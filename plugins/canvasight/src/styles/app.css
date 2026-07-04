@@ -3742,7 +3742,7 @@ body {
   transition: none;
 }
 
-.canvasight-app .topbar.canvasight-topbar {
+.canvasight-app .topbar {
   gap: 12px;
   padding: 6px 14px;
   border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
@@ -3750,14 +3750,29 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.canvasight-app .window-drag-region,
+.canvasight-app .window-drag-region {
+  order: 1;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
 .canvasight-app .topbar-leading {
-  display: none;
+  order: 0;
+  position: static;
+  display: flex;
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  gap: 8px;
 }
 
 .canvasight-brand {
-  flex: 0 0 auto;
-  min-width: 156px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
 }
 
 .canvasight-brand strong {
@@ -3768,22 +3783,24 @@ body {
 }
 
 .canvasight-brand span {
+  display: block;
+  overflow: hidden;
   color: var(--color-text-subtle);
   font-size: var(--text-12);
   line-height: var(--line-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.canvasight-project-form {
+.canvasight-empty-form {
   display: flex;
-  min-width: 220px;
-  max-width: 560px;
-  flex: 1 1 420px;
+  width: min(520px, calc(100vw - 48px));
+  max-width: 100%;
   align-items: center;
   gap: 8px;
-  -webkit-app-region: no-drag;
 }
 
-.canvasight-project-input {
+.canvasight-empty-input {
   width: 100%;
   height: 30px;
   min-width: 0;
@@ -3795,12 +3812,12 @@ body {
   font: inherit;
 }
 
-.canvasight-project-input:focus-visible {
+.canvasight-empty-input:focus-visible {
   outline: var(--border-weight-lg) solid var(--color-border-focus);
   outline-offset: 1px;
 }
 
-.canvasight-project-open {
+.canvasight-empty-open {
   height: 30px;
   flex: 0 0 auto;
   padding: 0 12px;
@@ -3811,14 +3828,14 @@ body {
   font: inherit;
 }
 
-.canvasight-project-open:disabled {
+.canvasight-empty-open:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
 .canvasight-app .topbar-status {
   min-width: 120px;
-  max-width: 280px;
+  max-width: 360px;
   flex: 0 1 auto;
   overflow: hidden;
   color: var(--color-text-subtle);
@@ -3827,7 +3844,8 @@ body {
 }
 
 .canvasight-app .topbar-actions {
-  margin-left: auto;
+  order: 2;
+  margin-left: 0;
 }
 
 .canvasight-app .workspace-content {
@@ -3850,10 +3868,6 @@ body {
 }
 
 @media (max-width: 900px) {
-  .canvasight-project-form {
-    flex-basis: 260px;
-  }
-
   .canvasight-app .topbar-status {
     display: none;
   }
@@ -3864,13 +3878,13 @@ body {
 }
 
 @media (max-width: 600px) {
-  .canvasight-app .topbar.canvasight-topbar {
+  .canvasight-app .topbar {
     gap: 8px;
     padding-inline: 8px;
   }
 
   .canvasight-brand {
-    min-width: 104px;
+    max-width: 132px;
   }
 
   .canvasight-brand span {
@@ -3880,20 +3894,7 @@ body {
     white-space: nowrap;
   }
 
-  .canvasight-project-form {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  .canvasight-project-input {
-    padding-inline: 8px;
-  }
-
-  .canvasight-project-open {
-    padding-inline: 10px;
-  }
-
   .canvasight-app .topbar-actions {
-    display: none;
+    gap: 8px;
   }
 }

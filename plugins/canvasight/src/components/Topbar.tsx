@@ -12,7 +12,11 @@ interface TopbarProps {
   sidebarCollapsed: boolean;
   updateState: AppUpdateState;
   disabled?: boolean;
+  projectName?: string;
+  showSidebarControls?: boolean;
+  status?: string;
   onCreateProject: () => void;
+  onOpenProject?: () => void;
   onUpdate: () => void;
   onRunActive: () => void;
   onOpenTasks: () => void;
@@ -35,7 +39,11 @@ export function Topbar({
   sidebarCollapsed,
   updateState,
   disabled = false,
+  projectName,
+  showSidebarControls = true,
+  status,
   onCreateProject,
+  onOpenProject,
   onUpdate,
   onRunActive,
   onOpenTasks,
@@ -55,25 +63,39 @@ export function Topbar({
 
   return (
     <header className="topbar" aria-label={t("topbar.windowActions")}>
-      <div className="window-drag-region" />
+      <div className="window-drag-region">
+        {status ? <div className="topbar-status" aria-live="polite">{status}</div> : null}
+      </div>
       <div className="topbar-leading">
-        <TooltipAnchor label={sidebarCollapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")} shortcut={shortcuts.toggleSidebar} side="bottom" align="start">
-          <IconButton
-            className="topbar-icon-button topbar-leading-button"
-            filled={false}
-            icon={sidebarCollapsed ? "topbar-sidebar" : "topbar-sidebar-expand"}
-            size="md"
-            aria-label={sidebarCollapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")}
-            aria-pressed={sidebarCollapsed}
-            onClick={onToggleSidebar}
-          />
-        </TooltipAnchor>
-        {sidebarCollapsed ? (
+        {showSidebarControls ? (
+          <TooltipAnchor label={sidebarCollapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")} shortcut={shortcuts.toggleSidebar} side="bottom" align="start">
+            <IconButton
+              className="topbar-icon-button topbar-leading-button"
+              filled={false}
+              icon={sidebarCollapsed ? "topbar-sidebar" : "topbar-sidebar-expand"}
+              size="md"
+              aria-label={sidebarCollapsed ? t("topbar.expandSidebar") : t("topbar.collapseSidebar")}
+              aria-pressed={sidebarCollapsed}
+              onClick={onToggleSidebar}
+            />
+          </TooltipAnchor>
+        ) : (
+          <div className="topbar-title canvasight-brand">
+            <strong>Canvasight</strong>
+            <span>{projectName || "No project"}</span>
+          </div>
+        )}
+        {showSidebarControls && sidebarCollapsed ? (
           <TooltipAnchor label={t("topbar.addProject")} shortcut={shortcuts.addProject} side="bottom" align="start">
             <IconButton className="topbar-icon-button topbar-leading-button" filled={false} icon="topbar-folder-plus" size="md" aria-label={t("topbar.addProject")} onClick={onCreateProject} />
           </TooltipAnchor>
         ) : null}
-        {updateVisible ? (
+        {!showSidebarControls ? (
+          <TooltipAnchor label={t("topbar.addProject")} shortcut={shortcuts.addProject} side="bottom" align="start">
+            <IconButton className="topbar-icon-button topbar-leading-button" filled={false} icon="topbar-folder-plus" size="md" aria-label={t("topbar.addProject")} onClick={onOpenProject ?? onCreateProject} />
+          </TooltipAnchor>
+        ) : null}
+        {showSidebarControls && updateVisible ? (
           <TooltipAnchor className="topbar-update-anchor" label={updateTooltip} side="bottom" align="start">
             <button className={`topbar-update-button ${updateBusy ? "is-loading" : ""}`} type="button" aria-label={updateTooltip} disabled={updateBusy} onClick={onUpdate}>
               {updateBusy ? <span className="topbar-update-spinner" aria-hidden="true" /> : <span>{updateLabel}</span>}
