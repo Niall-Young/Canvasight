@@ -40,7 +40,6 @@ import { shortcuts } from "./lib/shortcuts";
 import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
 import { TaskNode, setTaskNodeActions } from "./components/TaskNode";
-import { Topbar } from "./components/Topbar";
 import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { Icon } from "./components/ui/icon";
 import { IconButton } from "./components/ui/icon-button";
@@ -60,13 +59,6 @@ const taskNodeHorizontalGap = 180;
 const taskNodeVerticalGap = 72;
 const nodeConnectButtonSize = 20;
 const connectionPreviewEdgeId = "__canvasight-connection-preview__";
-const initialUpdateState = {
-  status: "idle",
-  currentVersion: "0.0.0",
-  isPackaged: false,
-  canCheck: false,
-  canInstall: false
-} as const;
 const zoomOptions = [
   { label: "50%", value: 0.5 },
   { label: "75%", value: 0.75 },
@@ -422,7 +414,6 @@ function CanvasightWorkspace(): ReactElement {
     canUndo,
     commitCanvasChange,
     edges,
-    isSaving,
     markNodeRun,
     nodes,
     project,
@@ -433,7 +424,6 @@ function CanvasightWorkspace(): ReactElement {
     setSaving,
     setSelectedNodeId,
     setStatus,
-    status,
     updateNodeData,
     drawer,
     removeAttachment,
@@ -927,13 +917,6 @@ function CanvasightWorkspace(): ReactElement {
     setViewportZoom(viewport.zoom);
   }, []);
 
-  const openProjectPrompt = useCallback(() => {
-    const nextPath = window.prompt("Open project path", projectPathInput || project?.path || "");
-    if (!nextPath) return;
-    setProjectPathInput(nextPath);
-    void openProjectPath(nextPath);
-  }, [openProjectPath, project?.path, projectPathInput]);
-
   const runActiveNode = useCallback(() => {
     if (!selectedNode) return;
     void runNode(selectedNode.id, selectedRunMode);
@@ -1053,22 +1036,6 @@ function CanvasightWorkspace(): ReactElement {
         latestMouseRef.current = { x: event.clientX, y: event.clientY };
       }}
     >
-      <Topbar
-        activeDrawer={drawer}
-        canOpenMarkdown={Boolean(selectedNode)}
-        canRun={canRun}
-        disabled={!project}
-        showSidebarControls={false}
-        sidebarCollapsed
-        updateState={initialUpdateState}
-        onCreateProject={openProjectPrompt}
-        onOpenMarkdown={toggleMarkdownDrawer}
-        onOpenTasks={toggleTasksDrawer}
-        onRunActive={runActiveNode}
-        onToggleSidebar={() => undefined}
-        onUpdate={() => undefined}
-      />
-
       <main className={`workspace-content ${drawer ? "has-right-sidebar" : ""} ${drawer === "markdown" ? "has-markdown-sidebar" : ""}`}>
         <section
           ref={canvasShellRef}
@@ -1123,6 +1090,42 @@ function CanvasightWorkspace(): ReactElement {
               >
                 <Background gap={28} size={1} color="rgba(125, 125, 125, 0.22)" />
               </ReactFlow>
+              <div className="canvas-run-toolbar" aria-label={t("topbar.windowActions")}>
+                <TooltipAnchor label={t("topbar.runCurrentTask")} shortcut={shortcuts.runCurrentTask} side="bottom" align="end">
+                  <IconButton
+                    className="canvas-toolbar-button"
+                    filled={false}
+                    icon="topbar-play"
+                    size="lg"
+                    aria-label={t("topbar.runCurrentTask")}
+                    disabled={!canRun}
+                    onClick={runActiveNode}
+                  />
+                </TooltipAnchor>
+                <TooltipAnchor label={t("topbar.taskList")} shortcut={shortcuts.taskList} side="bottom" align="end">
+                  <IconButton
+                    className={`canvas-toolbar-button ${drawer === "tasks" ? "is-selected" : ""}`}
+                    filled={false}
+                    icon="topbar-tasks"
+                    size="lg"
+                    aria-label={t("topbar.taskList")}
+                    aria-pressed={drawer === "tasks"}
+                    onClick={toggleTasksDrawer}
+                  />
+                </TooltipAnchor>
+                <TooltipAnchor label={t("topbar.openMarkdown")} shortcut={shortcuts.openMarkdown} side="bottom" align="end">
+                  <IconButton
+                    className={`canvas-toolbar-button ${drawer === "markdown" ? "is-selected" : ""}`}
+                    filled={false}
+                    icon="topbar-sidebar-right-expand"
+                    size="lg"
+                    aria-label={t("topbar.openMarkdown")}
+                    aria-pressed={drawer === "markdown"}
+                    disabled={!selectedNode}
+                    onClick={toggleMarkdownDrawer}
+                  />
+                </TooltipAnchor>
+              </div>
               <div className="canvas-actions" aria-label={t("canvas.actions")}>
                 <TooltipAnchor label={t("canvas.fit")} shortcut={shortcuts.fitCanvas} side="right">
                   <IconButton className="canvas-tool-button" filled={false} icon="map-pin" size="lg" aria-label={t("canvas.fit")} onClick={fitCanvas} />

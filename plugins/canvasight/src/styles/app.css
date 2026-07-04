@@ -1680,7 +1680,8 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .canvas-actions,
-.canvas-toolbar {
+.canvas-toolbar,
+.canvas-run-toolbar {
   position: absolute;
   z-index: 8;
   border: var(--border-weight-sm) solid var(--color-border-divider);
@@ -1707,6 +1708,16 @@ button.achievement-card.is-unlocked:focus-visible {
   padding: 6px;
   border-radius: var(--radius-lg);
   transform: translateX(-50%);
+}
+
+.canvas-run-toolbar {
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
 }
 
 .canvas-tool-button,
@@ -1750,7 +1761,10 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .canvas-toolbar .canvas-toolbar-button.is-selected,
 .canvas-toolbar .canvas-toolbar-button.is-selected:hover,
-.canvas-toolbar .canvas-toolbar-button.is-selected:focus-visible {
+.canvas-toolbar .canvas-toolbar-button.is-selected:focus-visible,
+.canvas-run-toolbar .canvas-toolbar-button.is-selected,
+.canvas-run-toolbar .canvas-toolbar-button.is-selected:hover,
+.canvas-run-toolbar .canvas-toolbar-button.is-selected:focus-visible {
   color: var(--color-primary);
   background: var(--color-primary-subtle);
 }
@@ -3737,7 +3751,7 @@ body {
   width: 100vw;
   height: 100vh;
   flex-direction: column;
-  padding: 44px 0 0;
+  padding: 0;
   background: var(--color-background);
   transition: none;
 }
@@ -3850,9 +3864,9 @@ body {
 
 .canvasight-app .workspace-content {
   width: 100%;
-  height: calc(100vh - 44px);
-  padding: 12px;
-  background: var(--color-background);
+  height: 100vh;
+  padding: 0;
+  background: var(--color-background-canvas);
 }
 
 .canvasight-app.app-shell,
@@ -3867,13 +3881,18 @@ body {
   background: var(--color-background-canvas);
 }
 
+.canvasight-app .canvas-shell {
+  border: 0;
+  border-radius: 0;
+}
+
 @media (max-width: 900px) {
   .canvasight-app .topbar-status {
     display: none;
   }
 
   .canvasight-app .workspace-content {
-    padding: 8px;
+    padding: 0;
   }
 }
 
