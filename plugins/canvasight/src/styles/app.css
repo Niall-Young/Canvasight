@@ -3492,7 +3492,7 @@ button.achievement-card.is-unlocked:focus-visible {
   flex-direction: column;
   overflow: hidden;
   color: var(--color-text);
-  background: transparent;
+  background: var(--color-background-surface);
   opacity: 0;
   pointer-events: none;
   transform: translateX(12px);
