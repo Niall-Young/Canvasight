@@ -3603,6 +3603,8 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .markdown-pane {
   gap: 12px;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
 .markdown-sidebar-heading {
