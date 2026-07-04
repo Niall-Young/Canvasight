@@ -1,0 +1,343 @@
+import { Fragment, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import type { RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
+import { useI18n } from "../lib/i18n";
+import { childCount } from "../lib/markdown";
+import type { Translate } from "../lib/translations";
+import { IconButton } from "./ui/icon-button";
+import { Segmented, SegmentedItem } from "./ui/segmented";
+import { TooltipAnchor } from "./ui/tooltip";
+import { TaskItem } from "./ui/task-item";
+import { Toast, ToastViewport } from "./ui/toast";
+
+interface RightDrawerProps {
+  drawer: "tasks" | "markdown" | null;
+  nodes: ScatterNode[];
+  edges: ScatterEdge[];
+  selectedNodeId: string | null;
+  markdown: string;
+  currentRunMode: RunMode;
+  onSelectNode: (nodeId: string, mode: RunMode) => void;
+  onRunNode: (nodeId: string, mode: RunMode) => void;
+}
+
+type MarkdownView = "source" | "preview";
+type TaskListEntry = {
+  canRun: boolean;
+  flow: boolean;
+  id: string;
+  meta: string;
+  mode: RunMode;
+  node: ScatterNode;
+  nodeCount: number;
+};
+
+function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translate): TaskListEntry[] {
+  const incomingNodeIds = new Set(edges.map((edge) => edge.target));
+  const outgoingNodeIds = new Set(edges.map((edge) => edge.source));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  return nodes.flatMap((node) => {
+    const entries: TaskListEntry[] = [];
+    const isFlowStart = outgoingNodeIds.has(node.id) && !incomingNodeIds.has(node.id);
+    const isStandaloneNode = !incomingNodeIds.has(node.id) && !outgoingNodeIds.has(node.id);
+    const hasPrompt = node.data.body.trim().length > 0;
+
+    if (isFlowStart) {
+      const downstreamCount = childCount(node.id, edges);
+      const nodeCount = downstreamCount + 1;
+      const downstreamNodeIds = new Set<string>([node.id]);
+      const visit = (nodeId: string): void => {
+        for (const edge of edges.filter((item) => item.source === nodeId)) {
+          if (downstreamNodeIds.has(edge.target)) continue;
+          downstreamNodeIds.add(edge.target);
+          visit(edge.target);
+        }
+      };
+      visit(node.id);
+
+      entries.push({
+        canRun: Array.from(downstreamNodeIds).some((nodeId) => (nodeById.get(nodeId)?.data.body.trim().length ?? 0) > 0),
+        flow: true,
+        id: `flow-${node.id}`,
+        meta: t("drawer.flowStartMeta", { count: nodeCount }),
+        mode: "flow",
+        node,
+        nodeCount
+      });
+    }
+
+    if (!isStandaloneNode) return entries;
+
+    entries.push({
+      canRun: hasPrompt,
+      flow: false,
+      id: `node-${node.id}`,
+      meta: hasPrompt ? t("drawer.canSend") : t("drawer.notEdited"),
+      mode: "node",
+      node,
+      nodeCount: 1
+    });
+
+    return entries;
+  });
+}
+
+function inlineMarkdown(text: string): ReactNode[] {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={index}>{part.slice(1, -1)}</code>;
+    }
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return <Fragment key={index}>{part}</Fragment>;
+  });
+}
+
+function isTableLine(line: string): boolean {
+  return line.trim().startsWith("|") && line.trim().endsWith("|");
+}
+
+function isTableDivider(line: string): boolean {
+  return /^\|?[\s:-]+\|[\s|:-]*$/.test(line.trim());
+}
+
+function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+}
+
+function MarkdownPreview({ markdown }: { markdown: string }): ReactElement {
+  const blocks: ReactElement[] = [];
+  const lines = markdown.split(/\r?\n/);
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      blocks.push(
+        <pre className="markdown-preview-code" key={`code-${index}`}>
+          <code>{codeLines.join("\n")}</code>
+        </pre>
+      );
+      continue;
+    }
+
+    if (isTableLine(line) && index + 1 < lines.length && isTableDivider(lines[index + 1])) {
+      const headers = tableCells(line);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && isTableLine(lines[index])) {
+        rows.push(tableCells(lines[index]));
+        index += 1;
+      }
+      blocks.push(
+        <table className="markdown-preview-table" key={`table-${index}`}>
+          <thead>
+            <tr>
+              {headers.map((cell, cellIndex) => (
+                <th key={cellIndex}>{inlineMarkdown(cell)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {headers.map((_, cellIndex) => (
+                  <td key={cellIndex}>{inlineMarkdown(row[cellIndex] || "")}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+      continue;
+    }
+
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      const level = trimmed.match(/^#+/)?.[0].length || 1;
+      const content = trimmed.replace(/^#{1,6}\s+/, "");
+      const Heading = `h${Math.min(level, 4)}` as "h1" | "h2" | "h3" | "h4";
+      blocks.push(<Heading key={`heading-${index}`}>{inlineMarkdown(content)}</Heading>);
+      index += 1;
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(trimmed)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index].trim())) {
+        items.push(lines[index].trim().replace(/^[-*]\s+/, ""));
+        index += 1;
+      }
+      blocks.push(
+        <ul key={`list-${index}`}>
+          {items.map((item, itemIndex) => (
+            <li key={itemIndex}>{inlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    const paragraphLines = [trimmed];
+    index += 1;
+    while (index < lines.length) {
+      const next = lines[index].trim();
+      if (!next || /^#{1,6}\s+/.test(next) || /^[-*]\s+/.test(next) || next.startsWith("```") || isTableLine(next)) break;
+      paragraphLines.push(next);
+      index += 1;
+    }
+    blocks.push(<p key={`p-${index}`}>{inlineMarkdown(paragraphLines.join(" "))}</p>);
+  }
+
+  return <div className="markdown-preview">{blocks}</div>;
+}
+
+export function RightDrawer({
+  drawer,
+  nodes,
+  edges,
+  selectedNodeId,
+  markdown,
+  currentRunMode,
+  onSelectNode,
+  onRunNode
+}: RightDrawerProps): ReactElement {
+  const { t } = useI18n();
+  const [copyStatus, setCopyStatus] = useState<"idle" | "success">("idle");
+  const [markdownView, setMarkdownView] = useState<MarkdownView>("source");
+  const [renderedDrawer, setRenderedDrawer] = useState<Exclude<RightDrawerProps["drawer"], null>>("tasks");
+
+  useEffect(() => {
+    if (drawer) setRenderedDrawer(drawer);
+  }, [drawer]);
+
+  useEffect(() => {
+    if (copyStatus !== "success") return undefined;
+    const timer = window.setTimeout(() => setCopyStatus("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
+
+  const isOpen = drawer !== null;
+  const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const taskEntries = taskListEntries(nodes, edges, t);
+  const flowStartNodeIds = new Set(taskEntries.filter((entry) => entry.flow).map((entry) => entry.node.id));
+  function downloadMarkdown(): void {
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${selectedNode?.data.title || "scatter-prompt"}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function copyMarkdown(): Promise<void> {
+    await navigator.clipboard.writeText(markdown);
+    setCopyStatus("success");
+  }
+
+  return (
+    <aside
+      className={`right-drawer is-${renderedDrawer} ${isOpen ? "is-open" : "is-collapsed"}`}
+      aria-hidden={!isOpen}
+      aria-label={renderedDrawer === "tasks" ? t("drawer.tasks") : t("drawer.markdown")}
+      inert={!isOpen}
+    >
+      {renderedDrawer === "tasks" ? (
+        <div className="task-sidebar">
+          <p className="right-sidebar-title">{t("drawer.tasks")}</p>
+          <div className="task-list">
+            {nodes.length === 0 ? (
+              <p className="empty-copy">{t("drawer.noTasks")}</p>
+            ) : (
+              taskEntries.map((entry) => {
+                const isActive =
+                  entry.node.id === selectedNodeId &&
+                  (entry.mode === currentRunMode || (!entry.flow && !flowStartNodeIds.has(entry.node.id)));
+
+                return (
+                  <TaskItem
+                    key={entry.id}
+                    canRun={entry.canRun}
+                    className={isActive ? "is-active" : undefined}
+                    flow={entry.flow}
+                    meta={entry.meta}
+                    nodeCount={entry.nodeCount}
+                    taskName={entry.node.data.title || t("drawer.unnamedTask")}
+                    onClick={() => onSelectNode(entry.node.id, entry.mode)}
+                    onLocate={() => onSelectNode(entry.node.id, entry.mode)}
+                    onPlay={() => onRunNode(entry.node.id, entry.mode)}
+                  />
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="markdown-pane">
+          <div className="markdown-sidebar-heading">
+            <Segmented aria-label={t("drawer.previewMode")}>
+              <SegmentedItem
+                icon="marker-code"
+                selected={markdownView === "source"}
+                aria-label={t("drawer.markdownSource")}
+                onClick={() => setMarkdownView("source")}
+              />
+              <SegmentedItem
+                icon="notebook-narrow"
+                selected={markdownView === "preview"}
+                aria-label={t("drawer.markdownPreview")}
+                onClick={() => setMarkdownView("preview")}
+              />
+            </Segmented>
+            <div className="markdown-actions">
+              <TooltipAnchor label={t("drawer.downloadMarkdown")} side="bottom" align="end">
+                <IconButton className="topbar-icon-button" filled={false} icon="download" size="md" aria-label={t("drawer.downloadMarkdown")} disabled={!markdown} onClick={downloadMarkdown} />
+              </TooltipAnchor>
+              <TooltipAnchor label={copyStatus === "success" ? t("drawer.copiedMarkdown") : t("drawer.copyMarkdown")} side="bottom" align="end">
+                <IconButton
+                  className="topbar-icon-button"
+                  filled={false}
+                  icon={copyStatus === "success" ? "check-md" : "copy"}
+                  size="md"
+                  aria-label={copyStatus === "success" ? t("drawer.copiedMarkdown") : t("drawer.copyMarkdown")}
+                  disabled={!markdown}
+                  onClick={() => void copyMarkdown()}
+                />
+              </TooltipAnchor>
+            </div>
+          </div>
+          {markdownView === "source" ? (
+            <pre className="markdown-source">{markdown || t("drawer.markdownPlaceholder")}</pre>
+          ) : markdown ? (
+            <MarkdownPreview markdown={markdown} />
+          ) : (
+            <div className="markdown-preview">
+              <p>{t("drawer.markdownPlaceholder")}</p>
+            </div>
+          )}
+          {copyStatus === "success" ? (
+            <ToastViewport>
+              <Toast tone="positive" message={t("drawer.copiedMarkdown")} onClose={() => setCopyStatus("idle")} />
+            </ToastViewport>
+          ) : null}
+        </div>
+      )}
+    </aside>
+  );
+}

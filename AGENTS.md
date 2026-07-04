@@ -43,7 +43,18 @@ If verification cannot be run because the project has no scripts yet, state that
 
 ## Current Commands
 
-No project commands are defined yet.
+Canvasight is currently implemented as a repo-local Codex plugin under `plugins/canvasight`.
 
-Update this section when a package manager, framework, test runner, or dev server is added.
+Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasight`:
 
+- `npm run dev` starts the Vite web app.
+- `npm run typecheck` runs TypeScript checks.
+- `npm run build` builds the web app into `dist/`.
+- `npm run preview` previews the built web app.
+- `npm run test:mcp` runs the MCP smoke test once implemented.
+
+Plugin validation runs from the repo root:
+
+- `python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/niallyoung/Desktop/Canvasight/plugins/canvasight`
+
+After installing or reinstalling `canvasight@canvasight-local`, verify MCP tools from a new Codex thread or a reloaded session. Existing open threads may not hot-refresh newly installed plugin tools.

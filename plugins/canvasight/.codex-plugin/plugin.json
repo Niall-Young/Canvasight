@@ -1,0 +1,35 @@
+{
+  "name": "canvasight",
+  "version": "0.1.0",
+  "description": "A local canvas workspace that turns connected task nodes and attachments into structured Codex prompts.",
+  "author": {
+    "name": "Niall Young"
+  },
+  "homepage": "https://github.com/Niall-Young/Canvasight",
+  "repository": "https://github.com/Niall-Young/Canvasight",
+  "license": "MIT",
+  "keywords": [
+    "canvas",
+    "codex",
+    "prompt",
+    "workflow"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Canvasight",
+    "shortDescription": "Build prompt flows on a local canvas",
+    "longDescription": "Canvasight opens a browser canvas for arranging task nodes, attachments, and flows, then returns generated Markdown and structured run data to the current Codex thread.",
+    "developerName": "Niall Young",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Open Canvasight for this workspace."
+    ],
+    "brandColor": "#0862FD"
+  },
+  "mcpServers": "./.mcp.json"
+}

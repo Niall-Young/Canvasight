@@ -1,0 +1,20 @@
+{
+  "name": "canvasight-local",
+  "interface": {
+    "displayName": "Canvasight Local"
+  },
+  "plugins": [
+    {
+      "name": "canvasight",
+      "source": {
+        "source": "local",
+        "path": "./plugins/canvasight"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
