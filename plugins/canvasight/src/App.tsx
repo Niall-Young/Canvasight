@@ -1058,13 +1058,10 @@ function CanvasightWorkspace(): ReactElement {
         canOpenMarkdown={Boolean(selectedNode)}
         canRun={canRun}
         disabled={!project}
-        projectName={project?.name}
         showSidebarControls={false}
         sidebarCollapsed
-        status={isSaving ? "Saving..." : status}
         updateState={initialUpdateState}
         onCreateProject={openProjectPrompt}
-        onOpenProject={openProjectPrompt}
         onOpenMarkdown={toggleMarkdownDrawer}
         onOpenTasks={toggleTasksDrawer}
         onRunActive={runActiveNode}
