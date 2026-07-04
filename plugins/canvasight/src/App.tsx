@@ -370,9 +370,9 @@ function toDocument(project: ScatterProjectInfo, nodes: ScatterNode[], edges: Sc
   };
 }
 
-function flowEdges(edges: ScatterEdge[], selectedNodeId: string | null, connectionPreview: ConnectionHoverTarget | null): Edge[] {
+function flowEdges(edges: ScatterEdge[], selectedNodeId: string | null, hoveredNodeId: string | null, connectionPreview: ConnectionHoverTarget | null): Edge[] {
   const activeNodeIds = new Set(
-    [selectedNodeId, connectionPreview?.sourceId, connectionPreview?.targetId].filter(Boolean) as string[]
+    [selectedNodeId, hoveredNodeId, connectionPreview?.sourceId, connectionPreview?.targetId].filter(Boolean) as string[]
   );
   const renderedEdges = edges.map((edge) => ({
     ...edge,
@@ -486,6 +486,7 @@ function CanvasightWorkspace(): ReactElement {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionPreview, setConnectionPreview] = useState<ConnectionHoverTarget | null>(null);
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("select");
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [spacePanActive, setSpacePanActive] = useState(false);
   const [isResizingMarkdown, setIsResizingMarkdown] = useState(false);
   const [panelRatios, setPanelRatios] = useState<PanelRatios>({ canvas: 1, markdown: 1 });
@@ -512,7 +513,7 @@ function CanvasightWorkspace(): ReactElement {
         : { markdown: "", nodes: [], attachments: [], imagePaths: [], planMode: false, hasCycle: false },
     [edges, language, nodes, project, selectedNode, selectedRunMode]
   );
-  const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, connectionPreview), [connectionPreview, edges, selectedNodeId]);
+  const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
   const workspaceStyle = useMemo(
     () =>
       ({
@@ -829,6 +830,7 @@ function CanvasightWorkspace(): ReactElement {
       duplicateNode,
       removeAttachment,
       runNode,
+      setNodeHover: (nodeId: string, hovered: boolean) => setHoveredNodeId((current) => (hovered ? nodeId : current === nodeId ? null : current)),
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
   }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, updateNodeData]);
@@ -965,6 +967,8 @@ function CanvasightWorkspace(): ReactElement {
 
   const handleNodeMouseEnter = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      setHoveredNodeId(node.id);
+
       const connectionStart = connectionStartRef.current;
       if (!connectionStart) return;
 
@@ -985,6 +989,8 @@ function CanvasightWorkspace(): ReactElement {
 
   const handleNodeMouseLeave = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      setHoveredNodeId((current) => (current === node.id ? null : current));
+
       if (connectionHoverTargetRef.current?.hoveredNodeId === node.id) {
         clearConnectionHoverTarget();
       }
@@ -1187,7 +1193,10 @@ function CanvasightWorkspace(): ReactElement {
       className="canvasight-app app-shell is-sidebar-collapsed"
       onMouseMove={(event) => {
         latestMouseRef.current = { x: event.clientX, y: event.clientY };
+        const targetNodeId = nodeIdFromElementTarget(event.target);
+        setHoveredNodeId((current) => (current === targetNodeId ? current : targetNodeId));
       }}
+      onMouseLeave={() => setHoveredNodeId(null)}
     >
       <main
         ref={workspaceContentRef}

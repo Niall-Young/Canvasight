@@ -41,6 +41,7 @@ interface RuntimeActions {
   createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
   duplicateNode: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
+  setNodeHover: (nodeId: string, hovered: boolean) => void;
   runNode: (nodeId: string, mode: RunMode) => Promise<void>;
 }
 
@@ -344,7 +345,12 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   );
 
   return (
-    <div ref={rootRef} className={`task-node ${selected ? "is-selected" : ""}`}>
+    <div
+      ref={rootRef}
+      className={`task-node ${selected ? "is-selected" : ""}`}
+      onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
+      onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
+    >
       <Handle type="target" position={Position.Left} className="node-handle" isConnectableStart={!hasParent} isConnectableEnd={!hasParent}>
         {hasParent ? (
           <span className="node-edge-cap" aria-hidden="true" />
