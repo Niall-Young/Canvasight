@@ -775,6 +775,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const workspaceContentRef = useRef<HTMLElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
+  const pageNameInputRef = useRef<HTMLInputElement | null>(null);
   const latestMouseRef = useRef<FlowPosition>({ x: 360, y: 240 });
   const draggingTemplateRef = useRef<NodeTemplate | null>(null);
   const connectionStartRef = useRef<ConnectionStart | null>(null);
@@ -989,6 +990,21 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     setStatus(t("status.pageRenamed", { name: nextName }));
     cancelRenamePage();
   }, [activePage, cancelRenamePage, pageNameDraft, renameActivePage, setStatus, t]);
+
+  useEffect(() => {
+    if (!renamingPage) return;
+
+    const handlePageNamePointerDown = (event: PointerEvent) => {
+      const input = pageNameInputRef.current;
+      if (input && event.composedPath().includes(input)) return;
+      commitRenamePage();
+    };
+
+    document.addEventListener("pointerdown", handlePageNamePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePageNamePointerDown, true);
+    };
+  }, [commitRenamePage, renamingPage]);
 
   const handleCreatePage = useCallback(() => {
     const page = createPage();
@@ -1829,6 +1845,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
               <div className="canvas-page-toolbar" aria-label={t("page.toolbar")}>
                 {renamingPage ? (
                   <input
+                    ref={pageNameInputRef}
                     className="canvas-page-name-input"
                     value={pageNameDraft}
                     autoFocus

@@ -114,6 +114,7 @@ Canvasight should use a restrained, professional interface:
 - Contextual actions should appear near the object or in the inspector, not both unless there is a strong reason.
 - Destructive actions require confirmation or an easy undo path.
 - Dragging, resizing, zooming, and panning should feel stable and should not conflict with text selection or form input.
+- Inline name or title editing should commit when focus leaves or the user clicks outside the input. `Enter` commits and `Escape` cancels.
 
 ## States
 
