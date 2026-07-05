@@ -557,6 +557,20 @@ function CanvasightWorkspace(): ReactElement {
     [nodes, replaceCanvasLive, setSelectedNodeId]
   );
 
+  const locateNode = useCallback(
+    (nodeId: string, mode: RunMode = "flow") => {
+      const node = nodes.find((item) => item.id === nodeId);
+      if (!node) return;
+      selectNode(nodeId, mode);
+      const bounds = nodeBounds(node);
+      void flowInstanceRef.current?.setCenter(node.position.x + bounds.width / 2, node.position.y + bounds.height / 2, {
+        duration: 260,
+        zoom: Math.max(0.5, Math.min(1, viewportZoom))
+      });
+    },
+    [nodes, selectNode, viewportZoom]
+  );
+
   const openProjectPath = useCallback(
     async (projectPath: string) => {
       const trimmedPath = projectPath.trim();
@@ -1412,6 +1426,7 @@ function CanvasightWorkspace(): ReactElement {
           selectedNodeId={selectedNodeId}
           markdown={markdownResult.markdown}
           currentRunMode={selectedRunMode}
+          onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
           onSelectNode={(nodeId, mode) => selectNode(nodeId, mode)}
           onRunNode={(nodeId, mode) => void runNode(nodeId, mode)}
         />

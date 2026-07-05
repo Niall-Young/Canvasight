@@ -16,6 +16,7 @@ interface RightDrawerProps {
   selectedNodeId: string | null;
   markdown: string;
   currentRunMode: RunMode;
+  onLocateNode: (nodeId: string, mode: RunMode) => void;
   onSelectNode: (nodeId: string, mode: RunMode) => void;
   onRunNode: (nodeId: string, mode: RunMode) => void;
 }
@@ -214,6 +215,7 @@ export function RightDrawer({
   selectedNodeId,
   markdown,
   currentRunMode,
+  onLocateNode,
   onSelectNode,
   onRunNode
 }: RightDrawerProps): ReactElement {
@@ -280,7 +282,7 @@ export function RightDrawer({
                     nodeCount={entry.nodeCount}
                     taskName={entry.node.data.title || t("drawer.unnamedTask")}
                     onClick={() => onSelectNode(entry.node.id, entry.mode)}
-                    onLocate={() => onSelectNode(entry.node.id, entry.mode)}
+                    onLocate={() => onLocateNode(entry.node.id, entry.mode)}
                     onPlay={() => onRunNode(entry.node.id, entry.mode)}
                   />
                 );

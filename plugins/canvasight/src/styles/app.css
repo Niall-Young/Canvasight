@@ -2592,6 +2592,7 @@ button.achievement-card.is-unlocked:focus-visible {
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
+  cursor: pointer;
   font: inherit;
   text-align: left;
 }
@@ -2649,7 +2650,9 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .kit-task-item:hover .kit-task-item-actions,
-.kit-task-item:focus-visible .kit-task-item-actions {
+.kit-task-item:focus-visible .kit-task-item-actions,
+.kit-task-item:focus-within .kit-task-item-actions,
+.kit-task-item.is-active .kit-task-item-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -2662,7 +2665,11 @@ button.achievement-card.is-unlocked:focus-visible {
   justify-content: center;
   padding: 2px;
   color: var(--color-icon);
+  border: 0;
   border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
 }
 
 .kit-task-item-action:hover,
