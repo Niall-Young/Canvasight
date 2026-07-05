@@ -15,6 +15,8 @@ Use the Canvasight MCP tools when a task benefits from visual planning, connecte
 4. Treat the returned Markdown and `structuredContent` as the source of truth for the next Codex action.
 5. Call `close_canvasight` when the session is no longer needed.
 
+Use `list_canvasight_recent_projects` followed by `open_canvasight_recent_project` when the user wants to reopen Canvasight from a new Codex thread or recover the last canvas. The plugin serves the built web app through the MCP server; do not ask the user to run `npm run dev` for normal plugin use.
+
 Do not use macOS Accessibility automation, virtual clicks, clipboard paste, or `codex://threads/new` to send Canvasight output. The plugin returns output through MCP.
 
 ## Codex Native Mode Protocol

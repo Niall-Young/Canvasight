@@ -12,12 +12,14 @@ const SERVER_NAME = "canvasight";
 const SERVER_VERSION = "0.1.0";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
+const MAX_RECENT_PROJECTS = 12;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
+const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,6 +124,15 @@ function projectNameFromPath(projectPath) {
   return path.basename(projectPath) || projectPath;
 }
 
+function canvasightHome() {
+  const configured = process.env.CANVASIGHT_HOME;
+  return path.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
+}
+
+function canvasightStatePath() {
+  return path.join(canvasightHome(), "state.json");
+}
+
 function scatterDir(projectPath) {
   return path.join(projectPath, ".scatter");
 }
@@ -199,6 +210,108 @@ function defaultScatterDocument(projectPath) {
     nodes: [],
     edges: []
   };
+}
+
+function normalizeRecentLimit(value) {
+  return Math.max(1, Math.min(Math.floor(toNumber(Number(value), MAX_RECENT_PROJECTS)), 50));
+}
+
+function emptyUserState() {
+  return {
+    version: 1,
+    updatedAt: nowIso(),
+    lastProjectPath: null,
+    recentProjects: []
+  };
+}
+
+function normalizeRecentProject(value) {
+  if (!isObject(value) || typeof value.path !== "string" || !value.path.trim()) return null;
+  const projectPath = path.resolve(value.path);
+  return {
+    name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : projectNameFromPath(projectPath),
+    path: projectPath,
+    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : null,
+    lastOpenedAt: typeof value.lastOpenedAt === "string" && value.lastOpenedAt ? value.lastOpenedAt : null
+  };
+}
+
+async function readUserState() {
+  try {
+    const raw = await fsp.readFile(canvasightStatePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const recentProjects = Array.isArray(parsed?.recentProjects)
+      ? parsed.recentProjects.map(normalizeRecentProject).filter(Boolean)
+      : [];
+    return {
+      version: 1,
+      updatedAt: typeof parsed?.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : nowIso(),
+      lastProjectPath:
+        typeof parsed?.lastProjectPath === "string" && parsed.lastProjectPath.trim()
+          ? path.resolve(parsed.lastProjectPath)
+          : recentProjects[0]?.path || null,
+      recentProjects
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return emptyUserState();
+    throw error;
+  }
+}
+
+async function writeUserState(state) {
+  const normalizedRecentProjects = Array.isArray(state.recentProjects)
+    ? state.recentProjects.map(normalizeRecentProject).filter(Boolean).slice(0, MAX_RECENT_PROJECTS)
+    : [];
+  const normalizedState = {
+    version: 1,
+    updatedAt: nowIso(),
+    lastProjectPath: normalizedRecentProjects[0]?.path || null,
+    recentProjects: normalizedRecentProjects
+  };
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  await fsp.writeFile(canvasightStatePath(), `${JSON.stringify(normalizedState, null, 2)}\n`, "utf8");
+  return normalizedState;
+}
+
+async function rememberProject(projectPath, project) {
+  if (typeof projectPath !== "string" || !projectPath.trim()) return null;
+  const resolvedProjectPath = path.resolve(projectPath);
+  const state = await readUserState();
+  const now = nowIso();
+  const entry = {
+    name:
+      typeof project?.name === "string" && project.name.trim()
+        ? project.name.trim()
+        : typeof project?.projectName === "string" && project.projectName.trim()
+          ? project.projectName.trim()
+          : projectNameFromPath(resolvedProjectPath),
+    path: resolvedProjectPath,
+    updatedAt: typeof project?.updatedAt === "string" && project.updatedAt ? project.updatedAt : now,
+    lastOpenedAt: now
+  };
+  const rest = state.recentProjects.filter((item) => item.path !== resolvedProjectPath);
+  await writeUserState({
+    ...state,
+    recentProjects: [entry, ...rest]
+  });
+  return entry;
+}
+
+async function rememberProjectBestEffort(projectPath, project) {
+  try {
+    return await rememberProject(projectPath, project);
+  } catch {
+    return null;
+  }
+}
+
+async function recentProjects(limit) {
+  const state = await readUserState();
+  return state.recentProjects.slice(0, normalizeRecentLimit(limit)).map((project) => ({
+    ...project,
+    exists: fs.existsSync(project.path),
+    hasScatter: fs.existsSync(scatterPath(project.path))
+  }));
 }
 
 function normalizeAttachment(value) {
@@ -893,7 +1006,9 @@ async function handleSessionApi(req, res, url) {
     const body = await readJsonBody(req);
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
     session.projectPath = projectPath;
-    sendJson(res, 200, await openProject(projectPath));
+    const openedProject = await openProject(projectPath);
+    await rememberProjectBestEffort(projectPath, openedProject.project);
+    sendJson(res, 200, openedProject);
     return true;
   }
 
@@ -903,6 +1018,10 @@ async function handleSessionApi(req, res, url) {
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
     const document = await writeScatterDocument(projectPath, body.document);
     session.projectPath = projectPath;
+    await rememberProjectBestEffort(projectPath, {
+      name: document.projectName,
+      updatedAt: document.updatedAt
+    });
     sendJson(res, 200, document);
     return true;
   }
@@ -913,6 +1032,7 @@ async function handleSessionApi(req, res, url) {
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
     const attachments = await saveAttachments(projectPath, body.files);
     session.projectPath = projectPath;
+    await rememberProjectBestEffort(projectPath);
     sendJson(res, 200, attachments);
     return true;
   }
@@ -1012,6 +1132,7 @@ async function toolOpenCanvasight(args) {
     threadId: args?.threadId
   });
   const openedProject = await openProject(session.projectPath);
+  await rememberProjectBestEffort(session.projectPath, openedProject.project);
   const server = await ensureHttpServer();
   const url = `${server.origin}/?sessionId=${encodeURIComponent(session.id)}`;
   openBrowser(url);
@@ -1028,6 +1149,38 @@ async function toolOpenCanvasight(args) {
     },
     `Canvasight session opened: ${url}`
   );
+}
+
+async function toolListCanvasightRecentProjects(args) {
+  const projects = await recentProjects(args?.limit);
+  return toolResult(
+    {
+      status: "listed",
+      count: projects.length,
+      statePath: canvasightStatePath(),
+      projects
+    },
+    projects.length
+      ? projects.map((project, index) => `${index + 1}. ${project.name} — ${project.path}`).join("\n")
+      : "No recent Canvasight projects."
+  );
+}
+
+async function toolOpenCanvasightRecentProject(args) {
+  const explicitProjectPath = optionalProjectPath(args?.projectPath);
+  const index = Math.max(1, Math.floor(toNumber(Number(args?.index), 1)));
+  const projects = explicitProjectPath ? [] : await recentProjects(Math.max(index, MAX_RECENT_PROJECTS));
+  const projectPath = explicitProjectPath || projects[index - 1]?.path;
+
+  if (!projectPath) {
+    throw new Error("No recent Canvasight project is available. Call open_canvasight with a projectPath first.");
+  }
+
+  return toolOpenCanvasight({
+    projectPath,
+    language: args?.language,
+    threadId: args?.threadId
+  });
 }
 
 async function toolAwaitCanvasightRun(args) {
@@ -1079,6 +1232,50 @@ const tools = [
     }
   },
   {
+    name: "list_canvasight_recent_projects",
+    description: "List Canvasight projects remembered across Codex threads.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 50,
+          description: "Maximum number of recent projects to return."
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "open_canvasight_recent_project",
+    description: "Open the most recent remembered Canvasight project, or a chosen recent project path/index.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        index: {
+          type: "number",
+          minimum: 1,
+          description: "1-based recent project index. Defaults to the most recent project."
+        },
+        projectPath: {
+          type: "string",
+          description: "Optional explicit project path. When provided, it is opened and remembered."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Optional UI and markdown language preference."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "await_canvasight_run",
     description: "Wait for a browser run payload from a Canvasight session.",
     inputSchema: {
@@ -1114,6 +1311,8 @@ const tools = [
 
 async function callTool(name, args) {
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
+  if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
+  if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});
   throw new Error(`Unknown tool: ${name}`);

@@ -14,6 +14,7 @@ const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
+const canvasightHome = path.join(tempRoot, "canvasight-home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
 
@@ -78,6 +79,7 @@ const child = spawn(process.execPath, [serverPath], {
     ...process.env,
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
     CANVASIGHT_OPEN_BROWSER: "0",
+    CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CODEX_THREAD_ID: "thread-smoke"
@@ -194,6 +196,8 @@ async function main() {
     const listed = await request("tools/list", {});
     const toolNames = new Set(listed.tools.map((tool) => tool.name));
     assert.equal(toolNames.has("open_canvasight"), true);
+    assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
+    assert.equal(toolNames.has("open_canvasight_recent_project"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
 
@@ -213,6 +217,13 @@ async function main() {
       projectPath: defaultProjectPath,
       sessionId: autoOpened.structuredContent.sessionId
     });
+    const recentAfterAutoOpen = await request("tools/call", {
+      name: "list_canvasight_recent_projects",
+      arguments: {}
+    });
+    assert.equal(recentAfterAutoOpen.structuredContent.status, "listed");
+    assert.equal(recentAfterAutoOpen.structuredContent.projects[0].path, defaultProjectPath);
+    assert.equal(recentAfterAutoOpen.structuredContent.projects[0].hasScatter, true);
     await request("tools/call", {
       name: "close_canvasight",
       arguments: {
@@ -231,6 +242,32 @@ async function main() {
     assert.equal(opened.structuredContent.status, "opened");
     assert.equal(opened.structuredContent.projectPath, projectPath);
     assert.equal(opened.structuredContent.codexThreadId, "thread-smoke");
+
+    const recentAfterProjectOpen = await request("tools/call", {
+      name: "list_canvasight_recent_projects",
+      arguments: {
+        limit: 2
+      }
+    });
+    assert.equal(recentAfterProjectOpen.structuredContent.projects.length, 2);
+    assert.equal(recentAfterProjectOpen.structuredContent.projects[0].path, projectPath);
+    assert.equal(recentAfterProjectOpen.structuredContent.projects[1].path, defaultProjectPath);
+
+    const recentOpened = await request("tools/call", {
+      name: "open_canvasight_recent_project",
+      arguments: {
+        language: "zh"
+      }
+    });
+    assert.equal(recentOpened.structuredContent.status, "opened");
+    assert.equal(recentOpened.structuredContent.projectPath, projectPath);
+    assert.equal(recentOpened.structuredContent.language, "zh");
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: recentOpened.structuredContent.sessionId
+      }
+    });
 
     const sessionId = opened.structuredContent.sessionId;
     const origin = opened.structuredContent.origin;
@@ -277,6 +314,13 @@ async function main() {
       body: JSON.stringify({ projectPath, document })
     });
     assert.equal(savedDocument.nodes[0].id, "node-a");
+    const recentAfterDocumentSave = await request("tools/call", {
+      name: "list_canvasight_recent_projects",
+      arguments: {
+        limit: 1
+      }
+    });
+    assert.equal(recentAfterDocumentSave.structuredContent.projects[0].updatedAt, document.updatedAt);
 
     const scatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(scatterJson.version, 1);

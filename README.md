@@ -12,6 +12,8 @@ npm run build
 npm run test:mcp
 ```
 
+`npm run dev` is only for plugin web app development. Normal Codex plugin use starts the MCP server, serves the built `dist/` app, and opens Canvasight through MCP tools.
+
 ## Plugin
 
 The plugin source lives at `plugins/canvasight`. The repo-local marketplace is `.agents/plugins/marketplace.json`.
@@ -34,5 +36,9 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 In the fresh or reloaded thread, the plugin should expose:
 
 - `open_canvasight`
+- `list_canvasight_recent_projects`
+- `open_canvasight_recent_project`
 - `await_canvasight_run`
 - `close_canvasight`
+
+`open_canvasight` remembers opened projects in the local Canvasight user state. In a new Codex thread, call `list_canvasight_recent_projects` and `open_canvasight_recent_project` to reopen the last canvas without starting a separate Vite dev server.
