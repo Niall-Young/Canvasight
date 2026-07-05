@@ -133,10 +133,14 @@ export function SettingsDialog({
   }
 
   return (
-    <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
+    <RadixDialog.Root modal open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="settings-dialog-overlay" />
-        <RadixDialog.Content className="settings-dialog-content" aria-describedby={undefined}>
+        <RadixDialog.Content
+          className="settings-dialog-content"
+          aria-describedby={undefined}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
           <header className="settings-dialog-header">
             <RadixDialog.Title className="settings-dialog-title">{t("settings.title")}</RadixDialog.Title>
             <RadixDialog.Close asChild>
