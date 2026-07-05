@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.1";
+const SERVER_VERSION = "0.1.2";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -18,6 +18,8 @@ const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
+const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "replace-active-page", "replace-document"]);
+const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
@@ -66,6 +68,14 @@ function normalizeEffort(value) {
 
 function normalizeRunMode(value) {
   return VALID_RUN_MODES.has(value) ? value : "flow";
+}
+
+function normalizeGraphWriteMode(value) {
+  return VALID_GRAPH_WRITE_MODES.has(value) ? value : "append-page";
+}
+
+function normalizeGraphLayout(value) {
+  return VALID_GRAPH_LAYOUTS.has(value) ? value : "horizontal";
 }
 
 function normalizeCodexMode(value, legacyPlanMode = false) {
@@ -751,6 +761,205 @@ async function writeScatterDocument(projectPath, document) {
   const normalized = normalizeScatterDocument(document, projectPath);
   await fsp.writeFile(scatterPath(projectPath), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   return normalized;
+}
+
+function coerceNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function optionalDimension(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function generatedGraphId(prefix, index, usedIds) {
+  let id = `${prefix}-${index + 1}`;
+  let suffix = 2;
+  while (usedIds.has(id)) {
+    id = `${prefix}-${index + 1}-${suffix}`;
+    suffix += 1;
+  }
+  return id;
+}
+
+function normalizeGraphNodePosition(node, index, layout) {
+  const column = layout === "vertical" ? 0 : layout === "grid" ? index % 3 : index;
+  const row = layout === "horizontal" ? 0 : layout === "grid" ? Math.floor(index / 3) : index;
+  const fallback = {
+    x: column * 460,
+    y: row * 260
+  };
+  const position = isObject(node.position) ? node.position : {};
+  return {
+    x: coerceNumber(position.x ?? node.x, fallback.x),
+    y: coerceNumber(position.y ?? node.y, fallback.y)
+  };
+}
+
+function normalizeGraphNode(value, index, layout, usedNodeIds) {
+  if (!isObject(value)) throw new HttpError(400, `nodes[${index}] must be an object`);
+  const explicitId = typeof value.id === "string" && value.id.trim() ? value.id.trim() : "";
+  const id = explicitId || generatedGraphId("node", index, usedNodeIds);
+  if (usedNodeIds.has(id)) throw new HttpError(400, `Duplicate node id: ${id}`);
+  usedNodeIds.add(id);
+
+  const data = isObject(value.data) ? value.data : {};
+  const codexMode = normalizeCodexMode(value.codexMode || data.codexMode, Boolean(value.planMode ?? data.planMode));
+  const width = optionalDimension(value.width);
+  const height = optionalDimension(value.height);
+  return {
+    id,
+    type: "task",
+    position: normalizeGraphNodePosition(value, index, layout),
+    ...(width ? { width } : {}),
+    ...(height ? { height } : {}),
+    data: {
+      ...data,
+      title: typeof value.title === "string" ? value.title : typeof data.title === "string" ? data.title : "",
+      body: typeof value.body === "string" ? value.body : typeof data.body === "string" ? data.body : "",
+      attachments: Array.isArray(value.attachments)
+        ? value.attachments.map(normalizeAttachment)
+        : Array.isArray(data.attachments)
+          ? data.attachments.map(normalizeAttachment)
+          : [],
+      codexMode,
+      effort: normalizeEffort(value.effort || data.effort),
+      planMode: codexMode === "plan",
+      runMode: normalizeRunMode(value.runMode || data.runMode)
+    }
+  };
+}
+
+function normalizeGraphEdge(value, index, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs) {
+  if (!isObject(value)) throw new HttpError(400, `edges[${index}] must be an object`);
+  const source = typeof value.source === "string" ? value.source.trim() : "";
+  const target = typeof value.target === "string" ? value.target.trim() : "";
+  if (!source || !nodeIds.has(source)) throw new HttpError(400, `edges[${index}].source must reference an existing node id`);
+  if (!target || !nodeIds.has(target)) throw new HttpError(400, `edges[${index}].target must reference an existing node id`);
+  if (source === target) throw new HttpError(400, `edges[${index}] cannot connect a node to itself`);
+  const connectionPair = `${source}\u0000${target}`;
+  if (usedConnectionPairs.has(connectionPair)) throw new HttpError(400, `Duplicate edge connection: ${source} -> ${target}`);
+  if (usedTargetIds.has(target)) throw new HttpError(400, `Node already has a parent edge: ${target}`);
+  const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : generatedGraphId("edge", index, usedEdgeIds);
+  if (usedEdgeIds.has(id)) throw new HttpError(400, `Duplicate edge id: ${id}`);
+  usedEdgeIds.add(id);
+  usedTargetIds.add(target);
+  usedConnectionPairs.add(connectionPair);
+  return {
+    id,
+    source,
+    target,
+    ...(typeof value.label === "string" && value.label.trim() ? { label: value.label.trim() } : {})
+  };
+}
+
+function graphPageInputs(args) {
+  if (Array.isArray(args?.pages) && args.pages.length > 0) return args.pages;
+  return [
+    {
+      id: args?.pageId,
+      name: args?.pageName,
+      viewport: args?.viewport,
+      layout: args?.layout,
+      nodes: args?.nodes,
+      edges: args?.edges
+    }
+  ];
+}
+
+function buildScatterPageFromGraph(value, index, args) {
+  const page = isObject(value) ? value : {};
+  const now = nowIso();
+  const layout = normalizeGraphLayout(page.layout || args?.layout);
+  const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
+  if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
+  const usedNodeIds = new Set();
+  const nodes = rawNodes.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const usedEdgeIds = new Set();
+  const usedTargetIds = new Set();
+  const usedConnectionPairs = new Set();
+  const edges = Array.isArray(page.edges)
+    ? page.edges.map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs))
+    : [];
+  return {
+    id: typeof page.id === "string" && page.id.trim() ? page.id.trim() : `page-${crypto.randomBytes(5).toString("hex")}`,
+    name:
+      typeof page.name === "string" && page.name.trim()
+        ? page.name.trim()
+        : typeof args?.pageName === "string" && args.pageName.trim()
+          ? args.pageName.trim()
+          : `AI Canvas ${index + 1}`,
+    createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
+    updatedAt: now,
+    viewport: normalizeScatterViewport(page.viewport || args?.viewport),
+    nodes,
+    edges
+  };
+}
+
+function replaceActivePage(existingDocument, incomingPage) {
+  const pages = existingDocument.pages.length ? existingDocument.pages : [defaultScatterPage()];
+  const activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
+  return pages.map((page) =>
+    page.id === activePageId
+      ? {
+          ...incomingPage,
+          id: activePageId,
+          name: incomingPage.name || page.name,
+          createdAt: page.createdAt || incomingPage.createdAt
+        }
+      : page
+  );
+}
+
+async function writeScatterGraph(projectPath, args) {
+  const mode = normalizeGraphWriteMode(args?.mode);
+  const existingDocument = await readScatterDocument(projectPath);
+  const incomingPages = graphPageInputs(args).map((page, index) => buildScatterPageFromGraph(page, index, args));
+  const now = nowIso();
+  let pages;
+  let activePageId;
+
+  if (mode === "replace-document") {
+    pages = incomingPages;
+    activePageId =
+      typeof args?.activePageId === "string" && incomingPages.some((page) => page.id === args.activePageId)
+        ? args.activePageId
+        : incomingPages[0].id;
+  } else if (mode === "replace-active-page") {
+    pages = replaceActivePage(existingDocument, incomingPages[0]);
+    activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
+  } else {
+    pages = [...existingDocument.pages, ...incomingPages];
+    activePageId = incomingPages[incomingPages.length - 1].id;
+  }
+
+  const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+  const document = await writeScatterDocument(projectPath, {
+    version: 1,
+    projectName:
+      typeof args?.projectName === "string" && args.projectName.trim()
+        ? args.projectName.trim()
+        : existingDocument.projectName || projectNameFromPath(projectPath),
+    updatedAt: now,
+    activePageId: activePage.id,
+    pages: pages.map((page) => ({
+      ...page,
+      updatedAt: page.id === activePage.id ? now : page.updatedAt
+    })),
+    viewport: activePage.viewport,
+    nodes: activePage.nodes,
+    edges: activePage.edges
+  });
+
+  await rememberProjectBestEffort(projectPath, {
+    name: document.projectName,
+    updatedAt: document.updatedAt
+  });
+
+  return document;
 }
 
 async function openProject(projectPath) {
@@ -1727,6 +1936,35 @@ async function toolOpenCanvasightRecentProject(args) {
   });
 }
 
+async function toolWriteCanvasightGraph(args) {
+  const projectPath = normalizeProjectPath(args?.projectPath || defaultProjectPath());
+  const document = await writeScatterGraph(projectPath, args || {});
+  const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
+  const nodeIds = activePage.nodes.map((node) => node.id);
+  const edgeIds = activePage.edges.map((edge) => edge.id);
+  const summary = [
+    `Canvasight graph written: ${scatterPath(projectPath)}`,
+    `Active page: ${activePage.name} (${activePage.id})`,
+    `Nodes: ${nodeIds.length}`,
+    `Edges: ${edgeIds.length}`
+  ].join("\n");
+
+  return toolResult(
+    {
+      status: "written",
+      projectPath,
+      scatterPath: scatterPath(projectPath),
+      mode: normalizeGraphWriteMode(args?.mode),
+      activePageId: activePage.id,
+      activePageName: activePage.name,
+      nodeIds,
+      edgeIds,
+      document
+    },
+    summary
+  );
+}
+
 async function toolAwaitCanvasightRun(args) {
   const sessionIdValue = typeof args?.sessionId === "string" && args.sessionId ? args.sessionId : "";
   let projectPathValue = optionalProjectPath(args?.projectPath);
@@ -1851,6 +2089,83 @@ const tools = [
     }
   },
   {
+    name: "write_canvasight_graph",
+    description:
+      "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Local project path. Defaults to Canvasight's default project path when omitted."
+        },
+        projectName: {
+          type: "string",
+          description: "Optional project name stored in .scatter/scatter.json."
+        },
+        mode: {
+          type: "string",
+          enum: ["append-page", "replace-active-page", "replace-document"],
+          description: "Write behavior. Defaults to append-page so AI output does not overwrite existing pages."
+        },
+        pageId: {
+          type: "string",
+          description: "Optional id for the single page form."
+        },
+        pageName: {
+          type: "string",
+          description: "Optional name for the single page form."
+        },
+        activePageId: {
+          type: "string",
+          description: "Active page id when mode is replace-document."
+        },
+        layout: {
+          type: "string",
+          enum: ["horizontal", "vertical", "grid"],
+          description: "Default layout for nodes without explicit x/y or position. Defaults to horizontal."
+        },
+        viewport: {
+          type: "object",
+          description: "Optional viewport for generated pages.",
+          properties: {
+            x: { type: "number" },
+            y: { type: "number" },
+            zoom: { type: "number" }
+          },
+          additionalProperties: true
+        },
+        nodes: {
+          type: "array",
+          description: "Single page node list. Each node accepts id, title, body, x/y or position, codexMode, runMode, effort, and attachments.",
+          items: { type: "object", additionalProperties: true }
+        },
+        edges: {
+          type: "array",
+          description: "Single page edge list. source and target must reference node ids.",
+          items: { type: "object", additionalProperties: true }
+        },
+        pages: {
+          type: "array",
+          description: "Optional multi-page graph input. When provided, top-level nodes/edges are ignored.",
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" },
+              layout: { type: "string", enum: ["horizontal", "vertical", "grid"] },
+              viewport: { type: "object", additionalProperties: true },
+              nodes: { type: "array", items: { type: "object", additionalProperties: true } },
+              edges: { type: "array", items: { type: "object", additionalProperties: true } }
+            },
+            additionalProperties: true
+          }
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "await_canvasight_run",
     description: "Wait for a browser run payload from a Canvasight session. The current Codex thread receives and applies the run payload.",
     inputSchema: {
@@ -1896,6 +2211,7 @@ async function callTool(name, args) {
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
+  if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});
   throw new Error(`Unknown tool: ${name}`);

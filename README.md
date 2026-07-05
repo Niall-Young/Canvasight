@@ -14,6 +14,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - 在同一个项目里用多个 Page 隔离不同画布工作区。
 - 给节点附加图片、文件和上下文资料。
 - 选择 Chat、Plan 或 Goal 模式，把画布内容交给 Codex 执行。
+- 让 Codex 根据代码架构、产品需求或任务计划直接生成 Canvasight 节点和连线。
 - 保存常用节点的标题、提示词和附件为全局模板，并在任意项目里拖回画布复用。
 - 在新 Codex 线程里恢复最近使用的 Canvasight 项目。
 - 让网页画布独立于单个 Codex thread 存活，当前在哪个 thread，就由哪个 thread 获取 Run payload。
@@ -25,6 +26,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - **项目 Page**：一个项目下可以有多个相互隔离的画布工作区。
 - **附件**：支持上传、拖拽和粘贴图片到节点。
 - **Markdown 预览**：把当前节点或下游流程转换成可发送给 Codex 的 Markdown。
+- **AI 生成画布**：Codex 可以通过 `write_canvasight_graph` 写入 `.scatter/scatter.json`，创建新 Page、节点和连线。
 - **全局节点模板**：从节点菜单把非空提示词和附件保存为本机全局模板，打开模板抽屉后可搜索并拖拽到当前画布。
 - **Codex 原生模式**：节点可选择 Chat、Plan 或 Goal。
 - **项目级 daemon**：本地网页服务独立于打开它的 Codex thread，归档旧 thread 不会直接关闭画布服务。
@@ -41,6 +43,18 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 6. 点击节点或流程的 Run。
 7. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
 
+### AI 直接创建画布
+
+当你希望 Codex 把代码架构、产品需求或执行计划变成 Canvasight 画布时，可以直接提出类似请求：
+
+- “分析这个代码项目的架构，并生成一个 Canvasight 架构图页面。”
+- “把这份产品需求拆成 Canvasight 节点，按用户流程连接起来。”
+- “新增一个 Canvasight Page，包含调研、设计、开发、测试四个节点。”
+
+Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认追加一个新 Page，避免覆盖现有画布。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：不能自连、不能重复、一个节点不能有多个父节点。
+
+如果网页已经打开，外部写入后刷新页面或重新打开项目即可看到 AI 生成的 Page。AI 写入画布只是创建可编辑节点和连线，不会自动运行节点，也不会直接发送消息给 Codex；真正发送仍然通过点击 Run 后由 `await_canvasight_run` 接收。
+
 ### 插件安装
 
 插件源码位于 `plugins/canvasight`，repo-local marketplace 位于 `.agents/plugins/marketplace.json`。
@@ -52,17 +66,20 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.1` 或更高版本。如果仍是 `0.1.0`，旧的 MCP cache 可能还在运行 thread-local HTTP server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.2` 或更高版本。如果仍是 `0.1.0` 或 `0.1.1`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### MCP Tools
 
 - `open_canvasight`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
+- `write_canvasight_graph`
 - `await_canvasight_run`
 - `close_canvasight`
 
 `open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
+
+`write_canvasight_graph` 让 Codex/AI 直接创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线。默认模式是 `append-page`，适合生成“代码架构”“需求拆解”“执行计划”等独立画布。只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。
 
 ### 数据存储
 
@@ -73,6 +90,7 @@ codex plugin add canvasight@canvasight-local
 - 全局节点模板保存在本机 Canvasight 用户状态中，不写入项目 `.scatter/scatter.json`，因此会跨项目可用。
 - 模板附件会复制到本机 Canvasight 全局模板资源目录，不引用原项目附件路径。
 - `.scatter/scatter.json` 保持 v1 兼容，并通过 `pages` / `activePageId` 支持项目内多个 Page。
+- AI 写入画布也使用同一个 `.scatter/scatter.json` v1 协议；推荐通过 `write_canvasight_graph` 生成合法结构，而不是手动拼完整文件。
 
 ### 开发命令
 
@@ -112,6 +130,10 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 **Page 和项目有什么区别？**
 
 项目对应一个本地目录和 `.scatter` 数据。Page 是同一个项目下相互隔离的画布工作区。
+
+**AI 生成画布和 Run 有什么区别？**
+
+AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、节点和连线。Run 是用户在网页里点击节点或流程后，把 Markdown payload 交给当前调用 `await_canvasight_run` 的 Codex thread。
 
 **节点模板属于项目吗？**
 
@@ -165,6 +187,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - Use multiple Pages inside one project to isolate canvas workspaces.
 - Attach images, files, and context to task nodes.
 - Send canvas output to Codex in Chat, Plan, or Goal mode.
+- Let Codex generate Canvasight nodes and edges directly from code architecture, product requirements, or task plans.
 - Save reusable node titles, prompts, and attachments as global templates and drag them back into any project canvas.
 - Reopen recent Canvasight projects from a new Codex thread.
 - Keep the browser canvas alive outside a single Codex thread, so whichever thread is current can receive the next Run payload.
@@ -176,6 +199,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - **Project Pages**: keep multiple isolated canvas workspaces inside one project.
 - **Attachments**: upload, drag, or paste images and files into nodes.
 - **Markdown preview**: convert the current node or downstream flow into Markdown for Codex.
+- **AI-generated canvas**: Codex can call `write_canvasight_graph` to write `.scatter/scatter.json` and create new Pages, nodes, and edges.
 - **Global node templates**: save non-empty node prompts and attachments from the node menu, search them in the template drawer, and drag them into the current canvas.
 - **Native Codex modes**: choose Chat, Plan, or Goal per node.
 - **Project-level daemon**: the local web service is independent from the Codex thread that opened it, so archiving that thread does not directly stop the canvas service.
@@ -192,6 +216,18 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 6. Click Run on a node or flow.
 7. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
 
+### AI-Generated Canvas Data
+
+When you want Codex to turn code architecture, product requirements, or an execution plan into a Canvasight canvas, ask for it directly:
+
+- “Analyze this codebase architecture and generate a Canvasight architecture page.”
+- “Break this product requirement into Canvasight nodes and connect them by user flow.”
+- “Add a Canvasight Page with research, design, development, and testing nodes.”
+
+Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project, defaults to appending a new Page, and validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: no self-connections, no duplicates, and no more than one parent edge into the same target node.
+
+If the web app is already open, refresh the page or reopen the project to see the externally generated Page. AI-generated canvas data only creates editable nodes and edges; it does not run nodes or send a message to Codex. Sending still happens through Run plus `await_canvasight_run`.
+
 ### Plugin Installation
 
 The plugin source lives in `plugins/canvasight`. The repo-local marketplace lives at `.agents/plugins/marketplace.json`.
@@ -203,17 +239,20 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.1` or newer. If it still shows `0.1.0`, the old MCP cache may still be running the thread-local HTTP server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.2` or newer. If it still shows `0.1.0` or `0.1.1`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### MCP Tools
 
 - `open_canvasight`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
+- `write_canvasight_graph`
 - `await_canvasight_run`
 - `close_canvasight`
 
 `open_canvasight` remembers opened projects and starts or reuses the project-level daemon. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
+
+`write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json`. Its default mode is `append-page`, which is intended for standalone “code architecture”, “requirements breakdown”, or “execution plan” canvases. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit.
 
 ### Data Storage
 
@@ -224,6 +263,7 @@ After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-loca
 - Global node templates are stored in local Canvasight user state, not in project `.scatter/scatter.json`, so they are reusable across projects.
 - Template attachments are copied into the local Canvasight global template asset directory instead of referencing the original project attachment path.
 - `.scatter/scatter.json` remains v1-compatible and supports multiple project Pages through `pages` / `activePageId`.
+- AI-generated canvas data uses the same `.scatter/scatter.json` v1 protocol. Prefer `write_canvasight_graph` to produce a valid structure instead of manually assembling the whole file.
 
 ### Development Commands
 
@@ -263,6 +303,10 @@ Open a new Codex thread or reload the current Codex session. Already-open thread
 **What is the difference between a Page and a project?**
 
 A project maps to a local directory and `.scatter` data. A Page is an isolated canvas workspace inside that project.
+
+**What is the difference between AI-generated canvas data and Run?**
+
+AI-generated canvas data writes `.scatter/scatter.json` to create editable Pages, nodes, and edges. Run happens after the user clicks a node or flow in the web app, then the Markdown payload is received by the Codex thread calling `await_canvasight_run`.
 
 **Are node templates project-specific?**
 

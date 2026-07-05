@@ -124,6 +124,26 @@ Canvasight should use a restrained, professional interface:
 - Dragging, resizing, zooming, and panning should feel stable and should not conflict with text selection or form input.
 - Inline name or title editing should commit when focus leaves or the user clicks outside the input. `Enter` commits and `Escape` cancels.
 
+## AI-Generated Canvas
+
+Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to create pages, nodes, edges, and attachments. AI-generated canvas content should feel like normal editable canvas state, not a separate imported artifact.
+
+- AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
+- AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
+- AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction.
+- AI output should prefer creating a new Page for each architecture map, requirement breakdown, or task plan so existing user pages are not overwritten.
+- AI-generated content must remain fully editable by the user.
+
+## Canvas File Protocol
+
+The `.scatter/scatter.json` file is a user-editable and AI-editable canvas protocol.
+
+- External file writes must be validated before becoming visible canvas state.
+- Invalid or partially valid canvas files should show a recoverable error instead of blanking the workspace.
+- Unknown fields should be preserved when possible to protect forward compatibility.
+- Missing optional fields should fall back to stable defaults.
+- New AI-generated nodes should have deterministic, readable layout defaults and enough spacing to keep text, handles, and edges from overlapping.
+
 ## States
 
 Every primary surface should define:

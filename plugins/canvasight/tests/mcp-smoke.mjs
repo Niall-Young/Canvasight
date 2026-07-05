@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.1");
+    assert.equal(initialized.serverInfo.version, "0.1.2");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -300,6 +300,7 @@ async function main() {
     assert.equal(toolNames.has("open_canvasight"), true);
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
+    assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
 
@@ -319,7 +320,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.1");
+    assert.equal(autoHealth.serverVersion, "0.1.2");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -439,6 +440,114 @@ async function main() {
     assert.equal(Array.isArray(openProject.document.pages), true);
     assert.equal(openProject.document.pages.length, 1);
     assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
+
+    const graphWritten = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        pageName: "Code Architecture",
+        layout: "grid",
+        nodes: [
+          {
+            id: "entry",
+            title: "Entry points",
+            body: "Map CLI and browser entry points.",
+            codexMode: "chat"
+          },
+          {
+            id: "api",
+            title: "API layer",
+            body: "Summarize HTTP and MCP API responsibilities.",
+            codexMode: "plan"
+          },
+          {
+            id: "store",
+            title: "Canvas store",
+            body: "Explain page, node, and edge state ownership.",
+            codexMode: "goal"
+          }
+        ],
+        edges: [
+          {
+            id: "entry-api",
+            source: "entry",
+            target: "api",
+            label: "calls"
+          },
+          {
+            id: "api-store",
+            source: "api",
+            target: "store",
+            label: "updates"
+          }
+        ]
+      }
+    });
+    assert.equal(graphWritten.structuredContent.status, "written");
+    assert.equal(graphWritten.structuredContent.projectPath, projectPath);
+    assert.equal(graphWritten.structuredContent.activePageName, "Code Architecture");
+    assert.deepEqual(graphWritten.structuredContent.nodeIds, ["entry", "api", "store"]);
+    assert.deepEqual(graphWritten.structuredContent.edgeIds, ["entry-api", "api-store"]);
+
+    const graphScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assert.equal(graphScatterJson.version, 1);
+    assert.equal(graphScatterJson.projectName, "demo-project");
+    assert.equal(graphScatterJson.activePageId, graphWritten.structuredContent.activePageId);
+    assert.equal(graphScatterJson.pages.length, 2);
+    assert.equal(graphScatterJson.nodes.length, 3);
+    assert.equal(graphScatterJson.edges.length, 2);
+    assert.equal(graphScatterJson.nodes[1].data.codexMode, "plan");
+    assert.equal(graphScatterJson.nodes[1].data.planMode, true);
+    assert.equal(graphScatterJson.nodes[2].data.codexMode, "goal");
+    assert.equal(graphScatterJson.nodes[2].position.x, 920);
+    assert.equal(graphScatterJson.edges[0].source, "entry");
+    assert.equal(graphScatterJson.edges[1].target, "store");
+
+    await assert.rejects(
+      () =>
+        request("tools/call", {
+          name: "write_canvasight_graph",
+          arguments: {
+            projectPath,
+            pageName: "Invalid Graph",
+            nodes: [
+              {
+                id: "only-node",
+                title: "Only node",
+                body: "This graph has an invalid edge."
+              }
+            ],
+            edges: [
+              {
+                source: "only-node",
+                target: "missing-node"
+              }
+            ]
+          }
+        }),
+      /target must reference an existing node id/
+    );
+
+    await assert.rejects(
+      () =>
+        request("tools/call", {
+          name: "write_canvasight_graph",
+          arguments: {
+            projectPath,
+            pageName: "Invalid Parent Graph",
+            nodes: [
+              { id: "parent-a", title: "Parent A", body: "First parent." },
+              { id: "parent-b", title: "Parent B", body: "Second parent." },
+              { id: "child", title: "Child", body: "Only one parent is allowed." }
+            ],
+            edges: [
+              { source: "parent-a", target: "child" },
+              { source: "parent-b", target: "child" }
+            ]
+          }
+        }),
+      /Node already has a parent edge: child/
+    );
 
     const document = {
       version: 1,

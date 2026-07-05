@@ -24,6 +24,30 @@ The Run payload belongs to the Codex thread that calls `await_canvasight_run`, n
 
 Do not use macOS Accessibility automation, virtual clicks, clipboard paste, or `codex://threads/new` to send Canvasight output. The plugin returns output through MCP.
 
+## AI Canvas Writing Protocol
+
+Use `write_canvasight_graph` when the user asks Codex to create or update a Canvasight canvas from analysis, code architecture, product requirements, task planning, or another structured breakdown.
+
+Prefer `write_canvasight_graph` over hand-editing `.scatter/scatter.json` unless the user explicitly asks for raw file editing. The tool writes a valid v1 `.scatter/scatter.json`, validates node and edge references, and remembers the project for reopening.
+
+Default behavior is `mode: "append-page"` so AI-generated content lands in a new Page and does not overwrite the user's existing canvas. Use `replace-active-page` or `replace-document` only when the user explicitly asks to replace existing canvas content.
+
+For each generated node, provide:
+
+- stable `id` values when edges need to reference them,
+- concise `title`,
+- actionable `body` prompt content,
+- optional `codexMode`: `chat`, `plan`, or `goal`,
+- optional `x` / `y` or `position` when a specific layout is needed.
+
+For each generated edge, `source` and `target` must reference node ids in the same Page. Do not create edges that point to missing nodes.
+
+Generated edges must follow the same rules as manual canvas connections: no self-connections, no duplicate `source -> target` edges, and no more than one parent edge into the same target node.
+
+Use `layout: "horizontal"` for linear flows, `layout: "vertical"` for staged lists, and `layout: "grid"` for architecture or requirement maps when exact positions are not important.
+
+After writing a graph, call `open_canvasight` or `open_canvasight_recent_project` when the user wants to inspect it in the browser. If the web app was already open, tell the user to refresh or reopen the project to load the external file update.
+
 ## Codex Native Mode Protocol
 
 After `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
