@@ -285,11 +285,15 @@ async function main() {
     });
     assert.equal(openProject.document.version, 1);
     assert.equal(openProject.project.path, projectPath);
+    assert.equal(Array.isArray(openProject.document.pages), true);
+    assert.equal(openProject.document.pages.length, 1);
+    assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
 
     const document = {
       version: 1,
       projectName: "demo-project",
       updatedAt: "2026-07-04T00:00:00.000Z",
+      activePageId: "page-main",
       viewport: { x: 12, y: 24, zoom: 1 },
       nodes: [
         {
@@ -307,13 +311,52 @@ async function main() {
           }
         }
       ],
-      edges: []
+      edges: [],
+      pages: [
+        {
+          id: "page-main",
+          name: "Main Page",
+          createdAt: "2026-07-04T00:00:00.000Z",
+          updatedAt: "2026-07-04T00:00:00.000Z",
+          viewport: { x: 12, y: 24, zoom: 1 },
+          nodes: [
+            {
+              id: "node-a",
+              type: "task",
+              position: { x: 0, y: 0 },
+              data: {
+                title: "Smoke task",
+                body: "Run the smoke payload.",
+                attachments: [],
+                codexMode: "plan",
+                effort: "high",
+                planMode: true,
+                runMode: "flow"
+              }
+            }
+          ],
+          edges: []
+        },
+        {
+          id: "page-empty",
+          name: "Empty Page",
+          createdAt: "2026-07-04T00:00:00.000Z",
+          updatedAt: "2026-07-04T00:00:00.000Z",
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: []
+        }
+      ]
     };
     const savedDocument = await fetchJson(`${origin}/api/sessions/${sessionId}/document`, {
       method: "POST",
       body: JSON.stringify({ projectPath, document })
     });
     assert.equal(savedDocument.nodes[0].id, "node-a");
+    assert.equal(savedDocument.activePageId, "page-main");
+    assert.equal(savedDocument.pages.length, 2);
+    assert.equal(savedDocument.pages[0].nodes[0].id, "node-a");
+    assert.equal(savedDocument.pages[1].nodes.length, 0);
     const recentAfterDocumentSave = await request("tools/call", {
       name: "list_canvasight_recent_projects",
       arguments: {

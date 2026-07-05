@@ -105,10 +105,22 @@ export interface ScatterEdge {
   label?: string;
 }
 
+export interface ScatterPage {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  viewport: { x: number; y: number; zoom: number };
+  nodes: ScatterNode[];
+  edges: ScatterEdge[];
+}
+
 export interface ScatterDocument {
   version: 1;
   projectName: string;
   updatedAt: string;
+  activePageId: string;
+  pages: ScatterPage[];
   viewport: { x: number; y: number; zoom: number };
   nodes: ScatterNode[];
   edges: ScatterEdge[];

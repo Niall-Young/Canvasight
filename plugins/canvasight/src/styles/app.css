@@ -1677,12 +1677,24 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .canvas-actions,
 .canvas-toolbar,
-.canvas-run-toolbar {
+.canvas-run-toolbar,
+.canvas-page-toolbar {
   position: absolute;
   z-index: 8;
   border: var(--border-weight-sm) solid var(--color-border-divider);
   background: var(--color-background-surface);
   box-shadow: var(--shadow-node);
+}
+
+.canvas-page-toolbar {
+  top: 12px;
+  left: 12px;
+  display: flex;
+  max-width: min(420px, calc(100% - 112px));
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
 }
 
 .canvas-actions {
@@ -1718,6 +1730,7 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .canvas-tool-button,
 .canvas-toolbar-button,
+.canvas-page-button,
 .canvas-zoom-trigger {
   display: inline-flex;
   align-items: center;
@@ -1730,7 +1743,8 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .canvas-tool-button,
-.canvas-toolbar-button {
+.canvas-toolbar-button,
+.canvas-page-button {
   width: 32px;
   height: 32px;
   padding: 6px;
@@ -1740,6 +1754,8 @@ button.achievement-card.is-unlocked:focus-visible {
 .canvas-tool-button:focus-visible,
 .canvas-toolbar-button:hover,
 .canvas-toolbar-button:focus-visible,
+.canvas-page-button:hover,
+.canvas-page-button:focus-visible,
 .canvas-zoom-trigger:hover,
 .canvas-zoom-trigger:focus-visible {
   outline: none;
@@ -1753,6 +1769,73 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .canvas-tool-button:disabled:hover {
   background: transparent;
+}
+
+.canvas-page-trigger,
+.canvas-page-name-input {
+  display: inline-flex;
+  width: min(260px, 38vw);
+  height: 32px;
+  min-width: 132px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--color-text);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-14);
+  line-height: var(--line-14);
+}
+
+.canvas-page-trigger {
+  justify-content: flex-start;
+}
+
+.canvas-page-trigger:hover,
+.canvas-page-trigger:focus-visible,
+.canvas-page-name-input:focus {
+  outline: none;
+  background: var(--color-interaction);
+}
+
+.canvas-page-trigger span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-page-name-input {
+  background: var(--color-background-input);
+}
+
+.canvas-page-popover {
+  z-index: 30;
+}
+
+.kit-dropdown-menu.canvas-page-menu {
+  width: 224px;
+}
+
+.canvas-page-menu .kit-dropdown-menu-item {
+  min-width: 0;
+}
+
+.canvas-page-menu .kit-dropdown-menu-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-page-menu-divider {
+  display: block;
+  height: 1px;
+  margin: 4px;
+  background: var(--color-border-divider);
 }
 
 .canvas-toolbar .canvas-toolbar-button.is-selected,

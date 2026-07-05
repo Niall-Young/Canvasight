@@ -33,6 +33,7 @@ import {
   type ScatterEdge,
   type ScatterNode,
   type ScatterNodeData,
+  type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
 import { canvasightApi } from "./lib/canvasightApi";
@@ -137,18 +138,34 @@ function projectNameFromPath(projectPath: string): string {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) || "Canvasight Project";
 }
 
+function emptyPage(index = 0, name = `Page ${index + 1}`): ScatterPage {
+  const now = new Date().toISOString();
+  return {
+    id: nanoid(),
+    name,
+    createdAt: now,
+    updatedAt: now,
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [],
+    edges: []
+  };
+}
+
 function defaultProjectPathFromBrowser(): string {
   return import.meta.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH?.trim() || "";
 }
 
 function emptyDocument(projectPath: string): ScatterDocument {
+  const page = emptyPage(0);
   return {
     version: 1,
     projectName: projectNameFromPath(projectPath),
     updatedAt: new Date().toISOString(),
-    viewport: { x: 0, y: 0, zoom: 1 },
-    nodes: [],
-    edges: []
+    activePageId: page.id,
+    pages: [page],
+    viewport: page.viewport,
+    nodes: page.nodes,
+    edges: page.edges
   };
 }
 
@@ -408,40 +425,111 @@ function emptyNode(position: { x: number; y: number }, index: number): ScatterNo
   };
 }
 
-function normalizeDocument(projectPath: string, document: ScatterDocument): ScatterDocument {
+function normalizeViewport(value: unknown): ScatterDocument["viewport"] {
+  const viewport = value && typeof value === "object" ? (value as Partial<ScatterDocument["viewport"]>) : {};
+  return {
+    x: typeof viewport.x === "number" && Number.isFinite(viewport.x) ? viewport.x : 0,
+    y: typeof viewport.y === "number" && Number.isFinite(viewport.y) ? viewport.y : 0,
+    zoom: typeof viewport.zoom === "number" && Number.isFinite(viewport.zoom) ? viewport.zoom : 1
+  };
+}
+
+function normalizePageNodes(nodes: unknown): ScatterNode[] {
+  return Array.isArray(nodes)
+    ? nodes.map((node) => {
+        const codexMode = normalizeCodexMode(node.data?.codexMode, Boolean(node.data?.planMode));
+        return {
+          ...node,
+          type: "task",
+          selected: false,
+          data: {
+            ...node.data,
+            title: typeof node.data?.title === "string" ? node.data.title : "",
+            body: typeof node.data?.body === "string" ? node.data.body : "",
+            attachments: node.data?.attachments || [],
+            codexMode,
+            effort: node.data?.effort || "xhigh",
+            planMode: codexMode === "plan",
+            runMode: node.data?.runMode || "flow"
+          }
+        } satisfies ScatterNode;
+      })
+    : [];
+}
+
+function normalizePageEdges(edges: unknown): ScatterEdge[] {
+  return Array.isArray(edges) ? edges : [];
+}
+
+function normalizePage(page: Partial<ScatterPage>, index: number, fallback?: Partial<ScatterPage>): ScatterPage {
+  const now = new Date().toISOString();
+  return {
+    id: typeof page.id === "string" && page.id ? page.id : fallback?.id || nanoid(),
+    name: typeof page.name === "string" && page.name.trim() ? page.name.trim() : fallback?.name || `Page ${index + 1}`,
+    createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : fallback?.createdAt || now,
+    updatedAt: typeof page.updatedAt === "string" && page.updatedAt ? page.updatedAt : fallback?.updatedAt || now,
+    viewport: normalizeViewport(page.viewport || fallback?.viewport),
+    nodes: normalizePageNodes(page.nodes || fallback?.nodes),
+    edges: normalizePageEdges(page.edges || fallback?.edges)
+  };
+}
+
+function normalizeDocument(projectPath: string, document: Partial<ScatterDocument>): ScatterDocument {
   const fallback = emptyDocument(projectPath);
+  const legacyFallback: Partial<ScatterPage> = {
+    id: document.activePageId,
+    name: "Page 1",
+    updatedAt: document.updatedAt,
+    viewport: document.viewport,
+    nodes: document.nodes,
+    edges: document.edges
+  };
+  const pages =
+    Array.isArray(document.pages) && document.pages.length > 0
+      ? document.pages.map((page, index) => normalizePage(page, index, index === 0 ? legacyFallback : undefined))
+      : [normalizePage({}, 0, legacyFallback)];
+  const activePageId =
+    typeof document.activePageId === "string" && pages.some((page) => page.id === document.activePageId) ? document.activePageId : pages[0].id;
+  const activePage = pages.find((page) => page.id === activePageId) ?? pages[0];
+
   return {
     ...fallback,
     ...document,
     projectName: document.projectName || fallback.projectName,
-    nodes: (document.nodes || []).map((node) => {
-      const codexMode = normalizeCodexMode(node.data.codexMode, Boolean(node.data.planMode));
-      return {
-        ...node,
-        type: "task",
-        selected: false,
-        data: {
-          ...node.data,
-          attachments: node.data.attachments || [],
-          codexMode,
-          effort: node.data.effort || "xhigh",
-          planMode: codexMode === "plan",
-          runMode: node.data.runMode || "flow"
-        }
-      };
-    }),
-    edges: document.edges || []
+    updatedAt: document.updatedAt || fallback.updatedAt,
+    activePageId,
+    pages,
+    viewport: activePage.viewport,
+    nodes: activePage.nodes,
+    edges: activePage.edges
   };
 }
 
-function toDocument(project: ScatterProjectInfo, nodes: ScatterNode[], edges: ScatterEdge[]): ScatterDocument {
+function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePageId: string | null, nodes: ScatterNode[], edges: ScatterEdge[]): ScatterDocument {
+  const now = new Date().toISOString();
+  const sourcePages = pages.length ? pages : [emptyPage(0)];
+  const currentPageId = activePageId && sourcePages.some((page) => page.id === activePageId) ? activePageId : sourcePages[0].id;
+  const serializedPages = sourcePages.map((page) => {
+    const pageNodes = page.id === currentPageId ? nodes : page.nodes;
+    const pageEdges = page.id === currentPageId ? edges : page.edges;
+    return {
+      ...page,
+      updatedAt: page.id === currentPageId ? now : page.updatedAt,
+      nodes: pageNodes.map((node) => ({ ...node, selected: false })),
+      edges: pageEdges.map(({ id, source, target, label }) => ({ id, source, target, label }))
+    };
+  });
+  const activePage = serializedPages.find((page) => page.id === currentPageId) ?? serializedPages[0];
+
   return {
     version: 1,
     projectName: project.name,
-    updatedAt: new Date().toISOString(),
-    viewport: { x: 0, y: 0, zoom: 1 },
-    nodes: nodes.map((node) => ({ ...node, selected: false })),
-    edges: edges.map(({ id, source, target, label }) => ({ id, source, target, label }))
+    updatedAt: now,
+    activePageId: currentPageId,
+    pages: serializedPages,
+    viewport: activePage.viewport,
+    nodes: activePage.nodes,
+    edges: activePage.edges
   };
 }
 
@@ -608,12 +696,18 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     canRedo,
     canUndo,
     commitCanvasChange,
+    createPage,
+    deleteActivePage,
     edges,
     markNodeRun,
     nodes,
+    activePageId,
+    pages,
     project,
     replaceCanvasLive,
+    renameActivePage,
     selectedNodeId,
+    setActivePageId,
     setDrawer,
     setProjectDocument,
     setSaving,
@@ -637,6 +731,8 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const [viewportZoom, setViewportZoom] = useState(1);
   const [selectedRunMode, setSelectedRunMode] = useState<RunMode>("flow");
   const [markdownNodeId, setMarkdownNodeId] = useState<string | null>(null);
+  const [renamingPage, setRenamingPage] = useState(false);
+  const [pageNameDraft, setPageNameDraft] = useState("");
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -652,8 +748,10 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
   const markdownNode = useMemo(() => nodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, nodes]);
+  const activePage = useMemo(() => pages.find((page) => page.id === activePageId) ?? pages[0] ?? null, [activePageId, pages]);
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
+  const canDeletePage = pages.length > 1;
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
   const markdownResult = useMemo(
@@ -693,6 +791,19 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     if (!markdownNodeId) return;
     if (!nodes.some((node) => node.id === markdownNodeId)) setMarkdownNodeId(null);
   }, [markdownNodeId, nodes]);
+
+  useEffect(() => {
+    setMarkdownNodeId(null);
+    setSelectedRunMode("flow");
+    setConnectionPreview(null);
+    setHoveredNodeId(null);
+    connectionStartRef.current = null;
+    connectionSucceededRef.current = false;
+    connectionHoverTargetRef.current = null;
+    if (project) {
+      window.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.24 }));
+    }
+  }, [activePageId, project]);
 
   const clearConnectionHoverTarget = useCallback(() => {
     updateConnectionHoverTarget(null);
@@ -793,7 +904,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     saveTimerRef.current = window.setTimeout(() => {
       setSaving(true);
       canvasightApi
-        .saveDocument(project.path, toDocument(project, nodes, edges))
+        .saveDocument(project.path, toDocument(project, pages, activePageId, nodes, edges))
         .then(() => setStatus(t("status.saved")))
         .catch((error) => setStatus(error instanceof Error ? error.message : t("status.saveFailed")))
         .finally(() => setSaving(false));
@@ -802,7 +913,42 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
-  }, [edges, nodes, project, setSaving, setStatus, t]);
+  }, [activePageId, edges, nodes, pages, project, setSaving, setStatus, t]);
+
+  const beginRenamePage = useCallback(() => {
+    if (!activePage) return;
+    setPageNameDraft(activePage.name);
+    setRenamingPage(true);
+  }, [activePage]);
+
+  const cancelRenamePage = useCallback(() => {
+    setRenamingPage(false);
+    setPageNameDraft("");
+  }, []);
+
+  const commitRenamePage = useCallback(() => {
+    const nextName = pageNameDraft.trim();
+    if (!nextName || !activePage) {
+      cancelRenamePage();
+      return;
+    }
+    renameActivePage(nextName);
+    setStatus(t("status.pageRenamed", { name: nextName }));
+    cancelRenamePage();
+  }, [activePage, cancelRenamePage, pageNameDraft, renameActivePage, setStatus, t]);
+
+  const handleCreatePage = useCallback(() => {
+    const page = createPage();
+    if (!page) return;
+    setStatus(t("status.pageCreated", { name: page.name }));
+  }, [createPage, setStatus, t]);
+
+  const handleDeletePage = useCallback(() => {
+    if (!activePage || !canDeletePage) return;
+    if (!window.confirm(t("page.deleteConfirm", { name: activePage.name }))) return;
+    deleteActivePage();
+    setStatus(t("status.pageDeleted", { name: activePage.name }));
+  }, [activePage, canDeletePage, deleteActivePage, setStatus, t]);
 
   const getVisibleCanvasCenterPosition = useCallback((): FlowPosition => {
     const canvasRect = canvasShellRef.current?.getBoundingClientRect();
@@ -1525,6 +1671,82 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
         >
           {project ? (
             <>
+              <div className="canvas-page-toolbar" aria-label={t("page.toolbar")}>
+                {renamingPage ? (
+                  <input
+                    className="canvas-page-name-input"
+                    value={pageNameDraft}
+                    autoFocus
+                    aria-label={t("page.rename")}
+                    onChange={(event) => setPageNameDraft(event.currentTarget.value)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onBlur={commitRenamePage}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitRenamePage();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelRenamePage();
+                      }
+                    }}
+                  />
+                ) : (
+                  <RadixDropdownMenu.Root>
+                    <RadixDropdownMenu.Trigger asChild>
+                      <button className="canvas-page-trigger" type="button" aria-label={t("page.switch")}>
+                        <Icon name="stack" size={16} />
+                        <span>{activePage?.name ?? t("page.untitled")}</span>
+                        <Icon name="chevron-down" size={16} />
+                      </button>
+                    </RadixDropdownMenu.Trigger>
+                    <RadixDropdownMenu.Portal>
+                      <RadixDropdownMenu.Content className="canvas-page-popover" side="bottom" sideOffset={8} align="start">
+                        <DropdownMenu className="canvas-page-menu" role="menu">
+                          {pages.map((page) => (
+                            <RadixDropdownMenu.Item key={page.id} asChild>
+                              <DropdownMenuItem
+                                icon="notebook"
+                                label={page.name}
+                                selected={page.id === activePageId}
+                                role="menuitemradio"
+                                aria-checked={page.id === activePageId}
+                                onClick={() => setActivePageId(page.id)}
+                              />
+                            </RadixDropdownMenu.Item>
+                          ))}
+                          <span className="canvas-page-menu-divider" aria-hidden />
+                          <RadixDropdownMenu.Item asChild>
+                            <DropdownMenuItem icon="plus-lg" label={t("page.new")} onClick={handleCreatePage} />
+                          </RadixDropdownMenu.Item>
+                        </DropdownMenu>
+                      </RadixDropdownMenu.Content>
+                    </RadixDropdownMenu.Portal>
+                  </RadixDropdownMenu.Root>
+                )}
+                <TooltipAnchor label={t("page.new")} side="bottom" align="start">
+                  <IconButton className="canvas-page-button" filled={false} icon="plus-lg" size="lg" aria-label={t("page.new")} onClick={handleCreatePage} />
+                </TooltipAnchor>
+                <RadixDropdownMenu.Root>
+                  <RadixDropdownMenu.Trigger asChild>
+                    <IconButton className="canvas-page-button" filled={false} icon="dots-horizontal" size="lg" aria-label={t("page.more")} />
+                  </RadixDropdownMenu.Trigger>
+                  <RadixDropdownMenu.Portal>
+                    <RadixDropdownMenu.Content className="canvas-page-popover" side="bottom" sideOffset={8} align="start">
+                      <DropdownMenu className="canvas-page-menu" role="menu">
+                        <RadixDropdownMenu.Item asChild>
+                          <DropdownMenuItem icon="edit" label={t("page.rename")} onClick={beginRenamePage} />
+                        </RadixDropdownMenu.Item>
+                        <RadixDropdownMenu.Item asChild disabled={!canDeletePage}>
+                          <DropdownMenuItem icon="trash" label={t("page.delete")} disabled={!canDeletePage} onClick={handleDeletePage} />
+                        </RadixDropdownMenu.Item>
+                      </DropdownMenu>
+                    </RadixDropdownMenu.Content>
+                  </RadixDropdownMenu.Portal>
+                </RadixDropdownMenu.Root>
+              </div>
               <ReactFlow
                 nodes={nodes as Node[]}
                 edges={renderedEdges}

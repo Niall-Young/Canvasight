@@ -202,10 +202,27 @@ function attachmentKind(name, mime) {
 }
 
 function defaultScatterDocument(projectPath) {
+  const now = nowIso();
+  const page = defaultScatterPage();
   return {
     version: 1,
     projectName: projectNameFromPath(projectPath),
-    updatedAt: nowIso(),
+    updatedAt: now,
+    activePageId: page.id,
+    pages: [page],
+    viewport: page.viewport,
+    nodes: page.nodes,
+    edges: page.edges
+  };
+}
+
+function defaultScatterPage(index = 0) {
+  const now = nowIso();
+  return {
+    id: `page-${crypto.randomBytes(5).toString("hex")}`,
+    name: `Page ${index + 1}`,
+    createdAt: now,
+    updatedAt: now,
     viewport: { x: 0, y: 0, zoom: 1 },
     nodes: [],
     edges: []
@@ -365,6 +382,38 @@ function normalizeScatterEdge(value, index) {
   };
 }
 
+function normalizeScatterViewport(value) {
+  const viewport = isObject(value) ? value : {};
+  return {
+    x: toNumber(viewport.x, 0),
+    y: toNumber(viewport.y, 0),
+    zoom: toNumber(viewport.zoom, 1)
+  };
+}
+
+function normalizeScatterPage(value, index, fallback) {
+  const page = isObject(value) ? value : {};
+  const now = nowIso();
+  return {
+    ...page,
+    id: typeof page.id === "string" && page.id ? page.id : `page-${index + 1}`,
+    name: typeof page.name === "string" && page.name.trim() ? page.name.trim() : `Page ${index + 1}`,
+    createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
+    updatedAt: typeof page.updatedAt === "string" && page.updatedAt ? page.updatedAt : typeof fallback?.updatedAt === "string" ? fallback.updatedAt : now,
+    viewport: normalizeScatterViewport(page.viewport || fallback?.viewport),
+    nodes: Array.isArray(page.nodes)
+      ? page.nodes.map(normalizeScatterNode)
+      : Array.isArray(fallback?.nodes)
+        ? fallback.nodes.map(normalizeScatterNode)
+        : [],
+    edges: Array.isArray(page.edges)
+      ? page.edges.map(normalizeScatterEdge)
+      : Array.isArray(fallback?.edges)
+        ? fallback.edges.map(normalizeScatterEdge)
+        : []
+  };
+}
+
 function normalizeScatterDocument(value, projectPath) {
   if (!isObject(value)) {
     throw new HttpError(400, "document must be an object");
@@ -373,19 +422,28 @@ function normalizeScatterDocument(value, projectPath) {
     throw new HttpError(400, "Only .scatter/scatter.json version 1 is supported");
   }
 
-  const viewport = isObject(value.viewport) ? value.viewport : {};
+  const legacyFallback = {
+    updatedAt: value.updatedAt,
+    viewport: value.viewport,
+    nodes: value.nodes,
+    edges: value.edges
+  };
+  const rawPages = Array.isArray(value.pages) && value.pages.length > 0 ? value.pages : [legacyFallback];
+  const pages = rawPages.map((page, index) => normalizeScatterPage(page, index, index === 0 ? legacyFallback : undefined));
+  const activePageId =
+    typeof value.activePageId === "string" && pages.some((page) => page.id === value.activePageId) ? value.activePageId : pages[0].id;
+  const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+
   return {
     ...value,
     version: 1,
     projectName: typeof value.projectName === "string" && value.projectName ? value.projectName : projectNameFromPath(projectPath),
     updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : nowIso(),
-    viewport: {
-      x: toNumber(viewport.x, 0),
-      y: toNumber(viewport.y, 0),
-      zoom: toNumber(viewport.zoom, 1)
-    },
-    nodes: Array.isArray(value.nodes) ? value.nodes.map(normalizeScatterNode) : [],
-    edges: Array.isArray(value.edges) ? value.edges.map(normalizeScatterEdge) : []
+    activePageId,
+    pages,
+    viewport: activePage.viewport,
+    nodes: activePage.nodes,
+    edges: activePage.edges
   };
 }
 
