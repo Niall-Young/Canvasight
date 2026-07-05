@@ -10,7 +10,7 @@ Use this skill to open or recover Canvasight's browser canvas through MCP.
 ## Workflow
 
 1. Call `open_canvasight` with the current workspace path when available.
-2. Navigate Codex's in-app Browser to the full returned `browserUrl` / `url`, including query parameters.
+2. Navigate Codex's in-app Browser/sidebar to the full returned `browserUrl` / `url`, including query parameters. The MCP server should not open the system browser by default.
 3. Use `list_canvasight_recent_projects` and `open_canvasight_recent_project` when the user wants the last Canvasight project from a new Codex thread.
 4. Call `close_canvasight` only when the specific session is no longer needed. It does not stop the project-level daemon.
 

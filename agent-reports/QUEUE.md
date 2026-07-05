@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2323-integration-summary-open-target-system-browser.md` - integrated Codex in-app browser as the default Canvasight open target.
+- `agent-reports/resolved/20260705-2323-development-solution-open-target-system-browser.md` - removed default system-browser launch and added explicit external-browser opt-in.
+- `agent-reports/resolved/20260705-2323-product-issue-open-target-system-browser.md` - resolved Canvasight opening directly in the system browser.
 - `agent-reports/resolved/20260705-2311-integration-summary-agent-team-agents-md-persistence.md` - integrated default AGENTS.md persistence for Canvasight Agent Team across Codex threads.
 - `agent-reports/resolved/20260705-2311-development-solution-agent-team-agents-md-persistence.md` - changed Agent Team bootstrap from opt-in AGENTS.md edits to default minimal persistence.
 - `agent-reports/resolved/20260705-2311-product-issue-agent-team-agents-md-persistence.md` - resolved cross-thread loss of Agent Team rules when AGENTS.md was not updated.

@@ -16,6 +16,10 @@ Connection refused usually means the URL points at an old thread-local dev serve
 
 Use `open_canvasight` or `open_canvasight_recent_project` to get a fresh full `browserUrl`. Do not reuse only the old origin.
 
+## Opens In System Browser
+
+`open_canvasight` should target Codex's in-app browser sidebar and should not launch the system default browser unless `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` is explicitly set for development debugging. If an old plugin cache still opens Safari or Chrome directly, reinstall `canvasight@canvasight-local` and start a new Codex thread.
+
 ## Archived Opening Thread
 
 The browser page should not depend on the Codex thread that originally opened it. If a page was opened before persistent daemon support or the URL is stale, reopen the recent project. The current thread should receive the next Run payload by calling `await_canvasight_run` with `projectPath`.

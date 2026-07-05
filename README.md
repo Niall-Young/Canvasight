@@ -37,7 +37,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 
 ### 基础用法
 
-1. 在 Codex 中调用 `open_canvasight` 打开 Canvasight；它会启动或复用项目级本地 daemon。
+1. 在 Codex 中调用 `open_canvasight` 打开 Canvasight；它会启动或复用项目级本地 daemon，并把完整 URL 交给 Codex 侧边栏内置浏览器。
 2. 在浏览器画布里创建任务节点，填写提示词，按需要添加附件。
 3. 用连接线组织节点关系，或者在左上角创建多个 Page 管理不同工作区。
 4. 选择节点的 Codex 模式：Chat、Plan 或 Goal。
@@ -80,7 +80,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.10` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8` 或 `0.1.9`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.11` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8`、`0.1.9` 或 `0.1.10`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -105,7 +105,7 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
+`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认面向 Codex 侧边栏内置浏览器，不会再直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
 
 `list_canvasight_node_templates` 返回本机全局节点模板，供 AI 写图前扫描和复用。`write_canvasight_graph` 让 Codex/AI 直接创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线。`mode` 决定 Page 写入行为，`graphType` 决定任务节点结构。默认模式是 `append-page`，适合在未明确要求覆盖时保护现有画布；只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。节点可传 `templateId` 或 `templateQuery` 复用模板标题、正文和附件。
 
@@ -182,7 +182,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **内置浏览器打不开 Canvasight 怎么办？**
 
-`open_canvasight` 返回前会先验证完整会话 URL 可访问。用内置浏览器打开时，请导航到 tool result 里的完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight` 或 `open_canvasight_recent_project` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
+`open_canvasight` 返回前会先验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请在 Codex 侧边栏内置浏览器打开 tool result 里的完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight` 或 `open_canvasight_recent_project` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
 
 **当前 thread 怎么接收旧网页里的 Run？**
 
@@ -243,7 +243,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 
 ### Basic Workflow
 
-1. Call `open_canvasight` from Codex; it starts or reuses the project-level local daemon.
+1. Call `open_canvasight` from Codex; it starts or reuses the project-level local daemon and hands the full URL to Codex's in-app browser sidebar.
 2. Create task nodes in the browser canvas, write prompts, and add attachments when needed.
 3. Connect nodes into flows, or create multiple Pages from the top-left Page switcher.
 4. Choose the node's Codex mode: Chat, Plan, or Goal.
@@ -286,7 +286,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.10` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, or `0.1.9`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.11` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, `0.1.9`, or `0.1.10`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -311,7 +311,7 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
+`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It targets Codex's in-app browser sidebar by default and no longer launches the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
 
 `list_canvasight_node_templates` returns local global node templates so AI can scan and reuse them before writing a graph. `write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json`. `mode` controls Page write behavior, while `graphType` controls the task node structure. Its default mode is `append-page`, which protects existing canvas content when replacement was not explicitly requested. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit. Nodes can pass `templateId` or `templateQuery` to reuse a template title, body, and attachments.
 
@@ -388,7 +388,7 @@ Yes. The web service is hosted by the project-level daemon, not the thread-local
 
 **What if the in-app browser cannot open Canvasight?**
 
-`open_canvasight` verifies that the full session URL is reachable before returning. When opening it in the in-app browser, navigate to the full `browserUrl` / `url` from the tool result, not only the `origin`. If it still cannot load, call `open_canvasight` or `open_canvasight_recent_project` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
+`open_canvasight` verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url` from the tool result in Codex's in-app browser sidebar, not only the `origin`. If it still cannot load, call `open_canvasight` or `open_canvasight_recent_project` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
 
 **How does the current thread receive a Run from an old browser tab?**
 

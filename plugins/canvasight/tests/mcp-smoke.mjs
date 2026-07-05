@@ -79,7 +79,6 @@ const child = spawn(process.execPath, [serverPath], {
   env: {
     ...process.env,
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
-    CANVASIGHT_OPEN_BROWSER: "0",
     CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
@@ -187,7 +186,6 @@ function createMcpClient(label, envOverrides = {}) {
     env: {
       ...process.env,
       CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
-      CANVASIGHT_OPEN_BROWSER: "0",
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
@@ -292,7 +290,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.10");
+    assert.equal(initialized.serverInfo.version, "0.1.11");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -322,14 +320,17 @@ async function main() {
     assert.equal(autoOpened.structuredContent.status, "opened");
     daemonToken = new URL(autoOpened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(autoOpened.structuredContent.browserUrl, autoOpened.structuredContent.url);
-    assert.match(autoOpened.content[0].text, /Navigate the in-app browser to this full URL:/);
+    assert.equal(autoOpened.structuredContent.openTarget, "codex_in_app_browser");
+    assert.equal(autoOpened.structuredContent.externalBrowser.status, "skipped");
+    assert.equal(autoOpened.structuredContent.externalBrowser.reason, "codex_in_app_browser_default");
+    assert.match(autoOpened.content[0].text, /Codex in-app browser sidebar/);
     assert.equal(autoOpened.structuredContent.projectPath, defaultProjectPath);
     assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
     const autoPageResponse = await fetch(autoOpened.structuredContent.browserUrl);
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.10");
+    assert.equal(autoHealth.serverVersion, "0.1.11");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -362,6 +363,8 @@ async function main() {
     assert.equal(opened.structuredContent.status, "opened");
     daemonToken = new URL(opened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(opened.structuredContent.browserUrl, opened.structuredContent.url);
+    assert.equal(opened.structuredContent.openTarget, "codex_in_app_browser");
+    assert.equal(opened.structuredContent.externalBrowser.status, "skipped");
     assert.equal(opened.structuredContent.projectPath, projectPath);
     assert.equal(opened.structuredContent.codexThreadId, "thread-smoke");
 

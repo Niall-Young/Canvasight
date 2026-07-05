@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.10";
+const SERVER_VERSION = "0.1.11";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -1714,8 +1714,15 @@ function revealPath(targetPath) {
   child.unref();
 }
 
-function openBrowser(url) {
-  if (process.env.CANVASIGHT_OPEN_BROWSER === "0") return;
+function openExternalBrowser(url) {
+  const explicit = process.env.CANVASIGHT_OPEN_EXTERNAL_BROWSER || process.env.CANVASIGHT_OPEN_BROWSER;
+  if (explicit !== "1" && String(explicit).toLowerCase() !== "true") {
+    return {
+      status: "skipped",
+      reason: "codex_in_app_browser_default"
+    };
+  }
+
   let command;
   let args;
   if (process.platform === "darwin") {
@@ -1734,6 +1741,10 @@ function openBrowser(url) {
   });
   child.on("error", () => undefined);
   child.unref();
+  return {
+    status: "opened",
+    reason: "explicit_external_browser"
+  };
 }
 
 function appServerRequest(method, params, { experimentalApi = false } = {}) {
@@ -2260,20 +2271,22 @@ async function toolOpenCanvasight(args) {
   const session = opened.session;
   const url = daemonSessionUrl(daemon, session.sessionId);
   await waitForReachableUrl(url, "Canvasight browser session");
-  openBrowser(url);
+  const externalBrowser = openExternalBrowser(url);
   return toolResult(
     {
       status: "opened",
       sessionId: session.sessionId,
       url,
       browserUrl: url,
+      openTarget: "codex_in_app_browser",
+      externalBrowser,
       origin: daemon.origin,
       projectPath: session.projectPath,
       codexThreadId: session.codexThreadId,
       project: opened.project,
       language: session.language
     },
-    `Canvasight session opened. Navigate the in-app browser to this full URL: ${url}`
+    `Canvasight session opened. Open this URL in the Codex in-app browser sidebar: ${url}`
   );
 }
 

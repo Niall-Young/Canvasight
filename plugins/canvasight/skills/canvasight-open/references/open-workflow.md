@@ -4,7 +4,7 @@
 
 Call `open_canvasight` with `projectPath` when the workspace path is known. The tool starts or reuses Canvasight's project-level local daemon and returns a full browser URL after verifying the page is reachable.
 
-When using Codex's in-app Browser, navigate to the full returned `browserUrl` / `url`. Do not navigate only to the origin because the session id and token are part of the usable URL.
+Open the full returned `browserUrl` / `url` in Codex's in-app Browser/sidebar. Do not navigate only to the origin because the session id and token are part of the usable URL. Canvasight does not launch the system browser by default; set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` only for local development debugging.
 
 ## Recover A Recent Project
 
