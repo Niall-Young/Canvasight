@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.1.1";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -495,6 +495,25 @@ async function healthyDaemonState(state) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForReachableUrl(url, label = "Canvasight URL") {
+  const deadline = Date.now() + 5000;
+  let lastError = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      await response.arrayBuffer();
+      if (response.ok) return;
+      lastError = new Error(`${label} returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(100);
+  }
+
+  throw new Error(`${label} was not reachable: ${lastError?.message || "unknown error"}`);
 }
 
 async function waitForDaemon(token) {
@@ -1658,19 +1677,21 @@ async function toolOpenCanvasight(args) {
   });
   const session = opened.session;
   const url = daemonSessionUrl(daemon, session.sessionId);
+  await waitForReachableUrl(url, "Canvasight browser session");
   openBrowser(url);
   return toolResult(
     {
       status: "opened",
       sessionId: session.sessionId,
       url,
+      browserUrl: url,
       origin: daemon.origin,
       projectPath: session.projectPath,
       codexThreadId: session.codexThreadId,
       project: opened.project,
       language: session.language
     },
-    `Canvasight session opened: ${url}`
+    `Canvasight session opened. Navigate the in-app browser to this full URL: ${url}`
   );
 }
 

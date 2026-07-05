@@ -9,7 +9,7 @@ Use the Canvasight MCP tools when a task benefits from visual planning, connecte
 
 ## Workflow
 
-1. Call `open_canvasight` with the current workspace path when available. This starts or reuses Canvasight's project-level local daemon.
+1. Call `open_canvasight` with the current workspace path when available. This starts or reuses Canvasight's project-level local daemon and returns a full `browserUrl` / `url` after verifying the session page is reachable.
 2. Ask the user to operate the browser canvas and click Run on the target node or flow.
 3. Call `await_canvasight_run` from the Codex thread that should receive the next Run payload.
 4. Prefer the returned `sessionId` when you have it. When attaching from a new Codex thread to a browser tab that was opened earlier, call `await_canvasight_run` with the project path so the current thread waits on that project's run queue.
@@ -17,6 +17,8 @@ Use the Canvasight MCP tools when a task benefits from visual planning, connecte
 6. Call `close_canvasight` only when the specific session is no longer needed. It does not stop the project-level daemon.
 
 Use `list_canvasight_recent_projects` followed by `open_canvasight_recent_project` when the user wants to reopen Canvasight from a new Codex thread or recover the last canvas. The plugin serves the built web app through a local daemon that outlives thread-local MCP processes; do not ask the user to run `npm run dev` for normal plugin use.
+
+When using Codex's in-app Browser, navigate it to the full `browserUrl` / `url` from the `open_canvasight` tool result. Do not navigate only to the `origin`, because the session id and token are part of the usable browser URL.
 
 The Run payload belongs to the Codex thread that calls `await_canvasight_run`, not necessarily the thread that originally opened the browser canvas. This is what allows a user to archive the opening thread and keep using the same Canvasight page from the current thread.
 

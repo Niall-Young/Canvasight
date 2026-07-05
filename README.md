@@ -52,6 +52,8 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.1` 或更高版本。如果仍是 `0.1.0`，旧的 MCP cache 可能还在运行 thread-local HTTP server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+
 ### MCP Tools
 
 - `open_canvasight`
@@ -122,6 +124,10 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 **归档启动 Canvasight 的 thread 后，网页还会活着吗？**
 
 会。网页服务由项目级 daemon 托管，不再绑定打开它的 thread-local MCP 进程。归档旧 thread 后，旧浏览器 tab 仍可继续使用；如果手动停止 daemon 或机器重启导致旧 URL 失效，再从当前 thread 重新打开最近项目即可。
+
+**内置浏览器打不开 Canvasight 怎么办？**
+
+`open_canvasight` 返回前会先验证完整会话 URL 可访问。用内置浏览器打开时，请导航到 tool result 里的完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight` 或 `open_canvasight_recent_project` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
 
 **当前 thread 怎么接收旧网页里的 Run？**
 
@@ -197,6 +203,8 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.1` or newer. If it still shows `0.1.0`, the old MCP cache may still be running the thread-local HTTP server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+
 ### MCP Tools
 
 - `open_canvasight`
@@ -267,6 +275,10 @@ In a new thread, call `list_canvasight_recent_projects`, then call `open_canvasi
 **Will the page stay alive after I archive the thread that opened Canvasight?**
 
 Yes. The web service is hosted by the project-level daemon, not the thread-local MCP process that opened it. The old browser tab can continue working after that thread is archived. If the daemon is manually stopped or the machine restarts and the old URL becomes invalid, reopen the recent project from the current thread.
+
+**What if the in-app browser cannot open Canvasight?**
+
+`open_canvasight` verifies that the full session URL is reachable before returning. When opening it in the in-app browser, navigate to the full `browserUrl` / `url` from the tool result, not only the `origin`. If it still cannot load, call `open_canvasight` or `open_canvasight_recent_project` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
 
 **How does the current thread receive a Run from an old browser tab?**
 

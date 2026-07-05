@@ -55,6 +55,7 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Avoid placeholder-only screens for core flows; build the usable workflow first.
 - Keep canvas state, persistence, and MCP contracts explicit. Do not hide run behavior inside presentation components when it can live in store or runtime helpers.
 - Use the existing app icon registry in `src/components/ui/icon.tsx` and SVG assets under `src/assets/icons` before adding another icon path.
+- When MCP runtime behavior changes, bump the plugin version in `.codex-plugin/plugin.json`, `package.json`, `package-lock.json`, and `mcp/server.mjs` `SERVER_VERSION` together. Codex may keep versioned plugin cache entries, so changing runtime code without a version bump can leave users running stale MCP servers.
 
 ## Design Standards
 
