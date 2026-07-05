@@ -1,5 +1,5 @@
 import { Children, isValidElement } from "react";
-import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, ReactElement, ReactNode } from "react";
+import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, MouseEvent, PointerEvent, ReactElement, ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 
@@ -23,9 +23,42 @@ interface SegmentedItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   selected?: boolean;
 }
 
-export function SegmentedItem({ className, icon = "marker-code", selected = false, type = "button", ...props }: SegmentedItemProps): ReactElement {
+export function SegmentedItem({
+  className,
+  icon = "marker-code",
+  selected = false,
+  type = "button",
+  onClick,
+  onMouseDown,
+  onPointerDown,
+  ...props
+}: SegmentedItemProps): ReactElement {
+  function handlePointerDown(event: PointerEvent<HTMLButtonElement>): void {
+    event.stopPropagation();
+    onPointerDown?.(event);
+  }
+
+  function handleMouseDown(event: MouseEvent<HTMLButtonElement>): void {
+    event.stopPropagation();
+    onMouseDown?.(event);
+  }
+
+  function handleClick(event: MouseEvent<HTMLButtonElement>): void {
+    event.stopPropagation();
+    onClick?.(event);
+  }
+
   return (
-    <button aria-selected={selected} className={cn("kit-segmented-item", selected && "is-selected", className)} role="tab" type={type} {...props}>
+    <button
+      aria-selected={selected}
+      className={cn("kit-segmented-item", selected && "is-selected", className)}
+      role="tab"
+      type={type}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      onPointerDown={handlePointerDown}
+      {...props}
+    >
       <Icon name={icon} size={16} />
     </button>
   );

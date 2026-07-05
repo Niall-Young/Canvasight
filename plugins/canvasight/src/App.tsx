@@ -25,6 +25,7 @@ import {
 import { nanoid } from "nanoid";
 import type {
   AttachmentInput,
+  CodexMode,
   LanguagePreference,
   RunMode,
   ScatterDocument,
@@ -332,6 +333,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
+function normalizeCodexMode(value: unknown, legacyPlanMode = false): CodexMode {
+  return value === "chat" || value === "plan" || value === "goal" ? value : legacyPlanMode ? "plan" : "chat";
+}
+
 function emptyNode(position: { x: number; y: number }, index: number): ScatterNode {
   return {
     id: nanoid(),
@@ -342,6 +347,7 @@ function emptyNode(position: { x: number; y: number }, index: number): ScatterNo
       title: `新建任务 ${index + 1}`,
       body: "",
       attachments: [],
+      codexMode: "chat",
       effort: "xhigh",
       planMode: false,
       runMode: "flow"
@@ -355,18 +361,22 @@ function normalizeDocument(projectPath: string, document: ScatterDocument): Scat
     ...fallback,
     ...document,
     projectName: document.projectName || fallback.projectName,
-    nodes: (document.nodes || []).map((node) => ({
-      ...node,
-      type: "task",
-      selected: false,
-      data: {
-        ...node.data,
-        attachments: node.data.attachments || [],
-        effort: node.data.effort || "xhigh",
-        planMode: Boolean(node.data.planMode),
-        runMode: node.data.runMode || "flow"
-      }
-    })),
+    nodes: (document.nodes || []).map((node) => {
+      const codexMode = normalizeCodexMode(node.data.codexMode, Boolean(node.data.planMode));
+      return {
+        ...node,
+        type: "task",
+        selected: false,
+        data: {
+          ...node.data,
+          attachments: node.data.attachments || [],
+          codexMode,
+          effort: node.data.effort || "xhigh",
+          planMode: codexMode === "plan",
+          runMode: node.data.runMode || "flow"
+        }
+      };
+    }),
     edges: document.edges || []
   };
 }
@@ -597,7 +607,7 @@ function CanvasightWorkspace(): ReactElement {
     () =>
       project && markdownNode
         ? buildMarkdown(nodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language)
-        : { markdown: "", nodes: [], attachments: [], imagePaths: [], planMode: false, hasCycle: false },
+        : { markdown: "", nodes: [], attachments: [], imagePaths: [], codexMode: "chat", planMode: false, hasCycle: false },
     [edges, language, markdownNode, nodes, project, selectedRunMode]
   );
   const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
@@ -1023,6 +1033,7 @@ function CanvasightWorkspace(): ReactElement {
       try {
         await canvasightApi.run({
           attachments: result.attachments,
+          codexMode: result.codexMode,
           effort: node.data.effort || "xhigh",
           imagePaths: result.imagePaths,
           markdown: result.markdown,

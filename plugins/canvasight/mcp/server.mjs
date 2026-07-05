@@ -14,6 +14,7 @@ const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
+const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 
@@ -56,6 +57,10 @@ function normalizeEffort(value) {
 
 function normalizeRunMode(value) {
   return VALID_RUN_MODES.has(value) ? value : "flow";
+}
+
+function normalizeCodexMode(value, legacyPlanMode = false) {
+  return VALID_CODEX_MODES.has(value) ? value : legacyPlanMode ? "plan" : "chat";
 }
 
 function normalizeProjectPath(projectPath) {
@@ -195,6 +200,7 @@ function normalizeAttachment(value) {
 function normalizeScatterNode(value, index) {
   const node = isObject(value) ? value : {};
   const data = isObject(node.data) ? node.data : {};
+  const codexMode = normalizeCodexMode(data.codexMode, Boolean(data.planMode));
   return {
     ...node,
     id: typeof node.id === "string" && node.id ? node.id : `node-${index + 1}`,
@@ -208,8 +214,9 @@ function normalizeScatterNode(value, index) {
       title: typeof data.title === "string" ? data.title : "",
       body: typeof data.body === "string" ? data.body : "",
       attachments: Array.isArray(data.attachments) ? data.attachments.map(normalizeAttachment) : [],
+      codexMode,
       effort: normalizeEffort(data.effort),
-      planMode: Boolean(data.planMode),
+      planMode: codexMode === "plan",
       runMode: normalizeRunMode(data.runMode)
     }
   };
@@ -328,6 +335,7 @@ function getSession(id) {
 function normalizeRunPayload(session, value) {
   const payload = isObject(value) ? value : {};
   const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path.resolve(payload.projectPath) : session.projectPath;
+  const codexMode = normalizeCodexMode(payload.codexMode, Boolean(payload.planMode));
   return {
     status: "received",
     sessionId: session.id,
@@ -335,8 +343,9 @@ function normalizeRunPayload(session, value) {
     projectPath,
     markdown: typeof payload.markdown === "string" ? payload.markdown : "",
     imagePaths: Array.isArray(payload.imagePaths) ? payload.imagePaths.filter((item) => typeof item === "string") : [],
+    codexMode,
     effort: normalizeEffort(payload.effort),
-    planMode: Boolean(payload.planMode),
+    planMode: codexMode === "plan",
     runMode: normalizeRunMode(payload.runMode),
     nodeIds: Array.isArray(payload.nodeIds) ? payload.nodeIds.filter((item) => typeof item === "string") : [],
     attachments: Array.isArray(payload.attachments) ? payload.attachments.map(normalizeAttachment) : []
@@ -370,6 +379,7 @@ function waitForRun(sessionIdValue, timeoutMs) {
       projectPath: null,
       markdown: "",
       imagePaths: [],
+      codexMode: "chat",
       effort: "xhigh",
       planMode: false,
       runMode: "flow",
@@ -393,6 +403,7 @@ function waitForRun(sessionIdValue, timeoutMs) {
           projectPath: session.projectPath,
           markdown: "",
           imagePaths: [],
+          codexMode: "chat",
           effort: "xhigh",
           planMode: false,
           runMode: "flow",
@@ -417,6 +428,7 @@ function closeSession(sessionIdValue) {
       projectPath: session.projectPath,
       markdown: "",
       imagePaths: [],
+      codexMode: "chat",
       effort: "xhigh",
       planMode: false,
       runMode: "flow",

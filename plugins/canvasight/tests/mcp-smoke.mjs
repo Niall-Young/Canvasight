@@ -192,6 +192,7 @@ async function main() {
             title: "Smoke task",
             body: "Run the smoke payload.",
             attachments: [],
+            codexMode: "plan",
             effort: "high",
             planMode: true,
             runMode: "flow"
@@ -209,6 +210,8 @@ async function main() {
     const scatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(scatterJson.version, 1);
     assert.equal(scatterJson.nodes[0].data.title, "Smoke task");
+    assert.equal(scatterJson.nodes[0].data.codexMode, "plan");
+    assert.equal(scatterJson.nodes[0].data.planMode, true);
 
     const attachments = await fetchJson(`${origin}/api/sessions/${sessionId}/attachments`, {
       method: "POST",
@@ -245,8 +248,9 @@ async function main() {
       projectPath,
       markdown: "# Smoke task\n\nRun the smoke payload.",
       imagePaths: [],
+      codexMode: "goal",
       effort: "high",
-      planMode: true,
+      planMode: false,
       runMode: "flow",
       nodeIds: ["node-a"],
       attachments
@@ -261,8 +265,30 @@ async function main() {
     assert.equal(awaited.content[0].text, runPayload.markdown);
     assert.equal(awaited.structuredContent.status, "received");
     assert.equal(awaited.structuredContent.threadName, runPayload.threadName);
+    assert.equal(awaited.structuredContent.codexMode, "goal");
+    assert.equal(awaited.structuredContent.planMode, false);
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
+
+    const waitForLegacyRun = request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 5000
+      }
+    });
+    await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        codexMode: undefined,
+        planMode: true,
+        threadName: "Scatter Flow: Legacy plan task"
+      })
+    });
+    const legacyAwaited = await waitForLegacyRun;
+    assert.equal(legacyAwaited.structuredContent.codexMode, "plan");
+    assert.equal(legacyAwaited.structuredContent.planMode, true);
 
     const closed = await request("tools/call", {
       name: "close_canvasight",

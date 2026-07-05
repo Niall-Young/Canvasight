@@ -1,10 +1,11 @@
-import type { Attachment, LanguagePreference, RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
+import type { Attachment, CodexMode, LanguagePreference, RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
 
 export interface MarkdownResult {
   markdown: string;
   nodes: ScatterNode[];
   attachments: Attachment[];
   imagePaths: string[];
+  codexMode: CodexMode;
   planMode: boolean;
   hasCycle: boolean;
 }
@@ -71,8 +72,15 @@ interface MarkdownText {
   attachmentImage: string;
   attachments: string;
   connectionMap: string;
+  codexMode: string;
+  codexModeChat: string;
+  codexModeGoal: string;
+  codexModePlan: string;
   executionRequest: string;
   executionRequestBody: string;
+  goalModeRequested: string;
+  goalModeRequestedNo: string;
+  goalModeRequestedYes: string;
   includedNodes: string;
   noConnections: string;
   noPrompt: string;
@@ -105,8 +113,15 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     attachmentImage: "图片",
     attachments: "附件",
     connectionMap: "连接关系",
+    codexMode: "Codex 模式",
+    codexModeChat: "Chat",
+    codexModeGoal: "Goal",
+    codexModePlan: "Plan",
     executionRequest: "执行请求",
     executionRequestBody: "请把以下 Canvasight 画布上下文作为事实来源。需要时检查引用文件，并在这个项目中执行请求的工作。",
+    goalModeRequested: "请求 Goal 模式",
+    goalModeRequestedNo: "否",
+    goalModeRequestedYes: "是",
     includedNodes: "包含的节点",
     noConnections: "- 当前范围内没有下游连接。",
     noPrompt: "_未提供提示词正文。_",
@@ -137,8 +152,15 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     attachmentImage: "Image",
     attachments: "Attachments",
     connectionMap: "Connection Map",
+    codexMode: "Codex mode",
+    codexModeChat: "Chat",
+    codexModeGoal: "Goal",
+    codexModePlan: "Plan",
     executionRequest: "Execution Request",
     executionRequestBody: "Use the following Canvasight canvas context as the source of truth. Analyze the task structure, inspect referenced files when needed, and execute the requested work in this project.",
+    goalModeRequested: "Goal mode requested",
+    goalModeRequestedNo: "no",
+    goalModeRequestedYes: "yes",
     includedNodes: "Included Nodes",
     noConnections: "- No downstream connections included.",
     noPrompt: "_No prompt text provided._",
@@ -175,9 +197,20 @@ function attachmentLine(attachment: Attachment, text: MarkdownText): string {
   - ${text.source}: ${attachment.source}`;
 }
 
+function normalizeCodexMode(value: unknown, legacyPlanMode = false): CodexMode {
+  return value === "chat" || value === "plan" || value === "goal" ? value : legacyPlanMode ? "plan" : "chat";
+}
+
+function codexModeLabel(mode: CodexMode, text: MarkdownText): string {
+  if (mode === "plan") return text.codexModePlan;
+  if (mode === "goal") return text.codexModeGoal;
+  return text.codexModeChat;
+}
+
 function nodeBlock(node: ScatterNode, index: number, text: MarkdownText): string {
   const title = node.data.title?.trim() || text.untitledTask(index);
   const body = node.data.body?.trim() || text.noPrompt;
+  const codexMode = normalizeCodexMode(node.data.codexMode, node.data.planMode);
   const attachments = node.data.attachments.length
     ? node.data.attachments.map((attachment) => attachmentLine(attachment, text)).join("\n")
     : text.none;
@@ -185,7 +218,7 @@ function nodeBlock(node: ScatterNode, index: number, text: MarkdownText): string
   return `## ${index + 1}. ${title}
 
 ${text.nodeId}: \`${node.id}\`
-${text.planMode}: ${node.data.planMode ? text.planModeEnabled : text.planModeDisabled}
+${text.codexMode}: ${codexModeLabel(codexMode, text)}
 
 ### ${text.prompt}
 ${body}
@@ -216,7 +249,9 @@ export function buildMarkdown(
   const selectedEdges = allEdges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
   const attachments = orderedNodes.flatMap((node) => node.data.attachments);
   const imagePaths = attachments.filter((attachment) => attachment.kind === "image").map((attachment) => attachment.storedPath);
-  const planMode = startNode?.data.planMode || false;
+  const codexMode = normalizeCodexMode(startNode?.data.codexMode, startNode?.data.planMode);
+  const planMode = codexMode === "plan";
+  const goalMode = codexMode === "goal";
   const title = startNode?.data.title?.trim() || projectName || "Scatter Flow";
   const modeLabel = runMode === "flow" ? text.runModeFlow : text.runModeNode;
 
@@ -235,7 +270,9 @@ export function buildMarkdown(
 ${text.project}: ${projectName}
 ${text.projectPath}: \`${projectPath}\`
 ${text.runMode}: ${modeLabel}
+${text.codexMode}: ${codexModeLabel(codexMode, text)}
 ${text.planModeRequested}: ${planMode ? text.planModeRequestedYes : text.planModeRequestedNo}
+${text.goalModeRequested}: ${goalMode ? text.goalModeRequestedYes : text.goalModeRequestedNo}
 
 ${nodeIds.hasCycle ? text.warningCycle : ""}## ${text.executionRequest}
 ${text.executionRequestBody}
@@ -255,6 +292,7 @@ ${attachments.length ? attachments.map((attachment) => attachmentLine(attachment
     nodes: orderedNodes,
     attachments,
     imagePaths,
+    codexMode,
     planMode,
     hasCycle: nodeIds.hasCycle
   };

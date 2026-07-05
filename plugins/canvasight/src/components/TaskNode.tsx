@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import type { RunMode, ScatterNodeData } from "../../shared/types";
+import type { CodexMode, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { shortcuts } from "../lib/shortcuts";
 import { formatBytes } from "../lib/utils";
@@ -9,13 +9,18 @@ import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { IconButton } from "./ui/icon-button";
 import { Icon } from "./ui/icon";
-import { Switch } from "./ui/switch";
+import { Segmented, SegmentedItem } from "./ui/segmented";
 import { TooltipAnchor } from "./ui/tooltip";
 import { UploadChip } from "./ui/upload-chip";
 
 type TaskNodeProps = NodeProps<Node<ScatterNodeData, "task">>;
 type EditableField = "title" | "body";
 type ConnectedNodeSide = "left" | "right";
+const codexModeOptions = [
+  { icon: "chat", labelKey: "task.codexModeChat", value: "chat" },
+  { icon: "tasks", labelKey: "task.codexModePlan", value: "plan" },
+  { icon: "flag", labelKey: "task.codexModeGoal", value: "goal" }
+] as const satisfies ReadonlyArray<{ icon: string; labelKey: "task.codexModeChat" | "task.codexModePlan" | "task.codexModeGoal"; value: CodexMode }>;
 
 function fitTextareaHeight(textarea: HTMLTextAreaElement | null): boolean {
   if (!textarea) return false;
@@ -65,6 +70,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const [bodyDraft, setBodyDraft] = useState(data.body);
 
   const runMode = data.runMode || "flow";
+  const codexMode: CodexMode = data.codexMode === "chat" || data.codexMode === "plan" || data.codexMode === "goal" ? data.codexMode : data.planMode ? "plan" : "chat";
   const hasBody = bodyDraft.trim().length > 0;
   const hasParent = useScatterStore((state) =>
     state.edges.some((edge) => edge.target === id && state.nodes.some((node) => node.id === edge.source))
@@ -324,6 +330,17 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     [id]
   );
 
+  const setCodexMode = useCallback(
+    (nextMode: CodexMode) => {
+      if (nextMode === codexMode) return;
+      taskNodeActions?.updateNodeData(id, {
+        codexMode: nextMode,
+        planMode: nextMode === "plan"
+      });
+    },
+    [codexMode, id]
+  );
+
   return (
     <div
       ref={rootRef}
@@ -443,11 +460,19 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             <IconButton className="nodrag" filled={false} icon="plus-lg" size="lg" aria-label={t("task.addAttachment")} onClick={() => taskNodeActions?.chooseFilesForNode(id)} />
           </TooltipAnchor>
           <div className="task-node-settings">
-            <Switch
-              checked={data.planMode}
-              label={t("task.planMode")}
-              onCheckedChange={(checked) => taskNodeActions?.updateNodeData(id, { planMode: checked })}
-            />
+            <Segmented className="task-node-codex-mode nodrag nopan" aria-label={t("task.codexMode")}>
+              {codexModeOptions.map((option) => (
+                <SegmentedItem
+                  key={option.value}
+                  className="nodrag nopan"
+                  icon={option.icon}
+                  selected={codexMode === option.value}
+                  aria-label={t(option.labelKey)}
+                  title={t(option.labelKey)}
+                  onClick={() => setCodexMode(option.value)}
+                />
+              ))}
+            </Segmented>
           </div>
         </div>
       </div>

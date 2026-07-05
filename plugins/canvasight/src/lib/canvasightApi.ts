@@ -1,6 +1,7 @@
 import type {
   Attachment,
   AttachmentInput,
+  CodexMode,
   LanguagePreference,
   OpenProjectResult,
   RunMode,
@@ -15,6 +16,7 @@ export interface SessionInfo {
 
 export interface RunPayload {
   attachments: Attachment[];
+  codexMode: CodexMode;
   effort: string;
   imagePaths: string[];
   markdown: string;

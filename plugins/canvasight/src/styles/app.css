@@ -1985,6 +1985,13 @@ button.achievement-card.is-unlocked:focus-visible {
   gap: 12px;
 }
 
+.task-node-codex-mode {
+  --kit-segmented-item-size: 28px;
+  --kit-segmented-padding: 4px;
+
+  flex: 0 0 auto;
+}
+
 .task-node-effort-picker {
   position: relative;
   display: inline-flex;
