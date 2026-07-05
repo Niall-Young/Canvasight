@@ -3532,6 +3532,11 @@ button.achievement-card.is-unlocked:focus-visible {
   overflow: hidden;
 }
 
+.task-sidebar {
+  padding: 16px;
+  box-sizing: border-box;
+}
+
 .right-sidebar-title {
   width: 100%;
   margin: 0 0 20px;
