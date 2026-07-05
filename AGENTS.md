@@ -17,6 +17,16 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Add dependencies only when they solve a concrete implementation need.
 - When introducing a build system, document the commands in this file and in the project README if one exists.
 
+## Agent Roles
+
+- Main thread: owns integration, architecture decisions, conflict handling, verification, and final commits.
+- Product Agent: keeps the plugin aligned with the product goal of a browser canvas that returns output to Codex.
+- Design Agent: protects the web UI direction, component language, visual density, and removal of old desktop-shell residue.
+- Development Agent: owns implementation across MCP, persistence, React, and build/runtime behavior.
+- Test Supervisor Agent: owns smoke tests, build checks, plugin validation, and browser-visible verification.
+- Customer Support Agent: owns user-facing README documentation. On every user-visible feature, command, installation, workflow, or troubleshooting change, this agent must decide whether `README.md` needs an update. When it does, update README in the same delivery. README must keep a bilingual switch structure with Chinese and English sections, and must explain what Canvasight is for, its main features, basic usage, plugin setup, development commands, and common questions.
+  Before updating README, check `AGENTS.md`, `design.md`, `plugins/canvasight/package.json`, `plugins/canvasight/mcp/server.mjs`, and `plugins/canvasight/skills/canvasight/SKILL.md` so commands, tool names, and feature descriptions stay current. Do not present development-only commands as normal user workflow.
+
 ## Implementation Standards
 
 - Follow the conventions already present in the codebase once source files exist.
