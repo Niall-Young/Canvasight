@@ -75,7 +75,19 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.3` 或更高版本。如果仍是 `0.1.0`、`0.1.1` 或 `0.1.2`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.4` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2` 或 `0.1.3`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+
+### Skills 分工
+
+Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口误触发所有场景：
+
+- `canvasight`：薄索引，只在明确提到 Canvasight/Scatter 且任务跨多个能力或不清楚该用哪个细分 skill 时使用。
+- `canvasight-open`：打开网页画布、恢复最近项目、从新 Codex 线程重新 attach 到 Canvasight。
+- `canvasight-run`：接收 Run payload，处理 Markdown、结构化数据和 Chat / Plan / Goal 模式。
+- `canvasight-graph-writer`：用 `write_canvasight_graph` 让 AI 创建或更新 Canvasight 节点和连线。
+- `canvasight-troubleshooting`：处理插件安装、MCP cache、daemon、URL 失效、连接拒绝等问题。
+
+这些 Skill 只是 Codex 的触发与工作流分工，不改变 Canvasight 的用户界面，也不改变 Page、节点或 Run 的数据协议。
 
 ### MCP Tools
 
@@ -257,7 +269,19 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.3` or newer. If it still shows `0.1.0`, `0.1.1`, or `0.1.2`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.4` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, or `0.1.3`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+
+### Skill Split
+
+The Canvasight plugin now uses multiple Codex Skills so one broad entrypoint does not trigger for every Canvasight-related task:
+
+- `canvasight`: a thin index for explicit Canvasight/Scatter requests that span multiple capabilities or do not clearly match a narrower skill.
+- `canvasight-open`: opens the browser canvas, recovers recent projects, and attaches a new Codex thread to Canvasight.
+- `canvasight-run`: receives Run payloads and handles Markdown, structured data, and Chat / Plan / Goal mode.
+- `canvasight-graph-writer`: uses `write_canvasight_graph` so AI can create or update Canvasight nodes and edges.
+- `canvasight-troubleshooting`: handles plugin installation, MCP cache, daemon, stale URL, and connection-refused issues.
+
+These Skills only affect Codex routing and workflow instructions. They do not change the Canvasight UI, Page model, node data, or Run protocol.
 
 ### MCP Tools
 

@@ -1,4 +1,4 @@
-# Graph Type Classification Reference
+# Canvasight Graph Types
 
 `graphType` is a task generation strategy. It tells Codex how to organize node titles, prompt bodies, edges, and default layout.
 

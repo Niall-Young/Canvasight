@@ -1,4 +1,4 @@
-# Codex Native Modes Reference
+# Canvasight Run Output Contract
 
 After `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 

@@ -1,8 +1,8 @@
-# AI Graph Writing Reference
+# Canvasight Graph Writing
 
 Use `write_canvasight_graph` when the user asks Codex to create or update a Canvasight canvas from analysis, code architecture, product requirements, task planning, or another structured breakdown.
 
-Prefer `write_canvasight_graph` over hand-editing `.scatter/scatter.json` unless the user explicitly asks for raw file editing. The tool writes a valid v1 `.scatter/scatter.json`, validates node and edge references, and remembers the project for reopening.
+Prefer the MCP tool over hand-editing `.scatter/scatter.json` unless the user explicitly asks for raw file editing. The tool writes a valid v1 `.scatter/scatter.json`, validates node and edge references, and remembers the project for reopening.
 
 ## Write Mode
 

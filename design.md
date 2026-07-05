@@ -162,6 +162,26 @@ Pages are independent canvas workspaces inside a project. A Page is a user-contr
 - Page names should describe the user's workspace intent, not automatically mirror hidden AI classification.
 - Switching Pages should preserve each Page's own nodes, edges, viewport, selection, and local editing context.
 
+## Capability Boundaries
+
+Canvasight separates the user-facing canvas experience from AI/operator capabilities. The visible product remains a canvas workspace, not a skill directory or automation dashboard.
+
+- AI capabilities should appear through normal canvas objects, commands, dialogs, drawers, and status feedback.
+- Skill boundaries must not leak into primary navigation unless users need to choose a visible workflow mode.
+- Users should not need to understand which skill handled a task to inspect or edit the resulting canvas.
+- When multiple AI capabilities produce canvas content, their output should share the same node, edge, attachment, Page, and drawer patterns.
+- Errors from skill-driven actions should be shown as product errors with recovery paths, not as raw agent or implementation failures.
+
+AI capability information architecture:
+
+- Canvas: the shared destination for generated or manually edited task structures.
+- Page: a user-controlled workspace boundary, independent from skill categories.
+- Node: the smallest editable task unit, regardless of whether it was created by the user, AI, or a template.
+- Edge: a visible dependency or reasoning relationship between nodes.
+- Drawer: contextual review surface for task lists, Markdown output, templates, and generated summaries.
+- Dialog: focused confirmation, setup, or settings surface.
+- Toolbar: compact access to common commands and workspace modes.
+
 ## Canvas File Protocol
 
 The `.scatter/scatter.json` file is a user-editable and AI-editable canvas protocol.
