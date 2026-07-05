@@ -10,9 +10,21 @@ Classify the work first. Call only the agents needed for the current request. Do
 
 Agent Team roles are long-lived project role seats. They should behave like the fixed Canvasight project agents: the same roles keep handling the project across turns, instead of creating a fresh set for every task.
 
+## AGENTS.md Bootstrap Rule
+
+Before assigning fixed role agents for a project, ensure the target project `AGENTS.md` contains the durable collaboration rules the agents need.
+
+- If `AGENTS.md` is missing and Agent Team work is actually used, route the gap to the Development Standards Lead.
+- Create `AGENTS.md` only when the user explicitly requested durable Agent Team setup, the task is to establish project collaboration rules, or project rules allow the edit.
+- If `AGENTS.md` exists but lacks Agent Team lifecycle or report protocol sections, append a minimal update only when authorized instead of rewriting the file.
+- The minimum content is: project context, role responsibilities, persistent roster lifecycle, report queue/status protocol, verification expectations, and delivery/git rules.
+- The Development Standards Lead owns this file. If the role is missing or unavailable, the main thread performs the update and records the limitation in the integration summary.
+- Do not create or update `AGENTS.md` for a simple task where Agent Team is enabled but no role agent is actually called.
+- If the target project already defines a different agent workflow, preserve it, record the conflict, and ask for explicit direction before replacing it.
+
 Use this order:
 
-1. Read the project's `AGENTS.md` Agent Team lifecycle when it exists.
+1. Read the project's `AGENTS.md` Agent Team lifecycle, or route any missing/incomplete protocol gap to Development Standards Lead when Agent Team work is actually used.
 2. Check the latest integration summaries or current thread state for the recorded role-to-agent mapping.
 3. Reuse or resume the existing role agent for the needed role.
 4. Send follow-up work to that same role agent through the current agent tool, and use `agent-reports/` for durable cross-agent handoff.

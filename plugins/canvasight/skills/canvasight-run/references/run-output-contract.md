@@ -5,6 +5,7 @@ After `await_canvasight_run`, read `structuredContent.codexMode` first. If it is
 Then read `structuredContent.agentTeam`.
 
 - If `structuredContent.agentTeam.enabled === true`, use the `canvasight-agent-team` skill before executing the returned Markdown.
+- If Agent Team work is actually used, check whether the target project `AGENTS.md` contains persistent roster and report protocol rules before assigning role agents. Create or update `AGENTS.md` only when the user requested durable Agent Team setup or the project rules allow that edit; otherwise record the gap or ask before writing.
 - Use `structuredContent.agentTeam.recommendedRoles` as suggestions for which fixed roster roles to call. Reuse or resume existing role agents first; create a role only when that required role is missing.
 - Use `structuredContent.agentTeam.reportProtocol` for the report queue shape when a blocker, high-risk issue, or cross-role handoff appears.
 - If `structuredContent.agentTeam.enabled === false`, handle the Run as a normal Canvasight task unless the project `AGENTS.md` imposes its own workflow.

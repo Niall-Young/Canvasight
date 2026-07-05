@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2257-integration-summary-agents-md-bootstrap.md` - integrated AGENTS.md bootstrap rules into Agent Team skill, Run contract, README, and version bump.
+- `agent-reports/resolved/20260705-2257-development-solution-agents-md-bootstrap.md` - implemented controlled AGENTS.md bootstrap behavior for Canvasight Agent Team.
+- `agent-reports/resolved/20260705-2257-product-issue-agents-md-bootstrap.md` - resolved ambiguity around whether the skill requires project AGENTS.md updates.
 - `agent-reports/resolved/20260705-2242-integration-summary-agent-team-persistent-roster.md` - integrated persistent Agent Team roster, report status write-back, docs, version bump, and verification.
 - `agent-reports/resolved/20260705-2242-development-solution-agent-team-persistent-roster.md` - implemented fixed-role reuse and report communication rules in Canvasight Agent Team skill.
 - `agent-reports/resolved/20260705-2239-product-issue-agent-team-persistent-roster.md` - resolved Agent Team one-off agent ambiguity.

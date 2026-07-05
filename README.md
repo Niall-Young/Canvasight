@@ -80,7 +80,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.8` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6` 或 `0.1.7`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.9` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7` 或 `0.1.8`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -166,7 +166,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **Agent Team 开关是什么？**
 
-它控制 Canvasight 生成的 Run Markdown 是否附带 Agent Team 协作协议。默认开启，适合复杂产品、设计、开发、测试、文档或 Skill 任务。开启后 Codex 应优先复用项目里已有的固定角色 agent，而不是每次创建一批临时 agent；角色之间通过带状态的 `agent-reports/` 进行交接，并在接活、阻塞、解决或转交时主动回写状态和队列。关闭后，Canvasight 仍会正常返回 Markdown 和结构化数据，但不再要求 Codex 按 Agent Team / agent-report 流程执行。
+它控制 Canvasight 生成的 Run Markdown 是否附带 Agent Team 协作协议。默认开启，适合复杂产品、设计、开发、测试、文档或 Skill 任务。开启后，如果实际启用 Agent Team 且项目缺少 `AGENTS.md`，或 `AGENTS.md` 没有固定 roster / report 协议，Codex 应先把这个缺口交给 Development Standards Lead；只有用户明确要求或项目规则允许落地协作规则时，才创建或最小更新 `AGENTS.md`。之后应优先复用项目里已有的固定角色 agent，而不是每次创建一批临时 agent；角色之间通过带状态的 `agent-reports/` 进行交接，并在接活、阻塞、解决或转交时主动回写状态和队列。关闭后，Canvasight 仍会正常返回 Markdown 和结构化数据，但不再要求 Codex 按 Agent Team / agent-report 流程执行。
 
 **节点模板属于项目吗？**
 
@@ -286,7 +286,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.8` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, or `0.1.7`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.9` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, or `0.1.8`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -372,7 +372,7 @@ AI-generated canvas data writes `.scatter/scatter.json` to create editable Pages
 
 **What does the Agent Team setting do?**
 
-It controls whether Canvasight-generated Run Markdown includes Agent Team collaboration instructions. It is enabled by default for complex product, design, development, testing, documentation, or Skill tasks. When enabled, Codex should reuse the project's fixed role agents instead of creating a fresh temporary team every time; role handoff happens through status-bearing `agent-reports/`, and agents must update report state plus the queue when they accept, block, solve, or hand off work. Turn it off in Settings if you want Codex to handle the Run as a normal single-thread task.
+It controls whether Canvasight-generated Run Markdown includes Agent Team collaboration instructions. It is enabled by default for complex product, design, development, testing, documentation, or Skill tasks. When Agent Team work is actually used and the project lacks `AGENTS.md`, or `AGENTS.md` does not include fixed roster / report protocol rules, Codex should route that gap to Development Standards Lead first; it should create or minimally update `AGENTS.md` only when the user requested durable collaboration rules or the project rules allow that edit. Then Codex should reuse the project's fixed role agents instead of creating a fresh temporary team every time; role handoff happens through status-bearing `agent-reports/`, and agents must update report state plus the queue when they accept, block, solve, or hand off work. Turn it off in Settings if you want Codex to handle the Run as a normal single-thread task.
 
 **Are node templates project-specific?**
 

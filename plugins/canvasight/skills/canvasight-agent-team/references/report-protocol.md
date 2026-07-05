@@ -2,6 +2,8 @@
 
 Use a file-system queue when Agent Team is enabled and the project has or needs `agent-reports/`. Reports are the durable communication layer between persistent role agents.
 
+If the target project lacks `AGENTS.md` guidance for reports, route that gap to the Development Standards Lead before establishing a long-lived report workflow. If the project already defines different report folders or templates, preserve them and adapt Canvasight handoff wording to the existing structure instead of replacing it.
+
 ## Status Folders
 
 ```text

@@ -128,7 +128,7 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "已开启",
     agentTeamInstruction:
-      "先判断这次任务实际需要哪些固定角色，优先复用或恢复项目已有的同角色 agent；只有缺少必要角色时才创建新的固定角色 agent，不要为一次任务创建临时或重复 agent。跨角色沟通必须通过带状态的 agent report 记录；角色接活、阻塞、解决或转交时都要回写 report 状态和队列。任一角色发现跨职责、高风险或阻断问题时，先写 report，再交给对应角色分析和回写结果。",
+      "先判断这次任务实际需要哪些固定角色。若实际启用 Agent Team 且项目缺少 AGENTS.md，或 AGENTS.md 未记录固定 roster / report 协议，先交给 Development Standards Lead 检查；只有用户要求或项目规则允许落地协作规则时才创建或最小更新 AGENTS.md，否则记录限制或先询问。优先复用或恢复项目已有的同角色 agent；只有缺少必要角色时才创建新的固定角色 agent，不要为一次任务创建临时或重复 agent。跨角色沟通必须通过带状态的 agent report 记录；角色接活、阻塞、解决或转交时都要回写 report 状态和队列。",
     agentTeamRecommendedRoles: "建议角色",
     agentTeamReportProtocol: "Report 协议",
     agentTeamSkill: "Skill",
@@ -174,7 +174,7 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "enabled",
     agentTeamInstruction:
-      "Classify the task first, then reuse or resume existing fixed role agents for the project. Create a new fixed role agent only when a needed role is missing, and never create temporary or duplicate one-task agents. Cross-role communication must go through status-bearing agent reports; role agents must update report status and the queue when they accept, block, solve, or hand off work. If any role finds a cross-role, high-risk, or blocking issue, write a report first, then hand it to the responsible role for analysis and result write-back.",
+      "Classify the task first. If Agent Team work is actually used and the project lacks AGENTS.md, or AGENTS.md does not define the fixed roster / report protocol, route that gap to Development Standards Lead first. Create or minimally update AGENTS.md only when the user requested durable collaboration rules or the project rules allow that edit; otherwise record the limitation or ask before writing. Then reuse or resume existing fixed role agents for the project. Create a new fixed role agent only when a needed role is missing, and never create temporary or duplicate one-task agents. Cross-role communication must go through status-bearing agent reports; role agents must update report status and the queue when they accept, block, solve, or hand off work.",
     agentTeamRecommendedRoles: "Recommended roles",
     agentTeamReportProtocol: "Report protocol",
     agentTeamSkill: "Skill",
