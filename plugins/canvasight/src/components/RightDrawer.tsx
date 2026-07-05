@@ -14,6 +14,7 @@ interface RightDrawerProps {
   nodes: ScatterNode[];
   edges: ScatterEdge[];
   selectedNodeId: string | null;
+  markdownNodeId: string | null;
   markdown: string;
   currentRunMode: RunMode;
   onLocateNode: (nodeId: string, mode: RunMode) => void;
@@ -213,6 +214,7 @@ export function RightDrawer({
   nodes,
   edges,
   selectedNodeId,
+  markdownNodeId,
   markdown,
   currentRunMode,
   onLocateNode,
@@ -236,6 +238,7 @@ export function RightDrawer({
 
   const isOpen = drawer !== null;
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const markdownNode = nodes.find((node) => node.id === markdownNodeId);
   const taskEntries = taskListEntries(nodes, edges, t);
   const flowStartNodeIds = new Set(taskEntries.filter((entry) => entry.flow).map((entry) => entry.node.id));
   function downloadMarkdown(): void {
@@ -243,7 +246,7 @@ export function RightDrawer({
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${selectedNode?.data.title || "scatter-prompt"}.md`;
+    anchor.download = `${markdownNode?.data.title || selectedNode?.data.title || "scatter-prompt"}.md`;
     anchor.click();
     URL.revokeObjectURL(url);
   }

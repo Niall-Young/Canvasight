@@ -496,6 +496,7 @@ function CanvasightWorkspace(): ReactElement {
   const [panelRatios, setPanelRatios] = useState<PanelRatios>({ canvas: 1, markdown: 1 });
   const [viewportZoom, setViewportZoom] = useState(1);
   const [selectedRunMode, setSelectedRunMode] = useState<RunMode>("flow");
+  const [markdownNodeId, setMarkdownNodeId] = useState<string | null>(null);
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -507,15 +508,17 @@ function CanvasightWorkspace(): ReactElement {
   const connectionHoverTargetRef = useRef<ConnectionHoverTarget | null>(null);
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
+  const markdownNode = useMemo(() => nodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, nodes]);
+  const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
   const markdownResult = useMemo(
     () =>
-      project && selectedNode
-        ? buildMarkdown(nodes, edges, selectedNode.id, selectedRunMode, project.name, project.path, language)
+      project && markdownNode
+        ? buildMarkdown(nodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language)
         : { markdown: "", nodes: [], attachments: [], imagePaths: [], planMode: false, hasCycle: false },
-    [edges, language, nodes, project, selectedNode, selectedRunMode]
+    [edges, language, markdownNode, nodes, project, selectedRunMode]
   );
   const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
   const workspaceStyle = useMemo(
@@ -538,6 +541,15 @@ function CanvasightWorkspace(): ReactElement {
     connectionHoverTargetRef.current = target;
     setConnectionPreview(target);
   }, []);
+
+  useEffect(() => {
+    if (selectedNodeId) setMarkdownNodeId(selectedNodeId);
+  }, [selectedNodeId]);
+
+  useEffect(() => {
+    if (!markdownNodeId) return;
+    if (!nodes.some((node) => node.id === markdownNodeId)) setMarkdownNodeId(null);
+  }, [markdownNodeId, nodes]);
 
   const clearConnectionHoverTarget = useCallback(() => {
     updateConnectionHoverTarget(null);
@@ -834,6 +846,7 @@ function CanvasightWorkspace(): ReactElement {
           threadName
         });
         markNodeRun(nodeId, mode);
+        setMarkdownNodeId(nodeId);
         setDrawer("markdown");
         setSelectedRunMode(mode);
         setStatus(t("status.sentAssistant"));
@@ -1112,9 +1125,17 @@ function CanvasightWorkspace(): ReactElement {
   }, [drawer, project, setDrawer]);
 
   const toggleMarkdownDrawer = useCallback(() => {
-    if (!project || !selectedNode) return;
-    setDrawer(drawer === "markdown" ? null : "markdown");
-  }, [drawer, project, selectedNode, setDrawer]);
+    if (!project) return;
+    if (drawer === "markdown") {
+      setDrawer(null);
+      return;
+    }
+
+    const nextMarkdownNodeId = selectedNode?.id ?? markdownNode?.id;
+    if (!nextMarkdownNodeId) return;
+    setMarkdownNodeId(nextMarkdownNodeId);
+    setDrawer("markdown");
+  }, [drawer, markdownNode, project, selectedNode, setDrawer]);
 
   useEffect(() => {
     function isSpaceKey(event: KeyboardEvent): boolean {
@@ -1312,7 +1333,7 @@ function CanvasightWorkspace(): ReactElement {
                     size="lg"
                     aria-label={t("topbar.openMarkdown")}
                     aria-pressed={drawer === "markdown"}
-                    disabled={!selectedNode}
+                    disabled={!canToggleMarkdown}
                     onClick={toggleMarkdownDrawer}
                   />
                 </TooltipAnchor>
@@ -1424,6 +1445,7 @@ function CanvasightWorkspace(): ReactElement {
           nodes={nodes}
           edges={edges}
           selectedNodeId={selectedNodeId}
+          markdownNodeId={markdownNodeId}
           markdown={markdownResult.markdown}
           currentRunMode={selectedRunMode}
           onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
