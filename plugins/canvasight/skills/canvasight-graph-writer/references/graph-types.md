@@ -18,7 +18,7 @@ Template reuse can fill node titles, bodies, and attachments, but it must not ch
 
 Use when the user wants to build a product, app, tool, feature, or plugin.
 
-Before generating content, inspect whether project guidance files such as `AGENTS.md` and `design.md` exist when the workspace is available. If they are missing or incomplete, create nodes for drafting or completing them instead of assuming the standards already exist.
+Before generating content, check only whether root-level project guidance files such as `AGENTS.md` and `design.md` exist when the workspace is available. If either file is missing, create a node to draft that missing file. If a file already exists, do not judge its content completeness or create a documentation-completion node for it.
 
 Recommended nodes:
 
@@ -30,7 +30,7 @@ Recommended nodes:
 - technical architecture and data model,
 - implementation phases,
 - verification and release checklist,
-- missing `AGENTS.md` / `design.md` content when relevant.
+- draft nodes for missing root `AGENTS.md` / `design.md` files when relevant.
 
 Recommended shape: one goal node can fan out into product, design, technical, and verification branches.
 

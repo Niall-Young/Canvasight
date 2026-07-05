@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2201-integration-summary-project-guidance-nodes.md` - integrated automatic missing AGENTS.md / design.md nodes for software-product graphs.
+- `agent-reports/resolved/20260705-2153-product-issue-project-guidance-nodes.md` - resolved project guidance node generation rules.
+- `agent-reports/resolved/20260705-2201-development-solution-project-guidance-nodes.md` - implemented MCP-backed project guidance node creation and tests.
 - `agent-reports/resolved/20260705-1950-integration-summary-ai-template-reuse.md` - integrated AI graph template reuse across MCP, skill, README, and tests.
 - `agent-reports/resolved/20260705-1941-product-issue-ai-template-reuse.md` - tracked the AI graph template reuse gap through resolution.
 - `agent-reports/resolved/20260705-1948-development-solution-ai-template-reuse.md` - implemented MCP template listing and graph template reuse.

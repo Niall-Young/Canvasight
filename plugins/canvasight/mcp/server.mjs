@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.5";
+const SERVER_VERSION = "0.1.6";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -24,6 +24,26 @@ const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codeb
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
+  {
+    canonicalName: "AGENTS.md",
+    candidates: ["AGENTS.md", "agents.md", "Agents.md"],
+    aliases: ["agents.md", "agents-md", "agents md"],
+    nodeId: "project-guidance-agents-md",
+    title: "补充 AGENTS.md",
+    body:
+      "当前项目缺少 AGENTS.md。请创建该文件，写清项目上下文、工作规则、Agent Team 分工、实现标准、设计标准、验证命令和 git 提交规则。已有约定应从项目文件和当前需求中归纳，不要写成空模板。"
+  },
+  {
+    canonicalName: "design.md",
+    candidates: ["design.md", "DESIGN.md", "Design.md"],
+    aliases: ["design.md", "design-md", "design md"],
+    nodeId: "project-guidance-design-md",
+    title: "补充 design.md",
+    body:
+      "当前项目缺少 design.md。请创建该文件，沉淀产品定位、信息架构、布局规则、组件语言、交互状态、视觉约束和后续设计决策。需要基于当前产品目标，而不是复制通用设计系统。"
+  }
+];
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -824,6 +844,95 @@ function generatedGraphId(prefix, index, usedIds) {
   return id;
 }
 
+function graphNodeFieldText(value, field) {
+  const node = isObject(value) ? value : {};
+  const data = isObject(node.data) ? node.data : {};
+  return normalizeTemplateQuery(typeof node[field] === "string" ? node[field] : typeof data[field] === "string" ? data[field] : "");
+}
+
+function graphHasGuidanceIntent(title, guidanceFile) {
+  if (!title) return false;
+  const aliases = guidanceFile.aliases.map((alias) => normalizeTemplateQuery(alias));
+  const directTitles = [normalizeTemplateQuery(guidanceFile.title), normalizeTemplateQuery(`补充 ${guidanceFile.canonicalName}`)];
+  if (directTitles.includes(title)) return true;
+  return aliases.some((alias) =>
+    [
+      `补充 ${alias}`,
+      `创建 ${alias}`,
+      `起草 ${alias}`,
+      `新增 ${alias}`,
+      `draft ${alias}`,
+      `create ${alias}`,
+      `add ${alias}`
+    ].some((pattern) => title.includes(pattern))
+  );
+}
+
+function graphHasGuidanceNode(rawNodes, guidanceFile) {
+  const canonicalName = normalizeTemplateQuery(guidanceFile.canonicalName);
+  const nodeId = normalizeTemplateQuery(guidanceFile.nodeId);
+  return rawNodes.some((node) => {
+    const data = isObject(node?.data) ? node.data : {};
+    const id = graphNodeFieldText(node, "id");
+    const title = graphNodeFieldText(node, "title");
+    const projectGuidanceFile = normalizeTemplateQuery(data.projectGuidanceFile);
+    return id === nodeId || projectGuidanceFile === canonicalName || graphHasGuidanceIntent(title, guidanceFile);
+  });
+}
+
+function projectHasGuidanceFile(projectPath, guidanceFile) {
+  return guidanceFile.candidates.some((candidate) => fs.existsSync(path.join(projectPath, candidate)));
+}
+
+function projectGuidanceNodeId(baseId, usedIds) {
+  let id = baseId;
+  let suffix = 2;
+  while (usedIds.has(id)) {
+    id = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  usedIds.add(id);
+  return id;
+}
+
+function projectGuidanceEdgeId(index, usedIds) {
+  const baseId = `project-guidance-edge-${index + 1}`;
+  let id = baseId;
+  let suffix = 2;
+  while (usedIds.has(id)) {
+    id = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  usedIds.add(id);
+  return id;
+}
+
+function guidanceInputNodeIds(rawNodes) {
+  const usedIds = new Set();
+  rawNodes.forEach((node, index) => {
+    const explicitId = typeof node?.id === "string" && node.id.trim() ? node.id.trim() : "";
+    usedIds.add(explicitId || `node-${index + 1}`);
+  });
+  return usedIds;
+}
+
+function softwareProductGuidanceNodes(projectPath, graphType, pageIndex, rawNodes) {
+  if (graphType !== "software-product" || pageIndex !== 0 || !projectPath) return [];
+  const usedIds = guidanceInputNodeIds(rawNodes);
+  return SOFTWARE_PRODUCT_GUIDANCE_FILES.filter((guidanceFile) => !projectHasGuidanceFile(projectPath, guidanceFile))
+    .filter((guidanceFile) => !graphHasGuidanceNode(rawNodes, guidanceFile))
+    .map((guidanceFile) => ({
+      id: projectGuidanceNodeId(guidanceFile.nodeId, usedIds),
+      title: guidanceFile.title,
+      body: guidanceFile.body,
+      codexMode: "chat",
+      runMode: "flow",
+      data: {
+        projectGuidanceFile: guidanceFile.canonicalName
+      }
+    }));
+}
+
 function normalizeGraphNodePosition(node, index, layout) {
   const column = layout === "vertical" ? 0 : layout === "grid" ? index % 3 : index;
   const row = layout === "horizontal" ? 0 : layout === "grid" ? Math.floor(index / 3) : index;
@@ -961,22 +1070,39 @@ function graphPageInputs(args) {
   ];
 }
 
-function buildScatterPageFromGraph(value, index, args, templates = [], reusedTemplates = []) {
+function buildScatterPageFromGraph(value, index, args, projectPath, templates = [], reusedTemplates = [], projectGuidanceNodes = []) {
   const page = isObject(value) ? value : {};
   const now = nowIso();
   const graphType = normalizeGraphType(args?.graphType);
   const layout = normalizeGraphLayout(page.layout || args?.layout || defaultGraphLayoutForType(graphType));
   const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
   if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
+  const guidanceNodes = softwareProductGuidanceNodes(projectPath, graphType, index, rawNodes);
+  const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = new Set();
-  const nodes = rawNodes.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
+  const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
   const nodeIds = new Set(nodes.map((node) => node.id));
   const usedEdgeIds = new Set();
   const usedTargetIds = new Set();
   const usedConnectionPairs = new Set();
-  const edges = Array.isArray(page.edges)
-    ? page.edges.map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs))
-    : [];
+  const rawEdges = Array.isArray(page.edges) ? page.edges : [];
+  const autoEdgeIds = new Set(rawEdges.map((edge) => (typeof edge?.id === "string" && edge.id.trim() ? edge.id.trim() : "")).filter(Boolean));
+  const autoGuidanceEdges =
+    guidanceNodes.length && nodes.length > guidanceNodes.length
+      ? guidanceNodes.map((node, guidanceIndex) => ({
+          id: projectGuidanceEdgeId(guidanceIndex, autoEdgeIds),
+          source: nodes[0].id,
+          target: node.id
+        }))
+      : [];
+  const edges = [...rawEdges, ...autoGuidanceEdges].map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs));
+  guidanceNodes.forEach((node) => {
+    projectGuidanceNodes.push({
+      pageIndex: index,
+      nodeId: node.id,
+      fileName: node.data.projectGuidanceFile
+    });
+  });
   return {
     id: typeof page.id === "string" && page.id.trim() ? page.id.trim() : `page-${crypto.randomBytes(5).toString("hex")}`,
     name:
@@ -1012,8 +1138,11 @@ async function writeScatterGraph(projectPath, args) {
   const mode = normalizeGraphWriteMode(args?.mode);
   const existingDocument = await readScatterDocument(projectPath);
   const reusedTemplates = [];
+  const projectGuidanceNodes = [];
   const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
-  const incomingPages = graphPageInputs(args).map((page, index) => buildScatterPageFromGraph(page, index, args, templates, reusedTemplates));
+  const incomingPages = graphPageInputs(args).map((page, index) =>
+    buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
+  );
   const now = nowIso();
   let pages;
   let activePageId;
@@ -1055,7 +1184,7 @@ async function writeScatterGraph(projectPath, args) {
     updatedAt: document.updatedAt
   });
 
-  return { document, reusedTemplates };
+  return { document, reusedTemplates, projectGuidanceNodes };
 }
 
 async function openProject(projectPath) {
@@ -2054,7 +2183,7 @@ async function toolListCanvasightNodeTemplates(args) {
 
 async function toolWriteCanvasightGraph(args) {
   const projectPath = normalizeProjectPath(args?.projectPath || defaultProjectPath());
-  const { document, reusedTemplates } = await writeScatterGraph(projectPath, args || {});
+  const { document, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, args || {});
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
@@ -2065,7 +2194,8 @@ async function toolWriteCanvasightGraph(args) {
     `Active page: ${activePage.name} (${activePage.id})`,
     `Nodes: ${nodeIds.length}`,
     `Edges: ${edgeIds.length}`,
-    `Templates reused: ${reusedTemplates.length}`
+    `Templates reused: ${reusedTemplates.length}`,
+    `Project guidance nodes: ${projectGuidanceNodes.length}`
   ].join("\n");
 
   return toolResult(
@@ -2080,6 +2210,7 @@ async function toolWriteCanvasightGraph(args) {
       nodeIds,
       edgeIds,
       reusedTemplates,
+      projectGuidanceNodes,
       document
     },
     summary

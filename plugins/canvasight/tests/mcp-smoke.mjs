@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.5");
+    assert.equal(initialized.serverInfo.version, "0.1.6");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -329,7 +329,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.5");
+    assert.equal(autoHealth.serverVersion, "0.1.6");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -581,7 +581,7 @@ async function main() {
         pageName: "Product Build Breakdown",
         nodes: [
           { id: "product-goal", title: "Product goal", body: "Define the user outcome and success boundary." },
-          { id: "project-docs", title: "Project guidance", body: "Check AGENTS.md and design.md; create completion nodes if they are missing or incomplete." },
+          { id: "project-docs", title: "Project guidance", body: "Check project guidance files and create follow-up tasks when required." },
           { id: "feature-scope", title: "Feature scope", body: "Separate required behavior, non-goals, and edge cases." },
           { id: "design-style", title: "Design style", body: "Define layout, interaction, density, and visual language requirements." },
           { id: "technical-plan", title: "Technical plan", body: "Map implementation modules, data contracts, persistence, and verification." }
@@ -596,11 +596,82 @@ async function main() {
     });
     assert.equal(productGraph.structuredContent.status, "written");
     assert.equal(productGraph.structuredContent.graphType, "software-product");
-    assert.deepEqual(productGraph.structuredContent.nodeIds, ["product-goal", "project-docs", "feature-scope", "design-style", "technical-plan"]);
-    assert.deepEqual(productGraph.structuredContent.edgeIds, ["goal-docs", "goal-scope", "goal-design", "goal-tech"]);
+    assert.deepEqual(productGraph.structuredContent.nodeIds, [
+      "product-goal",
+      "project-docs",
+      "feature-scope",
+      "design-style",
+      "technical-plan",
+      "project-guidance-agents-md",
+      "project-guidance-design-md"
+    ]);
+    assert.deepEqual(productGraph.structuredContent.edgeIds, [
+      "goal-docs",
+      "goal-scope",
+      "goal-design",
+      "goal-tech",
+      "project-guidance-edge-1",
+      "project-guidance-edge-2"
+    ]);
+    assert.deepEqual(
+      productGraph.structuredContent.projectGuidanceNodes.map((node) => node.fileName),
+      ["AGENTS.md", "design.md"]
+    );
     const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(productScatterJson.pages.length, 4);
     assert.equal(productScatterJson.nodes[2].position.x, 920);
+    assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").data.projectGuidanceFile, "AGENTS.md");
+    assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-design-md").data.projectGuidanceFile, "design.md");
+
+    const guidedProjectPath = path.join(tempRoot, "guided-product-project");
+    await fsp.mkdir(guidedProjectPath, { recursive: true });
+    await fsp.writeFile(path.join(guidedProjectPath, "AGENTS.md"), "# Agent rules\n", "utf8");
+    await fsp.writeFile(path.join(guidedProjectPath, "design.md"), "# Design rules\n", "utf8");
+    const guidedGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath: guidedProjectPath,
+        graphType: "software-product",
+        pageName: "Existing Guidance Files",
+        nodes: [{ id: "guided-root", title: "Guided product", body: "Both project guidance files already exist." }]
+      }
+    });
+    assert.deepEqual(guidedGraph.structuredContent.nodeIds, ["guided-root"]);
+    assert.deepEqual(guidedGraph.structuredContent.edgeIds, []);
+    assert.deepEqual(guidedGraph.structuredContent.projectGuidanceNodes, []);
+
+    const partialGuidanceProjectPath = path.join(tempRoot, "partial-guidance-product-project");
+    await fsp.mkdir(partialGuidanceProjectPath, { recursive: true });
+    await fsp.writeFile(path.join(partialGuidanceProjectPath, "AGENTS.md"), "# Agent rules\n", "utf8");
+    const partialGuidanceGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath: partialGuidanceProjectPath,
+        graphType: "software-product",
+        pageName: "Partial Guidance Files",
+        nodes: [{ id: "partial-root", title: "Partial product", body: "Only one project guidance file exists." }]
+      }
+    });
+    assert.deepEqual(partialGuidanceGraph.structuredContent.nodeIds, ["partial-root", "project-guidance-design-md"]);
+    assert.deepEqual(partialGuidanceGraph.structuredContent.edgeIds, ["project-guidance-edge-1"]);
+    assert.deepEqual(
+      partialGuidanceGraph.structuredContent.projectGuidanceNodes.map((node) => node.fileName),
+      ["design.md"]
+    );
+
+    const nonProductProjectPath = path.join(tempRoot, "non-product-project");
+    await fsp.mkdir(nonProductProjectPath, { recursive: true });
+    const nonProductGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath: nonProductProjectPath,
+        graphType: "task-plan",
+        pageName: "Task Plan Without Guidance",
+        nodes: [{ id: "task-root", title: "Task root", body: "Non-product graph should not add project docs." }]
+      }
+    });
+    assert.deepEqual(nonProductGraph.structuredContent.nodeIds, ["task-root"]);
+    assert.deepEqual(nonProductGraph.structuredContent.projectGuidanceNodes, []);
 
     const templateAssetPath = path.join(tempRoot, "figma-color-template.md");
     await fsp.writeFile(templateAssetPath, "# Figma color variable checklist\n", "utf8");
