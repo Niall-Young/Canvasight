@@ -19,13 +19,31 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 
 ## Agent Roles
 
-- Main thread: owns integration, architecture decisions, conflict handling, verification, and final commits.
+- Main thread: owns integration, architecture decisions, conflict handling, verification, and final delivery.
 - Product Agent: keeps the plugin aligned with the product goal of a browser canvas that returns output to Codex.
 - Design Agent: protects the web UI direction, component language, visual density, and removal of old desktop-shell residue.
 - Development Agent: owns implementation across MCP, persistence, React, and build/runtime behavior.
 - Test Supervisor Agent: owns smoke tests, build checks, plugin validation, and browser-visible verification.
 - Customer Support Agent: owns user-facing README documentation. On every user-visible feature, command, installation, workflow, or troubleshooting change, this agent must decide whether `README.md` needs an update. When it does, update README in the same delivery. README must keep a bilingual switch structure with Chinese and English sections, and must explain what Canvasight is for, its main features, basic usage, plugin setup, development commands, and common questions.
   Before updating README, check `AGENTS.md`, `design.md`, `plugins/canvasight/package.json`, `plugins/canvasight/mcp/server.mjs`, and `plugins/canvasight/skills/canvasight/SKILL.md` so commands, tool names, and feature descriptions stay current. Do not present development-only commands as normal user workflow.
+- Design Standards Expert: owns `design.md`. This agent updates the design baseline when user-facing layout, interaction, visual language, icon semantics, or design-system rules change. Before UI implementation finishes, this agent checks whether `design.md` still matches the actual product direction.
+- Development Standards Lead: owns `AGENTS.md`. This agent keeps repo workflow, agent roles, command references, verification rules, and implementation standards current. Any durable process change must be reflected here in the same delivery.
+- Project Management Agent: owns git hygiene and delivery logs. This agent checks `git status`, keeps commits small and reviewable, writes Chinese conventional commit messages with prefixes such as `feat:` and `fix:`, and confirms staged files match the delivered scope.
+
+## Agent Team Lifecycle
+
+- Start each major workstream from the fixed roster above. Do not create extra role names unless the user explicitly changes the roster.
+- Do not spawn standby subagents just to keep them idle. Spawn a role only when it has concrete work that can run in parallel or requires an independent review.
+- Reuse an existing live subagent for the same role when possible. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, or Project Management agent for the same unresolved workstream.
+- When a subagent is spawned, record its role, purpose, and agent id in the next `agent-reports/*-integration-summary.md`.
+- Close subagents after their assigned work is complete or no longer needed. If a historical subagent cannot be closed because its id is unavailable, state that in the integration summary instead of creating replacement agents.
+- Role ownership still applies when the main thread performs a small change locally. In that case, the main thread must explicitly account for the relevant role's responsibility before final delivery.
+
+## Agent Reports
+
+- Use `/Users/niallyoung/Desktop/Canvasight/agent-reports/` for cross-agent Markdown communication and integration records.
+- For blockers or high-risk issues, write an issue report first, then hand it to the owning agent for a solution report before implementation.
+- For every integration round, write `YYYYMMDD-HHMM-integration-summary.md` with completed work, unresolved risks, role decisions, verification, and git status.
 
 ## Implementation Standards
 
