@@ -2,7 +2,9 @@
 
 ## Project Context
 
-Canvasight is an early-stage project. The repository currently starts from a clean baseline, so agents should preserve room for the final stack and avoid assuming frameworks, commands, or deployment targets before they exist in the repo.
+Canvasight is an early-stage repo-local Codex plugin. The active product lives under `plugins/canvasight` as a Vite, React, TypeScript, XYFlow, Zustand, and Radix UI application. Preserve room for the final stack, but do not treat the repository as an empty baseline anymore.
+
+The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. Running a node or flow sends Markdown and structured run data back to the current Codex thread through MCP.
 
 Use `design.md` as the product and UI design baseline when adding user-facing screens.
 
@@ -22,6 +24,8 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Keep business logic separate from presentation when the framework makes that practical.
 - Make UI components reusable only after the same pattern appears more than once or clearly belongs to a shared system.
 - Avoid placeholder-only screens for core flows; build the usable workflow first.
+- Keep canvas state, persistence, and MCP contracts explicit. Do not hide run behavior inside presentation components when it can live in store or runtime helpers.
+- Use the existing app icon registry in `src/components/ui/icon.tsx` and SVG assets under `src/assets/icons` before adding another icon path.
 
 ## Design Standards
 
@@ -29,6 +33,8 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Product surfaces should be direct and work-focused. Avoid marketing-style hero pages unless the request is specifically for a landing page.
 - Prioritize dense but readable interfaces: clear hierarchy, compact controls, predictable navigation, and strong empty/loading/error states.
 - Use established controls for their jobs: selects for switching records, tabs for view modes, toggles for binary settings, sliders or numeric inputs for values, and icon buttons for common tools.
+- Preserve the current workspace model: compact topbar, canvas-first layout, task nodes as the primary editable objects, contextual drawers for task lists and Markdown/run output, and node-level Codex mode controls.
+- When changing iconography, update both the visual asset and the semantic command it represents. For example, the task-list drawer should use a list icon, and the Goal Codex mode should use a target-style icon.
 
 ## Verification
 

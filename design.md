@@ -31,6 +31,55 @@ Recommended top-level structure:
 
 Avoid scattering core actions across multiple unrelated panels.
 
+## Current Workspace Baseline
+
+The active implementation is a Codex plugin workspace, not a landing page. The first viewport should open directly into the working app:
+
+- Topbar: compact global commands for project/workspace actions, running flows, opening the task list, and accessing settings.
+- Canvas: the dominant surface, powered by draggable task nodes and visible connections.
+- Task node: the primary editable object, with title, prompt/body content, attachments, connection affordances, run controls, and mode controls.
+- Right drawer: contextual workspace surfaces such as task list, Markdown/run output, and related inspection views.
+- Sidebar or project list: secondary navigation only; it must not compete visually with the active canvas.
+- Toast/status layer: short-lived feedback for save, run, achievement, and error events.
+
+Keep these regions stable. Opening drawers, changing node state, or hovering connected edges should clarify the current context without resizing the canvas unpredictably.
+
+## Task Node Design
+
+Task nodes should feel like compact work objects rather than document cards:
+
+- A selected node should expose editing and run controls clearly.
+- Title and body editing should preserve text input behavior, including IME composition.
+- Attachments should appear as compact chips with file size and removal affordances.
+- Parent and child connection handles should remain discoverable on the left and right edges.
+- Hovering a connected edge or related node should create a visible relationship highlight.
+- Running, loading, errored, selected, and editing states must be visually distinct.
+- Multi-select actions should work without making a single node look editable when it is only selected as part of a group.
+
+Node controls should stay small and predictable. Do not add large descriptive text inside nodes to explain the app.
+
+## Codex Run Modes
+
+Node-level Codex mode controls are part of the core workflow:
+
+- Chat mode uses a chat icon and sends the node as a normal Codex conversation prompt.
+- Plan mode uses a task/planning icon and enters Codex planning behavior.
+- Goal mode uses a target-style icon and starts a goal-oriented Codex run.
+
+These modes should be represented as a segmented control or similarly compact option set. The selected mode must be visually obvious, but the control should not dominate the node.
+
+## Icon Semantics
+
+Canvasight uses app-local SVG icons through the shared icon registry. Icons should map to the object or command they actually represent:
+
+- Task list drawer: list icon, not a generic task or checkbox icon.
+- Goal mode: target-style icon, not a generic flag.
+- Run: play icon.
+- New workspace or project: folder-plus or equivalent add-container icon.
+- Sidebar and drawer controls: directional panel icons that match the panel being opened.
+
+When an icon appears in both the topbar and canvas toolbar for the same command, use the same visual symbol in both places.
+
 ## Visual Style
 
 Canvasight should use a restrained, professional interface:
@@ -123,4 +172,3 @@ When the frontend stack is chosen, translate this baseline into concrete tokens:
 - Panel and toolbar dimensions
 
 Keep those tokens centralized rather than duplicating raw values across components.
-
