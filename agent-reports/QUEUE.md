@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2242-integration-summary-agent-team-persistent-roster.md` - integrated persistent Agent Team roster, report status write-back, docs, version bump, and verification.
+- `agent-reports/resolved/20260705-2242-development-solution-agent-team-persistent-roster.md` - implemented fixed-role reuse and report communication rules in Canvasight Agent Team skill.
+- `agent-reports/resolved/20260705-2239-product-issue-agent-team-persistent-roster.md` - resolved Agent Team one-off agent ambiguity.
 - `agent-reports/resolved/20260705-2226-integration-summary-agent-team-skill-toggle.md` - integrated configurable Agent Team skill, settings toggle, Run payload, docs, and verification.
 - `agent-reports/resolved/20260705-2226-development-solution-agent-team-skill-toggle.md` - implemented Agent Team setting, Run protocol, skill, docs, and tests.
 - `agent-reports/resolved/20260705-2211-product-issue-agent-team-skill-toggle.md` - resolved configurable Agent Team skill and default-on settings toggle.

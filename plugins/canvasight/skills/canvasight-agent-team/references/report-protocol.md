@@ -1,6 +1,6 @@
 # Report Protocol
 
-Use a file-system queue when Agent Team is enabled and the project has or needs `agent-reports/`.
+Use a file-system queue when Agent Team is enabled and the project has or needs `agent-reports/`. Reports are the durable communication layer between persistent role agents.
 
 ## Status Folders
 
@@ -19,6 +19,28 @@ agent-reports/
 
 Use `agent-reports/QUEUE.md` as the active queue index when it exists.
 
+## Communication Rule
+
+- Cross-agent handoff happens through Markdown reports, not only transient chat messages.
+- Every report must carry frontmatter status, owner, created_by, priority, created_at, and updated_at.
+- `owner`, `created_by`, and handoff fields should use stable roster role names such as `Product Agent` or `Test Supervisor Agent`, not random tool nicknames.
+- If the runtime exposes a concrete agent id, record it in the integration summary role mapping instead of replacing the role name in reports.
+- Every status change must update the report file and `agent-reports/QUEUE.md` when the queue exists.
+- Role agents should read the linked issue or solution report before responding to a handoff.
+- Role agents must write status back when they accept work, find a blocker, finish analysis, finish implementation, or hand work to another role.
+- Do not leave a report stale after doing work. At minimum update `updated_at`, `status`, `owner`, `当前状态`, and either `处理结果`, `验证方式`, or `后续风险`.
+- Integration summaries must record which role agents were called, reused, missing, or represented by main-thread checklist.
+
+## Status Write-Back Rule
+
+Agents own the report state for work they touch.
+
+- When accepting work: set `status: assigned`, set `owner`, move or keep the file under `agent-reports/assigned/`, and update `agent-reports/QUEUE.md`.
+- While working: keep `status: assigned`, append concise progress or blocker notes in the report body, and update `updated_at`.
+- When blocked: keep the report assigned, write the blocker, evidence, needed answer, and next owner. If the blocker needs another role, create or link a new issue report.
+- When solved: write a solution report under `agent-reports/resolved/`, update the original issue to `status: resolved`, add `solution_report`, and fill `处理结果`, `修改文件`, `验证方式`, and `后续风险`.
+- When archived: move only after the integration summary records the closure. Do not archive active or unverified work.
+
 ## Required Frontmatter
 
 ```yaml
@@ -33,10 +55,11 @@ updated_at: YYYY-MM-DD HH:MM
 related_files:
   - src/example.tsx
 solution_report:
+agent_id:
 ---
 ```
 
-Use local project role names when they differ from the example.
+Use local project role names when they differ from the example. `agent_id` is optional and should only be used when the runtime provides a useful stable id for the owner.
 
 ## Issue Report Body
 

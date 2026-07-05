@@ -4,7 +4,25 @@ Use this reference after `structuredContent.agentTeam.enabled` is true.
 
 ## Selection Rule
 
-Classify the work first. Create or reuse only the agents needed for the current request. Do not launch the whole team just because Agent Team is enabled.
+Classify the work first. Call only the agents needed for the current request. Do not launch the whole team just because Agent Team is enabled.
+
+## Persistent Roster Rule
+
+Agent Team roles are long-lived project role seats. They should behave like the fixed Canvasight project agents: the same roles keep handling the project across turns, instead of creating a fresh set for every task.
+
+Use this order:
+
+1. Read the project's `AGENTS.md` Agent Team lifecycle when it exists.
+2. Check the latest integration summaries or current thread state for the recorded role-to-agent mapping.
+3. Reuse or resume the existing role agent for the needed role.
+4. Send follow-up work to that same role agent through the current agent tool, and use `agent-reports/` for durable cross-agent handoff.
+5. Create a new role agent only when the role is needed and no reusable role agent exists.
+6. Record created, reused, missing, or replaced role agents in the next integration summary.
+7. Keep fixed role agents open after task completion unless the user explicitly asks to rebuild or stop the team.
+
+"On demand" means call the relevant fixed roles for the current work. It does not mean creating disposable one-task agents.
+
+When tool UIs expose random nicknames, keep the product-facing identity as the role name. Integration summaries may map the role to the actual agent id or nickname, but reports should assign work to the stable role name.
 
 ## Core Roles
 
@@ -29,4 +47,4 @@ Classify the work first. Create or reuse only the agents needed for the current 
 
 ## Avoid Over-Routing
 
-Do not create agents for roles whose owned surface is not affected. If a role is only marginally relevant, document the main-thread checklist instead of spawning another worker.
+Do not call agents for roles whose owned surface is not affected. Do not create duplicate agents for a role that already has a fixed project agent. If a role is only marginally relevant, document the main-thread checklist instead of creating another worker.

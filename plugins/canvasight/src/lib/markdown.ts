@@ -128,7 +128,7 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "已开启",
     agentTeamInstruction:
-      "先判断这次任务实际需要哪些角色，只创建必要的子智能体；不要默认启动全部角色。任一角色发现跨职责、高风险或阻断问题时，先写 agent report，再交给对应角色分析和回写结果。",
+      "先判断这次任务实际需要哪些固定角色，优先复用或恢复项目已有的同角色 agent；只有缺少必要角色时才创建新的固定角色 agent，不要为一次任务创建临时或重复 agent。跨角色沟通必须通过带状态的 agent report 记录；角色接活、阻塞、解决或转交时都要回写 report 状态和队列。任一角色发现跨职责、高风险或阻断问题时，先写 report，再交给对应角色分析和回写结果。",
     agentTeamRecommendedRoles: "建议角色",
     agentTeamReportProtocol: "Report 协议",
     agentTeamSkill: "Skill",
@@ -174,7 +174,7 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "enabled",
     agentTeamInstruction:
-      "Classify the task first, create only the needed subagents, and do not start every role by default. If any role finds a cross-role, high-risk, or blocking issue, write an agent report first, then hand it to the responsible role for analysis and result write-back.",
+      "Classify the task first, then reuse or resume existing fixed role agents for the project. Create a new fixed role agent only when a needed role is missing, and never create temporary or duplicate one-task agents. Cross-role communication must go through status-bearing agent reports; role agents must update report status and the queue when they accept, block, solve, or hand off work. If any role finds a cross-role, high-risk, or blocking issue, write a report first, then hand it to the responsible role for analysis and result write-back.",
     agentTeamRecommendedRoles: "Recommended roles",
     agentTeamReportProtocol: "Report protocol",
     agentTeamSkill: "Skill",

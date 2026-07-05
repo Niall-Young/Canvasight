@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.7");
+    assert.equal(initialized.serverInfo.version, "0.1.8");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -329,7 +329,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.7");
+    assert.equal(autoHealth.serverVersion, "0.1.8");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
