@@ -14,6 +14,8 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-1925-product-issue-figma-color-variables-plugin.md` - triaged the Figma color variables plugin request as a software-product planning task.
+- `agent-reports/resolved/20260705-1925-integration-summary.md` - completed the agent-report protocol dry run for the Figma plugin request.
 - `agent-reports/resolved/20260705-1914-integration-summary.md` - established the file-system Agent report protocol.
 
 ## Archived / Legacy
