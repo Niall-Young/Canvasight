@@ -14,6 +14,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - 在同一个项目里用多个 Page 隔离不同画布工作区。
 - 给节点附加图片、文件和上下文资料。
 - 选择 Chat、Plan 或 Goal 模式，把画布内容交给 Codex 执行。
+- 保存常用节点的标题、提示词和附件为全局模板，并在任意项目里拖回画布复用。
 - 在新 Codex 线程里恢复最近使用的 Canvasight 项目。
 - 让网页画布独立于单个 Codex thread 存活，当前在哪个 thread，就由哪个 thread 获取 Run payload。
 
@@ -24,6 +25,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - **项目 Page**：一个项目下可以有多个相互隔离的画布工作区。
 - **附件**：支持上传、拖拽和粘贴图片到节点。
 - **Markdown 预览**：把当前节点或下游流程转换成可发送给 Codex 的 Markdown。
+- **全局节点模板**：从节点菜单把非空提示词和附件保存为本机全局模板，打开模板抽屉后可搜索并拖拽到当前画布。
 - **Codex 原生模式**：节点可选择 Chat、Plan 或 Goal。
 - **项目级 daemon**：本地网页服务独立于打开它的 Codex thread，归档旧 thread 不会直接关闭画布服务。
 - **任务抽屉与设置**：查看任务清单、预览 Markdown，并调整语言和主题。
@@ -35,8 +37,9 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 2. 在浏览器画布里创建任务节点，填写提示词，按需要添加附件。
 3. 用连接线组织节点关系，或者在左上角创建多个 Page 管理不同工作区。
 4. 选择节点的 Codex 模式：Chat、Plan 或 Goal。
-5. 点击节点或流程的 Run。
-6. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
+5. 需要复用提示词时，从节点菜单选择“存为模板”；再从右上角模板按钮打开模板抽屉，搜索模板并拖到画布。
+6. 点击节点或流程的 Run。
+7. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
 
 ### 插件安装
 
@@ -65,6 +68,8 @@ codex plugin add canvasight@canvasight-local
 - 附件保存在 `.scatter/assets/`。
 - 最近项目状态保存在本机 Canvasight 用户状态中。
 - daemon 连接状态保存在本机 Canvasight 用户状态中，用于跨 Codex thread 复用本地服务。
+- 全局节点模板保存在本机 Canvasight 用户状态中，不写入项目 `.scatter/scatter.json`，因此会跨项目可用。
+- 模板附件会复制到本机 Canvasight 全局模板资源目录，不引用原项目附件路径。
 - `.scatter/scatter.json` 保持 v1 兼容，并通过 `pages` / `activePageId` 支持项目内多个 Page。
 
 ### 开发命令
@@ -105,6 +110,10 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 **Page 和项目有什么区别？**
 
 项目对应一个本地目录和 `.scatter` 数据。Page 是同一个项目下相互隔离的画布工作区。
+
+**节点模板属于项目吗？**
+
+不属于。节点模板是本机全局模板，可以跨项目复用。v1 模板保存节点标题、提示词正文和附件；不会保存 Chat、Plan、Goal、effort 或运行模式。
 
 **最近项目怎么恢复？**
 
@@ -150,6 +159,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - Use multiple Pages inside one project to isolate canvas workspaces.
 - Attach images, files, and context to task nodes.
 - Send canvas output to Codex in Chat, Plan, or Goal mode.
+- Save reusable node titles, prompts, and attachments as global templates and drag them back into any project canvas.
 - Reopen recent Canvasight projects from a new Codex thread.
 - Keep the browser canvas alive outside a single Codex thread, so whichever thread is current can receive the next Run payload.
 
@@ -160,6 +170,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - **Project Pages**: keep multiple isolated canvas workspaces inside one project.
 - **Attachments**: upload, drag, or paste images and files into nodes.
 - **Markdown preview**: convert the current node or downstream flow into Markdown for Codex.
+- **Global node templates**: save non-empty node prompts and attachments from the node menu, search them in the template drawer, and drag them into the current canvas.
 - **Native Codex modes**: choose Chat, Plan, or Goal per node.
 - **Project-level daemon**: the local web service is independent from the Codex thread that opened it, so archiving that thread does not directly stop the canvas service.
 - **Task drawer and settings**: inspect the task list, preview Markdown, and adjust language or theme.
@@ -171,8 +182,9 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 2. Create task nodes in the browser canvas, write prompts, and add attachments when needed.
 3. Connect nodes into flows, or create multiple Pages from the top-left Page switcher.
 4. Choose the node's Codex mode: Chat, Plan, or Goal.
-5. Click Run on a node or flow.
-6. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
+5. To reuse a prompt, choose “Save as template” from a node menu. Open the template drawer from the top-right template button, search templates, then drag one onto the canvas.
+6. Click Run on a node or flow.
+7. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
 
 ### Plugin Installation
 
@@ -201,6 +213,8 @@ After installing or reinstalling the plugin, open a new Codex thread or reload t
 - Attachments are stored in `.scatter/assets/`.
 - Recent project state is stored in local Canvasight user state.
 - Daemon connection state is stored in local Canvasight user state so the local service can be reused across Codex threads.
+- Global node templates are stored in local Canvasight user state, not in project `.scatter/scatter.json`, so they are reusable across projects.
+- Template attachments are copied into the local Canvasight global template asset directory instead of referencing the original project attachment path.
 - `.scatter/scatter.json` remains v1-compatible and supports multiple project Pages through `pages` / `activePageId`.
 
 ### Development Commands
@@ -241,6 +255,10 @@ Open a new Codex thread or reload the current Codex session. Already-open thread
 **What is the difference between a Page and a project?**
 
 A project maps to a local directory and `.scatter` data. A Page is an isolated canvas workspace inside that project.
+
+**Are node templates project-specific?**
+
+No. Node templates are local global templates and can be reused across projects. v1 templates save the node title, prompt body, and attachments; they do not save Chat, Plan, Goal, effort, or run mode.
 
 **How do I recover a recent project?**
 

@@ -1,18 +1,22 @@
-import { Fragment, useEffect, useState, type ReactElement, type ReactNode } from "react";
-import type { RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
+import { Fragment, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
+import type { NodeTemplate, RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { childCount } from "../lib/markdown";
 import type { Translate } from "../lib/translations";
+import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 import { Segmented, SegmentedItem } from "./ui/segmented";
 import { TooltipAnchor } from "./ui/tooltip";
 import { TaskItem } from "./ui/task-item";
 import { Toast, ToastViewport } from "./ui/toast";
+import type { DrawerMode } from "../store/scatterStore";
 
 interface RightDrawerProps {
-  drawer: "tasks" | "markdown" | null;
+  drawer: DrawerMode | null;
   nodes: ScatterNode[];
   edges: ScatterEdge[];
+  templates: NodeTemplate[];
+  templateSearch: string;
   selectedNodeId: string | null;
   markdownNodeId: string | null;
   markdown: string;
@@ -20,6 +24,9 @@ interface RightDrawerProps {
   onLocateNode: (nodeId: string, mode: RunMode) => void;
   onSelectNode: (nodeId: string, mode: RunMode) => void;
   onRunNode: (nodeId: string, mode: RunMode) => void;
+  onTemplateSearchChange: (value: string) => void;
+  onTemplateDragStart: (template: NodeTemplate, event: DragEvent<HTMLElement>) => void;
+  onTemplateDragEnd: () => void;
 }
 
 type MarkdownView = "source" | "preview";
@@ -209,22 +216,37 @@ function MarkdownPreview({ markdown }: { markdown: string }): ReactElement {
   return <div className="markdown-preview">{blocks}</div>;
 }
 
+function drawerLabel(drawer: DrawerMode, t: Translate): string {
+  if (drawer === "tasks") return t("drawer.tasks");
+  if (drawer === "templates") return t("drawer.templates");
+  return t("drawer.markdown");
+}
+
+function templatePreview(template: NodeTemplate): string {
+  return template.body.replace(/\s+/g, " ").trim();
+}
+
 export function RightDrawer({
   drawer,
   nodes,
   edges,
+  templates,
+  templateSearch,
   selectedNodeId,
   markdownNodeId,
   markdown,
   currentRunMode,
   onLocateNode,
   onSelectNode,
-  onRunNode
+  onRunNode,
+  onTemplateSearchChange,
+  onTemplateDragStart,
+  onTemplateDragEnd
 }: RightDrawerProps): ReactElement {
   const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState<"idle" | "success">("idle");
   const [markdownView, setMarkdownView] = useState<MarkdownView>("source");
-  const [renderedDrawer, setRenderedDrawer] = useState<Exclude<RightDrawerProps["drawer"], null>>("tasks");
+  const [renderedDrawer, setRenderedDrawer] = useState<DrawerMode>("tasks");
 
   useEffect(() => {
     if (drawer) setRenderedDrawer(drawer);
@@ -241,6 +263,11 @@ export function RightDrawer({
   const markdownNode = nodes.find((node) => node.id === markdownNodeId);
   const taskEntries = taskListEntries(nodes, edges, t);
   const flowStartNodeIds = new Set(taskEntries.filter((entry) => entry.flow).map((entry) => entry.node.id));
+  const normalizedTemplateSearch = templateSearch.trim().toLowerCase();
+  const filteredTemplates = templates.filter((template) => {
+    if (!normalizedTemplateSearch) return true;
+    return `${template.title} ${template.body}`.toLowerCase().includes(normalizedTemplateSearch);
+  });
   function downloadMarkdown(): void {
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -260,7 +287,7 @@ export function RightDrawer({
     <aside
       className={`right-drawer is-${renderedDrawer} ${isOpen ? "is-open" : "is-collapsed"}`}
       aria-hidden={!isOpen}
-      aria-label={renderedDrawer === "tasks" ? t("drawer.tasks") : t("drawer.markdown")}
+      aria-label={drawerLabel(renderedDrawer, t)}
       inert={!isOpen}
     >
       {renderedDrawer === "tasks" ? (
@@ -290,6 +317,45 @@ export function RightDrawer({
                   />
                 );
               })
+            )}
+          </div>
+        </div>
+      ) : renderedDrawer === "templates" ? (
+        <div className="template-sidebar">
+          <p className="right-sidebar-title">{t("drawer.templates")}</p>
+          <label className="template-search">
+            <Icon name="search" size={16} />
+            <input
+              value={templateSearch}
+              placeholder={t("drawer.templateSearchPlaceholder")}
+              aria-label={t("drawer.templateSearchPlaceholder")}
+              onChange={(event) => onTemplateSearchChange(event.currentTarget.value)}
+            />
+          </label>
+          <div className="template-list">
+            {templates.length === 0 ? (
+              <p className="empty-copy">{t("drawer.noTemplates")}</p>
+            ) : filteredTemplates.length === 0 ? (
+              <p className="empty-copy">{t("drawer.noTemplateResults")}</p>
+            ) : (
+              filteredTemplates.map((template) => (
+                <article
+                  key={template.id}
+                  className="template-item"
+                  draggable
+                  aria-label={t("drawer.dragTemplate")}
+                  onDragStart={(event) => onTemplateDragStart(template, event)}
+                  onDragEnd={onTemplateDragEnd}
+                >
+                  <div className="template-item-main">
+                    <div className="template-item-heading">
+                      <strong>{template.title || t("drawer.unnamedTemplate")}</strong>
+                      {template.attachments.length ? <span>{t("drawer.templateAttachmentCount", { count: template.attachments.length })}</span> : null}
+                    </div>
+                    <p>{templatePreview(template)}</p>
+                  </div>
+                </article>
+              ))
             )}
           </div>
         </div>

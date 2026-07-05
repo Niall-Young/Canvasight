@@ -12,6 +12,8 @@ import type {
 
 const MAX_HISTORY_LENGTH = 100;
 
+export type DrawerMode = "tasks" | "templates" | "markdown";
+
 interface CanvasSnapshot {
   nodes: ScatterNode[];
   edges: ScatterEdge[];
@@ -36,7 +38,7 @@ interface ScatterState {
   nodes: ScatterNode[];
   edges: ScatterEdge[];
   selectedNodeId: string | null;
-  drawer: "tasks" | "markdown" | null;
+  drawer: DrawerMode | null;
   theme: "light" | "dark";
   status: string;
   isSaving: boolean;
@@ -62,7 +64,7 @@ interface ScatterState {
   appendAttachments: (nodeId: string, attachments: Attachment[]) => void;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   setSelectedNodeId: (nodeId: string | null) => void;
-  setDrawer: (drawer: "tasks" | "markdown" | null) => void;
+  setDrawer: (drawer: DrawerMode | null) => void;
   setTheme: (theme: "light" | "dark") => void;
   setStatus: (status: string) => void;
   setSaving: (isSaving: boolean) => void;

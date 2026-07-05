@@ -3,6 +3,8 @@ import type {
   AttachmentInput,
   CodexMode,
   LanguagePreference,
+  NodeTemplate,
+  NodeTemplateInput,
   OpenProjectResult,
   RunMode,
   ScatterDocument
@@ -34,6 +36,90 @@ function sessionIdFromUrl(): string {
 
 function sessionTokenFromUrl(): string {
   return new URLSearchParams(window.location.search).get("token") || "";
+}
+
+const templateStorageKey = "canvasight.nodeTemplates";
+
+function createTemplateId(): string {
+  return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeLocalAttachment(value: unknown): Attachment | null {
+  if (!value || typeof value !== "object") return null;
+  const attachment = value as Partial<Attachment>;
+  return {
+    id: typeof attachment.id === "string" && attachment.id ? attachment.id : createTemplateId(),
+    kind: attachment.kind === "image" ? "image" : "file",
+    source: attachment.source === "drop" || attachment.source === "paste" || attachment.source === "clipboard" ? attachment.source : "upload",
+    originalName: typeof attachment.originalName === "string" && attachment.originalName ? attachment.originalName : "attachment",
+    storedPath: typeof attachment.storedPath === "string" ? attachment.storedPath : "",
+    relativePath: typeof attachment.relativePath === "string" ? attachment.relativePath : "",
+    fileUrl: typeof attachment.fileUrl === "string" ? attachment.fileUrl : "",
+    mime: typeof attachment.mime === "string" && attachment.mime ? attachment.mime : "application/octet-stream",
+    size: typeof attachment.size === "number" && Number.isFinite(attachment.size) ? attachment.size : 0,
+    createdAt: typeof attachment.createdAt === "string" && attachment.createdAt ? attachment.createdAt : new Date().toISOString()
+  };
+}
+
+function normalizeLocalTemplate(value: unknown): NodeTemplate | null {
+  if (!value || typeof value !== "object") return null;
+  const template = value as Partial<NodeTemplate>;
+  if (typeof template.body !== "string" || !template.body.trim()) return null;
+  const now = new Date().toISOString();
+
+  return {
+    id: typeof template.id === "string" && template.id ? template.id : createTemplateId(),
+    title: typeof template.title === "string" && template.title.trim() ? template.title.trim() : template.body.trim().slice(0, 40),
+    body: template.body,
+    attachments: Array.isArray(template.attachments)
+      ? template.attachments.map(normalizeLocalAttachment).filter((attachment): attachment is Attachment => Boolean(attachment))
+      : [],
+    createdAt: typeof template.createdAt === "string" && template.createdAt ? template.createdAt : now,
+    updatedAt: typeof template.updatedAt === "string" && template.updatedAt ? template.updatedAt : now
+  };
+}
+
+function loadLocalTemplates(): NodeTemplate[] {
+  try {
+    const raw = window.localStorage.getItem(templateStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeLocalTemplate).filter((template): template is NodeTemplate => Boolean(template));
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTemplates(templates: NodeTemplate[]): void {
+  window.localStorage.setItem(templateStorageKey, JSON.stringify(templates));
+}
+
+function saveLocalTemplate(input: NodeTemplateInput): NodeTemplate {
+  const now = new Date().toISOString();
+  const body = input.body.trim();
+  if (!body) throw new Error("Template body is required");
+  const template: NodeTemplate = {
+    id: createTemplateId(),
+    title: input.title.trim() || body.slice(0, 40),
+    body,
+    attachments: (input.attachments ?? []).map((attachment) => ({ ...attachment })),
+    createdAt: now,
+    updatedAt: now
+  };
+  const templates = [template, ...loadLocalTemplates()];
+  saveLocalTemplates(templates.slice(0, 200));
+  return template;
+}
+
+function shouldUseLocalTemplateStore(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("Failed to fetch") ||
+    message.includes("API route not found") ||
+    message.includes("Unexpected token") ||
+    message.includes("404")
+  );
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -122,5 +208,26 @@ export const canvasightApi = {
       method: "POST",
       body: JSON.stringify({ targetPath })
     });
+  },
+
+  async listTemplates(): Promise<NodeTemplate[]> {
+    try {
+      return await requestJson<NodeTemplate[]>(`/api/templates`);
+    } catch (error) {
+      if (shouldUseLocalTemplateStore(error)) return loadLocalTemplates();
+      throw error;
+    }
+  },
+
+  async saveTemplate(template: NodeTemplateInput): Promise<NodeTemplate> {
+    try {
+      return await requestJson<NodeTemplate>(`/api/templates`, {
+        method: "POST",
+        body: JSON.stringify({ template })
+      });
+    } catch (error) {
+      if (shouldUseLocalTemplateStore(error)) return saveLocalTemplate(template);
+      throw error;
+    }
   }
 };

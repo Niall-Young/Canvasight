@@ -88,6 +88,17 @@ export interface ScatterNodeData extends Record<string, unknown> {
   lastRunAt?: string;
 }
 
+export interface NodeTemplate {
+  id: string;
+  title: string;
+  body: string;
+  attachments: Attachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NodeTemplateInput = Pick<NodeTemplate, "title" | "body" | "attachments">;
+
 export interface ScatterNode {
   id: string;
   type: "task";

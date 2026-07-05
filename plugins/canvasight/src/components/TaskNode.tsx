@@ -40,6 +40,7 @@ interface RuntimeActions {
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
   duplicateNode: (nodeId: string) => void;
+  saveNodeAsTemplate: (nodeId: string, data: ScatterNodeData) => Promise<void>;
   deleteNode: (nodeId: string) => void;
   setNodeHover: (nodeId: string, hovered: boolean) => void;
   runNode: (nodeId: string, mode: RunMode) => Promise<void>;
@@ -405,6 +406,26 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
                 </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item asChild>
                   <ActionMenuItem icon="copy" label={t("task.copy")} onClick={() => taskNodeActions?.duplicateNode(id)} />
+                </RadixDropdownMenu.Item>
+                <RadixDropdownMenu.Item asChild disabled={!hasBody}>
+                  <ActionMenuItem
+                    icon="book-bookmark"
+                    label={t("task.saveAsTemplate")}
+                    disabled={!hasBody}
+                    onClick={() => {
+                      if (!hasBody) return;
+                      const templateData = {
+                        ...data,
+                        title: titleDraftRef.current,
+                        body: bodyDraftRef.current,
+                        codexMode,
+                        planMode: codexMode === "plan",
+                        runMode
+                      };
+                      flushDraftToStore();
+                      void taskNodeActions?.saveNodeAsTemplate(id, templateData);
+                    }}
+                  />
                 </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item asChild>
                   <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />

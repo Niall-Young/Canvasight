@@ -382,6 +382,45 @@ async function main() {
       sessionId
     });
 
+    const emptyTemplates = await fetchJson(`${origin}/api/templates`);
+    assert.deepEqual(emptyTemplates, []);
+    const templateSourceAttachmentPath = path.join(tempRoot, "template-source.txt");
+    await fsp.writeFile(templateSourceAttachmentPath, "template attachment", "utf8");
+    const savedTemplate = await fetchJson(`${origin}/api/templates`, {
+      method: "POST",
+      body: JSON.stringify({
+        template: {
+          title: "Smoke template",
+          body: "Use this reusable prompt in any project.",
+          attachments: [
+            {
+              id: "template-source",
+              kind: "file",
+              source: "upload",
+              originalName: "template-source.txt",
+              storedPath: templateSourceAttachmentPath,
+              relativePath: "",
+              fileUrl: "",
+              mime: "text/plain",
+              size: 19,
+              createdAt: "2026-07-04T00:00:00.000Z"
+            }
+          ]
+        }
+      })
+    });
+    assert.equal(savedTemplate.title, "Smoke template");
+    assert.equal(savedTemplate.attachments.length, 1);
+    assert.equal(savedTemplate.attachments[0].originalName, "template-source.txt");
+    assert.equal(savedTemplate.attachments[0].storedPath.startsWith(canvasightHome), true);
+    assert.equal(await fsp.readFile(savedTemplate.attachments[0].storedPath, "utf8"), "template attachment");
+    const templateAssetResponse = await fetch(`${origin}${savedTemplate.attachments[0].fileUrl}`);
+    assert.equal(templateAssetResponse.ok, true);
+    assert.equal(await templateAssetResponse.text(), "template attachment");
+    const templatesAfterSave = await fetchJson(`${origin}/api/templates`);
+    assert.equal(templatesAfterSave.length, 1);
+    assert.equal(templatesAfterSave[0].id, savedTemplate.id);
+
     const openProject = await fetchJson(`${origin}/api/sessions/${sessionId}/open-project`, {
       method: "POST",
       body: JSON.stringify({ projectPath })
@@ -615,6 +654,10 @@ async function main() {
     const persistedSession = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}`);
     assert.equal(persistedSession.sessionId, persistentSessionId);
     assert.equal(persistedSession.projectPath, persistentProjectPath);
+    const persistedTemplates = await fetchJson(`${persistentOrigin}/api/templates`);
+    const persistedTemplate = persistedTemplates.find((template) => template.id === savedTemplate.id);
+    assert.equal(persistedTemplate?.body, savedTemplate.body);
+    assert.equal(persistedTemplate?.attachments[0]?.originalName, "template-source.txt");
 
     const mcpB = createMcpClient("smoke-b", {
       CANVASIGHT_CODEX_NATIVE: "0",

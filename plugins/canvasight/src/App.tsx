@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Background,
@@ -28,6 +28,8 @@ import {
   type AppSettings,
   type AttachmentInput,
   type CodexMode,
+  type NodeTemplate,
+  type NodeTemplateInput,
   type RunMode,
   type ScatterDocument,
   type ScatterEdge,
@@ -64,6 +66,7 @@ const taskNodeVerticalGap = 72;
 const nodeConnectButtonSize = 20;
 const connectionPreviewEdgeId = "__canvasight-connection-preview__";
 const canvasClipboardMime = "application/x-canvasight-nodes";
+const templateDragMime = "application/x-canvasight-template";
 const appSettingsStorageKey = "canvasight.settings";
 const webDefaultAppSettings = {
   ...defaultAppSettings,
@@ -425,6 +428,38 @@ function emptyNode(position: { x: number; y: number }, index: number): ScatterNo
   };
 }
 
+function nodeFromTemplate(template: NodeTemplate, position: { x: number; y: number }, index: number): ScatterNode {
+  const body = template.body.trim();
+  return {
+    id: nanoid(),
+    type: "task",
+    position,
+    selected: true,
+    data: {
+      title: template.title.trim() || body.slice(0, 40) || `新建任务 ${index + 1}`,
+      body,
+      attachments: template.attachments.map((attachment) => ({ ...attachment })),
+      codexMode: "chat",
+      effort: "xhigh",
+      planMode: false,
+      runMode: "flow"
+    }
+  };
+}
+
+function setTemplateDragImage(event: DragEvent<HTMLElement>, template: NodeTemplate): void {
+  const dragImage = document.createElement("div");
+  const title = document.createElement("strong");
+  const body = document.createElement("span");
+  dragImage.className = "template-drag-image";
+  title.textContent = template.title.trim() || "Template";
+  body.textContent = template.body.replace(/\s+/g, " ").trim();
+  dragImage.append(title, body);
+  document.body.appendChild(dragImage);
+  event.dataTransfer.setDragImage(dragImage, 18, 18);
+  window.setTimeout(() => dragImage.remove(), 0);
+}
+
 function normalizeViewport(value: unknown): ScatterDocument["viewport"] {
   const viewport = value && typeof value === "object" ? (value as Partial<ScatterDocument["viewport"]>) : {};
   return {
@@ -733,12 +768,15 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const [markdownNodeId, setMarkdownNodeId] = useState<string | null>(null);
   const [renamingPage, setRenamingPage] = useState(false);
   const [pageNameDraft, setPageNameDraft] = useState("");
+  const [templates, setTemplates] = useState<NodeTemplate[]>([]);
+  const [templateSearch, setTemplateSearch] = useState("");
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const workspaceContentRef = useRef<HTMLElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
   const latestMouseRef = useRef<FlowPosition>({ x: 360, y: 240 });
+  const draggingTemplateRef = useRef<NodeTemplate | null>(null);
   const connectionStartRef = useRef<ConnectionStart | null>(null);
   const connectionSucceededRef = useRef(false);
   const connectionHoverTargetRef = useRef<ConnectionHoverTarget | null>(null);
@@ -897,6 +935,21 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
         return undefined;
       });
   }, [openProjectPath, setStatus, t]);
+
+  useEffect(() => {
+    let mounted = true;
+    canvasightApi
+      .listTemplates()
+      .then((items) => {
+        if (mounted) setTemplates(items);
+      })
+      .catch(() => {
+        if (mounted) setStatus(t("status.templatesLoadFailed"));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [setStatus, t]);
 
   useEffect(() => {
     if (!hydratedRef.current || !project) return;
@@ -1170,6 +1223,100 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     [addFilesToNode]
   );
 
+  const saveNodeAsTemplate = useCallback(
+    async (_nodeId: string, data: ScatterNodeData) => {
+      const body = data.body.trim();
+      if (!body) {
+        setStatus(t("status.templateSaveEmpty"));
+        return;
+      }
+
+      const input: NodeTemplateInput = {
+        title: data.title.trim() || body.slice(0, 40),
+        body,
+        attachments: data.attachments.map((attachment) => ({ ...attachment }))
+      };
+
+      try {
+        const template = await canvasightApi.saveTemplate(input);
+        setTemplates((current) => [template, ...current.filter((item) => item.id !== template.id)].slice(0, 200));
+        setDrawer("templates");
+        setStatus(t("status.templateSaved"));
+      } catch {
+        setStatus(t("status.templateSaveFailed"));
+      }
+    },
+    [setDrawer, setStatus, t]
+  );
+
+  const insertTemplateAtPosition = useCallback(
+    (template: NodeTemplate, position: FlowPosition) => {
+      if (!project) return;
+      const node = nodeFromTemplate(template, roundPosition(position), nodes.length);
+      commitCanvasChange({
+        nodes: [...nodes.map((item) => ({ ...item, selected: false })), node]
+      });
+      setSelectedNodeId(node.id);
+      setStatus(t("status.templateInserted"));
+    },
+    [commitCanvasChange, nodes, project, setSelectedNodeId, setStatus, t]
+  );
+
+  const templateFromDragEvent = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      const templateId = event.dataTransfer.getData(templateDragMime);
+      return draggingTemplateRef.current ?? templates.find((template) => template.id === templateId) ?? null;
+    },
+    [templates]
+  );
+
+  const handleTemplateDragStart = useCallback((template: NodeTemplate, event: DragEvent<HTMLElement>) => {
+    draggingTemplateRef.current = template;
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(templateDragMime, template.id);
+    event.dataTransfer.setData("text/plain", template.title || template.body.slice(0, 80));
+    setTemplateDragImage(event, template);
+  }, []);
+
+  const handleTemplateDragEnd = useCallback(() => {
+    draggingTemplateRef.current = null;
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      const template = templateFromDragEvent(event);
+      if (template) {
+        event.preventDefault();
+        draggingTemplateRef.current = null;
+        const flowPosition = flowInstanceRef.current?.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY
+        });
+        if (!flowPosition) return;
+        insertTemplateAtPosition(template, {
+          x: flowPosition.x - taskNodeWidth / 2,
+          y: flowPosition.y - taskNodeHeight / 2
+        });
+        return;
+      }
+
+      if (!selectedNode || !event.dataTransfer.files.length) return;
+      event.preventDefault();
+      void addFilesToNode(selectedNode.id, event.dataTransfer.files, "drop");
+    },
+    [addFilesToNode, insertTemplateAtPosition, selectedNode, templateFromDragEvent]
+  );
+
+  const handleCanvasDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (draggingTemplateRef.current || Array.from(event.dataTransfer.types).includes(templateDragMime)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      return;
+    }
+
+    event.preventDefault();
+  }, []);
+
   useEffect(() => {
     function handleCopy(event: ClipboardEvent): void {
       if (!project || event.defaultPrevented || isEditableTarget(event.target)) return;
@@ -1264,10 +1411,11 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
       duplicateNode,
       removeAttachment,
       runNode,
+      saveNodeAsTemplate,
       setNodeHover: (nodeId: string, hovered: boolean) => setHoveredNodeId((current) => (hovered ? nodeId : current === nodeId ? null : current)),
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
-  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, updateNodeData]);
+  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -1520,6 +1668,11 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
     setDrawer(drawer === "tasks" ? null : "tasks");
   }, [drawer, project, setDrawer]);
 
+  const toggleTemplatesDrawer = useCallback(() => {
+    if (!project) return;
+    setDrawer(drawer === "templates" ? null : "templates");
+  }, [drawer, project, setDrawer]);
+
   const toggleMarkdownDrawer = useCallback(() => {
     if (!project) return;
     if (drawer === "markdown") {
@@ -1662,12 +1815,8 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
         <section
           ref={canvasShellRef}
           className={`canvas-shell ${isConnecting ? "is-connecting" : ""} ${connectionPreview ? "has-connection-preview" : ""}`}
-          onDrop={(event) => {
-            if (!selectedNode || !event.dataTransfer.files.length) return;
-            event.preventDefault();
-            void addFilesToNode(selectedNode.id, event.dataTransfer.files, "drop");
-          }}
-          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleCanvasDrop}
+          onDragOver={handleCanvasDragOver}
         >
           {project ? (
             <>
@@ -1812,6 +1961,17 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
                     onClick={toggleTasksDrawer}
                   />
                 </TooltipAnchor>
+                <TooltipAnchor label={t("topbar.templates")} side="bottom" align="end">
+                  <IconButton
+                    className={`canvas-toolbar-button ${drawer === "templates" ? "is-selected" : ""}`}
+                    filled={false}
+                    icon="book-bookmark"
+                    size="lg"
+                    aria-label={t("topbar.templates")}
+                    aria-pressed={drawer === "templates"}
+                    onClick={toggleTemplatesDrawer}
+                  />
+                </TooltipAnchor>
                 <TooltipAnchor label={t("topbar.openMarkdown")} shortcut={shortcuts.openMarkdown} side="bottom" align="end">
                   <IconButton
                     className={`canvas-toolbar-button ${drawer === "markdown" ? "is-selected" : ""}`}
@@ -1934,6 +2094,8 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
           drawer={drawer}
           nodes={nodes}
           edges={edges}
+          templates={templates}
+          templateSearch={templateSearch}
           selectedNodeId={selectedNodeId}
           markdownNodeId={markdownNodeId}
           markdown={markdownResult.markdown}
@@ -1941,6 +2103,9 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
           onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
           onSelectNode={(nodeId, mode) => selectNode(nodeId, mode)}
           onRunNode={(nodeId, mode) => void runNode(nodeId, mode)}
+          onTemplateSearchChange={setTemplateSearch}
+          onTemplateDragStart={handleTemplateDragStart}
+          onTemplateDragEnd={handleTemplateDragEnd}
         />
       </main>
     </div>

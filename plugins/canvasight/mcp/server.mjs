@@ -13,6 +13,7 @@ const SERVER_VERSION = "0.1.0";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
+const MAX_NODE_TEMPLATES = 200;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
@@ -142,6 +143,14 @@ function canvasightDaemonStatePath() {
   return path.join(canvasightHome(), "daemon.json");
 }
 
+function canvasightTemplatesPath() {
+  return path.join(canvasightHome(), "templates.json");
+}
+
+function canvasightTemplateAssetsDir() {
+  return path.join(canvasightHome(), "template-assets");
+}
+
 function scatterDir(projectPath) {
   return path.join(projectPath, ".scatter");
 }
@@ -192,6 +201,11 @@ function daemonSessionUrl(state, sessionIdValue) {
 
 function isScatterAssetPath(filePath) {
   return filePath.includes(`${path.sep}.scatter${path.sep}assets${path.sep}`);
+}
+
+function isTemplateAssetPath(filePath) {
+  const root = `${path.resolve(canvasightTemplateAssetsDir())}${path.sep}`;
+  return path.resolve(filePath).startsWith(root);
 }
 
 function safeFileName(name) {
@@ -317,6 +331,90 @@ async function writeUserState(state) {
   await fsp.mkdir(canvasightHome(), { recursive: true });
   await fsp.writeFile(canvasightStatePath(), `${JSON.stringify(normalizedState, null, 2)}\n`, "utf8");
   return normalizedState;
+}
+
+function normalizeNodeTemplate(value) {
+  if (!isObject(value) || typeof value.body !== "string" || !value.body.trim()) return null;
+  const now = nowIso();
+  const body = value.body.trim();
+  return {
+    id: typeof value.id === "string" && value.id ? value.id : `template-${crypto.randomBytes(8).toString("hex")}`,
+    title: typeof value.title === "string" && value.title.trim() ? value.title.trim() : body.slice(0, 40),
+    body,
+    attachments: Array.isArray(value.attachments) ? value.attachments.map(normalizeAttachment) : [],
+    createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : now,
+    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : now
+  };
+}
+
+async function copyTemplateAttachments(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return [];
+  await fsp.mkdir(canvasightTemplateAssetsDir(), { recursive: true });
+  const copied = [];
+
+  for (const value of attachments) {
+    const attachment = normalizeAttachment(value);
+    const sourcePath = typeof value?.storedPath === "string" && value.storedPath ? path.resolve(value.storedPath) : "";
+    if (!sourcePath) continue;
+
+    let bytes;
+    try {
+      bytes = await fsp.readFile(sourcePath);
+    } catch {
+      continue;
+    }
+
+    const originalName = safeFileName(attachment.originalName);
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${originalName}`;
+    const storedPath = path.join(canvasightTemplateAssetsDir(), uniqueName);
+    await fsp.writeFile(storedPath, bytes);
+    copied.push({
+      ...attachment,
+      id: crypto.randomUUID(),
+      originalName,
+      storedPath,
+      relativePath: `template-assets/${uniqueName}`,
+      fileUrl: assetUrlForPath(storedPath),
+      size: bytes.length,
+      createdAt: nowIso()
+    });
+  }
+
+  return copied;
+}
+
+async function readNodeTemplates() {
+  try {
+    const raw = await fsp.readFile(canvasightTemplatesPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeNodeTemplate).filter(Boolean).slice(0, MAX_NODE_TEMPLATES);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return [];
+    throw error;
+  }
+}
+
+async function writeNodeTemplates(templates) {
+  const normalized = Array.isArray(templates) ? templates.map(normalizeNodeTemplate).filter(Boolean).slice(0, MAX_NODE_TEMPLATES) : [];
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  await fsp.writeFile(canvasightTemplatesPath(), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return normalized;
+}
+
+async function createNodeTemplate(input) {
+  const attachments = await copyTemplateAttachments(input?.attachments);
+  const template = normalizeNodeTemplate({
+    ...input,
+    attachments,
+    id: `template-${crypto.randomBytes(8).toString("hex")}`,
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  });
+  if (!template) throw new HttpError(400, "template body is required");
+  const templates = [template, ...(await readNodeTemplates())].slice(0, MAX_NODE_TEMPLATES);
+  await writeNodeTemplates(templates);
+  return template;
 }
 
 function normalizeDaemonState(value) {
@@ -1281,7 +1379,7 @@ async function serveStatic(req, res, url) {
 async function serveAsset(req, res, url) {
   assertMethod(req, "GET");
   const assetPath = path.resolve(base64UrlDecode(url.searchParams.get("path")));
-  if (!isScatterAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
+  if (!isScatterAssetPath(assetPath) && !isTemplateAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
   const stat = await fsp.stat(assetPath);
   if (!stat.isFile()) throw new HttpError(404, "Asset not found");
   res.writeHead(200, {
@@ -1397,6 +1495,21 @@ async function handleHttp(req, res) {
       assertDaemonAuthorized(req, url);
       await serveAsset(req, res, url);
       return;
+    }
+
+    if (url.pathname === "/api/templates") {
+      assertDaemonAuthorized(req, url);
+      if (req.method === "GET") {
+        sendJson(res, 200, await readNodeTemplates());
+        return;
+      }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req);
+        const template = await createNodeTemplate(isObject(body.template) ? body.template : body);
+        sendJson(res, 200, template);
+        return;
+      }
+      throw new HttpError(405, "Expected GET or POST");
     }
 
     if (url.pathname === "/api/sessions") {
