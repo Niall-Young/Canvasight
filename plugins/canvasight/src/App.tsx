@@ -59,6 +59,7 @@ const taskNodeHorizontalGap = 180;
 const taskNodeVerticalGap = 72;
 const nodeConnectButtonSize = 20;
 const connectionPreviewEdgeId = "__canvasight-connection-preview__";
+const canvasClipboardMime = "application/x-canvasight-nodes";
 const zoomOptions = [
   { label: "50%", value: 0.5 },
   { label: "75%", value: 0.75 },
@@ -82,6 +83,13 @@ type ConnectionHoverTarget = {
 type PanelRatios = {
   canvas: number;
   markdown: number;
+};
+type CanvasClipboardPayload = {
+  kind: "canvasight.nodes";
+  version: 1;
+  nodes: ScatterNode[];
+  edges: ScatterEdge[];
+  copiedAt: string;
 };
 
 function connectionLineStartX(x: number, position: Position): number {
@@ -461,6 +469,75 @@ async function filesToInputs(files: FileList | File[], source: "upload" | "drop"
   return inputs;
 }
 
+function cloneNodeData(data: ScatterNodeData): ScatterNodeData {
+  return {
+    ...data,
+    attachments: data.attachments.map((attachment) => ({ ...attachment }))
+  };
+}
+
+function cloneNodeForClipboard(node: ScatterNode): ScatterNode {
+  return {
+    ...node,
+    position: { ...node.position },
+    data: cloneNodeData(node.data)
+  };
+}
+
+function cloneEdgeForClipboard(edge: ScatterEdge): ScatterEdge {
+  return { ...edge };
+}
+
+function isScatterNode(value: unknown): value is ScatterNode {
+  if (!value || typeof value !== "object") return false;
+  const node = value as ScatterNode;
+  return (
+    typeof node.id === "string" &&
+    node.type === "task" &&
+    Boolean(node.position) &&
+    typeof node.position.x === "number" &&
+    typeof node.position.y === "number" &&
+    Boolean(node.data) &&
+    typeof node.data.title === "string" &&
+    typeof node.data.body === "string" &&
+    Array.isArray(node.data.attachments)
+  );
+}
+
+function isScatterEdge(value: unknown): value is ScatterEdge {
+  if (!value || typeof value !== "object") return false;
+  const edge = value as ScatterEdge;
+  return typeof edge.id === "string" && typeof edge.source === "string" && typeof edge.target === "string";
+}
+
+function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | null {
+  if (!text.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(text) as Partial<CanvasClipboardPayload>;
+    if (
+      parsed.kind !== "canvasight.nodes" ||
+      parsed.version !== 1 ||
+      !Array.isArray(parsed.nodes) ||
+      !Array.isArray(parsed.edges) ||
+      !parsed.nodes.every(isScatterNode) ||
+      !parsed.edges.every(isScatterEdge)
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "canvasight.nodes",
+      version: 1,
+      copiedAt: typeof parsed.copiedAt === "string" ? parsed.copiedAt : new Date().toISOString(),
+      nodes: parsed.nodes.map(cloneNodeForClipboard),
+      edges: parsed.edges.map(cloneEdgeForClipboard)
+    };
+  } catch {
+    return null;
+  }
+}
+
 function CanvasightWorkspace(): ReactElement {
   const { language, t } = useI18n();
   const {
@@ -506,8 +583,11 @@ function CanvasightWorkspace(): ReactElement {
   const connectionStartRef = useRef<ConnectionStart | null>(null);
   const connectionSucceededRef = useRef(false);
   const connectionHoverTargetRef = useRef<ConnectionHoverTarget | null>(null);
+  const canvasClipboardRef = useRef<CanvasClipboardPayload | null>(null);
+  const clipboardPasteSerialRef = useRef(0);
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
+  const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
   const markdownNode = useMemo(() => nodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, nodes]);
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
@@ -770,6 +850,91 @@ function CanvasightWorkspace(): ReactElement {
     [commitCanvasChange, edges, nodes, selectedNodeId, setSelectedNodeId]
   );
 
+  const deleteSelectedNodes = useCallback(() => {
+    if (!selectedNodes.length) return false;
+    const selectedIds = new Set(selectedNodes.map((node) => node.id));
+    commitCanvasChange({
+      nodes: nodes.filter((node) => !selectedIds.has(node.id)),
+      edges: edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target))
+    });
+    setSelectedNodeId(null);
+    setStatus(t("status.deletedNodes", { count: selectedIds.size }));
+    return true;
+  }, [commitCanvasChange, edges, nodes, selectedNodes, setSelectedNodeId, setStatus, t]);
+
+  const copySelectedNodes = useCallback(
+    (clipboardData?: DataTransfer | null) => {
+      if (!selectedNodes.length) return false;
+      const selectedIds = new Set(selectedNodes.map((node) => node.id));
+      const payload: CanvasClipboardPayload = {
+        kind: "canvasight.nodes",
+        version: 1,
+        copiedAt: new Date().toISOString(),
+        nodes: selectedNodes.map(cloneNodeForClipboard),
+        edges: edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)).map(cloneEdgeForClipboard)
+      };
+      const serialized = JSON.stringify(payload);
+
+      try {
+        clipboardData?.setData(canvasClipboardMime, serialized);
+        clipboardData?.setData("text/plain", serialized);
+      } catch {
+        // Clipboard events can be read-only in some browser paths; keep the in-page clipboard as the reliable path.
+      }
+
+      const writeText = navigator.clipboard?.writeText(serialized);
+      if (writeText) void writeText.catch(() => undefined);
+      canvasClipboardRef.current = payload;
+      clipboardPasteSerialRef.current = 0;
+      setStatus(t("status.copiedNodes", { count: payload.nodes.length }));
+      return true;
+    },
+    [edges, selectedNodes, setStatus, t]
+  );
+
+  const pasteCanvasClipboard = useCallback(
+    (payload = canvasClipboardRef.current) => {
+      if (!project || !payload?.nodes.length) return false;
+      const serial = clipboardPasteSerialRef.current + 1;
+      clipboardPasteSerialRef.current = serial;
+      const offset = 36 * serial;
+      const idMap = new Map<string, string>();
+      const pastedNodes = payload.nodes.map((node) => {
+        const id = nanoid();
+        idMap.set(node.id, id);
+        return {
+          ...node,
+          id,
+          selected: true,
+          position: roundPosition({ x: node.position.x + offset, y: node.position.y + offset }),
+          data: cloneNodeData(node.data)
+        } satisfies ScatterNode;
+      });
+      const pastedEdges = payload.edges
+        .map((edge) => {
+          const source = idMap.get(edge.source);
+          const target = idMap.get(edge.target);
+          if (!source || !target) return null;
+          return {
+            ...edge,
+            id: nanoid(),
+            source,
+            target
+          } satisfies ScatterEdge;
+        })
+        .filter((edge): edge is ScatterEdge => Boolean(edge));
+
+      commitCanvasChange({
+        nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...pastedNodes],
+        edges: [...edges, ...pastedEdges]
+      });
+      setSelectedNodeId(pastedNodes[0]?.id ?? null);
+      setStatus(t("status.pastedNodes", { count: pastedNodes.length }));
+      return true;
+    },
+    [commitCanvasChange, edges, nodes, project, setSelectedNodeId, setStatus, t]
+  );
+
   const addFilesToNode = useCallback(
     async (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => {
       if (!project) return;
@@ -799,12 +964,35 @@ function CanvasightWorkspace(): ReactElement {
   );
 
   useEffect(() => {
+    function handleCopy(event: ClipboardEvent): void {
+      if (!project || event.defaultPrevented || isEditableTarget(event.target)) return;
+      if (!copySelectedNodes(event.clipboardData)) return;
+      event.preventDefault();
+    }
+
+    window.addEventListener("copy", handleCopy, true);
+    return () => window.removeEventListener("copy", handleCopy, true);
+  }, [copySelectedNodes, project]);
+
+  useEffect(() => {
     function handlePaste(event: ClipboardEvent): void {
       if (!project || event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (!isEditableTarget(target)) {
+        const serializedPayload = event.clipboardData?.getData(canvasClipboardMime) || event.clipboardData?.getData("text/plain") || "";
+        const payload = parseCanvasClipboardPayload(serializedPayload);
+        if (payload) {
+          event.preventDefault();
+          canvasClipboardRef.current = payload;
+          clipboardPasteSerialRef.current = 0;
+          pasteCanvasClipboard(payload);
+          return;
+        }
+      }
+
       const files = clipboardImageFiles(event.clipboardData);
       if (!files.length) return;
 
-      const target = event.target instanceof Element ? event.target : null;
       const targetNodeId = nodeIdFromElementTarget(target);
       const documentLevelTarget = !target || target === document.body || target === document.documentElement;
       const canvasTarget = documentLevelTarget || Boolean(canvasShellRef.current?.contains(target));
@@ -817,7 +1005,7 @@ function CanvasightWorkspace(): ReactElement {
 
     window.addEventListener("paste", handlePaste, true);
     return () => window.removeEventListener("paste", handlePaste, true);
-  }, [addFilesToNode, nodes, project, selectedNodeId]);
+  }, [addFilesToNode, nodes, pasteCanvasClipboard, project, selectedNodeId]);
 
   const runNode = useCallback(
     async (nodeId: string, mode: RunMode) => {
@@ -1153,12 +1341,26 @@ function CanvasightWorkspace(): ReactElement {
 
       const key = event.key.toLowerCase();
       const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (project && !hasPrimaryModifier && !event.altKey && !event.shiftKey && (event.key === "Backspace" || event.key === "Delete")) {
+        if (deleteSelectedNodes()) {
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (hasPrimaryModifier && !event.altKey) {
         if (key === "z") {
           event.preventDefault();
           if (event.shiftKey) redo();
           else undo();
           return;
+        }
+
+        if (project && !event.shiftKey && key === "c") {
+          if (copySelectedNodes()) {
+            event.preventDefault();
+            return;
+          }
         }
 
         if (project && !event.shiftKey && event.key === "Enter") {
@@ -1224,7 +1426,7 @@ function CanvasightWorkspace(): ReactElement {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", resetSpacePan);
     };
-  }, [addNode, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, undo]);
+  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, undo]);
 
   const handleProjectSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
