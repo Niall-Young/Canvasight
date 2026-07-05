@@ -3,6 +3,7 @@ export const shortcuts = {
   addProject: "⌘⇧N",
   fitCanvas: "⌘0",
   openMarkdown: "⌘⇧M",
+  openTemplates: "⌘⇧L",
   openSearch: "⌘F",
   openSettings: "⌘,",
   panTool: "H",

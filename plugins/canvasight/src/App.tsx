@@ -1748,6 +1748,12 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
           return;
         }
 
+        if (project && event.shiftKey && key === "l") {
+          event.preventDefault();
+          toggleTemplatesDrawer();
+          return;
+        }
+
         if (project && event.shiftKey && key === "m") {
           event.preventDefault();
           toggleMarkdownDrawer();
@@ -1787,7 +1793,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", resetSpacePan);
     };
-  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, undo]);
+  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo]);
 
   const handleProjectSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -1961,7 +1967,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
                     onClick={toggleTasksDrawer}
                   />
                 </TooltipAnchor>
-                <TooltipAnchor label={t("topbar.templates")} side="bottom" align="end">
+                <TooltipAnchor label={t("topbar.templates")} shortcut={shortcuts.openTemplates} side="bottom" align="end">
                   <IconButton
                     className={`canvas-toolbar-button ${drawer === "templates" ? "is-selected" : ""}`}
                     filled={false}
