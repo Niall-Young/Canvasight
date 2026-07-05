@@ -1805,7 +1805,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
                   <IconButton
                     className={`canvas-toolbar-button ${drawer === "tasks" ? "is-selected" : ""}`}
                     filled={false}
-                    icon="topbar-tasks"
+                    icon="topbar-list"
                     size="lg"
                     aria-label={t("topbar.taskList")}
                     aria-pressed={drawer === "tasks"}

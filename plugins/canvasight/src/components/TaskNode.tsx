@@ -19,7 +19,7 @@ type ConnectedNodeSide = "left" | "right";
 const codexModeOptions = [
   { icon: "chat", labelKey: "task.codexModeChat", value: "chat" },
   { icon: "tasks", labelKey: "task.codexModePlan", value: "plan" },
-  { icon: "flag", labelKey: "task.codexModeGoal", value: "goal" }
+  { icon: "target-arrow", labelKey: "task.codexModeGoal", value: "goal" }
 ] as const satisfies ReadonlyArray<{ icon: string; labelKey: "task.codexModeChat" | "task.codexModePlan" | "task.codexModeGoal"; value: CodexMode }>;
 
 function fitTextareaHeight(textarea: HTMLTextAreaElement | null): boolean {

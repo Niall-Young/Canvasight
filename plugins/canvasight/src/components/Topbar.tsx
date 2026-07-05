@@ -97,7 +97,7 @@ export function Topbar({
           <IconButton
             className={`topbar-icon-button ${activeDrawer === "tasks" ? "is-selected" : ""}`}
             filled={false}
-            icon="topbar-tasks"
+            icon="topbar-list"
             size="lg"
             aria-label={t("topbar.taskList")}
             aria-pressed={activeDrawer === "tasks"}
