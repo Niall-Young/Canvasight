@@ -65,6 +65,34 @@ function normalizeProjectPath(projectPath) {
   return path.resolve(projectPath);
 }
 
+function optionalProjectPath(projectPath) {
+  if (typeof projectPath !== "string" || !projectPath.trim()) return null;
+  return path.resolve(projectPath);
+}
+
+function defaultProjectPath() {
+  const envNames = [
+    "CANVASIGHT_DEFAULT_PROJECT_PATH",
+    "CANVASIGHT_PROJECT_PATH",
+    "CODEX_WORKSPACE_DIR",
+    "CODEX_WORKSPACE",
+    "WORKSPACE",
+    "INIT_CWD",
+    "PWD"
+  ];
+
+  for (const envName of envNames) {
+    const candidate = optionalProjectPath(process.env[envName]);
+    if (candidate && candidate !== pluginRoot) return candidate;
+  }
+
+  if (path.basename(path.dirname(pluginRoot)) === "plugins") {
+    return path.resolve(pluginRoot, "../..");
+  }
+
+  return path.join(os.homedir(), "Canvasight");
+}
+
 function projectNameFromPath(projectPath) {
   return path.basename(projectPath) || projectPath;
 }
@@ -270,9 +298,10 @@ function sessionId() {
 
 function createSession({ projectPath, language }) {
   const id = sessionId();
+  const resolvedProjectPath = optionalProjectPath(projectPath) || defaultProjectPath();
   const session = {
     id,
-    projectPath: projectPath ? path.resolve(projectPath) : null,
+    projectPath: resolvedProjectPath,
     language: normalizeLanguage(language),
     createdAt: nowIso(),
     runQueue: [],
@@ -732,6 +761,7 @@ async function toolOpenCanvasight(args) {
     projectPath: typeof args?.projectPath === "string" && args.projectPath ? args.projectPath : null,
     language: args?.language
   });
+  const openedProject = await openProject(session.projectPath);
   const server = await ensureHttpServer();
   const url = `${server.origin}/?sessionId=${encodeURIComponent(session.id)}`;
   openBrowser(url);
@@ -742,6 +772,7 @@ async function toolOpenCanvasight(args) {
       url,
       origin: server.origin,
       projectPath: session.projectPath,
+      project: openedProject.project,
       language: session.language
     },
     `Canvasight session opened: ${url}`

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +12,9 @@ const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
+const defaultProjectPath = path.join(tempRoot, "auto-project");
+
 let nextId = 1;
 let stdoutBuffer = "";
 let stderrBuffer = "";
@@ -20,6 +24,7 @@ const child = spawn(process.execPath, [serverPath], {
   cwd: pluginRoot,
   env: {
     ...process.env,
+    CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
     CANVASIGHT_OPEN_BROWSER: "0"
   },
   stdio: ["pipe", "pipe", "pipe"]
@@ -106,7 +111,6 @@ async function main() {
     rejectPending(new Error(`MCP smoke test timed out. stderr=${stderrBuffer}`));
   }, 20000);
 
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "canvasight-mcp-"));
   try {
     const initialized = await request("initialize", {
       protocolVersion: "2024-11-05",
@@ -124,6 +128,28 @@ async function main() {
     assert.equal(toolNames.has("open_canvasight"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
+
+    const autoOpened = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: {
+        language: "zh"
+      }
+    });
+    assert.equal(autoOpened.structuredContent.status, "opened");
+    assert.equal(autoOpened.structuredContent.projectPath, defaultProjectPath);
+    assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
+    const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
+    assert.deepEqual(autoSession, {
+      language: "zh",
+      projectPath: defaultProjectPath,
+      sessionId: autoOpened.structuredContent.sessionId
+    });
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: autoOpened.structuredContent.sessionId
+      }
+    });
 
     const projectPath = path.join(tempRoot, "demo-project");
     const opened = await request("tools/call", {

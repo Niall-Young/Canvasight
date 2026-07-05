@@ -117,6 +117,10 @@ function projectNameFromPath(projectPath: string): string {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) || "Canvasight Project";
 }
 
+function defaultProjectPathFromBrowser(): string {
+  return import.meta.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH?.trim() || "";
+}
+
 function emptyDocument(projectPath: string): ScatterDocument {
   return {
     version: 1,
@@ -593,19 +597,26 @@ function CanvasightWorkspace(): ReactElement {
     canvasightApi
       .getSession()
       .then((session) => {
-        if (session.projectPath) {
-          setProjectPathInput(session.projectPath);
-          return openProjectPath(session.projectPath);
+        const projectPath = session.projectPath || defaultProjectPathFromBrowser();
+        if (projectPath) {
+          setProjectPathInput(projectPath);
+          return openProjectPath(projectPath);
         }
         setLoadingProject(false);
         hydratedRef.current = true;
-        setStatus("Enter a project path to start.");
+        setStatus("No default project path is configured.");
         return undefined;
       })
       .catch((error) => {
+        const projectPath = defaultProjectPathFromBrowser();
+        if (projectPath) {
+          setProjectPathInput(projectPath);
+          return openProjectPath(projectPath);
+        }
         setLoadingProject(false);
         hydratedRef.current = true;
         setStatus(error instanceof Error ? error.message : t("app.genericError"));
+        return undefined;
       });
   }, [openProjectPath, setStatus, t]);
 
