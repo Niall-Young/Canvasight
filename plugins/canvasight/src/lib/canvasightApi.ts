@@ -1,4 +1,5 @@
 import type {
+  AgentTeamRunConfig,
   Attachment,
   AttachmentInput,
   CodexMode,
@@ -18,6 +19,7 @@ export interface SessionInfo {
 
 export interface RunPayload {
   attachments: Attachment[];
+  agentTeam: AgentTeamRunConfig;
   codexMode: CodexMode;
   effort: string;
   imagePaths: string[];

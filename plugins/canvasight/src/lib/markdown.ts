@@ -1,4 +1,13 @@
-import type { Attachment, CodexMode, LanguagePreference, RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
+import type {
+  AgentTeamRoleId,
+  AgentTeamRunConfig,
+  Attachment,
+  CodexMode,
+  LanguagePreference,
+  RunMode,
+  ScatterEdge,
+  ScatterNode
+} from "../../shared/types";
 
 export interface MarkdownResult {
   markdown: string;
@@ -8,6 +17,7 @@ export interface MarkdownResult {
   codexMode: CodexMode;
   planMode: boolean;
   hasCycle: boolean;
+  agentTeam: AgentTeamRunConfig;
 }
 
 function downstreamNodeIds(startId: string, edges: ScatterEdge[]): { ids: Set<string>; hasCycle: boolean } {
@@ -68,6 +78,12 @@ function sortFlow(nodes: ScatterNode[], edges: ScatterEdge[], startId: string): 
 interface MarkdownText {
   absolutePath: string;
   allAttachments: string;
+  agentTeam: string;
+  agentTeamEnabled: string;
+  agentTeamInstruction: string;
+  agentTeamRecommendedRoles: string;
+  agentTeamReportProtocol: string;
+  agentTeamSkill: string;
   attachmentFile: string;
   attachmentImage: string;
   attachments: string;
@@ -109,6 +125,13 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
   zh: {
     absolutePath: "绝对路径",
     allAttachments: "所有附件",
+    agentTeam: "Agent Team",
+    agentTeamEnabled: "已开启",
+    agentTeamInstruction:
+      "先判断这次任务实际需要哪些角色，只创建必要的子智能体；不要默认启动全部角色。任一角色发现跨职责、高风险或阻断问题时，先写 agent report，再交给对应角色分析和回写结果。",
+    agentTeamRecommendedRoles: "建议角色",
+    agentTeamReportProtocol: "Report 协议",
+    agentTeamSkill: "Skill",
     attachmentFile: "文件",
     attachmentImage: "图片",
     attachments: "附件",
@@ -148,6 +171,13 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
   en: {
     absolutePath: "Absolute path",
     allAttachments: "All Attachments",
+    agentTeam: "Agent Team",
+    agentTeamEnabled: "enabled",
+    agentTeamInstruction:
+      "Classify the task first, create only the needed subagents, and do not start every role by default. If any role finds a cross-role, high-risk, or blocking issue, write an agent report first, then hand it to the responsible role for analysis and result write-back.",
+    agentTeamRecommendedRoles: "Recommended roles",
+    agentTeamReportProtocol: "Report protocol",
+    agentTeamSkill: "Skill",
     attachmentFile: "File",
     attachmentImage: "Image",
     attachments: "Attachments",
@@ -188,6 +218,185 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
 
 function markdownText(language: LanguagePreference): MarkdownText {
   return markdownTexts[language] ?? markdownTexts.zh;
+}
+
+const reportProtocol = {
+  root: "agent-reports",
+  statuses: ["open", "assigned", "resolved", "archived"]
+} satisfies AgentTeamRunConfig["reportProtocol"];
+
+const agentTeamRoleTexts: Record<LanguagePreference, Record<AgentTeamRoleId, { label: string; reason: string }>> = {
+  zh: {
+    "product-agent": {
+      label: "产品 Agent",
+      reason: "收束目标、范围、用户流程、验收标准和任务边界。"
+    },
+    "design-agent": {
+      label: "设计 Agent",
+      reason: "审查交互、布局、视觉密度、组件语言和可用性。"
+    },
+    "design-standards-agent": {
+      label: "设计规范专家",
+      reason: "维护 design.md，沉淀产品和 UI 设计基线。"
+    },
+    "development-agent": {
+      label: "开发 Agent",
+      reason: "实现代码、数据结构、MCP/API、持久化和运行时行为。"
+    },
+    "development-standards-agent": {
+      label: "开发规范组长",
+      reason: "维护 AGENTS.md、项目命令、工程规则和协作边界。"
+    },
+    "test-supervisor-agent": {
+      label: "测试监督 Agent",
+      reason: "维护测试矩阵、构建检查、smoke test 和浏览器可见验证。"
+    },
+    "customer-support-agent": {
+      label: "客服 Agent",
+      reason: "维护中英文 README、用户用法、功能说明和排障文档。"
+    },
+    "project-management-agent": {
+      label: "项目管理 Agent",
+      reason: "检查 git 状态、提交范围、版本记录和中文规范提交。"
+    },
+    "skill-expert-agent": {
+      label: "Skill 专家",
+      reason: "维护 skill 触发边界、SKILL.md 精简度、reference 拆分和校验。"
+    }
+  },
+  en: {
+    "product-agent": {
+      label: "Product Agent",
+      reason: "Clarify goals, scope, user flows, acceptance criteria, and task boundaries."
+    },
+    "design-agent": {
+      label: "Design Agent",
+      reason: "Review interaction, layout, visual density, component language, and usability."
+    },
+    "design-standards-agent": {
+      label: "Design Standards Expert",
+      reason: "Maintain design.md as the product and UI design baseline."
+    },
+    "development-agent": {
+      label: "Development Agent",
+      reason: "Implement code, data structures, MCP/API behavior, persistence, and runtime flows."
+    },
+    "development-standards-agent": {
+      label: "Development Standards Lead",
+      reason: "Maintain AGENTS.md, project commands, engineering rules, and collaboration boundaries."
+    },
+    "test-supervisor-agent": {
+      label: "Test Supervisor Agent",
+      reason: "Own test matrices, build checks, smoke tests, and browser-visible verification."
+    },
+    "customer-support-agent": {
+      label: "Customer Support Agent",
+      reason: "Maintain bilingual README content, usage guidance, feature descriptions, and troubleshooting."
+    },
+    "project-management-agent": {
+      label: "Project Management Agent",
+      reason: "Check git status, staging scope, version notes, and conventional commit messages."
+    },
+    "skill-expert-agent": {
+      label: "Skill Expert",
+      reason: "Own skill trigger boundaries, concise SKILL.md files, reference splitting, and validation."
+    }
+  }
+};
+
+const roleKeywords: Record<AgentTeamRoleId, string[]> = {
+  "product-agent": ["需求", "产品", "范围", "用户", "流程", "目标", "验收", "prd", "product", "scope", "user flow", "feature"],
+  "design-agent": ["设计", "交互", "样式", "视觉", "布局", "ui", "ux", "figma", "css", "layout", "interaction", "visual"],
+  "design-standards-agent": ["design.md", "设计规范", "设计基线", "design baseline", "design system"],
+  "development-agent": ["实现", "开发", "代码", "组件", "接口", "mcp", "api", "持久化", "修复", "bug", "build", "runtime", "react", "typescript"],
+  "development-standards-agent": ["agents.md", "agent team", "agent-report", "工程规范", "开发规范", "协作规则", "working rules"],
+  "test-supervisor-agent": ["测试", "验证", "复现", "playwright", "smoke", "typecheck", "build", "qa", "test", "verify"],
+  "customer-support-agent": ["readme", "文档", "说明", "教程", "用户", "faq", "docs", "troubleshoot"],
+  "project-management-agent": ["git", "commit", "提交", "版本", "release", "changelog", "plugin version", "staging"],
+  "skill-expert-agent": ["skill", "skill.md", "frontmatter", "trigger", "触发", "reference", "技能"]
+};
+
+function disabledAgentTeam(): AgentTeamRunConfig {
+  return {
+    enabled: false,
+    skillName: "canvasight-agent-team",
+    recommendedRoles: [],
+    reportProtocol
+  };
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function nodeSearchText(nodes: ScatterNode[], projectName: string, projectPath: string): string {
+  return normalizeSearchText(
+    [
+      projectName,
+      projectPath,
+      ...nodes.flatMap((node) => [
+        node.id,
+        node.data.title,
+        node.data.body,
+        ...node.data.attachments.flatMap((attachment) => [attachment.originalName, attachment.relativePath, attachment.mime])
+      ])
+    ].join(" ")
+  );
+}
+
+function recommendAgentTeamRoles(nodes: ScatterNode[], projectName: string, projectPath: string, language: LanguagePreference): AgentTeamRunConfig["recommendedRoles"] {
+  const searchText = nodeSearchText(nodes, projectName, projectPath);
+  const roleIds = new Set<AgentTeamRoleId>();
+
+  if (nodes.length > 1) roleIds.add("product-agent");
+  for (const [roleId, keywords] of Object.entries(roleKeywords) as Array<[AgentTeamRoleId, string[]]>) {
+    if (keywords.some((keyword) => searchText.includes(normalizeSearchText(keyword)))) roleIds.add(roleId);
+  }
+  if (roleIds.size === 0) roleIds.add("product-agent");
+
+  const roleText = agentTeamRoleTexts[language] ?? agentTeamRoleTexts.zh;
+  return Array.from(roleIds).map((id) => ({
+    id,
+    label: roleText[id].label,
+    reason: roleText[id].reason
+  }));
+}
+
+function buildAgentTeamConfig(
+  enabled: boolean,
+  nodes: ScatterNode[],
+  projectName: string,
+  projectPath: string,
+  language: LanguagePreference
+): AgentTeamRunConfig {
+  if (!enabled) return disabledAgentTeam();
+  return {
+    enabled: true,
+    skillName: "canvasight-agent-team",
+    recommendedRoles: recommendAgentTeamRoles(nodes, projectName, projectPath, language),
+    reportProtocol
+  };
+}
+
+function agentTeamSection(agentTeam: AgentTeamRunConfig, text: MarkdownText): string {
+  if (!agentTeam.enabled) return "";
+  const roles = agentTeam.recommendedRoles.length
+    ? agentTeam.recommendedRoles.map((role) => `- ${role.label} (\`${role.id}\`): ${role.reason}`).join("\n")
+    : text.none;
+
+  return `## ${text.agentTeam}
+${text.agentTeam}: ${text.agentTeamEnabled}
+${text.agentTeamSkill}: \`${agentTeam.skillName}\`
+
+${text.agentTeamInstruction}
+
+### ${text.agentTeamRecommendedRoles}
+${roles}
+
+### ${text.agentTeamReportProtocol}
+- ${agentTeam.reportProtocol.root}/open -> assigned -> resolved -> archived
+- Use fixed Markdown report templates with frontmatter, owner, created_by, priority, reproduction, impact, related files, expected result, processing result, modified files, verification, and follow-up risks.
+`;
 }
 
 function attachmentLine(attachment: Attachment, text: MarkdownText): string {
@@ -234,7 +443,8 @@ export function buildMarkdown(
   runMode: RunMode,
   projectName: string,
   projectPath: string,
-  language: LanguagePreference = "zh"
+  language: LanguagePreference = "zh",
+  agentTeamEnabled = true
 ): MarkdownResult {
   const text = markdownText(language);
   const startNode = startNodeId ? allNodes.find((node) => node.id === startNodeId) : null;
@@ -264,6 +474,7 @@ export function buildMarkdown(
         })
         .join("\n")
     : text.noConnections;
+  const agentTeam = buildAgentTeamConfig(agentTeamEnabled, orderedNodes, projectName, projectPath, language);
 
   const markdown = `# ${text.taskTitle}: ${title}
 
@@ -274,7 +485,8 @@ ${text.codexMode}: ${codexModeLabel(codexMode, text)}
 ${text.planModeRequested}: ${planMode ? text.planModeRequestedYes : text.planModeRequestedNo}
 ${text.goalModeRequested}: ${goalMode ? text.goalModeRequestedYes : text.goalModeRequestedNo}
 
-${nodeIds.hasCycle ? text.warningCycle : ""}## ${text.executionRequest}
+${nodeIds.hasCycle ? text.warningCycle : ""}${agentTeamSection(agentTeam, text)}
+## ${text.executionRequest}
 ${text.executionRequestBody}
 
 ## ${text.includedNodes}
@@ -294,6 +506,7 @@ ${attachments.length ? attachments.map((attachment) => attachmentLine(attachment
     imagePaths,
     codexMode,
     planMode,
+    agentTeam,
     hasCycle: nodeIds.hasCycle
   };
 }

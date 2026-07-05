@@ -11,6 +11,7 @@ Use this skill as the narrow index for Canvasight-specific work that does not cl
 
 - Use `canvasight-open` for opening, recovering, or attaching to the browser canvas.
 - Use `canvasight-run` for receiving Run payloads and handling Chat, Plan, or Goal mode.
+- Use `canvasight-agent-team` when a Canvasight Run payload enables Agent Team or the user asks for agent-report coordination.
 - Use `canvasight-graph-writer` for creating or updating Canvasight nodes and edges from AI analysis.
 - Use `canvasight-troubleshooting` for install, daemon, MCP cache, browser URL, or connection failures.
 

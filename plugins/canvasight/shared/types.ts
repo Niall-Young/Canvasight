@@ -6,6 +6,16 @@ export type EffortLevel = "low" | "medium" | "high" | "xhigh";
 export type LanguagePreference = "zh" | "en";
 export type ThemePreference = "system" | "light" | "dark";
 export type AssistantProvider = "codex" | "claude-cli";
+export type AgentTeamRoleId =
+  | "product-agent"
+  | "design-agent"
+  | "design-standards-agent"
+  | "development-agent"
+  | "development-standards-agent"
+  | "test-supervisor-agent"
+  | "customer-support-agent"
+  | "project-management-agent"
+  | "skill-expert-agent";
 export type AppUpdateStatus = "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "not-available" | "error";
 export type AppUpdateErrorCode = "development-mode" | "check-failed" | "install-failed";
 export const achievementIds = [
@@ -26,6 +36,7 @@ export interface AppSettings {
   translucentBackground: boolean;
   assistantProvider: AssistantProvider;
   assistantProviderOnboardingCompleted: boolean;
+  agentTeamEnabled: boolean;
 }
 
 export const defaultAppSettings = {
@@ -33,7 +44,8 @@ export const defaultAppSettings = {
   language: "zh",
   translucentBackground: true,
   assistantProvider: "codex",
-  assistantProviderOnboardingCompleted: false
+  assistantProviderOnboardingCompleted: false,
+  agentTeamEnabled: true
 } satisfies AppSettings;
 
 export interface AchievementState {
@@ -151,6 +163,22 @@ export interface AssistantRunInput {
   effort: EffortLevel;
   codexMode: CodexMode;
   planMode: boolean;
+}
+
+export interface AgentTeamRoleRecommendation {
+  id: AgentTeamRoleId;
+  label: string;
+  reason: string;
+}
+
+export interface AgentTeamRunConfig {
+  enabled: boolean;
+  skillName: "canvasight-agent-team";
+  recommendedRoles: AgentTeamRoleRecommendation[];
+  reportProtocol: {
+    root: "agent-reports";
+    statuses: ["open", "assigned", "resolved", "archived"];
+  };
 }
 
 export interface AssistantRunResult {

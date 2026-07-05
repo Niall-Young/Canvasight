@@ -106,6 +106,7 @@ type CanvasClipboardPayload = {
   copiedAt: string;
 };
 type CanvasightWorkspaceProps = {
+  agentTeamEnabled: boolean;
   onOpenSettings: () => void;
 };
 
@@ -369,6 +370,7 @@ function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): A
   return {
     ...webDefaultAppSettings,
     ...(value ?? {}),
+    agentTeamEnabled: value?.agentTeamEnabled ?? webDefaultAppSettings.agentTeamEnabled,
     translucentBackground: false
   };
 }
@@ -380,7 +382,8 @@ function settingsEqual(left: AppSettings | null | undefined, right: AppSettings)
       left.language === right.language &&
       left.translucentBackground === right.translucentBackground &&
       left.assistantProvider === right.assistantProvider &&
-      left.assistantProviderOnboardingCompleted === right.assistantProviderOnboardingCompleted
+      left.assistantProviderOnboardingCompleted === right.assistantProviderOnboardingCompleted &&
+      left.agentTeamEnabled === right.agentTeamEnabled
   );
 }
 
@@ -725,7 +728,7 @@ function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | nul
   }
 }
 
-function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
+function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
   const { language, t } = useI18n();
   const {
     appendAttachments,
@@ -798,9 +801,26 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const markdownResult = useMemo(
     () =>
       project && markdownNode
-        ? buildMarkdown(nodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language)
-        : { markdown: "", nodes: [], attachments: [], imagePaths: [], codexMode: "chat", planMode: false, hasCycle: false },
-    [edges, language, markdownNode, nodes, project, selectedRunMode]
+        ? buildMarkdown(nodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language, agentTeamEnabled)
+        : {
+            markdown: "",
+            nodes: [],
+            attachments: [],
+            imagePaths: [],
+            codexMode: "chat",
+            planMode: false,
+            agentTeam: {
+              enabled: false,
+              skillName: "canvasight-agent-team",
+              recommendedRoles: [],
+              reportProtocol: {
+                root: "agent-reports",
+                statuses: ["open", "assigned", "resolved", "archived"]
+              }
+            },
+            hasCycle: false
+          },
+    [agentTeamEnabled, edges, language, markdownNode, nodes, project, selectedRunMode]
   );
   const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
   const workspaceStyle = useMemo(
@@ -1397,7 +1417,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
       if (!project) return;
       const node = nodes.find((item) => item.id === nodeId);
       if (!node) return;
-      const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language);
+      const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
       if (result.nodes.every((item) => item.data.body.trim().length === 0)) {
         setStatus(t("status.cannotSendEmpty"));
         return;
@@ -1408,6 +1428,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
       try {
         await canvasightApi.run({
           attachments: result.attachments,
+          agentTeam: result.agentTeam,
           codexMode: result.codexMode,
           effort: node.data.effort || "xhigh",
           imagePaths: result.imagePaths,
@@ -1428,7 +1449,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
         setStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"));
       }
     },
-    [edges, language, markNodeRun, nodes, project, setDrawer, setStatus, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setDrawer, setStatus, t]
   );
 
   useEffect(() => {
@@ -2217,9 +2238,10 @@ export default function App(): ReactElement {
   return (
     <I18nProvider language={activeSettings.language}>
       <ReactFlowProvider>
-        <CanvasightWorkspace onOpenSettings={() => setSettingsOpen(true)} />
+        <CanvasightWorkspace agentTeamEnabled={activeSettings.agentTeamEnabled} onOpenSettings={() => setSettingsOpen(true)} />
       </ReactFlowProvider>
       <SettingsDialog
+        agentTeamEnabled={activeSettings.agentTeamEnabled}
         assistantProvider={activeSettings.assistantProvider}
         assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
         language={activeSettings.language}

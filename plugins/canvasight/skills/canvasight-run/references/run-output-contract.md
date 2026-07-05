@@ -2,6 +2,13 @@
 
 After `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 
+Then read `structuredContent.agentTeam`.
+
+- If `structuredContent.agentTeam.enabled === true`, use the `canvasight-agent-team` skill before executing the returned Markdown.
+- Use `structuredContent.agentTeam.recommendedRoles` as role suggestions, not as a command to spawn every role.
+- Use `structuredContent.agentTeam.reportProtocol` for the report queue shape when a blocker, high-risk issue, or cross-role handoff appears.
+- If `structuredContent.agentTeam.enabled === false`, handle the Run as a normal Canvasight task unless the project `AGENTS.md` imposes its own workflow.
+
 ## Chat
 
 For `chat`, continue as a normal Codex task using the returned Markdown as context.

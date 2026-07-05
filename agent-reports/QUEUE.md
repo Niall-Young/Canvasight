@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2226-integration-summary-agent-team-skill-toggle.md` - integrated configurable Agent Team skill, settings toggle, Run payload, docs, and verification.
+- `agent-reports/resolved/20260705-2226-development-solution-agent-team-skill-toggle.md` - implemented Agent Team setting, Run protocol, skill, docs, and tests.
+- `agent-reports/resolved/20260705-2211-product-issue-agent-team-skill-toggle.md` - resolved configurable Agent Team skill and default-on settings toggle.
 - `agent-reports/resolved/20260705-2201-integration-summary-project-guidance-nodes.md` - integrated automatic missing AGENTS.md / design.md nodes for software-product graphs.
 - `agent-reports/resolved/20260705-2153-product-issue-project-guidance-nodes.md` - resolved project guidance node generation rules.
 - `agent-reports/resolved/20260705-2201-development-solution-project-guidance-nodes.md` - implemented MCP-backed project guidance node creation and tests.

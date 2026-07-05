@@ -69,6 +69,7 @@ function SettingsSelect<TValue extends string>({
 }
 
 export function SettingsDialog({
+  agentTeamEnabled,
   assistantProvider,
   assistantProviderOnboardingCompleted,
   language,
@@ -81,6 +82,7 @@ export function SettingsDialog({
   translucentBackground
 }: SettingsDialogProps): ReactElement {
   const { t } = useI18n();
+  const [draftAgentTeamEnabled, setDraftAgentTeamEnabled] = useState(agentTeamEnabled);
   const [draftThemePreference, setDraftThemePreference] = useState(themePreference);
   const [draftLanguage, setDraftLanguage] = useState(language);
   const [draftTranslucentBackground, setDraftTranslucentBackground] = useState(translucentBackground);
@@ -97,11 +99,12 @@ export function SettingsDialog({
   ];
 
   useEffect(() => {
+    setDraftAgentTeamEnabled(agentTeamEnabled);
     setDraftThemePreference(themePreference);
     setDraftLanguage(language);
     setDraftTranslucentBackground(translucentBackground);
     setSaveError(null);
-  }, [language, themePreference, translucentBackground]);
+  }, [agentTeamEnabled, language, themePreference, translucentBackground]);
 
   const saveValues = useMemo(
     () => ({
@@ -109,9 +112,10 @@ export function SettingsDialog({
       language: draftLanguage,
       translucentBackground: draftTranslucentBackground,
       assistantProvider,
-      assistantProviderOnboardingCompleted
+      assistantProviderOnboardingCompleted,
+      agentTeamEnabled: draftAgentTeamEnabled
     }),
-    [assistantProvider, assistantProviderOnboardingCompleted, draftLanguage, draftThemePreference, draftTranslucentBackground]
+    [assistantProvider, assistantProviderOnboardingCompleted, draftAgentTeamEnabled, draftLanguage, draftThemePreference, draftTranslucentBackground]
   );
 
   useEffect(() => {
@@ -157,6 +161,10 @@ export function SettingsDialog({
               <span className="settings-dialog-row-label">{t("settings.language")}</span>
               <SettingsSelect ariaLabel={t("settings.language")} options={languageOptions} value={draftLanguage} onChange={setDraftLanguage} />
             </div>
+            <div className="settings-dialog-row">
+              <span className="settings-dialog-row-label">{t("settings.agentTeam")}</span>
+              <Switch checked={draftAgentTeamEnabled} onCheckedChange={setDraftAgentTeamEnabled} />
+            </div>
             {showTranslucentBackground ? (
               <div className="settings-dialog-row">
                 <span className="settings-dialog-row-label">{t("settings.translucentBackground")}</span>
@@ -173,6 +181,7 @@ export function SettingsDialog({
                 size="md"
                 disabled={isSaving}
                 onClick={() => {
+                  setDraftAgentTeamEnabled(defaultAppSettings.agentTeamEnabled);
                   setDraftThemePreference(defaultAppSettings.themePreference);
                   setDraftLanguage(defaultAppSettings.language);
                   setDraftTranslucentBackground(defaultAppSettings.translucentBackground);

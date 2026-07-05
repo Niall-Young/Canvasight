@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.6");
+    assert.equal(initialized.serverInfo.version, "0.1.7");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -329,7 +329,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.6");
+    assert.equal(autoHealth.serverVersion, "0.1.7");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -912,6 +912,26 @@ async function main() {
       effort: "high",
       planMode: false,
       runMode: "flow",
+      agentTeam: {
+        enabled: true,
+        skillName: "canvasight-agent-team",
+        recommendedRoles: [
+          {
+            id: "development-agent",
+            label: "Development Agent",
+            reason: "Implement the smoke payload."
+          },
+          {
+            id: "test-supervisor-agent",
+            label: "Test Supervisor Agent",
+            reason: "Verify the smoke payload."
+          }
+        ],
+        reportProtocol: {
+          root: "agent-reports",
+          statuses: ["open", "assigned", "resolved", "archived"]
+        }
+      },
       nodeIds: ["node-a"],
       attachments
     };
@@ -930,6 +950,13 @@ async function main() {
     assert.equal(awaited.structuredContent.codexNative.status, "applied");
     assert.equal(awaited.structuredContent.codexNative.action, "thread/goal/set");
     assert.equal(awaited.structuredContent.codexNative.threadId, "thread-smoke");
+    assert.equal(awaited.structuredContent.agentTeam.enabled, true);
+    assert.equal(awaited.structuredContent.agentTeam.skillName, "canvasight-agent-team");
+    assert.deepEqual(
+      awaited.structuredContent.agentTeam.recommendedRoles.map((role) => role.id),
+      ["development-agent", "test-supervisor-agent"]
+    );
+    assert.deepEqual(awaited.structuredContent.agentTeam.reportProtocol.statuses, ["open", "assigned", "resolved", "archived"]);
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
 
@@ -956,6 +983,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({
         ...runPayload,
+        agentTeam: undefined,
         codexMode: undefined,
         planMode: true,
         threadName: "Scatter Flow: Legacy plan task"
@@ -964,6 +992,7 @@ async function main() {
     const legacyAwaited = await waitForLegacyRun;
     assert.equal(legacyAwaited.structuredContent.codexMode, "plan");
     assert.equal(legacyAwaited.structuredContent.planMode, true);
+    assert.equal(legacyAwaited.structuredContent.agentTeam.enabled, false);
     assert.equal(legacyAwaited.structuredContent.codexNative.status, "applied");
     assert.equal(legacyAwaited.structuredContent.codexNative.action, "thread/settings/update");
     assert.equal(legacyAwaited.structuredContent.codexNative.collaborationMode, "plan");

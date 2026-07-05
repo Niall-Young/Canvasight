@@ -14,6 +14,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - 在同一个项目里用多个 Page 隔离不同画布工作区。
 - 给节点附加图片、文件和上下文资料。
 - 选择 Chat、Plan 或 Goal 模式，把画布内容交给 Codex 执行。
+- 默认在 Run 输出中包含 Agent Team 协作协议，让复杂任务按需使用产品、设计、开发、测试、文档、Skill 和项目管理角色。
 - 让 Codex 根据代码架构、产品需求或任务计划直接生成 Canvasight 节点和连线。
 - 保存常用节点的标题、提示词和附件为全局模板，并在任意项目里拖回画布复用。
 - 在新 Codex 线程里恢复最近使用的 Canvasight 项目。
@@ -29,6 +30,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - **AI 生成画布**：Codex 可以通过 `write_canvasight_graph` 写入 `.scatter/scatter.json`，按不同任务类型组织节点和连线，并优先复用已有全局节点模板。
 - **全局节点模板**：从节点菜单把非空提示词和附件保存为本机全局模板，打开模板抽屉后可搜索并拖拽到当前画布。
 - **Codex 原生模式**：节点可选择 Chat、Plan 或 Goal。
+- **Agent Team 协作**：默认开启。开启后，Run Markdown 会告诉 Codex 先按任务类型选择必要角色，并在高风险或阻断问题出现时使用 `agent-reports/` 记录 issue、solution 和集成摘要。
 - **项目级 daemon**：本地网页服务独立于打开它的 Codex thread，归档旧 thread 不会直接关闭画布服务。
 - **任务抽屉与设置**：查看任务清单、预览 Markdown，并调整语言和主题。
 - **最近项目恢复**：跨 Codex 线程记住最近打开的项目。
@@ -40,8 +42,9 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 3. 用连接线组织节点关系，或者在左上角创建多个 Page 管理不同工作区。
 4. 选择节点的 Codex 模式：Chat、Plan 或 Goal。
 5. 需要复用提示词时，从节点菜单选择“存为模板”；再从右上角模板按钮打开模板抽屉，搜索模板并拖到画布。
-6. 点击节点或流程的 Run。
-7. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
+6. Agent Team 默认开启；如果只想让 Codex 按普通单线程上下文处理 Run，可以在设置里关闭“开启 Agent Team”。
+7. 点击节点或流程的 Run。
+8. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
 
 ### AI 直接创建画布
 
@@ -77,7 +80,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.6` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4` 或 `0.1.5`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.7` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5` 或 `0.1.6`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -86,10 +89,11 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `canvasight`：薄索引，只在明确提到 Canvasight/Scatter 且任务跨多个能力或不清楚该用哪个细分 skill 时使用。
 - `canvasight-open`：打开网页画布、恢复最近项目、从新 Codex 线程重新 attach 到 Canvasight。
 - `canvasight-run`：接收 Run payload，处理 Markdown、结构化数据和 Chat / Plan / Goal 模式。
+- `canvasight-agent-team`：处理 Run 输出中的 Agent Team 协作协议，说明何时按需使用子智能体、如何写入 `agent-reports/`，以及如何避免把内部协作协议当成普通用户操作。
 - `canvasight-graph-writer`：用 `write_canvasight_graph` 让 AI 创建或更新 Canvasight 节点和连线。
 - `canvasight-troubleshooting`：处理插件安装、MCP cache、daemon、URL 失效、连接拒绝等问题。
 
-这些 Skill 只是 Codex 的触发与工作流分工，不改变 Canvasight 的用户界面，也不改变 Page、节点或 Run 的数据协议。
+这些 Skill 只是 Codex 的触发与工作流分工，不改变 Canvasight 的用户界面，也不改变 Page 或节点的编辑模型。`canvasight-agent-team` 只会在 Run 输出中增加可关闭的协作协议提示。
 
 ### MCP Tools
 
@@ -160,6 +164,10 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 
 AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、节点和连线。Run 是用户在网页里点击节点或流程后，把 Markdown payload 交给当前调用 `await_canvasight_run` 的 Codex thread。
 
+**Agent Team 开关是什么？**
+
+它控制 Canvasight 生成的 Run Markdown 是否附带 Agent Team 协作协议。默认开启，适合复杂产品、设计、开发、测试、文档或 Skill 任务；关闭后，Canvasight 仍会正常返回 Markdown 和结构化数据，但不再要求 Codex 按 Agent Team / agent-report 流程执行。
+
 **节点模板属于项目吗？**
 
 不属于。节点模板是本机全局模板，可以跨项目复用。v1 模板保存节点标题、提示词正文和附件；不会保存 Chat、Plan、Goal、effort 或运行模式。
@@ -212,6 +220,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - Use multiple Pages inside one project to isolate canvas workspaces.
 - Attach images, files, and context to task nodes.
 - Send canvas output to Codex in Chat, Plan, or Goal mode.
+- Include Agent Team collaboration instructions in Run output by default so complex tasks can use product, design, development, testing, documentation, skill, and project-management roles when needed.
 - Let Codex generate Canvasight nodes and edges directly from code architecture, product requirements, or task plans.
 - Save reusable node titles, prompts, and attachments as global templates and drag them back into any project canvas.
 - Reopen recent Canvasight projects from a new Codex thread.
@@ -227,6 +236,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - **AI-generated canvas**: Codex can call `write_canvasight_graph` to write `.scatter/scatter.json`, organize nodes and edges for different task types, and reuse saved global node templates first.
 - **Global node templates**: save non-empty node prompts and attachments from the node menu, search them in the template drawer, and drag them into the current canvas.
 - **Native Codex modes**: choose Chat, Plan, or Goal per node.
+- **Agent Team collaboration**: enabled by default. When enabled, Run Markdown asks Codex to choose only the needed roles for the task and to use `agent-reports/` for issue reports, solution reports, and integration summaries when blockers or high-risk handoffs appear.
 - **Project-level daemon**: the local web service is independent from the Codex thread that opened it, so archiving that thread does not directly stop the canvas service.
 - **Task drawer and settings**: inspect the task list, preview Markdown, and adjust language or theme.
 - **Recent project recovery**: remember recent projects across Codex threads.
@@ -238,8 +248,9 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 3. Connect nodes into flows, or create multiple Pages from the top-left Page switcher.
 4. Choose the node's Codex mode: Chat, Plan, or Goal.
 5. To reuse a prompt, choose “Save as template” from a node menu. Open the template drawer from the top-right template button, search templates, then drag one onto the canvas.
-6. Click Run on a node or flow.
-7. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
+6. Agent Team is enabled by default. Turn it off in Settings if you want Codex to handle Run output as a normal single-thread task.
+7. Click Run on a node or flow.
+8. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
 
 ### AI-Generated Canvas Data
 
@@ -275,7 +286,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.6` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, or `0.1.5`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.7` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, or `0.1.6`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -284,10 +295,11 @@ The Canvasight plugin now uses multiple Codex Skills so one broad entrypoint doe
 - `canvasight`: a thin index for explicit Canvasight/Scatter requests that span multiple capabilities or do not clearly match a narrower skill.
 - `canvasight-open`: opens the browser canvas, recovers recent projects, and attaches a new Codex thread to Canvasight.
 - `canvasight-run`: receives Run payloads and handles Markdown, structured data, and Chat / Plan / Goal mode.
+- `canvasight-agent-team`: handles Agent Team collaboration instructions included in Run output, including when Codex should use subagents, how `agent-reports/` should be used, and how to keep the internal collaboration protocol separate from normal user workflow.
 - `canvasight-graph-writer`: uses `write_canvasight_graph` so AI can create or update Canvasight nodes and edges.
 - `canvasight-troubleshooting`: handles plugin installation, MCP cache, daemon, stale URL, and connection-refused issues.
 
-These Skills only affect Codex routing and workflow instructions. They do not change the Canvasight UI, Page model, node data, or Run protocol.
+These Skills only affect Codex routing and workflow instructions. They do not change the Canvasight UI, Page model, or node editing model. `canvasight-agent-team` only adds an optional collaboration protocol hint to Run output.
 
 ### MCP Tools
 
@@ -357,6 +369,10 @@ A project maps to a local directory and `.scatter` data. A Page is an isolated c
 **What is the difference between AI-generated canvas data and Run?**
 
 AI-generated canvas data writes `.scatter/scatter.json` to create editable Pages, nodes, and edges. Run happens after the user clicks a node or flow in the web app, then the Markdown payload is received by the Codex thread calling `await_canvasight_run`.
+
+**What does the Agent Team setting do?**
+
+It controls whether Canvasight-generated Run Markdown includes Agent Team collaboration instructions. It is enabled by default for complex product, design, development, testing, documentation, or Skill tasks. Turn it off in Settings if you want Codex to handle the Run as a normal single-thread task.
 
 **Are node templates project-specific?**
 

@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.6";
+const SERVER_VERSION = "0.1.7";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -24,6 +24,18 @@ const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codeb
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+const AGENT_TEAM_ROLE_IDS = new Set([
+  "product-agent",
+  "design-agent",
+  "design-standards-agent",
+  "development-agent",
+  "development-standards-agent",
+  "test-supervisor-agent",
+  "customer-support-agent",
+  "project-management-agent",
+  "skill-expert-agent"
+]);
+const AGENT_TEAM_STATUS_FLOW = ["open", "assigned", "resolved", "archived"];
 const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
   {
     canonicalName: "AGENTS.md",
@@ -1234,6 +1246,30 @@ function getSession(id) {
   return session;
 }
 
+function normalizeAgentTeamPayload(value) {
+  const agentTeam = isObject(value) ? value : {};
+  const enabled = agentTeam.enabled === true;
+  const recommendedRoles = Array.isArray(agentTeam.recommendedRoles)
+    ? agentTeam.recommendedRoles
+        .filter((role) => isObject(role))
+        .map((role) => ({
+          id: typeof role.id === "string" && AGENT_TEAM_ROLE_IDS.has(role.id) ? role.id : "",
+          label: typeof role.label === "string" ? role.label : "",
+          reason: typeof role.reason === "string" ? role.reason : ""
+        }))
+        .filter((role) => role.id && role.label)
+    : [];
+  return {
+    enabled,
+    skillName: "canvasight-agent-team",
+    recommendedRoles: enabled ? recommendedRoles : [],
+    reportProtocol: {
+      root: "agent-reports",
+      statuses: AGENT_TEAM_STATUS_FLOW
+    }
+  };
+}
+
 function normalizeRunPayload(session, value) {
   const payload = isObject(value) ? value : {};
   const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path.resolve(payload.projectPath) : session.projectPath;
@@ -1254,6 +1290,7 @@ function normalizeRunPayload(session, value) {
     effort: normalizeEffort(payload.effort),
     planMode: codexMode === "plan",
     runMode: normalizeRunMode(payload.runMode),
+    agentTeam: normalizeAgentTeamPayload(payload.agentTeam),
     nodeIds: Array.isArray(payload.nodeIds) ? payload.nodeIds.filter((item) => typeof item === "string") : [],
     attachments: Array.isArray(payload.attachments) ? payload.attachments.map(normalizeAttachment) : []
   };
