@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.9");
+    assert.equal(initialized.serverInfo.version, "0.1.10");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -329,7 +329,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.9");
+    assert.equal(autoHealth.serverVersion, "0.1.10");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -940,6 +940,8 @@ async function main() {
       body: JSON.stringify(runPayload)
     });
     assert.equal(queued.status, "queued");
+    assert.equal(queued.agentTeam.agentsMd.status, "created");
+    assert.equal(queued.agentTeam.agentsMd.reason, "missing_agents_md");
 
     const awaited = await waitForRun;
     assert.equal(awaited.content[0].text, runPayload.markdown);
@@ -957,8 +959,12 @@ async function main() {
       ["development-agent", "test-supervisor-agent"]
     );
     assert.deepEqual(awaited.structuredContent.agentTeam.reportProtocol.statuses, ["open", "assigned", "resolved", "archived"]);
+    assert.equal(awaited.structuredContent.agentTeam.agentsMd.status, "created");
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
+    const createdAgentsMd = await fsp.readFile(path.join(projectPath, "AGENTS.md"), "utf8");
+    assert.match(createdAgentsMd, /<!-- canvasight-agent-team:start -->/);
+    assert.match(createdAgentsMd, /## Canvasight Agent Team/);
 
     const goalNativeLog = await readNativeLog();
     assert.equal(goalNativeLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
@@ -1007,6 +1013,92 @@ async function main() {
       ),
       true
     );
+
+    const appendProjectPath = path.join(tempRoot, "agent-team-append-project");
+    await fsp.mkdir(appendProjectPath, { recursive: true });
+    await fsp.writeFile(path.join(appendProjectPath, "AGENTS.md"), "# Existing rules\n\nKeep this rule.\n", "utf8");
+    const waitForAppendRun = request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 5000
+      }
+    });
+    const appendQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        projectPath: appendProjectPath,
+        threadName: "Agent Team Append",
+        markdown: "# Agent Team Append",
+        codexMode: "chat",
+        planMode: false,
+        nodeIds: [],
+        attachments: []
+      })
+    });
+    assert.equal(appendQueued.agentTeam.agentsMd.status, "appended");
+    const appendAwaited = await waitForAppendRun;
+    assert.equal(appendAwaited.structuredContent.agentTeam.agentsMd.status, "appended");
+    const appendedAgentsMd = await fsp.readFile(path.join(appendProjectPath, "AGENTS.md"), "utf8");
+    assert.match(appendedAgentsMd, /Keep this rule\./);
+    assert.equal((appendedAgentsMd.match(/canvasight-agent-team:start/g) || []).length, 1);
+
+    const waitForUnchangedRun = request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 5000
+      }
+    });
+    const unchangedQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        projectPath: appendProjectPath,
+        threadName: "Agent Team Existing",
+        markdown: "# Agent Team Existing",
+        codexMode: "chat",
+        planMode: false,
+        nodeIds: [],
+        attachments: []
+      })
+    });
+    assert.equal(unchangedQueued.agentTeam.agentsMd.status, "unchanged");
+    const unchangedAwaited = await waitForUnchangedRun;
+    assert.equal(unchangedAwaited.structuredContent.agentTeam.agentsMd.status, "unchanged");
+    const unchangedAgentsMd = await fsp.readFile(path.join(appendProjectPath, "AGENTS.md"), "utf8");
+    assert.equal((unchangedAgentsMd.match(/canvasight-agent-team:start/g) || []).length, 1);
+
+    const disabledAgentTeamProjectPath = path.join(tempRoot, "agent-team-disabled-project");
+    await fsp.mkdir(disabledAgentTeamProjectPath, { recursive: true });
+    const waitForDisabledAgentTeamRun = request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 5000
+      }
+    });
+    const disabledAgentTeamQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        projectPath: disabledAgentTeamProjectPath,
+        threadName: "Agent Team Disabled",
+        markdown: "# Agent Team Disabled",
+        codexMode: "chat",
+        planMode: false,
+        agentTeam: { enabled: false },
+        nodeIds: [],
+        attachments: []
+      })
+    });
+    assert.equal(disabledAgentTeamQueued.agentTeam.agentsMd.status, "skipped");
+    assert.equal(disabledAgentTeamQueued.agentTeam.agentsMd.reason, "agent_team_disabled");
+    const disabledAgentTeamAwaited = await waitForDisabledAgentTeamRun;
+    assert.equal(disabledAgentTeamAwaited.structuredContent.agentTeam.enabled, false);
+    assert.equal(disabledAgentTeamAwaited.structuredContent.agentTeam.agentsMd.status, "skipped");
+    await assert.rejects(() => fsp.stat(path.join(disabledAgentTeamProjectPath, "AGENTS.md")), /ENOENT/);
 
     const closed = await request("tools/call", {
       name: "close_canvasight",

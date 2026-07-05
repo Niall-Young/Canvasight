@@ -12,19 +12,33 @@ Agent Team roles are long-lived project role seats. They should behave like the 
 
 ## AGENTS.md Bootstrap Rule
 
-Before assigning fixed role agents for a project, ensure the target project `AGENTS.md` contains the durable collaboration rules the agents need.
+Before assigning fixed role agents for a project, ensure the target project `AGENTS.md` contains the durable collaboration rules the agents need. This bootstrap is part of the Agent Team workflow because a new Codex thread cannot inherit previous thread-local subagent state.
 
 - If `AGENTS.md` is missing and Agent Team work is actually used, route the gap to the Development Standards Lead.
-- Create `AGENTS.md` only when the user explicitly requested durable Agent Team setup, the task is to establish project collaboration rules, or project rules allow the edit.
-- If `AGENTS.md` exists but lacks Agent Team lifecycle or report protocol sections, append a minimal update only when authorized instead of rewriting the file.
+- Create `AGENTS.md` by default before role assignment when it is missing.
+- If `AGENTS.md` exists but lacks Agent Team lifecycle or report protocol sections, append a minimal Agent Team section instead of rewriting the file.
 - The minimum content is: project context, role responsibilities, persistent roster lifecycle, report queue/status protocol, verification expectations, and delivery/git rules.
 - The Development Standards Lead owns this file. If the role is missing or unavailable, the main thread performs the update and records the limitation in the integration summary.
-- Do not create or update `AGENTS.md` for a simple task where Agent Team is enabled but no role agent is actually called.
+- Do not create or update `AGENTS.md` when Agent Team is disabled or no role-agent workflow is actually used.
 - If the target project already defines a different agent workflow, preserve it, record the conflict, and ask for explicit direction before replacing it.
+
+Minimum appended section. Prefer the managed sentinels when Codex needs to write the section manually:
+
+```markdown
+<!-- canvasight-agent-team:start -->
+## Canvasight Agent Team
+
+- Use persistent role agents for Canvasight Agent Team work. Reuse existing role agents in the current thread when possible.
+- Create only the roles needed for the current task. If a later task needs another role, create that missing fixed role and record it in an integration summary.
+- Keep cross-agent handoff in `agent-reports/` using status-bearing issue, solution, and integration summary reports.
+- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
+- The main thread owns integration, conflict handling, final verification, and git delivery.
+<!-- canvasight-agent-team:end -->
+```
 
 Use this order:
 
-1. Read the project's `AGENTS.md` Agent Team lifecycle, or route any missing/incomplete protocol gap to Development Standards Lead when Agent Team work is actually used.
+1. Read the project's `AGENTS.md` Agent Team lifecycle, or route any missing/incomplete protocol gap to Development Standards Lead and persist the minimum section when Agent Team work is actually used.
 2. Check the latest integration summaries or current thread state for the recorded role-to-agent mapping.
 3. Reuse or resume the existing role agent for the needed role.
 4. Send follow-up work to that same role agent through the current agent tool, and use `agent-reports/` for durable cross-agent handoff.

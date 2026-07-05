@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260705-2311-integration-summary-agent-team-agents-md-persistence.md` - integrated default AGENTS.md persistence for Canvasight Agent Team across Codex threads.
+- `agent-reports/resolved/20260705-2311-development-solution-agent-team-agents-md-persistence.md` - changed Agent Team bootstrap from opt-in AGENTS.md edits to default minimal persistence.
+- `agent-reports/resolved/20260705-2311-product-issue-agent-team-agents-md-persistence.md` - resolved cross-thread loss of Agent Team rules when AGENTS.md was not updated.
 - `agent-reports/resolved/20260705-2257-integration-summary-agents-md-bootstrap.md` - integrated AGENTS.md bootstrap rules into Agent Team skill, Run contract, README, and version bump.
 - `agent-reports/resolved/20260705-2257-development-solution-agents-md-bootstrap.md` - implemented controlled AGENTS.md bootstrap behavior for Canvasight Agent Team.
 - `agent-reports/resolved/20260705-2257-product-issue-agents-md-bootstrap.md` - resolved ambiguity around whether the skill requires project AGENTS.md updates.

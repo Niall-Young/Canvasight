@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.9";
+const SERVER_VERSION = "0.1.10";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -36,6 +36,42 @@ const AGENT_TEAM_ROLE_IDS = new Set([
   "skill-expert-agent"
 ]);
 const AGENT_TEAM_STATUS_FLOW = ["open", "assigned", "resolved", "archived"];
+const AGENT_TEAM_AGENTS_MD_START = "<!-- canvasight-agent-team:start -->";
+const AGENT_TEAM_AGENTS_MD_END = "<!-- canvasight-agent-team:end -->";
+const AGENT_TEAM_AGENTS_MD_BLOCK = `${AGENT_TEAM_AGENTS_MD_START}
+## Canvasight Agent Team
+
+When Canvasight Agent Team mode is enabled, Codex should use persistent role agents instead of creating one-off agents for each task.
+
+### Fixed Roles
+
+- Product Agent: keeps work aligned with product goals and scope.
+- Design Agent: checks UI direction, interaction quality, and design consistency.
+- Development Agent: implements code, persistence, runtime, and integration changes.
+- Test Supervisor Agent: verifies builds, smoke tests, regressions, and browser-visible behavior.
+- Customer Support Agent: decides whether user-facing README documentation needs updates.
+- Design Standards Expert: maintains \`design.md\` when product UI rules change.
+- Development Standards Lead: maintains \`AGENTS.md\` and project working rules.
+- Project Management Expert: manages git status, staging scope, and conventional Chinese commit messages.
+- Skill Expert Agent: maintains Canvasight and Codex skill instructions when skill behavior changes.
+
+### Agent Reports
+
+Use \`agent-reports/\` for cross-agent communication when a blocking, high-risk, or cross-role issue appears.
+
+- Issue reports: \`YYYYMMDD-HHMM-<role>-issue-<slug>.md\`
+- Solution reports: \`YYYYMMDD-HHMM-<role>-solution-<slug>.md\`
+- Integration summaries: \`YYYYMMDD-HHMM-integration-summary.md\`
+
+### Operating Rules
+
+- Reuse fixed roles across the project whenever possible.
+- Create only the roles needed for the current task; if a later task needs another role, create that missing fixed role and record it in an integration summary.
+- Do not create duplicate one-off agents for the same role.
+- Preserve existing project rules in this file; target project rules take precedence over Canvasight defaults.
+- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
+- The main thread owns integration, conflict handling, final verification, and git delivery.
+${AGENT_TEAM_AGENTS_MD_END}`;
 const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
   {
     canonicalName: "AGENTS.md",
@@ -1270,6 +1306,77 @@ function normalizeAgentTeamPayload(value) {
   };
 }
 
+function disabledAgentTeamAgentsMdResult(projectPath, reason) {
+  return {
+    status: "skipped",
+    reason,
+    path: projectPath ? path.join(projectPath, "AGENTS.md") : null
+  };
+}
+
+async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
+  const agentsPath = path.join(projectPath, "AGENTS.md");
+  if (!agentTeam.enabled) return disabledAgentTeamAgentsMdResult(projectPath, "agent_team_disabled");
+
+  try {
+    await fsp.mkdir(projectPath, { recursive: true });
+    let existing = "";
+    let existed = true;
+    try {
+      existing = await fsp.readFile(agentsPath, "utf8");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      existed = false;
+    }
+
+    if (/canvasight-agent-team\s*:\s*(disable|disabled|off|false)/i.test(existing)) {
+      return {
+        status: "skipped",
+        reason: "disabled_by_project",
+        path: agentsPath
+      };
+    }
+
+    const startIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_START);
+    const endIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_END);
+    if (startIndex >= 0 && endIndex > startIndex) {
+      const before = existing.slice(0, startIndex).replace(/\s*$/, "");
+      const after = existing.slice(endIndex + AGENT_TEAM_AGENTS_MD_END.length).replace(/^\s*/, "");
+      const next = [before, AGENT_TEAM_AGENTS_MD_BLOCK, after].filter(Boolean).join("\n\n") + "\n";
+      if (next !== existing) {
+        await fsp.writeFile(agentsPath, next, "utf8");
+        return {
+          status: "updated",
+          reason: "managed_block_refreshed",
+          path: agentsPath
+        };
+      }
+      return {
+        status: "unchanged",
+        reason: "managed_block_present",
+        path: agentsPath
+      };
+    }
+
+    const next = existed && existing.trim()
+      ? `${existing.replace(/\s*$/, "")}\n\n${AGENT_TEAM_AGENTS_MD_BLOCK}\n`
+      : `${AGENT_TEAM_AGENTS_MD_BLOCK}\n`;
+    await fsp.writeFile(agentsPath, next, "utf8");
+    return {
+      status: existed ? "appended" : "created",
+      reason: existed ? "missing_managed_block" : "missing_agents_md",
+      path: agentsPath
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      reason: "write_failed",
+      path: agentsPath,
+      error: error?.message || String(error)
+    };
+  }
+}
+
 function normalizeRunPayload(session, value) {
   const payload = isObject(value) ? value : {};
   const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path.resolve(payload.projectPath) : session.projectPath;
@@ -1373,6 +1480,7 @@ function timeoutRunPayload(sessionIdValue, projectPath = null, threadId = null) 
 
 async function enqueueRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
+  normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
   const waiter = session.waiters.shift() || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
   if (waiter) {
     detachWaiter(waiter);
@@ -1930,8 +2038,11 @@ async function handleSessionApi(req, res, url) {
   if (action === "run") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
-    await enqueueRun(session, body);
-    sendJson(res, 200, { status: "queued" });
+    const queued = await enqueueRun(session, body);
+    sendJson(res, 200, {
+      status: "queued",
+      agentTeam: queued.agentTeam
+    });
     return true;
   }
 
