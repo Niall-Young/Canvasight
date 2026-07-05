@@ -25,11 +25,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const distRoot = path.join(pluginRoot, "dist");
+const isDaemonMode = process.argv.includes("--daemon");
+const isStopDaemonMode = process.argv.includes("--stop-daemon");
 
 const sessions = new Map();
+const globalRunWaiters = [];
 let httpState = null;
 let inputBuffer = Buffer.alloc(0);
 let useContentLengthTransport = false;
+let daemonAuthToken = process.env.CANVASIGHT_DAEMON_TOKEN || "";
+let daemonStartedAt = nowIso();
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -133,6 +138,10 @@ function canvasightStatePath() {
   return path.join(canvasightHome(), "state.json");
 }
 
+function canvasightDaemonStatePath() {
+  return path.join(canvasightHome(), "daemon.json");
+}
+
 function scatterDir(projectPath) {
   return path.join(projectPath, ".scatter");
 }
@@ -159,6 +168,26 @@ function base64UrlDecode(value) {
   } catch {
     throw new HttpError(400, "Invalid asset path");
   }
+}
+
+function assetUrlForPath(filePath) {
+  const tokenQuery = daemonAuthToken ? `&token=${encodeURIComponent(daemonAuthToken)}` : "";
+  return `/api/asset?path=${encodeURIComponent(base64UrlEncode(filePath))}${tokenQuery}`;
+}
+
+function publicSessionUrl(sessionIdValue) {
+  if (!httpState) throw new HttpError(503, "Canvasight daemon is not ready");
+  const url = new URL(httpState.origin);
+  url.searchParams.set("sessionId", sessionIdValue);
+  if (daemonAuthToken) url.searchParams.set("token", daemonAuthToken);
+  return url.toString();
+}
+
+function daemonSessionUrl(state, sessionIdValue) {
+  const url = new URL(state.origin);
+  url.searchParams.set("sessionId", sessionIdValue);
+  if (state.token) url.searchParams.set("token", state.token);
+  return url.toString();
 }
 
 function isScatterAssetPath(filePath) {
@@ -290,6 +319,134 @@ async function writeUserState(state) {
   return normalizedState;
 }
 
+function normalizeDaemonState(value) {
+  if (!isObject(value) || typeof value.origin !== "string" || !value.origin.startsWith("http://127.0.0.1:")) return null;
+  return {
+    version: 1,
+    pid: Number.isFinite(Number(value.pid)) ? Number(value.pid) : null,
+    origin: value.origin,
+    port: Number.isFinite(Number(value.port)) ? Number(value.port) : null,
+    token: typeof value.token === "string" ? value.token : "",
+    pluginRoot: typeof value.pluginRoot === "string" ? value.pluginRoot : "",
+    serverVersion: typeof value.serverVersion === "string" ? value.serverVersion : "",
+    startedAt: typeof value.startedAt === "string" ? value.startedAt : ""
+  };
+}
+
+async function readDaemonState() {
+  try {
+    const raw = await fsp.readFile(canvasightDaemonStatePath(), "utf8");
+    return normalizeDaemonState(JSON.parse(raw));
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+async function writeDaemonState(state) {
+  const normalized = normalizeDaemonState(state);
+  if (!normalized) throw new Error("Invalid Canvasight daemon state");
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  await fsp.writeFile(canvasightDaemonStatePath(), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  return normalized;
+}
+
+async function removeDaemonState() {
+  await fsp.rm(canvasightDaemonStatePath(), { force: true });
+}
+
+function daemonHeaders(state, headers = {}) {
+  return {
+    ...(state?.token ? { "x-canvasight-token": state.token } : {}),
+    ...headers
+  };
+}
+
+async function daemonJson(state, route, init = {}) {
+  const url = new URL(route, state.origin);
+  const response = await fetch(url, {
+    ...init,
+    headers: daemonHeaders(state, {
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...(init.headers || {})
+    })
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `Canvasight daemon request failed: ${response.status}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+async function healthyDaemonState(state) {
+  if (!state) return null;
+  try {
+    const health = await daemonJson({ ...state, token: "" }, "/api/health");
+    if (health?.status !== "ok") return null;
+    if (health.pluginRoot !== pluginRoot || health.serverVersion !== SERVER_VERSION) return null;
+    return {
+      ...state,
+      origin: health.origin || state.origin,
+      port: health.port || state.port,
+      pid: health.pid || state.pid
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForDaemon(token) {
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    const state = await readDaemonState();
+    if (state && (!token || state.token === token)) {
+      const healthy = await healthyDaemonState(state);
+      if (healthy) return healthy;
+    }
+    await sleep(120);
+  }
+  throw new Error("Canvasight daemon did not start in time");
+}
+
+async function ensureDaemonServer() {
+  const existing = await healthyDaemonState(await readDaemonState());
+  if (existing) return existing;
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  const child = spawn(process.execPath, [__filename, "--daemon"], {
+    cwd: pluginRoot,
+    detached: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      CANVASIGHT_DAEMON_TOKEN: token
+    }
+  });
+  child.unref();
+  return waitForDaemon(token);
+}
+
+async function stopDaemonFromState() {
+  const state = await readDaemonState();
+  if (!state) return false;
+  const healthy = await healthyDaemonState(state);
+  if (!healthy?.pid) {
+    await removeDaemonState();
+    return false;
+  }
+  try {
+    process.kill(healthy.pid, "SIGTERM");
+  } catch {
+    await removeDaemonState();
+    return false;
+  }
+  return true;
+}
+
 async function rememberProject(projectPath, project) {
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
   const resolvedProjectPath = path.resolve(projectPath);
@@ -333,14 +490,15 @@ async function recentProjects(limit) {
 
 function normalizeAttachment(value) {
   const source = ["upload", "drop", "paste", "clipboard"].includes(value?.source) ? value.source : "upload";
+  const storedPath = typeof value?.storedPath === "string" ? value.storedPath : "";
   return {
     id: typeof value?.id === "string" && value.id ? value.id : crypto.randomUUID(),
     kind: value?.kind === "image" ? "image" : "file",
     source,
     originalName: typeof value?.originalName === "string" ? value.originalName : "attachment",
-    storedPath: typeof value?.storedPath === "string" ? value.storedPath : "",
+    storedPath,
     relativePath: typeof value?.relativePath === "string" ? value.relativePath : "",
-    fileUrl: typeof value?.fileUrl === "string" ? value.fileUrl : "",
+    fileUrl: storedPath ? assetUrlForPath(storedPath) : typeof value?.fileUrl === "string" ? value.fileUrl : "",
     mime: typeof value?.mime === "string" ? value.mime : "application/octet-stream",
     size: toNumber(value?.size, 0),
     createdAt: typeof value?.createdAt === "string" ? value.createdAt : nowIso()
@@ -539,7 +697,7 @@ function normalizeRunPayload(session, value) {
     codexMode,
     codexNative: {
       status: "pending",
-      threadId: session.codexThreadId,
+      threadId: null,
       mode: codexMode
     },
     effort: normalizeEffort(payload.effort),
@@ -552,14 +710,84 @@ function normalizeRunPayload(session, value) {
 
 function completeWaiter(waiter, payload) {
   clearTimeout(waiter.timer);
+  if (waiter.abortSignal && waiter.abortHandler) {
+    waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
+  }
   waiter.resolve(payload);
+}
+
+function waiterMatches(waiter, session, payload) {
+  if (waiter.sessionId && waiter.sessionId !== session.id) return false;
+  if (waiter.projectPath && path.resolve(waiter.projectPath) !== path.resolve(payload.projectPath || session.projectPath)) return false;
+  return true;
+}
+
+function detachWaiter(waiter) {
+  clearTimeout(waiter.timer);
+  if (waiter.abortSignal && waiter.abortHandler) {
+    waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
+  }
+  if (waiter.sessionId) {
+    const session = sessions.get(waiter.sessionId);
+    if (session) {
+      const index = session.waiters.indexOf(waiter);
+      if (index >= 0) session.waiters.splice(index, 1);
+    }
+    return;
+  }
+  const index = globalRunWaiters.indexOf(waiter);
+  if (index >= 0) globalRunWaiters.splice(index, 1);
+}
+
+function closedRunPayload(sessionIdValue, projectPath = null, threadId = null) {
+  return {
+    status: "closed",
+    sessionId: sessionIdValue || "",
+    threadName: "",
+    projectPath,
+    markdown: "",
+    imagePaths: [],
+    codexMode: "chat",
+    codexNative: {
+      status: "not_applicable",
+      threadId,
+      mode: "chat"
+    },
+    effort: "xhigh",
+    planMode: false,
+    runMode: "flow",
+    nodeIds: [],
+    attachments: []
+  };
+}
+
+function timeoutRunPayload(sessionIdValue, projectPath = null, threadId = null) {
+  return {
+    status: "timeout",
+    sessionId: sessionIdValue || "",
+    threadName: "",
+    projectPath,
+    markdown: "",
+    imagePaths: [],
+    codexMode: "chat",
+    codexNative: {
+      status: "not_applicable",
+      threadId,
+      mode: "chat"
+    },
+    effort: "xhigh",
+    planMode: false,
+    runMode: "flow",
+    nodeIds: [],
+    attachments: []
+  };
 }
 
 async function enqueueRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
-  normalized.codexNative = await applyCodexNativeMode(session, normalized);
-  const waiter = session.waiters.shift();
+  const waiter = session.waiters.shift() || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
   if (waiter) {
+    detachWaiter(waiter);
     completeWaiter(waiter, normalized);
   } else {
     session.runQueue.push(normalized);
@@ -567,61 +795,63 @@ async function enqueueRun(session, payload) {
   return normalized;
 }
 
-function waitForRun(sessionIdValue, timeoutMs) {
-  const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 60000), 300000));
-  const session = sessions.get(sessionIdValue);
-  if (!session) {
-    return Promise.resolve({
-      status: "closed",
-      sessionId: sessionIdValue,
-      threadName: "",
-      projectPath: null,
-      markdown: "",
-      imagePaths: [],
-      codexMode: "chat",
-      codexNative: {
-        status: "not_applicable",
-        threadId: null,
-        mode: "chat"
-      },
-      effort: "xhigh",
-      planMode: false,
-      runMode: "flow",
-      nodeIds: [],
-      attachments: []
-    });
+function takeQueuedRun(sessionIdValue, projectPath) {
+  if (sessionIdValue) {
+    const session = sessions.get(sessionIdValue);
+    if (!session) return null;
+    if (projectPath) {
+      const index = session.runQueue.findIndex((run) => path.resolve(run.projectPath || session.projectPath) === path.resolve(projectPath));
+      return index >= 0 ? session.runQueue.splice(index, 1)[0] : null;
+    }
+    return session.runQueue.shift() || null;
   }
-  const queued = session.runQueue.shift();
+
+  const resolvedProjectPath = optionalProjectPath(projectPath);
+  for (const session of sessions.values()) {
+    const index = session.runQueue.findIndex((run) => {
+      if (!resolvedProjectPath) return true;
+      return path.resolve(run.projectPath || session.projectPath) === resolvedProjectPath;
+    });
+    if (index >= 0) return session.runQueue.splice(index, 1)[0];
+  }
+  return null;
+}
+
+function waitForRun(sessionIdValue, timeoutMs, options = {}) {
+  const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 60000), 300000));
+  const projectPath = optionalProjectPath(options.projectPath);
+  const session = sessions.get(sessionIdValue);
+  if (sessionIdValue && !session) {
+    return Promise.resolve(closedRunPayload(sessionIdValue, projectPath));
+  }
+  const queued = takeQueuedRun(sessionIdValue || null, projectPath);
   if (queued) return Promise.resolve(queued);
 
   return new Promise((resolve) => {
     const waiter = {
+      sessionId: sessionIdValue || null,
+      projectPath,
       resolve,
       timer: setTimeout(() => {
-        const index = session.waiters.indexOf(waiter);
-        if (index >= 0) session.waiters.splice(index, 1);
-        resolve({
-          status: "timeout",
-          sessionId: sessionIdValue,
-          threadName: "",
-          projectPath: session.projectPath,
-          markdown: "",
-          imagePaths: [],
-          codexMode: "chat",
-          codexNative: {
-            status: "not_applicable",
-            threadId: session.codexThreadId,
-            mode: "chat"
-          },
-          effort: "xhigh",
-          planMode: false,
-          runMode: "flow",
-          nodeIds: [],
-          attachments: []
-        });
+        detachWaiter(waiter);
+        resolve(timeoutRunPayload(sessionIdValue, projectPath));
       }, timeout)
     };
-    session.waiters.push(waiter);
+
+    if (options.abortSignal) {
+      waiter.abortSignal = options.abortSignal;
+      waiter.abortHandler = () => {
+        detachWaiter(waiter);
+        resolve(closedRunPayload(sessionIdValue, projectPath));
+      };
+      options.abortSignal.addEventListener("abort", waiter.abortHandler, { once: true });
+    }
+
+    if (sessionIdValue) {
+      session.waiters.push(waiter);
+    } else {
+      globalRunWaiters.push(waiter);
+    }
   });
 }
 
@@ -709,6 +939,20 @@ function assertMethod(req, expected) {
   }
 }
 
+function requestAuthToken(req, url) {
+  const header = req.headers["x-canvasight-token"];
+  if (typeof header === "string" && header) return header;
+  if (Array.isArray(header) && header[0]) return header[0];
+  return url.searchParams.get("token") || "";
+}
+
+function assertDaemonAuthorized(req, url) {
+  if (!daemonAuthToken) return;
+  if (requestAuthToken(req, url) !== daemonAuthToken) {
+    throw new HttpError(401, "Unauthorized Canvasight daemon request");
+  }
+}
+
 async function saveAttachments(projectPath, files) {
   if (!Array.isArray(files)) throw new HttpError(400, "files must be an array");
   await ensureScatterLayout(projectPath);
@@ -739,7 +983,7 @@ async function saveAttachments(projectPath, files) {
       originalName,
       storedPath,
       relativePath: toRelativeProjectPath(projectPath, storedPath),
-      fileUrl: `/api/asset?path=${encodeURIComponent(base64UrlEncode(storedPath))}`,
+      fileUrl: assetUrlForPath(storedPath),
       mime,
       size: bytes.length,
       createdAt: nowIso()
@@ -1103,6 +1347,17 @@ async function handleSessionApi(req, res, url) {
     return true;
   }
 
+  if (action === "close") {
+    assertMethod(req, "POST");
+    const existed = closeSession(session.id);
+    sendJson(res, 200, {
+      status: "closed",
+      sessionId: session.id,
+      existed
+    });
+    return true;
+  }
+
   throw new HttpError(404, "API route not found");
 }
 
@@ -1114,7 +1369,23 @@ async function handleHttp(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/health") {
+      assertMethod(req, "GET");
+      sendJson(res, 200, {
+        status: "ok",
+        name: SERVER_NAME,
+        serverVersion: SERVER_VERSION,
+        pluginRoot,
+        pid: process.pid,
+        origin: httpState?.origin || null,
+        port: httpState?.port || null,
+        startedAt: daemonStartedAt
+      });
+      return;
+    }
+
     if (url.pathname === "/api/reveal") {
+      assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
       revealPath(body.targetPath);
@@ -1123,11 +1394,65 @@ async function handleHttp(req, res) {
     }
 
     if (url.pathname === "/api/asset") {
+      assertDaemonAuthorized(req, url);
       await serveAsset(req, res, url);
       return;
     }
 
+    if (url.pathname === "/api/sessions") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const session = createSession({
+        projectPath: typeof body?.projectPath === "string" && body.projectPath ? body.projectPath : null,
+        language: body?.language,
+        threadId: body?.threadId
+      });
+      const openedProject = await openProject(session.projectPath);
+      await rememberProjectBestEffort(session.projectPath, openedProject.project);
+      sendJson(res, 200, {
+        session: sessionInfo(session),
+        project: openedProject.project,
+        document: openedProject.document
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/runs/await") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const abortController = new AbortController();
+      const abort = () => {
+        if (!res.writableEnded) abortController.abort();
+      };
+      res.on("close", abort);
+      const run = await waitForRun(
+        typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : "",
+        body?.timeoutMs,
+        {
+          projectPath: body?.projectPath,
+          abortSignal: abortController.signal
+        }
+      );
+      res.off("close", abort);
+      if (res.destroyed) return;
+      sendJson(res, 200, run);
+      return;
+    }
+
+    if (url.pathname === "/api/daemon/stop") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      sendJson(res, 200, { status: "stopping", pid: process.pid });
+      setTimeout(() => {
+        void shutdownDaemon().finally(() => process.exit(0));
+      }, 20);
+      return;
+    }
+
     if (url.pathname.startsWith("/api/sessions/")) {
+      assertDaemonAuthorized(req, url);
       if (!(await handleSessionApi(req, res, url))) {
         throw new HttpError(404, "API route not found");
       }
@@ -1168,7 +1493,32 @@ async function ensureHttpServer() {
     port,
     origin: `http://127.0.0.1:${port}`
   };
+  if (isDaemonMode) {
+    await writeDaemonState({
+      version: 1,
+      pid: process.pid,
+      origin: httpState.origin,
+      port,
+      token: daemonAuthToken,
+      pluginRoot,
+      serverVersion: SERVER_VERSION,
+      startedAt: daemonStartedAt
+    });
+  }
   return httpState;
+}
+
+async function shutdownDaemon() {
+  for (const id of Array.from(sessions.keys())) closeSession(id);
+  while (globalRunWaiters.length) {
+    const waiter = globalRunWaiters.shift();
+    completeWaiter(waiter, closedRunPayload(waiter.sessionId, waiter.projectPath));
+  }
+  if (httpState) {
+    await new Promise((resolve) => httpState.server.close(resolve));
+    httpState = null;
+  }
+  if (isDaemonMode) await removeDaemonState();
 }
 
 function toolResult(structuredContent, text = "") {
@@ -1184,25 +1534,27 @@ function toolResult(structuredContent, text = "") {
 }
 
 async function toolOpenCanvasight(args) {
-  const session = createSession({
-    projectPath: typeof args?.projectPath === "string" && args.projectPath ? args.projectPath : null,
-    language: args?.language,
-    threadId: args?.threadId
+  const daemon = await ensureDaemonServer();
+  const opened = await daemonJson(daemon, "/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath: typeof args?.projectPath === "string" && args.projectPath ? args.projectPath : null,
+      language: args?.language,
+      threadId: args?.threadId || process.env.CODEX_THREAD_ID || null
+    })
   });
-  const openedProject = await openProject(session.projectPath);
-  await rememberProjectBestEffort(session.projectPath, openedProject.project);
-  const server = await ensureHttpServer();
-  const url = `${server.origin}/?sessionId=${encodeURIComponent(session.id)}`;
+  const session = opened.session;
+  const url = daemonSessionUrl(daemon, session.sessionId);
   openBrowser(url);
   return toolResult(
     {
       status: "opened",
-      sessionId: session.id,
+      sessionId: session.sessionId,
       url,
-      origin: server.origin,
+      origin: daemon.origin,
       projectPath: session.projectPath,
       codexThreadId: session.codexThreadId,
-      project: openedProject.project,
+      project: opened.project,
       language: session.language
     },
     `Canvasight session opened: ${url}`
@@ -1242,10 +1594,28 @@ async function toolOpenCanvasightRecentProject(args) {
 }
 
 async function toolAwaitCanvasightRun(args) {
-  if (typeof args?.sessionId !== "string" || !args.sessionId) {
-    throw new Error("sessionId is required");
+  const sessionIdValue = typeof args?.sessionId === "string" && args.sessionId ? args.sessionId : "";
+  let projectPathValue = optionalProjectPath(args?.projectPath);
+  if (!sessionIdValue && !projectPathValue) {
+    projectPathValue = (await recentProjects(1))[0]?.path || defaultProjectPath();
   }
-  const run = await waitForRun(args.sessionId, args.timeoutMs);
+  const daemon = await ensureDaemonServer();
+  const run = await daemonJson(daemon, "/api/runs/await", {
+    method: "POST",
+    body: JSON.stringify({
+      sessionId: sessionIdValue,
+      timeoutMs: args.timeoutMs,
+      projectPath: projectPathValue
+    })
+  });
+  if (run.status === "received") {
+    run.codexNative = await applyCodexNativeMode(
+      {
+        codexThreadId: optionalThreadId(args.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID)
+      },
+      run
+    );
+  }
   const text = run.status === "received" ? run.markdown : `Canvasight run status: ${run.status}`;
   return toolResult(run, text);
 }
@@ -1254,21 +1624,34 @@ async function toolCloseCanvasight(args) {
   if (typeof args?.sessionId !== "string" || !args.sessionId) {
     throw new Error("sessionId is required");
   }
-  const existed = closeSession(args.sessionId);
+  const daemon = await ensureDaemonServer();
+  const closed = await daemonJson(daemon, `/api/sessions/${encodeURIComponent(args.sessionId)}/close`, {
+    method: "POST",
+    body: JSON.stringify({})
+  }).catch((error) => {
+    if (String(error?.message || "").includes("Session not found")) {
+      return {
+        status: "closed",
+        sessionId: args.sessionId,
+        existed: false
+      };
+    }
+    throw error;
+  });
   return toolResult(
     {
       status: "closed",
       sessionId: args.sessionId,
-      existed
+      existed: Boolean(closed.existed)
     },
-    existed ? `Canvasight session closed: ${args.sessionId}` : `Canvasight session already closed: ${args.sessionId}`
+    closed.existed ? `Canvasight session closed: ${args.sessionId}` : `Canvasight session already closed: ${args.sessionId}`
   );
 }
 
 const tools = [
   {
     name: "open_canvasight",
-    description: "Open a Canvasight browser session and start or reuse the local HTTP server.",
+    description: "Open a Canvasight browser session and start or reuse the project-level local daemon.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1335,19 +1718,27 @@ const tools = [
   },
   {
     name: "await_canvasight_run",
-    description: "Wait for a browser run payload from a Canvasight session.",
+    description: "Wait for a browser run payload from a Canvasight session. The current Codex thread receives and applies the run payload.",
     inputSchema: {
       type: "object",
       properties: {
         sessionId: {
-          type: "string"
+          type: "string",
+          description: "Optional session id. When omitted, Canvasight waits for the matching project queue."
+        },
+        projectPath: {
+          type: "string",
+          description: "Optional project path filter when attaching from another Codex thread. Defaults to the most recent Canvasight project when sessionId is omitted."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional current Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
         },
         timeoutMs: {
           type: "number",
           minimum: 1
         }
       },
-      required: ["sessionId"],
       additionalProperties: false
     }
   },
@@ -1502,27 +1893,56 @@ function drainInputBuffer() {
   }
 }
 
-process.stdin.on("data", (chunk) => {
-  inputBuffer = Buffer.concat([inputBuffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
-  try {
-    drainInputBuffer();
-  } catch (error) {
-    writeError(null, -32700, error?.message || "Parse error");
-    inputBuffer = Buffer.alloc(0);
-  }
-});
+async function runDaemon() {
+  if (!daemonAuthToken) daemonAuthToken = crypto.randomBytes(24).toString("base64url");
+  daemonStartedAt = nowIso();
+  await ensureHttpServer();
+}
 
-process.stdin.on("end", () => {
-  for (const id of Array.from(sessions.keys())) closeSession(id);
-  if (httpState) httpState.server.close();
-});
+function runMcpStdio() {
+  process.stdin.on("data", (chunk) => {
+    inputBuffer = Buffer.concat([inputBuffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+    try {
+      drainInputBuffer();
+    } catch (error) {
+      writeError(null, -32700, error?.message || "Parse error");
+      inputBuffer = Buffer.alloc(0);
+    }
+  });
+
+  process.stdin.on("end", () => {
+    // The persistent Canvasight daemon deliberately outlives this thread-local MCP shim.
+  });
+}
+
+async function handleProcessShutdown() {
+  if (isDaemonMode) {
+    await shutdownDaemon();
+  }
+}
 
 process.on("SIGTERM", () => {
-  if (httpState) httpState.server.close();
-  process.exit(0);
+  void handleProcessShutdown().finally(() => process.exit(0));
 });
 
 process.on("SIGINT", () => {
-  if (httpState) httpState.server.close();
-  process.exit(0);
+  void handleProcessShutdown().finally(() => process.exit(0));
 });
+
+if (isStopDaemonMode) {
+  stopDaemonFromState()
+    .then((stopped) => {
+      process.stdout.write(`${stopped ? "Canvasight daemon stop requested" : "Canvasight daemon was not running"}\n`);
+    })
+    .catch((error) => {
+      process.stderr.write(`${error?.message || "Failed to stop Canvasight daemon"}\n`);
+      process.exitCode = 1;
+    });
+} else if (isDaemonMode) {
+  runDaemon().catch((error) => {
+    process.stderr.write(`${error?.message || "Canvasight daemon failed"}\n`);
+    process.exitCode = 1;
+  });
+} else {
+  runMcpStdio();
+}

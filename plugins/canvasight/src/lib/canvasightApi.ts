@@ -32,11 +32,17 @@ function sessionIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("sessionId") || "local";
 }
 
+function sessionTokenFromUrl(): string {
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = sessionTokenFromUrl();
   const response = await fetch(path, {
     ...init,
     headers: {
       "content-type": "application/json",
+      ...(token ? { "x-canvasight-token": token } : {}),
       ...(init?.headers ?? {})
     }
   });
@@ -76,6 +82,7 @@ async function fileInputToPayload(input: AttachmentInput): Promise<{
 
 export const canvasightApi = {
   sessionId: sessionIdFromUrl(),
+  token: sessionTokenFromUrl(),
 
   getSession(): Promise<SessionInfo> {
     return requestJson<SessionInfo>(`/api/sessions/${this.sessionId}`);

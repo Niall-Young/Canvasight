@@ -71,6 +71,7 @@ fs.chmodSync(fakeCodexPath, 0o755);
 let nextId = 1;
 let stdoutBuffer = "";
 let stderrBuffer = "";
+let daemonToken = "";
 const pending = new Map();
 
 const child = spawn(process.execPath, [serverPath], {
@@ -165,6 +166,7 @@ async function fetchJson(url, init) {
     ...init,
     headers: {
       "content-type": "application/json",
+      ...(daemonToken ? { "x-canvasight-token": daemonToken } : {}),
       ...(init?.headers || {})
     }
   });
@@ -173,6 +175,105 @@ async function fetchJson(url, init) {
     throw new Error(`${init?.method || "GET"} ${url} failed: ${response.status} ${text}`);
   }
   return text ? JSON.parse(text) : null;
+}
+
+function createMcpClient(label, envOverrides = {}) {
+  let clientNextId = 1;
+  let clientStdoutBuffer = "";
+  let clientStderrBuffer = "";
+  const clientPending = new Map();
+  const clientChild = spawn(process.execPath, [serverPath], {
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
+      CANVASIGHT_OPEN_BROWSER: "0",
+      CANVASIGHT_HOME: canvasightHome,
+      CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_NATIVE_LOG: nativeLogPath,
+      CODEX_THREAD_ID: `thread-${label}`,
+      ...envOverrides
+    },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  function rejectClientPending(error) {
+    for (const { reject } of clientPending.values()) reject(error);
+    clientPending.clear();
+  }
+
+  function parseClientStdout() {
+    while (clientStdoutBuffer.includes("\n")) {
+      const newline = clientStdoutBuffer.indexOf("\n");
+      const line = clientStdoutBuffer.slice(0, newline).trim();
+      clientStdoutBuffer = clientStdoutBuffer.slice(newline + 1);
+      if (!line) continue;
+      const message = JSON.parse(line);
+      const handler = clientPending.get(message.id);
+      if (!handler) continue;
+      clientPending.delete(message.id);
+      if (message.error) {
+        handler.reject(new Error(message.error.message));
+      } else {
+        handler.resolve(message.result);
+      }
+    }
+  }
+
+  clientChild.stdout.setEncoding("utf8");
+  clientChild.stdout.on("data", (chunk) => {
+    clientStdoutBuffer += chunk;
+    parseClientStdout();
+  });
+
+  clientChild.stderr.setEncoding("utf8");
+  clientChild.stderr.on("data", (chunk) => {
+    clientStderrBuffer += chunk;
+  });
+
+  clientChild.on("exit", (code, signal) => {
+    if (clientPending.size) {
+      rejectClientPending(new Error(`MCP ${label} exited early: code=${code} signal=${signal} stderr=${clientStderrBuffer}`));
+    }
+  });
+
+  return {
+    child: clientChild,
+    request(method, params) {
+      const id = clientNextId;
+      clientNextId += 1;
+      const promise = new Promise((resolve, reject) => {
+        clientPending.set(id, { resolve, reject });
+      });
+      clientChild.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      return promise;
+    },
+    notify(method, params) {
+      clientChild.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
+    },
+    stop() {
+      clientChild.stdin.end();
+      clientChild.kill("SIGTERM");
+    },
+    stderr() {
+      return clientStderrBuffer;
+    }
+  };
+}
+
+function stopDaemon() {
+  return new Promise((resolve) => {
+    const stopper = spawn(process.execPath, [serverPath, "--stop-daemon"], {
+      cwd: pluginRoot,
+      env: {
+        ...process.env,
+        CANVASIGHT_HOME: canvasightHome
+      },
+      stdio: "ignore"
+    });
+    stopper.on("exit", () => resolve());
+    stopper.on("error", () => resolve());
+  });
 }
 
 async function main() {
@@ -208,6 +309,7 @@ async function main() {
       }
     });
     assert.equal(autoOpened.structuredContent.status, "opened");
+    daemonToken = new URL(autoOpened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(autoOpened.structuredContent.projectPath, defaultProjectPath);
     assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
@@ -240,6 +342,7 @@ async function main() {
       }
     });
     assert.equal(opened.structuredContent.status, "opened");
+    daemonToken = new URL(opened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(opened.structuredContent.projectPath, projectPath);
     assert.equal(opened.structuredContent.codexThreadId, "thread-smoke");
 
@@ -491,12 +594,100 @@ async function main() {
     assert.equal(closedAgain.structuredContent.status, "closed");
     assert.equal(closedAgain.structuredContent.existed, false);
 
+    const persistentProjectPath = path.join(tempRoot, "persistent-project");
+    const persistentOpened = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: {
+        projectPath: persistentProjectPath,
+        language: "en"
+      }
+    });
+    assert.equal(persistentOpened.structuredContent.status, "opened");
+    daemonToken = new URL(persistentOpened.structuredContent.url).searchParams.get("token") || daemonToken;
+    const persistentOrigin = persistentOpened.structuredContent.origin;
+    const persistentSessionId = persistentOpened.structuredContent.sessionId;
+    assert.equal(await fetchJson(`${persistentOrigin}/api/health`).then((health) => health.status), "ok");
+
+    child.stdin.end();
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+
+    const persistedSession = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}`);
+    assert.equal(persistedSession.sessionId, persistentSessionId);
+    assert.equal(persistedSession.projectPath, persistentProjectPath);
+
+    const mcpB = createMcpClient("smoke-b", {
+      CANVASIGHT_CODEX_NATIVE: "0",
+      CODEX_THREAD_ID: "thread-smoke-b"
+    });
+    try {
+      const initializedB = await mcpB.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-smoke-b",
+          version: "0.0.0"
+        }
+      });
+      assert.equal(initializedB.serverInfo.name, "canvasight");
+      mcpB.notify("notifications/initialized", {});
+
+      const crossWait = mcpB.request("tools/call", {
+        name: "await_canvasight_run",
+        arguments: {
+          projectPath: persistentProjectPath,
+          timeoutMs: 5000
+        }
+      });
+
+      const crossPayload = {
+        sessionId: persistentSessionId,
+        threadName: "Persistent Flow",
+        projectPath: persistentProjectPath,
+        markdown: "# Persistent Flow\n\nRun from the old browser session.",
+        imagePaths: [],
+        codexMode: "plan",
+        effort: "medium",
+        planMode: true,
+        runMode: "flow",
+        nodeIds: ["persistent-node"],
+        attachments: []
+      };
+      const crossQueued = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}/run`, {
+        method: "POST",
+        body: JSON.stringify(crossPayload)
+      });
+      assert.equal(crossQueued.status, "queued");
+
+      const crossAwaited = await crossWait;
+      assert.equal(crossAwaited.content[0].text, crossPayload.markdown);
+      assert.equal(crossAwaited.structuredContent.status, "received");
+      assert.equal(crossAwaited.structuredContent.sessionId, persistentSessionId);
+      assert.equal(crossAwaited.structuredContent.projectPath, persistentProjectPath);
+      assert.equal(crossAwaited.structuredContent.codexMode, "plan");
+      assert.equal(crossAwaited.structuredContent.codexNative.status, "disabled");
+      assert.deepEqual(crossAwaited.structuredContent.nodeIds, ["persistent-node"]);
+
+      const drained = await mcpB.request("tools/call", {
+        name: "await_canvasight_run",
+        arguments: {
+          projectPath: persistentProjectPath,
+          timeoutMs: 20
+        }
+      });
+      assert.equal(drained.structuredContent.status, "timeout");
+    } finally {
+      mcpB.stop();
+    }
+
     clearTimeout(killTimer);
     console.log("MCP smoke test passed");
   } finally {
+    clearTimeout(killTimer);
+    await stopDaemon();
     await fsp.rm(tempRoot, { recursive: true, force: true });
-    child.stdin.end();
-    child.kill("SIGTERM");
+    if (!child.stdin.destroyed) child.stdin.end();
+    if (!child.killed) child.kill("SIGTERM");
   }
 }
 

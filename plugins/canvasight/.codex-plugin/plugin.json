@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Canvasight",
     "shortDescription": "Build prompt flows on a local canvas",
-    "longDescription": "Canvasight opens a browser canvas for arranging task nodes, attachments, and flows, then returns generated Markdown and structured run data to the current Codex thread.",
+    "longDescription": "Canvasight opens a persistent local browser canvas for arranging task nodes, attachments, and flows, then returns generated Markdown and structured run data to the Codex thread currently waiting for that project.",
     "developerName": "Niall Young",
     "category": "Productivity",
     "capabilities": [

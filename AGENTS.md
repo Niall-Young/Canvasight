@@ -4,7 +4,7 @@
 
 Canvasight is an early-stage repo-local Codex plugin. The active product lives under `plugins/canvasight` as a Vite, React, TypeScript, XYFlow, Zustand, and Radix UI application. Preserve room for the final stack, but do not treat the repository as an empty baseline anymore.
 
-The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. Running a node or flow sends Markdown and structured run data back to the current Codex thread through MCP.
+The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Running a node or flow sends Markdown and structured run data to whichever Codex thread calls `await_canvasight_run`.
 
 Use `design.md` as the product and UI design baseline when adding user-facing screens.
 
@@ -64,10 +64,12 @@ Canvasight is currently implemented as a repo-local Codex plugin under `plugins/
 Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasight`:
 
 - `npm run dev` starts the Vite web app.
+- `npm run daemon` manually starts the project-level Canvasight daemon for development/debugging.
+- `npm run daemon:stop` manually stops the project-level Canvasight daemon for development/debugging.
 - `npm run typecheck` runs TypeScript checks.
 - `npm run build` builds the web app into `dist/`.
 - `npm run preview` previews the built web app.
-- `npm run test:mcp` runs the MCP smoke test once implemented.
+- `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts.
 
 Plugin validation runs from the repo root:
 
