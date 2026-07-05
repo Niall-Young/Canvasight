@@ -32,11 +32,11 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 
 ## Agent Team Lifecycle
 
-- Start each major workstream from the fixed roster above. Do not create extra role names unless the user explicitly changes the roster.
-- Do not spawn standby subagents just to keep them idle. Spawn a role only when it has concrete work that can run in parallel or requires an independent review.
-- Reuse an existing live subagent for the same role when possible. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, or Project Management agent for the same unresolved workstream.
-- When a subagent is spawned, record its role, purpose, and agent id in the next `agent-reports/*-integration-summary.md`.
-- Close subagents after their assigned work is complete or no longer needed. If a historical subagent cannot be closed because its id is unavailable, state that in the integration summary instead of creating replacement agents.
+- Maintain eight persistent role subagents: Product, Design, Development, Test Supervisor, Customer Support, Design Standards Expert, Development Standards Lead, and Project Management.
+- Do not close these eight fixed subagents after a task finishes. Keep them available so the main thread can continue assigning follow-up work to the same role instance.
+- Reuse the fixed subagent for its role. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, or Project Management agent unless the user explicitly rebuilds the team again.
+- When the fixed roster is created or rebuilt, record each role, purpose, and agent id in the next `agent-reports/*-integration-summary.md`.
+- Historical extra subagents from earlier experiments should not receive new work. If their ids are unavailable, leave them alone and continue only with the fixed roster.
 - Role ownership still applies when the main thread performs a small change locally. In that case, the main thread must explicitly account for the relevant role's responsibility before final delivery.
 
 ## Agent Reports
