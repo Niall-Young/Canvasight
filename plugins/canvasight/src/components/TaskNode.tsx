@@ -1,15 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import type { EffortLevel, RunMode, ScatterNodeData } from "../../shared/types";
+import type { RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { shortcuts } from "../lib/shortcuts";
-import { effortLabelKey } from "../lib/translations";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
-import { DropdownMenu, DropdownMenuItem } from "./ui/dropdown-menu";
-import { DropdownTrigger } from "./ui/dropdown-trigger";
 import { IconButton } from "./ui/icon-button";
 import { Icon } from "./ui/icon";
 import { Switch } from "./ui/switch";
@@ -19,8 +16,6 @@ import { UploadChip } from "./ui/upload-chip";
 type TaskNodeProps = NodeProps<Node<ScatterNodeData, "task">>;
 type EditableField = "title" | "body";
 type ConnectedNodeSide = "left" | "right";
-
-const effortOptions: EffortLevel[] = ["low", "medium", "high", "xhigh"];
 
 function fitTextareaHeight(textarea: HTMLTextAreaElement | null): boolean {
   if (!textarea) return false;
@@ -65,14 +60,11 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   // Keep IME edits local until composition ends so store/autosave updates do not commit raw pinyin.
   const titleDraftRef = useRef(data.title);
   const bodyDraftRef = useRef(data.body);
-  const [effortMenuOpen, setEffortMenuOpen] = useState(false);
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [titleDraft, setTitleDraft] = useState(data.title);
   const [bodyDraft, setBodyDraft] = useState(data.body);
 
   const runMode = data.runMode || "flow";
-  const effort = data.effort || "xhigh";
-  const effortLabel = t(effortLabelKey(effort));
   const hasBody = bodyDraft.trim().length > 0;
   const hasParent = useScatterStore((state) =>
     state.edges.some((edge) => edge.target === id && state.nodes.some((node) => node.id === edge.source))
@@ -168,18 +160,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       bodyRef.current?.setSelectionRange(valueLength, valueLength);
     }
   }, [editingField]);
-
-  useEffect(() => {
-    if (!effortMenuOpen) return;
-
-    function handlePointerDown(event: PointerEvent): void {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
-      setEffortMenuOpen(false);
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [effortMenuOpen]);
 
   const handleEditablePointerDown = useCallback(() => {
     pointerStartedSelectedRef.current = selected;
@@ -463,33 +443,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             <IconButton className="nodrag" filled={false} icon="plus-lg" size="lg" aria-label={t("task.addAttachment")} onClick={() => taskNodeActions?.chooseFilesForNode(id)} />
           </TooltipAnchor>
           <div className="task-node-settings">
-            <div className="task-node-effort-picker">
-              <DropdownTrigger
-                className="nodrag"
-                label={effortLabel}
-                size="lg"
-                aria-haspopup="menu"
-                aria-expanded={effortMenuOpen}
-                onClick={() => setEffortMenuOpen((open) => !open)}
-              />
-              {effortMenuOpen ? (
-                <DropdownMenu className="task-node-effort-menu" role="menu">
-                  {effortOptions.map((option) => (
-                    <DropdownMenuItem
-                      key={option}
-                      label={t(effortLabelKey(option))}
-                      selected={option === effort}
-                      role="menuitemradio"
-                      aria-checked={option === effort}
-                      onClick={() => {
-                        taskNodeActions?.updateNodeData(id, { effort: option });
-                        setEffortMenuOpen(false);
-                      }}
-                    />
-                  ))}
-                </DropdownMenu>
-              ) : null}
-            </div>
             <Switch
               checked={data.planMode}
               label={t("task.planMode")}
