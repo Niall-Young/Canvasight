@@ -4,7 +4,6 @@ import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   defaultAppSettings,
   type AppSettings,
-  type AssistantProvider,
   type LanguagePreference,
   type ThemePreference
 } from "../../shared/types";
@@ -85,7 +84,6 @@ export function SettingsDialog({
   const [draftThemePreference, setDraftThemePreference] = useState(themePreference);
   const [draftLanguage, setDraftLanguage] = useState(language);
   const [draftTranslucentBackground, setDraftTranslucentBackground] = useState(translucentBackground);
-  const [draftAssistantProvider, setDraftAssistantProvider] = useState(assistantProvider);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const themeOptions: Array<SettingsOption<ThemePreference>> = [
@@ -97,28 +95,23 @@ export function SettingsDialog({
     { label: t("settings.language.zh"), value: "zh" },
     { label: t("settings.language.en"), value: "en" }
   ];
-  const assistantProviderOptions: Array<SettingsOption<AssistantProvider>> = [
-    { label: t("settings.assistantProvider.codex"), value: "codex" },
-    { label: t("settings.assistantProvider.claudeCli"), value: "claude-cli" }
-  ];
 
   useEffect(() => {
     setDraftThemePreference(themePreference);
     setDraftLanguage(language);
     setDraftTranslucentBackground(translucentBackground);
-    setDraftAssistantProvider(assistantProvider);
     setSaveError(null);
-  }, [assistantProvider, language, themePreference, translucentBackground]);
+  }, [language, themePreference, translucentBackground]);
 
   const saveValues = useMemo(
     () => ({
       themePreference: draftThemePreference,
       language: draftLanguage,
       translucentBackground: draftTranslucentBackground,
-      assistantProvider: draftAssistantProvider,
+      assistantProvider,
       assistantProviderOnboardingCompleted
     }),
-    [assistantProviderOnboardingCompleted, draftAssistantProvider, draftLanguage, draftThemePreference, draftTranslucentBackground]
+    [assistantProvider, assistantProviderOnboardingCompleted, draftLanguage, draftThemePreference, draftTranslucentBackground]
   );
 
   useEffect(() => {
@@ -160,15 +153,6 @@ export function SettingsDialog({
               <span className="settings-dialog-row-label">{t("settings.language")}</span>
               <SettingsSelect ariaLabel={t("settings.language")} options={languageOptions} value={draftLanguage} onChange={setDraftLanguage} />
             </div>
-            <div className="settings-dialog-row">
-              <span className="settings-dialog-row-label">{t("settings.assistantProvider")}</span>
-              <SettingsSelect
-                ariaLabel={t("settings.assistantProvider")}
-                options={assistantProviderOptions}
-                value={draftAssistantProvider}
-                onChange={setDraftAssistantProvider}
-              />
-            </div>
             {showTranslucentBackground ? (
               <div className="settings-dialog-row">
                 <span className="settings-dialog-row-label">{t("settings.translucentBackground")}</span>
@@ -188,7 +172,6 @@ export function SettingsDialog({
                   setDraftThemePreference(defaultAppSettings.themePreference);
                   setDraftLanguage(defaultAppSettings.language);
                   setDraftTranslucentBackground(defaultAppSettings.translucentBackground);
-                  setDraftAssistantProvider(defaultAppSettings.assistantProvider);
                 }}
               >
                 {t("settings.restoreDefaults")}
