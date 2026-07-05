@@ -17,6 +17,7 @@ const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
+const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,6 +62,25 @@ function normalizeRunMode(value) {
 
 function normalizeCodexMode(value, legacyPlanMode = false) {
   return VALID_CODEX_MODES.has(value) ? value : legacyPlanMode ? "plan" : "chat";
+}
+
+function optionalThreadId(threadId) {
+  if (typeof threadId !== "string" || !threadId.trim()) return null;
+  return threadId.trim();
+}
+
+function nativeCodexEnabled() {
+  const value = String(process.env.CANVASIGHT_CODEX_NATIVE || "").toLowerCase();
+  return value !== "0" && value !== "false" && value !== "off";
+}
+
+function nativeCodexTimeoutMs() {
+  return Math.max(500, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_TIMEOUT_MS), 5000), 30000));
+}
+
+function codexAppBin() {
+  if (process.env.CANVASIGHT_CODEX_BIN) return process.env.CANVASIGHT_CODEX_BIN;
+  return fs.existsSync(DEFAULT_CODEX_APP_BIN) ? DEFAULT_CODEX_APP_BIN : "codex";
 }
 
 function normalizeProjectPath(projectPath) {
@@ -303,13 +323,14 @@ function sessionId() {
   return `session-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-function createSession({ projectPath, language }) {
+function createSession({ projectPath, language, threadId }) {
   const id = sessionId();
   const resolvedProjectPath = optionalProjectPath(projectPath) || defaultProjectPath();
   const session = {
     id,
     projectPath: resolvedProjectPath,
     language: normalizeLanguage(language),
+    codexThreadId: optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID),
     createdAt: nowIso(),
     runQueue: [],
     waiters: []
@@ -320,6 +341,7 @@ function createSession({ projectPath, language }) {
 
 function sessionInfo(session) {
   return {
+    codexThreadId: session.codexThreadId,
     language: session.language,
     projectPath: session.projectPath,
     sessionId: session.id
@@ -344,6 +366,11 @@ function normalizeRunPayload(session, value) {
     markdown: typeof payload.markdown === "string" ? payload.markdown : "",
     imagePaths: Array.isArray(payload.imagePaths) ? payload.imagePaths.filter((item) => typeof item === "string") : [],
     codexMode,
+    codexNative: {
+      status: "pending",
+      threadId: session.codexThreadId,
+      mode: codexMode
+    },
     effort: normalizeEffort(payload.effort),
     planMode: codexMode === "plan",
     runMode: normalizeRunMode(payload.runMode),
@@ -357,8 +384,9 @@ function completeWaiter(waiter, payload) {
   waiter.resolve(payload);
 }
 
-function enqueueRun(session, payload) {
+async function enqueueRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
+  normalized.codexNative = await applyCodexNativeMode(session, normalized);
   const waiter = session.waiters.shift();
   if (waiter) {
     completeWaiter(waiter, normalized);
@@ -380,6 +408,11 @@ function waitForRun(sessionIdValue, timeoutMs) {
       markdown: "",
       imagePaths: [],
       codexMode: "chat",
+      codexNative: {
+        status: "not_applicable",
+        threadId: null,
+        mode: "chat"
+      },
       effort: "xhigh",
       planMode: false,
       runMode: "flow",
@@ -404,6 +437,11 @@ function waitForRun(sessionIdValue, timeoutMs) {
           markdown: "",
           imagePaths: [],
           codexMode: "chat",
+          codexNative: {
+            status: "not_applicable",
+            threadId: session.codexThreadId,
+            mode: "chat"
+          },
           effort: "xhigh",
           planMode: false,
           runMode: "flow",
@@ -429,6 +467,11 @@ function closeSession(sessionIdValue) {
       markdown: "",
       imagePaths: [],
       codexMode: "chat",
+      codexNative: {
+        status: "not_applicable",
+        threadId: session.codexThreadId,
+        mode: "chat"
+      },
       effort: "xhigh",
       planMode: false,
       runMode: "flow",
@@ -582,6 +625,200 @@ function openBrowser(url) {
   child.unref();
 }
 
+function appServerRequest(method, params, { experimentalApi = false } = {}) {
+  const bin = codexAppBin();
+  const timeoutMs = nativeCodexTimeoutMs();
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, ["app-server", "--stdio"], {
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let initialized = false;
+
+    const timer = setTimeout(() => {
+      finish(new Error(`Codex app-server request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    function finish(error, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill("SIGTERM");
+      if (error) {
+        reject(error);
+      } else {
+        resolve(value);
+      }
+    }
+
+    function send(message) {
+      child.stdin.write(`${JSON.stringify(message)}\n`);
+    }
+
+    function handleMessage(message) {
+      if (!isObject(message) || !Object.prototype.hasOwnProperty.call(message, "id")) return;
+      if (message.id === 1) {
+        if (message.error) {
+          finish(new Error(message.error.message || "Codex app-server initialize failed"));
+          return;
+        }
+        initialized = true;
+        send({
+          jsonrpc: "2.0",
+          id: 2,
+          method,
+          params
+        });
+        return;
+      }
+      if (message.id === 2) {
+        if (message.error) {
+          finish(new Error(message.error.message || `Codex app-server ${method} failed`));
+        } else {
+          finish(null, message.result || {});
+        }
+      }
+    }
+
+    function parseStdout() {
+      while (stdout.includes("\n")) {
+        const newline = stdout.indexOf("\n");
+        const line = stdout.slice(0, newline).trim();
+        stdout = stdout.slice(newline + 1);
+        if (!line) continue;
+        try {
+          handleMessage(JSON.parse(line));
+        } catch (error) {
+          finish(error);
+        }
+      }
+    }
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      parseStdout();
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", finish);
+    child.once("exit", (code, signal) => {
+      if (!settled && initialized) finish(new Error(`Codex app-server exited early: code=${code} signal=${signal} stderr=${stderr}`));
+    });
+
+    send({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        clientInfo: {
+          name: "canvasight",
+          version: SERVER_VERSION
+        },
+        capabilities: {
+          ...(experimentalApi ? { experimentalApi: true } : {})
+        }
+      }
+    });
+  });
+}
+
+function codexCollaborationMode(mode) {
+  return {
+    mode,
+    settings: {
+      model: null,
+      reasoning_effort: mode === "plan" ? "medium" : null,
+      developer_instructions: null
+    }
+  };
+}
+
+function goalObjectiveFromRun(payload) {
+  const heading = payload.threadName || "Canvasight Goal";
+  const projectLine = payload.projectPath ? `Project path: ${payload.projectPath}` : "";
+  const markdown = typeof payload.markdown === "string" ? payload.markdown.trim() : "";
+  return [heading, projectLine, markdown].filter(Boolean).join("\n\n").slice(0, 12000);
+}
+
+async function setCodexCollaborationMode(threadId, mode) {
+  return appServerRequest(
+    "thread/settings/update",
+    {
+      threadId,
+      collaborationMode: codexCollaborationMode(mode)
+    },
+    { experimentalApi: true }
+  );
+}
+
+async function setCodexGoal(threadId, payload) {
+  return appServerRequest(
+    "thread/goal/set",
+    {
+      threadId,
+      objective: goalObjectiveFromRun(payload),
+      status: "active",
+      tokenBudget: null
+    },
+    { experimentalApi: false }
+  );
+}
+
+async function applyCodexNativeMode(session, payload) {
+  if (!nativeCodexEnabled()) {
+    return {
+      status: "disabled",
+      threadId: session.codexThreadId,
+      mode: payload.codexMode
+    };
+  }
+
+  if (!session.codexThreadId) {
+    return {
+      status: "skipped",
+      reason: "missing CODEX_THREAD_ID",
+      threadId: null,
+      mode: payload.codexMode
+    };
+  }
+
+  try {
+    if (payload.codexMode === "goal") {
+      await setCodexGoal(session.codexThreadId, payload);
+      await setCodexCollaborationMode(session.codexThreadId, "default");
+      return {
+        status: "applied",
+        action: "thread/goal/set",
+        threadId: session.codexThreadId,
+        mode: payload.codexMode
+      };
+    }
+
+    const collaborationMode = payload.codexMode === "plan" ? "plan" : "default";
+    await setCodexCollaborationMode(session.codexThreadId, collaborationMode);
+    return {
+      status: "applied",
+      action: "thread/settings/update",
+      threadId: session.codexThreadId,
+      mode: payload.codexMode,
+      collaborationMode
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      error: error?.message || "Codex native mode request failed",
+      threadId: session.codexThreadId,
+      mode: payload.codexMode
+    };
+  }
+}
+
 function staticTarget(urlPath) {
   const decodedPath = decodeURIComponent(urlPath);
   const requested = decodedPath === "/" ? "/index.html" : decodedPath;
@@ -683,7 +920,7 @@ async function handleSessionApi(req, res, url) {
   if (action === "run") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
-    enqueueRun(session, body);
+    await enqueueRun(session, body);
     sendJson(res, 200, { status: "queued" });
     return true;
   }
@@ -771,7 +1008,8 @@ function toolResult(structuredContent, text = "") {
 async function toolOpenCanvasight(args) {
   const session = createSession({
     projectPath: typeof args?.projectPath === "string" && args.projectPath ? args.projectPath : null,
-    language: args?.language
+    language: args?.language,
+    threadId: args?.threadId
   });
   const openedProject = await openProject(session.projectPath);
   const server = await ensureHttpServer();
@@ -784,6 +1022,7 @@ async function toolOpenCanvasight(args) {
       url,
       origin: server.origin,
       projectPath: session.projectPath,
+      codexThreadId: session.codexThreadId,
       project: openedProject.project,
       language: session.language
     },
@@ -830,6 +1069,10 @@ const tools = [
           type: "string",
           enum: ["zh", "en"],
           description: "Optional UI and markdown language preference."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
         }
       },
       additionalProperties: false

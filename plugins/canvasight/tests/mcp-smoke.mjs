@@ -14,6 +14,58 @@ const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
+const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
+const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
+
+fs.writeFileSync(
+  fakeCodexPath,
+  `#!/usr/bin/env node
+import fs from "node:fs";
+
+const logPath = process.env.CANVASIGHT_NATIVE_LOG;
+let buffer = "";
+
+function write(message) {
+  process.stdout.write(JSON.stringify(message) + "\\n");
+}
+
+function append(method, params) {
+  if (!logPath) return;
+  fs.appendFileSync(logPath, JSON.stringify({ method, params }) + "\\n");
+}
+
+function handle(message) {
+  if (message.method === "initialize") {
+    write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
+    return;
+  }
+  append(message.method, message.params);
+  if (message.method === "thread/goal/set") {
+    write({ id: message.id, result: { goal: { threadId: message.params.threadId, objective: message.params.objective, status: "active", tokenBudget: null, tokensUsed: 0, timeUsedSeconds: 0, createdAt: 0, updatedAt: 0 } } });
+    return;
+  }
+  if (message.method === "thread/settings/update") {
+    write({ id: message.id, result: {} });
+    return;
+  }
+  write({ id: message.id, error: { code: -32601, message: "Method not found" } });
+}
+
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  while (buffer.includes("\\n")) {
+    const newline = buffer.indexOf("\\n");
+    const line = buffer.slice(0, newline).trim();
+    buffer = buffer.slice(newline + 1);
+    if (!line) continue;
+    handle(JSON.parse(line));
+  }
+});
+`,
+  "utf8"
+);
+fs.chmodSync(fakeCodexPath, 0o755);
 
 let nextId = 1;
 let stdoutBuffer = "";
@@ -25,7 +77,10 @@ const child = spawn(process.execPath, [serverPath], {
   env: {
     ...process.env,
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
-    CANVASIGHT_OPEN_BROWSER: "0"
+    CANVASIGHT_OPEN_BROWSER: "0",
+    CANVASIGHT_CODEX_BIN: fakeCodexPath,
+    CANVASIGHT_NATIVE_LOG: nativeLogPath,
+    CODEX_THREAD_ID: "thread-smoke"
   },
   stdio: ["pipe", "pipe", "pipe"]
 });
@@ -90,6 +145,19 @@ function notify(method, params) {
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
 }
 
+async function readNativeLog() {
+  try {
+    const raw = await fsp.readFile(nativeLogPath, "utf8");
+    return raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 async function fetchJson(url, init) {
   const response = await fetch(url, {
     ...init,
@@ -140,6 +208,7 @@ async function main() {
     assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
+      codexThreadId: "thread-smoke",
       language: "zh",
       projectPath: defaultProjectPath,
       sessionId: autoOpened.structuredContent.sessionId
@@ -161,11 +230,13 @@ async function main() {
     });
     assert.equal(opened.structuredContent.status, "opened");
     assert.equal(opened.structuredContent.projectPath, projectPath);
+    assert.equal(opened.structuredContent.codexThreadId, "thread-smoke");
 
     const sessionId = opened.structuredContent.sessionId;
     const origin = opened.structuredContent.origin;
     const session = await fetchJson(`${origin}/api/sessions/${sessionId}`);
     assert.deepEqual(session, {
+      codexThreadId: "thread-smoke",
       language: "en",
       projectPath,
       sessionId
@@ -267,8 +338,23 @@ async function main() {
     assert.equal(awaited.structuredContent.threadName, runPayload.threadName);
     assert.equal(awaited.structuredContent.codexMode, "goal");
     assert.equal(awaited.structuredContent.planMode, false);
+    assert.equal(awaited.structuredContent.codexNative.status, "applied");
+    assert.equal(awaited.structuredContent.codexNative.action, "thread/goal/set");
+    assert.equal(awaited.structuredContent.codexNative.threadId, "thread-smoke");
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
+
+    const goalNativeLog = await readNativeLog();
+    assert.equal(goalNativeLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
+    assert.equal(
+      goalNativeLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "default"
+      ),
+      true
+    );
 
     const waitForLegacyRun = request("tools/call", {
       name: "await_canvasight_run",
@@ -289,6 +375,20 @@ async function main() {
     const legacyAwaited = await waitForLegacyRun;
     assert.equal(legacyAwaited.structuredContent.codexMode, "plan");
     assert.equal(legacyAwaited.structuredContent.planMode, true);
+    assert.equal(legacyAwaited.structuredContent.codexNative.status, "applied");
+    assert.equal(legacyAwaited.structuredContent.codexNative.action, "thread/settings/update");
+    assert.equal(legacyAwaited.structuredContent.codexNative.collaborationMode, "plan");
+
+    const planNativeLog = await readNativeLog();
+    assert.equal(
+      planNativeLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "plan"
+      ),
+      true
+    );
 
     const closed = await request("tools/call", {
       name: "close_canvasight",
