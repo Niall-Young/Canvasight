@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.4";
+const SERVER_VERSION = "0.1.5";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -438,6 +438,36 @@ async function createNodeTemplate(input) {
   return template;
 }
 
+function normalizeTemplateQuery(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function templateSearchText(template) {
+  return normalizeTemplateQuery(`${template.title} ${template.body}`);
+}
+
+function templateMatchesQuery(template, query) {
+  const normalizedQuery = normalizeTemplateQuery(query);
+  if (!normalizedQuery) return true;
+  const searchText = templateSearchText(template);
+  return normalizedQuery.split(" ").filter(Boolean).every((token) => searchText.includes(token));
+}
+
+function normalizeTemplateListLimit(value) {
+  return Math.max(1, Math.min(Math.floor(toNumber(Number(value), 20)), MAX_NODE_TEMPLATES));
+}
+
+function findTemplateByQuery(templates, query) {
+  const normalizedQuery = normalizeTemplateQuery(query);
+  if (!normalizedQuery) return null;
+  const titleMatch = templates.find((template) => normalizeTemplateQuery(template.title) === normalizedQuery);
+  if (titleMatch) return titleMatch;
+  return templates.find((template) => templateMatchesQuery(template, normalizedQuery)) || null;
+}
+
 function normalizeDaemonState(value) {
   if (!isObject(value) || typeof value.origin !== "string" || !value.origin.startsWith("http://127.0.0.1:")) return null;
   return {
@@ -808,7 +838,39 @@ function normalizeGraphNodePosition(node, index, layout) {
   };
 }
 
-function normalizeGraphNode(value, index, layout, usedNodeIds) {
+function graphNodeTemplateRequest(value, data) {
+  const templateId = typeof value.templateId === "string" && value.templateId.trim() ? value.templateId.trim() : typeof data.templateId === "string" ? data.templateId.trim() : "";
+  const templateQuery =
+    typeof value.templateQuery === "string" && value.templateQuery.trim()
+      ? value.templateQuery.trim()
+      : typeof data.templateQuery === "string" && data.templateQuery.trim()
+        ? data.templateQuery.trim()
+        : typeof value.templateTitle === "string" && value.templateTitle.trim()
+          ? value.templateTitle.trim()
+          : typeof data.templateTitle === "string" && data.templateTitle.trim()
+            ? data.templateTitle.trim()
+            : "";
+  return { templateId, templateQuery };
+}
+
+function findTemplateForGraphNode(value, data, templates, index) {
+  if (!Array.isArray(templates) || templates.length === 0) return { template: null, match: "" };
+  const { templateId, templateQuery } = graphNodeTemplateRequest(value, data);
+  if (templateId) {
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) throw new HttpError(400, `nodes[${index}].templateId does not match a saved node template`);
+    return { template, match: "templateId" };
+  }
+  if (templateQuery) {
+    const template = findTemplateByQuery(templates, templateQuery);
+    return { template, match: template ? "templateQuery" : "" };
+  }
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : typeof data.title === "string" && data.title.trim() ? data.title.trim() : "";
+  const template = title ? templates.find((item) => normalizeTemplateQuery(item.title) === normalizeTemplateQuery(title)) : null;
+  return { template: template || null, match: template ? "title" : "" };
+}
+
+function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], reusedTemplates = []) {
   if (!isObject(value)) throw new HttpError(400, `nodes[${index}] must be an object`);
   const explicitId = typeof value.id === "string" && value.id.trim() ? value.id.trim() : "";
   const id = explicitId || generatedGraphId("node", index, usedNodeIds);
@@ -816,9 +878,27 @@ function normalizeGraphNode(value, index, layout, usedNodeIds) {
   usedNodeIds.add(id);
 
   const data = isObject(value.data) ? value.data : {};
+  const { template, match } = findTemplateForGraphNode(value, data, templates, index);
   const codexMode = normalizeCodexMode(value.codexMode || data.codexMode, Boolean(value.planMode ?? data.planMode));
   const width = optionalDimension(value.width);
   const height = optionalDimension(value.height);
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : typeof data.title === "string" && data.title.trim() ? data.title.trim() : template?.title || "";
+  const body = typeof value.body === "string" && value.body.trim() ? value.body : typeof data.body === "string" && data.body.trim() ? data.body : template?.body || "";
+  const attachments = Array.isArray(value.attachments)
+    ? value.attachments.map(normalizeAttachment)
+    : Array.isArray(data.attachments)
+      ? data.attachments.map(normalizeAttachment)
+      : template
+        ? template.attachments.map(normalizeAttachment)
+        : [];
+  if (template) {
+    reusedTemplates.push({
+      nodeId: id,
+      templateId: template.id,
+      templateTitle: template.title,
+      match
+    });
+  }
   return {
     id,
     type: "task",
@@ -827,13 +907,15 @@ function normalizeGraphNode(value, index, layout, usedNodeIds) {
     ...(height ? { height } : {}),
     data: {
       ...data,
-      title: typeof value.title === "string" ? value.title : typeof data.title === "string" ? data.title : "",
-      body: typeof value.body === "string" ? value.body : typeof data.body === "string" ? data.body : "",
-      attachments: Array.isArray(value.attachments)
-        ? value.attachments.map(normalizeAttachment)
-        : Array.isArray(data.attachments)
-          ? data.attachments.map(normalizeAttachment)
-          : [],
+      ...(template
+        ? {
+            templateId: template.id,
+            templateTitle: template.title
+          }
+        : {}),
+      title,
+      body,
+      attachments,
       codexMode,
       effort: normalizeEffort(value.effort || data.effort),
       planMode: codexMode === "plan",
@@ -879,7 +961,7 @@ function graphPageInputs(args) {
   ];
 }
 
-function buildScatterPageFromGraph(value, index, args) {
+function buildScatterPageFromGraph(value, index, args, templates = [], reusedTemplates = []) {
   const page = isObject(value) ? value : {};
   const now = nowIso();
   const graphType = normalizeGraphType(args?.graphType);
@@ -887,7 +969,7 @@ function buildScatterPageFromGraph(value, index, args) {
   const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
   if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
   const usedNodeIds = new Set();
-  const nodes = rawNodes.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds));
+  const nodes = rawNodes.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
   const nodeIds = new Set(nodes.map((node) => node.id));
   const usedEdgeIds = new Set();
   const usedTargetIds = new Set();
@@ -929,7 +1011,9 @@ function replaceActivePage(existingDocument, incomingPage) {
 async function writeScatterGraph(projectPath, args) {
   const mode = normalizeGraphWriteMode(args?.mode);
   const existingDocument = await readScatterDocument(projectPath);
-  const incomingPages = graphPageInputs(args).map((page, index) => buildScatterPageFromGraph(page, index, args));
+  const reusedTemplates = [];
+  const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
+  const incomingPages = graphPageInputs(args).map((page, index) => buildScatterPageFromGraph(page, index, args, templates, reusedTemplates));
   const now = nowIso();
   let pages;
   let activePageId;
@@ -971,7 +1055,7 @@ async function writeScatterGraph(projectPath, args) {
     updatedAt: document.updatedAt
   });
 
-  return document;
+  return { document, reusedTemplates };
 }
 
 async function openProject(projectPath) {
@@ -1948,9 +2032,29 @@ async function toolOpenCanvasightRecentProject(args) {
   });
 }
 
+async function toolListCanvasightNodeTemplates(args) {
+  const templates = await readNodeTemplates();
+  const query = typeof args?.query === "string" ? args.query : "";
+  const limit = normalizeTemplateListLimit(args?.limit);
+  const matchedTemplates = templates.filter((template) => templateMatchesQuery(template, query));
+  const limitedTemplates = matchedTemplates.slice(0, limit);
+  return toolResult(
+    {
+      status: "ok",
+      query,
+      count: limitedTemplates.length,
+      total: matchedTemplates.length,
+      templates: limitedTemplates
+    },
+    limitedTemplates.length
+      ? `Canvasight node templates: ${limitedTemplates.length}/${matchedTemplates.length}`
+      : "No Canvasight node templates matched."
+  );
+}
+
 async function toolWriteCanvasightGraph(args) {
   const projectPath = normalizeProjectPath(args?.projectPath || defaultProjectPath());
-  const document = await writeScatterGraph(projectPath, args || {});
+  const { document, reusedTemplates } = await writeScatterGraph(projectPath, args || {});
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
@@ -1960,7 +2064,8 @@ async function toolWriteCanvasightGraph(args) {
     `Graph type: ${graphType}`,
     `Active page: ${activePage.name} (${activePage.id})`,
     `Nodes: ${nodeIds.length}`,
-    `Edges: ${edgeIds.length}`
+    `Edges: ${edgeIds.length}`,
+    `Templates reused: ${reusedTemplates.length}`
   ].join("\n");
 
   return toolResult(
@@ -1974,6 +2079,7 @@ async function toolWriteCanvasightGraph(args) {
       activePageName: activePage.name,
       nodeIds,
       edgeIds,
+      reusedTemplates,
       document
     },
     summary
@@ -2104,9 +2210,29 @@ const tools = [
     }
   },
   {
+    name: "list_canvasight_node_templates",
+    description: "List saved global Canvasight node templates so AI graph generation can reuse existing user prompts and attachments.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Optional search text matched against template title and body."
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 200,
+          description: "Maximum number of templates to return. Defaults to 20."
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "write_canvasight_graph",
     description:
-      "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph.",
+      "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Can reuse saved global node templates through templateId or templateQuery.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2156,9 +2282,14 @@ const tools = [
           },
           additionalProperties: true
         },
+        reuseTemplates: {
+          type: "boolean",
+          description: "Whether to allow saved global node templates to be reused. Defaults to true."
+        },
         nodes: {
           type: "array",
-          description: "Single page node list. Each node accepts id, title, body, x/y or position, codexMode, runMode, effort, and attachments.",
+          description:
+            "Single page node list. Each node accepts id, title, body, x/y or position, codexMode, runMode, effort, attachments, templateId, and templateQuery. Use templateId after calling list_canvasight_node_templates when a saved template should provide title, body, and attachments.",
           items: { type: "object", additionalProperties: true }
         },
         edges: {
@@ -2232,6 +2363,7 @@ async function callTool(name, args) {
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
+  if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});

@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.4");
+    assert.equal(initialized.serverInfo.version, "0.1.5");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -300,6 +300,7 @@ async function main() {
     assert.equal(toolNames.has("open_canvasight"), true);
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
+    assert.equal(toolNames.has("list_canvasight_node_templates"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
@@ -328,7 +329,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.4");
+    assert.equal(autoHealth.serverVersion, "0.1.5");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -600,6 +601,78 @@ async function main() {
     const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(productScatterJson.pages.length, 4);
     assert.equal(productScatterJson.nodes[2].position.x, 920);
+
+    const templateAssetPath = path.join(tempRoot, "figma-color-template.md");
+    await fsp.writeFile(templateAssetPath, "# Figma color variable checklist\n", "utf8");
+    const graphTemplate = await fetchJson(`${origin}/api/templates`, {
+      method: "POST",
+      body: JSON.stringify({
+        template: {
+          title: "Figma color variable scaffold",
+          body: "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.",
+          attachments: [
+            {
+              id: "template-attachment-1",
+              kind: "file",
+              source: "upload",
+              originalName: "figma-color-template.md",
+              storedPath: templateAssetPath,
+              relativePath: "template-assets/figma-color-template.md",
+              fileUrl: "",
+              mime: "text/markdown",
+              size: 34,
+              createdAt: "2026-07-05T00:00:00.000Z"
+            }
+          ]
+        }
+      })
+    });
+
+    const listedTemplates = await request("tools/call", {
+      name: "list_canvasight_node_templates",
+      arguments: {
+        query: "Figma color",
+        limit: 5
+      }
+    });
+    assert.equal(listedTemplates.structuredContent.status, "ok");
+    assert.equal(listedTemplates.structuredContent.count, 1);
+    assert.equal(listedTemplates.structuredContent.templates[0].id, graphTemplate.id);
+
+    const templateGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        graphType: "software-product",
+        pageName: "Template Reuse",
+        nodes: [
+          {
+            id: "template-by-id",
+            templateId: graphTemplate.id,
+            codexMode: "goal"
+          },
+          {
+            id: "template-by-query",
+            templateQuery: "token hierarchy conflict",
+            title: "Template query reuse"
+          }
+        ],
+        edges: [{ id: "template-edge", source: "template-by-id", target: "template-by-query" }]
+      }
+    });
+    assert.equal(templateGraph.structuredContent.status, "written");
+    assert.equal(templateGraph.structuredContent.reusedTemplates.length, 2);
+    assert.deepEqual(
+      templateGraph.structuredContent.reusedTemplates.map((item) => item.match),
+      ["templateId", "templateQuery"]
+    );
+    const templateScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assert.equal(templateScatterJson.nodes[0].data.title, "Figma color variable scaffold");
+    assert.equal(templateScatterJson.nodes[0].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
+    assert.equal(templateScatterJson.nodes[0].data.attachments[0].originalName, "figma-color-template.md");
+    assert.equal(templateScatterJson.nodes[0].data.templateId, graphTemplate.id);
+    assert.equal(templateScatterJson.nodes[1].data.title, "Template query reuse");
+    assert.equal(templateScatterJson.nodes[1].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
 
     await assert.rejects(
       () =>

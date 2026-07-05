@@ -1,6 +1,6 @@
 ---
 name: canvasight-graph-writer
-description: Create or update Canvasight task nodes and edges with AI through write_canvasight_graph. Use when the user asks Codex to generate Canvasight nodes, write a Canvasight graph, turn product requirements into Canvasight structure, map an article into Canvasight nodes, analyze a codebase into a Canvasight graph, or create/update .scatter/scatter.json through the Canvasight plugin.
+description: Create or update Canvasight task nodes and edges with AI through write_canvasight_graph, including scanning and reusing saved global node templates. Use when the user asks Codex to generate Canvasight nodes, write a Canvasight graph, turn product requirements into Canvasight structure, map an article into Canvasight nodes, analyze a codebase into a Canvasight graph, reuse Canvasight node templates, or create/update .scatter/scatter.json through the Canvasight plugin.
 ---
 
 # Canvasight Graph Writer
@@ -11,14 +11,17 @@ Use this skill when Codex should create or update Canvasight nodes and connectio
 
 1. Classify the task structure and choose `graphType`.
 2. Choose `mode` from the user's write intent.
-3. Call `write_canvasight_graph` instead of hand-editing `.scatter/scatter.json`.
-4. Open or refresh Canvasight when the user wants to inspect the generated graph.
+3. Call `list_canvasight_node_templates`; reuse matching saved templates with `templateId` when they fit the requested graph.
+4. Call `write_canvasight_graph` instead of hand-editing `.scatter/scatter.json`.
+5. Open or refresh Canvasight when the user wants to inspect the generated graph.
 
 ## Core Rules
 
 - `graphType` controls node organization and default layout.
 - `mode` controls Page write behavior.
 - Do not let `graphType` decide whether a Page is created, selected, or replaced.
+- Saved node templates are global local user assets. Reuse them when they match the user's requested graph instead of recreating equivalent prompt nodes.
+- Template reuse does not control `graphType`, `mode`, Page behavior, or node Codex mode.
 - One node may connect to multiple downstream nodes.
 - Self-connections, duplicate `source -> target` edges, and multiple parent edges into the same target are invalid.
 

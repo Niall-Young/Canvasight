@@ -21,8 +21,16 @@ For each generated node, provide:
 - stable `id` values when edges need to reference them,
 - concise `title`,
 - actionable `body` prompt content,
+- optional `templateId` from `list_canvasight_node_templates` when a saved global node template should supply title, body, and attachments,
+- optional `templateQuery` only when no exact template id is known and a best-effort local template search is acceptable,
 - optional `codexMode`: `chat`, `plan`, or `goal`,
 - optional `x` / `y` or `position` when a specific layout is needed.
+
+## Template Reuse
+
+Before writing a graph, call `list_canvasight_node_templates` to inspect saved global templates. Prefer exact `templateId` reuse when a template fits the node's purpose. A reused template provides default title, body, and attachments; explicit node fields can still override the title or body for the current graph.
+
+Do not force a template into an unrelated node. If no saved template fits, generate a normal node.
 
 ## Edge Input
 

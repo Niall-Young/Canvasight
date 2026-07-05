@@ -4,6 +4,8 @@
 
 `graphType` is not a Page concept. It does not decide whether a Page is created, selected, appended, or replaced. `mode` remains the only Page write behavior control.
 
+Template reuse can fill node titles, bodies, and attachments, but it must not change the selected `graphType`.
+
 ## Supported Types
 
 - `software-product`
