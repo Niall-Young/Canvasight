@@ -503,6 +503,40 @@ async function main() {
     assert.equal(graphScatterJson.edges[0].source, "entry");
     assert.equal(graphScatterJson.edges[1].target, "store");
 
+    const fanOutGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        pageName: "Fan-out Requirements",
+        layout: "grid",
+        nodes: [
+          { id: "root", title: "Product goal", body: "Define the core product outcome." },
+          { id: "research", title: "Research", body: "Collect user and market constraints." },
+          { id: "design", title: "Design", body: "Turn constraints into interface structure." },
+          { id: "build", title: "Build", body: "Implement the selected product path." }
+        ],
+        edges: [
+          { id: "root-research", source: "root", target: "research" },
+          { id: "root-design", source: "root", target: "design" },
+          { id: "root-build", source: "root", target: "build" }
+        ]
+      }
+    });
+    assert.equal(fanOutGraph.structuredContent.status, "written");
+    assert.equal(fanOutGraph.structuredContent.activePageName, "Fan-out Requirements");
+    assert.deepEqual(fanOutGraph.structuredContent.nodeIds, ["root", "research", "design", "build"]);
+    assert.deepEqual(fanOutGraph.structuredContent.edgeIds, ["root-research", "root-design", "root-build"]);
+
+    const fanOutScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assert.equal(fanOutScatterJson.pages.length, 3);
+    assert.equal(fanOutScatterJson.nodes.length, 4);
+    assert.equal(fanOutScatterJson.edges.length, 3);
+    assert.equal(fanOutScatterJson.edges.every((edge) => edge.source === "root"), true);
+    assert.deepEqual(
+      fanOutScatterJson.edges.map((edge) => edge.target),
+      ["research", "design", "build"]
+    );
+
     await assert.rejects(
       () =>
         request("tools/call", {

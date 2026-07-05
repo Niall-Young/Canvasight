@@ -42,7 +42,7 @@ For each generated node, provide:
 
 For each generated edge, `source` and `target` must reference node ids in the same Page. Do not create edges that point to missing nodes.
 
-Generated edges must follow the same rules as manual canvas connections: no self-connections, no duplicate `source -> target` edges, and no more than one parent edge into the same target node.
+Generated edges must follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicate `source -> target` edges, and no more than one parent edge into the same target node.
 
 Use `layout: "horizontal"` for linear flows, `layout: "vertical"` for staged lists, and `layout: "grid"` for architecture or requirement maps when exact positions are not important.
 

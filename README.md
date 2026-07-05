@@ -51,7 +51,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - “把这份产品需求拆成 Canvasight 节点，按用户流程连接起来。”
 - “新增一个 Canvasight Page，包含调研、设计、开发、测试四个节点。”
 
-Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认追加一个新 Page，避免覆盖现有画布。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：不能自连、不能重复、一个节点不能有多个父节点。
+Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认追加一个新 Page，避免覆盖现有画布。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：支持一个节点连接多个下游节点，但不能自连、不能重复、一个节点不能有多个父节点。
 
 如果网页已经打开，外部写入后刷新页面或重新打开项目即可看到 AI 生成的 Page。AI 写入画布只是创建可编辑节点和连线，不会自动运行节点，也不会直接发送消息给 Codex；真正发送仍然通过点击 Run 后由 `await_canvasight_run` 接收。
 
@@ -224,7 +224,7 @@ When you want Codex to turn code architecture, product requirements, or an execu
 - “Break this product requirement into Canvasight nodes and connect them by user flow.”
 - “Add a Canvasight Page with research, design, development, and testing nodes.”
 
-Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project, defaults to appending a new Page, and validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: no self-connections, no duplicates, and no more than one parent edge into the same target node.
+Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project, defaults to appending a new Page, and validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicates, and no more than one parent edge into the same target node.
 
 If the web app is already open, refresh the page or reopen the project to see the externally generated Page. AI-generated canvas data only creates editable nodes and edges; it does not run nodes or send a message to Codex. Sending still happens through Run plus `await_canvasight_run`.
 
