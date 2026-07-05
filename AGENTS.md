@@ -33,10 +33,10 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 
 ## Agent Team Lifecycle
 
-- Maintain eight persistent role subagents: Product, Design, Development, Test Supervisor, Customer Support, Design Standards Expert, Development Standards Lead, and Project Management.
-- Do not close these eight fixed subagents after a task finishes. Keep them available so the main thread can continue assigning follow-up work to the same role instance.
-- Reuse the fixed subagent for its role. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, or Project Management agent unless the user explicitly rebuilds the team again.
-- When the fixed roster is created or rebuilt, record each role, purpose, and agent id in the next `agent-reports/*-integration-summary.md`.
+- Maintain nine persistent role subagents when tool limits allow it: Product, Design, Development, Test Supervisor, Customer Support, Design Standards Expert, Development Standards Lead, Project Management, and Skill Expert.
+- Do not close these fixed subagents after a task finishes. Keep them available so the main thread can continue assigning follow-up work to the same role instance.
+- Reuse the fixed subagent for its role. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, Project Management, or Skill Expert agent unless the user explicitly rebuilds the team again.
+- When the fixed roster is created or rebuilt, record each role, purpose, and agent id in the next `agent-reports/resolved/*-integration-summary.md`.
 - Historical extra subagents from earlier experiments should not receive new work. If their ids are unavailable, leave them alone and continue only with the fixed roster.
 - There is no "small change" exception. Every code, UI, document, command, build artifact, or workflow change must go through the fixed agent team responsibilities before final delivery.
 - If a required fixed subagent cannot be spawned or reused because of tool limits, record the limitation in the integration summary and have the main thread explicitly perform that role's checklist for the current delivery.
@@ -44,8 +44,32 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 ## Agent Reports
 
 - Use `/Users/niallyoung/Desktop/Canvasight/agent-reports/` for cross-agent Markdown communication and integration records.
-- For blockers or high-risk issues, write an issue report first, then hand it to the owning agent for a solution report before implementation.
-- For every integration round, write `YYYYMMDD-HHMM-integration-summary.md` with completed work, unresolved risks, role decisions, verification, and git status.
+- Treat `agent-reports/` as the file-system queue for the Agent Team. New reports must use one of these status folders:
+  - `agent-reports/open/` for newly discovered issues that are not yet accepted by an owner.
+  - `agent-reports/assigned/` for issues handed to a responsible Agent and waiting for analysis or implementation.
+  - `agent-reports/resolved/` for solution reports, completed integration summaries, and issues with a recorded fix.
+  - `agent-reports/archived/` for closed/no-action/legacy reports that should remain auditable but are not active.
+- Existing Markdown files directly under `agent-reports/` are legacy records. Do not move or rewrite them unless a current task needs that specific report.
+- Use `agent-reports/QUEUE.md` as the active queue index. Every new issue, assignment, solution, unresolved-risk note, or closure must update the queue in the same delivery.
+- Every new report must start with YAML frontmatter containing at least:
+  - `status`: `open`, `assigned`, `resolved`, or `archived`.
+  - `report_type`: `issue`, `solution`, or `integration-summary`.
+  - `owner`: responsible Agent role, or `main-thread` when the main thread owns it.
+  - `created_by`: submitting Agent role.
+  - `priority`: `low`, `medium`, `high`, or `critical`.
+  - `created_at`: local timestamp in `YYYY-MM-DD HH:mm` format.
+  - `updated_at`: local timestamp in `YYYY-MM-DD HH:mm` format.
+- Use `agent-reports/_templates/issue.md`, `agent-reports/_templates/solution.md`, and `agent-reports/_templates/integration-summary.md` as the required body structure for new reports.
+- For blockers or high-risk issues, create an issue report in `open/`, assign it by moving or writing it under `assigned/` and setting `status: assigned`, then hand it to the owning Agent for a solution report before implementation.
+- When an issue is resolved, the responsible Agent or main thread must write a solution report in `resolved/` and update the issue report with:
+  - `status: resolved`
+  - `solution_report: <relative path>`
+  - `处理结果`
+  - `修改文件`
+  - `验证方式`
+  - `后续风险`
+- For every integration round, write a `resolved/YYYYMMDD-HHMM-integration-summary.md` using the integration template. It must record completed work, unresolved risks, role decisions, verification, git status, and any report state changes.
+- A final delivery is not complete while an issue report relevant to the delivered scope remains `open` or `assigned` without an explicit unresolved-risk note in the integration summary.
 
 ## Implementation Standards
 
