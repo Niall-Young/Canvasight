@@ -1282,6 +1282,7 @@ function CanvasightWorkspace(): ReactElement {
                 panOnScroll
                 panOnScrollMode={PanOnScrollMode.Free}
                 selectionKeyCode={null}
+                selectionOnDrag={!panModeActive}
                 zoomActivationKeyCode="Meta"
                 zoomOnDoubleClick={false}
                 zoomOnPinch

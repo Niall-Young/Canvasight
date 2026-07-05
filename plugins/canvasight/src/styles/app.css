@@ -1631,10 +1631,6 @@ button.achievement-card.is-unlocked:focus-visible {
   display: none;
 }
 
-.canvas-shell:not(.is-shift-selecting) .react-flow__selection {
-  display: none !important;
-}
-
 .react-flow svg.react-flow__connectionline {
   z-index: 0;
 }
