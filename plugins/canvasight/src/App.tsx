@@ -23,16 +23,17 @@ import {
   type ReactFlowInstance
 } from "@xyflow/react";
 import { nanoid } from "nanoid";
-import type {
-  AttachmentInput,
-  CodexMode,
-  LanguagePreference,
-  RunMode,
-  ScatterDocument,
-  ScatterEdge,
-  ScatterNode,
-  ScatterNodeData,
-  ScatterProjectInfo
+import {
+  defaultAppSettings,
+  type AppSettings,
+  type AttachmentInput,
+  type CodexMode,
+  type RunMode,
+  type ScatterDocument,
+  type ScatterEdge,
+  type ScatterNode,
+  type ScatterNodeData,
+  type ScatterProjectInfo
 } from "../shared/types";
 import { canvasightApi } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
@@ -40,6 +41,7 @@ import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
 import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { TaskNode, setTaskNodeActions } from "./components/TaskNode";
 import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { Icon } from "./components/ui/icon";
@@ -61,6 +63,12 @@ const taskNodeVerticalGap = 72;
 const nodeConnectButtonSize = 20;
 const connectionPreviewEdgeId = "__canvasight-connection-preview__";
 const canvasClipboardMime = "application/x-canvasight-nodes";
+const appSettingsStorageKey = "canvasight.settings";
+const webDefaultAppSettings = {
+  ...defaultAppSettings,
+  themePreference: "light",
+  translucentBackground: false
+} satisfies AppSettings;
 const zoomOptions = [
   { label: "50%", value: 0.5 },
   { label: "75%", value: 0.75 },
@@ -91,6 +99,9 @@ type CanvasClipboardPayload = {
   nodes: ScatterNode[];
   edges: ScatterEdge[];
   copiedAt: string;
+};
+type CanvasightWorkspaceProps = {
+  onOpenSettings: () => void;
 };
 
 function connectionLineStartX(x: number, position: Position): number {
@@ -333,6 +344,48 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
+function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {
+  return {
+    ...webDefaultAppSettings,
+    ...(value ?? {}),
+    translucentBackground: false
+  };
+}
+
+function settingsEqual(left: AppSettings | null | undefined, right: AppSettings): boolean {
+  return Boolean(
+    left &&
+      left.themePreference === right.themePreference &&
+      left.language === right.language &&
+      left.translucentBackground === right.translucentBackground &&
+      left.assistantProvider === right.assistantProvider &&
+      left.assistantProviderOnboardingCompleted === right.assistantProviderOnboardingCompleted
+  );
+}
+
+function loadStoredAppSettings(): AppSettings | null {
+  try {
+    const raw = window.localStorage.getItem(appSettingsStorageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return normalizeAppSettings(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function hasStoredAppSettings(): boolean {
+  try {
+    return Boolean(window.localStorage.getItem(appSettingsStorageKey));
+  } catch {
+    return false;
+  }
+}
+
+function saveStoredAppSettings(settings: AppSettings): void {
+  window.localStorage.setItem(appSettingsStorageKey, JSON.stringify(settings));
+}
+
 function normalizeCodexMode(value: unknown, legacyPlanMode = false): CodexMode {
   return value === "chat" || value === "plan" || value === "goal" ? value : legacyPlanMode ? "plan" : "chat";
 }
@@ -548,7 +601,7 @@ function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | nul
   }
 }
 
-function CanvasightWorkspace(): ReactElement {
+function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
   const { language, t } = useI18n();
   const {
     appendAttachments,
@@ -704,8 +757,6 @@ function CanvasightWorkspace(): ReactElement {
   );
 
   useEffect(() => {
-    document.documentElement.dataset.theme = "light";
-    document.documentElement.dataset.translucent = "false";
     window.scatter = {
       showInFolder: (targetPath: string) => canvasightApi.showInFolder(targetPath)
     };
@@ -1562,6 +1613,9 @@ function CanvasightWorkspace(): ReactElement {
                 <TooltipAnchor label={t("canvas.redo")} shortcut={shortcuts.redo} side="right">
                   <IconButton className="canvas-tool-button" filled={false} icon="redo" size="lg" aria-label={t("canvas.redo")} disabled={!canRedo} onClick={redo} />
                 </TooltipAnchor>
+                <TooltipAnchor label={t("sidebar.settings")} side="right">
+                  <IconButton className="canvas-tool-button" filled={false} icon="settings-cog" size="lg" aria-label={t("sidebar.settings")} onClick={onOpenSettings} />
+                </TooltipAnchor>
               </div>
               <div className="canvas-toolbar" aria-label={t("canvas.tools")}>
                 <TooltipAnchor label={t("canvas.addNode")} shortcut={shortcuts.addNode}>
@@ -1672,17 +1726,74 @@ function CanvasightWorkspace(): ReactElement {
 }
 
 export default function App(): ReactElement {
-  const [language, setLanguage] = useState<LanguagePreference>("zh");
+  const [savedSettings, setSavedSettings] = useState<AppSettings>(() => loadStoredAppSettings() ?? webDefaultAppSettings);
+  const [previewSettings, setPreviewSettings] = useState<AppSettings | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
+  const hasStoredSettingsRef = useRef(hasStoredAppSettings());
+  const activeSettings = previewSettings ?? savedSettings;
+  const resolvedTheme = activeSettings.themePreference === "system" ? systemTheme : activeSettings.themePreference;
 
   useEffect(() => {
-    canvasightApi.getSession().then((session) => setLanguage(session.language)).catch(() => undefined);
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = () => setSystemTheme(mediaQuery.matches ? "dark" : "light");
+    updateSystemTheme();
+    mediaQuery.addEventListener("change", updateSystemTheme);
+    return () => mediaQuery.removeEventListener("change", updateSystemTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.translucent = "false";
+  }, [resolvedTheme]);
+
+  useEffect(() => {
+    if (hasStoredSettingsRef.current) return;
+    canvasightApi
+      .getSession()
+      .then((session) =>
+        setSavedSettings((current) => {
+          const next = normalizeAppSettings({ ...current, language: session.language });
+          return settingsEqual(current, next) ? current : next;
+        })
+      )
+      .catch(() => undefined);
+  }, []);
+
+  const previewAppSettings = useCallback((values: AppSettings) => {
+    const next = normalizeAppSettings(values);
+    setPreviewSettings((current) => (settingsEqual(current, next) ? current : next));
+  }, []);
+
+  const saveAppSettings = useCallback(async (values: AppSettings) => {
+    const next = normalizeAppSettings(values);
+    setSavedSettings(next);
+    setPreviewSettings(null);
+    saveStoredAppSettings(next);
+  }, []);
+
+  const handleSettingsOpenChange = useCallback((open: boolean) => {
+    setSettingsOpen(open);
+    if (!open) setPreviewSettings(null);
   }, []);
 
   return (
-    <I18nProvider language={language}>
+    <I18nProvider language={activeSettings.language}>
       <ReactFlowProvider>
-        <CanvasightWorkspace />
+        <CanvasightWorkspace onOpenSettings={() => setSettingsOpen(true)} />
       </ReactFlowProvider>
+      <SettingsDialog
+        assistantProvider={activeSettings.assistantProvider}
+        assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
+        language={activeSettings.language}
+        open={settingsOpen}
+        showTranslucentBackground={false}
+        themePreference={activeSettings.themePreference}
+        translucentBackground={false}
+        onOpenChange={handleSettingsOpenChange}
+        onPreview={previewAppSettings}
+        onSave={saveAppSettings}
+      />
     </I18nProvider>
   );
 }
