@@ -98,6 +98,9 @@ Canvasight should use a restrained, professional interface:
 - Side panels should use fixed or constrained widths with responsive collapse behavior.
 - Controls should not resize the canvas unexpectedly.
 - Use stable dimensions for boards, tiles, icon buttons, and repeated objects so hover and loading states do not cause layout shift.
+- Text inside compact controls, triggers, segmented controls, and toolbar buttons must not push icons or affordances out of alignment. Reserve fixed space for leading and trailing icons, and truncate long labels with ellipsis.
+- Page, workspace, and record switchers should have a stable width contract: long names use single-line truncation, while icons, chevrons, add buttons, and overflow buttons keep their fixed size and position.
+- Compact triggers must use `min-width: 0` on the text region and non-shrinking icon slots so localized strings and renamed pages cannot distort the control.
 
 ## Typography
 
@@ -148,6 +151,7 @@ Desktop is the primary workspace target. Smaller screens should preserve core re
 - Keep the active object visible when panels open.
 - Move dense property controls into drawers or tabs on narrow screens.
 - Keep toolbar actions reachable without wrapping into unstable rows.
+- On narrow or constrained widths, preserve command affordances before showing full labels. Labels may truncate, but icons and click targets must remain visible and usable.
 
 ## Naming And Tone
 

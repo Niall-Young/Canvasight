@@ -1885,7 +1885,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
                     <RadixDropdownMenu.Trigger asChild>
                       <button className="canvas-page-trigger" type="button" aria-label={t("page.switch")}>
                         <Icon name="stack" size={16} />
-                        <span>{activePage?.name ?? t("page.untitled")}</span>
+                        <span className="canvas-page-trigger-label">{activePage?.name ?? t("page.untitled")}</span>
                         <Icon name="chevron-down" size={16} />
                       </button>
                     </RadixDropdownMenu.Trigger>

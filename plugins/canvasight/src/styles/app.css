@@ -1880,7 +1880,13 @@ button.achievement-card.is-unlocked:focus-visible {
   background: var(--color-interaction);
 }
 
-.canvas-page-trigger span {
+.canvas-page-trigger > .app-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.canvas-page-trigger-label {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
