@@ -292,7 +292,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.2");
+    assert.equal(initialized.serverInfo.version, "0.1.3");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -303,6 +303,14 @@ async function main() {
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
+    const writeGraphTool = listed.tools.find((tool) => tool.name === "write_canvasight_graph");
+    assert.deepEqual(writeGraphTool.inputSchema.properties.graphType.enum, [
+      "software-product",
+      "article-outline",
+      "codebase-structure",
+      "task-plan",
+      "general"
+    ]);
 
     const autoOpened = await request("tools/call", {
       name: "open_canvasight",
@@ -320,7 +328,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.2");
+    assert.equal(autoHealth.serverVersion, "0.1.3");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -445,8 +453,8 @@ async function main() {
       name: "write_canvasight_graph",
       arguments: {
         projectPath,
+        graphType: "codebase-structure",
         pageName: "Code Architecture",
-        layout: "grid",
         nodes: [
           {
             id: "entry",
@@ -485,6 +493,7 @@ async function main() {
     });
     assert.equal(graphWritten.structuredContent.status, "written");
     assert.equal(graphWritten.structuredContent.projectPath, projectPath);
+    assert.equal(graphWritten.structuredContent.graphType, "codebase-structure");
     assert.equal(graphWritten.structuredContent.activePageName, "Code Architecture");
     assert.deepEqual(graphWritten.structuredContent.nodeIds, ["entry", "api", "store"]);
     assert.deepEqual(graphWritten.structuredContent.edgeIds, ["entry-api", "api-store"]);
@@ -503,10 +512,35 @@ async function main() {
     assert.equal(graphScatterJson.edges[0].source, "entry");
     assert.equal(graphScatterJson.edges[1].target, "store");
 
+    const articleReplace = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        mode: "replace-active-page",
+        graphType: "article-outline",
+        pageName: "Article Outline",
+        nodes: [
+          { id: "thesis", title: "Thesis", body: "Capture the article's central claim." },
+          { id: "evidence", title: "Evidence", body: "Track the strongest supporting section." }
+        ],
+        edges: [{ id: "thesis-evidence", source: "thesis", target: "evidence" }]
+      }
+    });
+    assert.equal(articleReplace.structuredContent.status, "written");
+    assert.equal(articleReplace.structuredContent.graphType, "article-outline");
+    assert.equal(articleReplace.structuredContent.activePageId, graphWritten.structuredContent.activePageId);
+    const articleScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assert.equal(articleScatterJson.pages.length, 2);
+    assert.equal(articleScatterJson.activePageId, graphWritten.structuredContent.activePageId);
+    assert.equal(articleScatterJson.nodes.length, 2);
+    assert.equal(articleScatterJson.nodes[0].position.y, 0);
+    assert.equal(articleScatterJson.nodes[1].position.y, 260);
+
     const fanOutGraph = await request("tools/call", {
       name: "write_canvasight_graph",
       arguments: {
         projectPath,
+        graphType: "task-plan",
         pageName: "Fan-out Requirements",
         layout: "grid",
         nodes: [
@@ -523,6 +557,7 @@ async function main() {
       }
     });
     assert.equal(fanOutGraph.structuredContent.status, "written");
+    assert.equal(fanOutGraph.structuredContent.graphType, "task-plan");
     assert.equal(fanOutGraph.structuredContent.activePageName, "Fan-out Requirements");
     assert.deepEqual(fanOutGraph.structuredContent.nodeIds, ["root", "research", "design", "build"]);
     assert.deepEqual(fanOutGraph.structuredContent.edgeIds, ["root-research", "root-design", "root-build"]);
@@ -536,6 +571,35 @@ async function main() {
       fanOutScatterJson.edges.map((edge) => edge.target),
       ["research", "design", "build"]
     );
+
+    const productGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        graphType: "software-product",
+        pageName: "Product Build Breakdown",
+        nodes: [
+          { id: "product-goal", title: "Product goal", body: "Define the user outcome and success boundary." },
+          { id: "project-docs", title: "Project guidance", body: "Check AGENTS.md and design.md; create completion nodes if they are missing or incomplete." },
+          { id: "feature-scope", title: "Feature scope", body: "Separate required behavior, non-goals, and edge cases." },
+          { id: "design-style", title: "Design style", body: "Define layout, interaction, density, and visual language requirements." },
+          { id: "technical-plan", title: "Technical plan", body: "Map implementation modules, data contracts, persistence, and verification." }
+        ],
+        edges: [
+          { id: "goal-docs", source: "product-goal", target: "project-docs" },
+          { id: "goal-scope", source: "product-goal", target: "feature-scope" },
+          { id: "goal-design", source: "product-goal", target: "design-style" },
+          { id: "goal-tech", source: "product-goal", target: "technical-plan" }
+        ]
+      }
+    });
+    assert.equal(productGraph.structuredContent.status, "written");
+    assert.equal(productGraph.structuredContent.graphType, "software-product");
+    assert.deepEqual(productGraph.structuredContent.nodeIds, ["product-goal", "project-docs", "feature-scope", "design-style", "technical-plan"]);
+    assert.deepEqual(productGraph.structuredContent.edgeIds, ["goal-docs", "goal-scope", "goal-design", "goal-tech"]);
+    const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assert.equal(productScatterJson.pages.length, 4);
+    assert.equal(productScatterJson.nodes[2].position.x, 920);
 
     await assert.rejects(
       () =>

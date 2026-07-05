@@ -26,7 +26,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - **项目 Page**：一个项目下可以有多个相互隔离的画布工作区。
 - **附件**：支持上传、拖拽和粘贴图片到节点。
 - **Markdown 预览**：把当前节点或下游流程转换成可发送给 Codex 的 Markdown。
-- **AI 生成画布**：Codex 可以通过 `write_canvasight_graph` 写入 `.scatter/scatter.json`，创建新 Page、节点和连线。
+- **AI 生成画布**：Codex 可以通过 `write_canvasight_graph` 写入 `.scatter/scatter.json`，按不同任务类型组织节点和连线。
 - **全局节点模板**：从节点菜单把非空提示词和附件保存为本机全局模板，打开模板抽屉后可搜索并拖拽到当前画布。
 - **Codex 原生模式**：节点可选择 Chat、Plan 或 Goal。
 - **项目级 daemon**：本地网页服务独立于打开它的 Codex thread，归档旧 thread 不会直接关闭画布服务。
@@ -45,13 +45,22 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 
 ### AI 直接创建画布
 
-当你希望 Codex 把代码架构、产品需求或执行计划变成 Canvasight 画布时，可以直接提出类似请求：
+当你希望 Codex 把代码架构、产品需求、文章脉络或执行计划变成 Canvasight 画布时，可以直接提出类似请求：
 
 - “分析这个代码项目的架构，并生成一个 Canvasight 架构图页面。”
 - “把这份产品需求拆成 Canvasight 节点，按用户流程连接起来。”
+- “按这篇文章的脉络生成阅读梳理节点。”
 - “新增一个 Canvasight Page，包含调研、设计、开发、测试四个节点。”
 
-Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认追加一个新 Page，避免覆盖现有画布。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：支持一个节点连接多个下游节点，但不能自连、不能重复、一个节点不能有多个父节点。
+Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认写入模式是 `append-page`，用于避免覆盖现有画布；这只是安全默认值，不是任务分类规则。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：支持一个节点连接多个下游节点，但不能自连、不能重复、一个节点不能有多个父节点。
+
+AI 生成时可以使用 `graphType` 选择节点组织策略，但分类只影响节点标题、提示词、连线结构和默认布局，不决定是否创建、切换或替换 Page：
+
+- `software-product`：适合开发产品、功能或插件。应检查项目里是否已有 `AGENTS.md` 和 `design.md`，没有或缺内容时要生成补齐这些文档的节点，同时梳理产品目标、功能边界、设计样式、技术方案、验证方式。
+- `article-outline`：适合阅读文章、报告或论文。节点应跟随原文脉络，包括核心观点、章节结构、论据、案例、结论和疑问，不套用产品开发模板。
+- `codebase-structure`：适合梳理代码库。节点应跟随实际目录、入口命令、核心模块、数据流、外部接口、风险区域和验证方式，不编造没有读到的模块。
+- `task-plan`：适合 bug 修复、迁移、执行计划或测试计划。
+- `general`：适合混合或信息不足的请求。
 
 如果网页已经打开，外部写入后刷新页面或重新打开项目即可看到 AI 生成的 Page。AI 写入画布只是创建可编辑节点和连线，不会自动运行节点，也不会直接发送消息给 Codex；真正发送仍然通过点击 Run 后由 `await_canvasight_run` 接收。
 
@@ -66,7 +75,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.2` 或更高版本。如果仍是 `0.1.0` 或 `0.1.1`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.3` 或更高版本。如果仍是 `0.1.0`、`0.1.1` 或 `0.1.2`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### MCP Tools
 
@@ -79,7 +88,7 @@ codex plugin add canvasight@canvasight-local
 
 `open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
 
-`write_canvasight_graph` 让 Codex/AI 直接创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线。默认模式是 `append-page`，适合生成“代码架构”“需求拆解”“执行计划”等独立画布。只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。
+`write_canvasight_graph` 让 Codex/AI 直接创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线。`mode` 决定 Page 写入行为，`graphType` 决定任务节点结构。默认模式是 `append-page`，适合在未明确要求覆盖时保护现有画布；只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。
 
 ### 数据存储
 
@@ -199,7 +208,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - **Project Pages**: keep multiple isolated canvas workspaces inside one project.
 - **Attachments**: upload, drag, or paste images and files into nodes.
 - **Markdown preview**: convert the current node or downstream flow into Markdown for Codex.
-- **AI-generated canvas**: Codex can call `write_canvasight_graph` to write `.scatter/scatter.json` and create new Pages, nodes, and edges.
+- **AI-generated canvas**: Codex can call `write_canvasight_graph` to write `.scatter/scatter.json` and organize nodes and edges for different task types.
 - **Global node templates**: save non-empty node prompts and attachments from the node menu, search them in the template drawer, and drag them into the current canvas.
 - **Native Codex modes**: choose Chat, Plan, or Goal per node.
 - **Project-level daemon**: the local web service is independent from the Codex thread that opened it, so archiving that thread does not directly stop the canvas service.
@@ -218,13 +227,22 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 
 ### AI-Generated Canvas Data
 
-When you want Codex to turn code architecture, product requirements, or an execution plan into a Canvasight canvas, ask for it directly:
+When you want Codex to turn code architecture, product requirements, an article outline, or an execution plan into a Canvasight canvas, ask for it directly:
 
 - “Analyze this codebase architecture and generate a Canvasight architecture page.”
 - “Break this product requirement into Canvasight nodes and connect them by user flow.”
+- “Generate reading-outline nodes that follow this article's structure.”
 - “Add a Canvasight Page with research, design, development, and testing nodes.”
 
-Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project, defaults to appending a new Page, and validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicates, and no more than one parent edge into the same target node.
+Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project and defaults to `mode: "append-page"` to avoid overwriting existing canvas content; this is a safe write default, not a task classification rule. It validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicates, and no more than one parent edge into the same target node.
+
+AI generation can use `graphType` to choose a node organization strategy, but classification only affects node titles, prompt bodies, edge structure, and default layout. It does not decide whether a Page is created, switched, or replaced:
+
+- `software-product`: for building products, features, tools, or plugins. It should check whether `AGENTS.md` and `design.md` already exist in the project and create nodes to draft or complete them when they are missing or incomplete, then cover product goals, scope boundaries, design style, technical approach, and verification.
+- `article-outline`: for reading articles, reports, or papers. Nodes should follow the source structure: thesis, sections, arguments, evidence, examples, conclusion, and questions instead of forcing a product-development template.
+- `codebase-structure`: for inspecting repositories. Nodes should follow the actual directory structure, entry commands, core modules, data flow, external interfaces, risk areas, and verification paths without inventing uninspected modules.
+- `task-plan`: for bug fixes, migrations, execution plans, or test plans.
+- `general`: for mixed or underspecified requests.
 
 If the web app is already open, refresh the page or reopen the project to see the externally generated Page. AI-generated canvas data only creates editable nodes and edges; it does not run nodes or send a message to Codex. Sending still happens through Run plus `await_canvasight_run`.
 
@@ -239,7 +257,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.2` or newer. If it still shows `0.1.0` or `0.1.1`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.3` or newer. If it still shows `0.1.0`, `0.1.1`, or `0.1.2`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### MCP Tools
 
@@ -252,7 +270,7 @@ After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-loca
 
 `open_canvasight` remembers opened projects and starts or reuses the project-level daemon. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
 
-`write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json`. Its default mode is `append-page`, which is intended for standalone “code architecture”, “requirements breakdown”, or “execution plan” canvases. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit.
+`write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json`. `mode` controls Page write behavior, while `graphType` controls the task node structure. Its default mode is `append-page`, which protects existing canvas content when replacement was not explicitly requested. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit.
 
 ### Data Storage
 

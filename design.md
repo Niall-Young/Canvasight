@@ -131,8 +131,36 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
 - AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
 - AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction.
-- AI output should prefer creating a new Page for each architecture map, requirement breakdown, or task plan so existing user pages are not overwritten.
+- AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
 - AI-generated content must remain fully editable by the user.
+
+## AI-Generated Task Structure
+
+AI-generated canvas content may use scenario classification as a generation strategy, but classification should shape the task structure, not become visible navigation architecture by default.
+
+- AI classification is used to decide what nodes, edges, labels, and prompt structure to generate.
+- Classification should not require creating one Page per category.
+- Generated nodes should reflect the work structure through clear titles, concise prompts, and meaningful connections.
+- Classification metadata should remain optional and implementation-facing unless it improves user understanding.
+- Users should experience the result as a normal editable canvas, not as a taxonomy dashboard.
+
+Common generation strategies:
+
+- Product or feature development: include product goals, user workflows, scope boundaries, design style, technical architecture, verification, and missing project guidance such as `AGENTS.md` or `design.md` when relevant.
+- Article or document reading: follow the source structure, including thesis, sections, arguments, evidence, conclusion, and questions.
+- Codebase inspection: follow the real repository structure, including entry commands, directories, core modules, data flow, interfaces, risks, and verification paths.
+- Task planning: organize objective, evidence, constraints, steps, blockers, verification, and delivery.
+
+## Page Model
+
+Pages are independent canvas workspaces inside a project. A Page is a user-controlled workspace boundary, not an AI scenario category.
+
+- Users may create Pages for separate workflows, experiments, versions, branches, topics, or temporary drafts.
+- AI may create, select, or update Pages only when the write mode or explicit user request calls for it.
+- One Page may contain multiple task scenarios when the user's workflow calls for it.
+- One task scenario may span multiple Pages when the user intentionally separates it.
+- Page names should describe the user's workspace intent, not automatically mirror hidden AI classification.
+- Switching Pages should preserve each Page's own nodes, edges, viewport, selection, and local editing context.
 
 ## Canvas File Protocol
 

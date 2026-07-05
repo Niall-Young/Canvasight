@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.2";
+const SERVER_VERSION = "0.1.3";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -20,6 +20,7 @@ const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
+const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codebase-structure", "task-plan", "general"]);
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
@@ -76,6 +77,16 @@ function normalizeGraphWriteMode(value) {
 
 function normalizeGraphLayout(value) {
   return VALID_GRAPH_LAYOUTS.has(value) ? value : "horizontal";
+}
+
+function normalizeGraphType(value) {
+  return VALID_GRAPH_TYPES.has(value) ? value : "general";
+}
+
+function defaultGraphLayoutForType(graphType) {
+  if (graphType === "article-outline") return "vertical";
+  if (graphType === "software-product" || graphType === "codebase-structure") return "grid";
+  return "horizontal";
 }
 
 function normalizeCodexMode(value, legacyPlanMode = false) {
@@ -871,7 +882,8 @@ function graphPageInputs(args) {
 function buildScatterPageFromGraph(value, index, args) {
   const page = isObject(value) ? value : {};
   const now = nowIso();
-  const layout = normalizeGraphLayout(page.layout || args?.layout);
+  const graphType = normalizeGraphType(args?.graphType);
+  const layout = normalizeGraphLayout(page.layout || args?.layout || defaultGraphLayoutForType(graphType));
   const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
   if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
   const usedNodeIds = new Set();
@@ -1942,8 +1954,10 @@ async function toolWriteCanvasightGraph(args) {
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
+  const graphType = normalizeGraphType(args?.graphType);
   const summary = [
     `Canvasight graph written: ${scatterPath(projectPath)}`,
+    `Graph type: ${graphType}`,
     `Active page: ${activePage.name} (${activePage.id})`,
     `Nodes: ${nodeIds.length}`,
     `Edges: ${edgeIds.length}`
@@ -1955,6 +1969,7 @@ async function toolWriteCanvasightGraph(args) {
       projectPath,
       scatterPath: scatterPath(projectPath),
       mode: normalizeGraphWriteMode(args?.mode),
+      graphType,
       activePageId: activePage.id,
       activePageName: activePage.name,
       nodeIds,
@@ -2107,6 +2122,12 @@ const tools = [
           type: "string",
           enum: ["append-page", "replace-active-page", "replace-document"],
           description: "Write behavior. Defaults to append-page so AI output does not overwrite existing pages."
+        },
+        graphType: {
+          type: "string",
+          enum: ["software-product", "article-outline", "codebase-structure", "task-plan", "general"],
+          description:
+            "Task generation strategy metadata. It affects how AI should organize nodes and default layout, but does not decide page creation or replacement."
         },
         pageId: {
           type: "string",
