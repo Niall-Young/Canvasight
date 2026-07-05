@@ -504,6 +504,13 @@ button {
   background: rgba(18, 18, 23, 0.18);
 }
 
+.confirm-dialog-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: rgba(18, 18, 23, 0.24);
+}
+
 .settings-dialog-content {
   position: fixed;
   z-index: 60;
@@ -523,7 +530,29 @@ button {
   transform: translate(-50%, -50%);
 }
 
+.confirm-dialog-content {
+  position: fixed;
+  z-index: 90;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  flex-direction: column;
+  overflow: clip;
+  color: var(--color-text);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-xl);
+  background: var(--color-background-raised);
+  box-shadow: var(--shadow-popover);
+  transform: translate(-50%, -50%);
+}
+
 .settings-dialog-content:focus-visible {
+  outline: none;
+}
+
+.confirm-dialog-content:focus-visible {
   outline: none;
 }
 
@@ -534,6 +563,15 @@ button {
   align-items: center;
   gap: 12px;
   padding: 20px;
+}
+
+.confirm-dialog-header {
+  display: flex;
+  width: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 12px;
 }
 
 .settings-dialog-title {
@@ -549,8 +587,43 @@ button {
   white-space: nowrap;
 }
 
+.confirm-dialog-title {
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-16);
+  line-height: var(--line-16);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-dialog-close {
   flex: 0 0 auto;
+}
+
+.confirm-dialog-close {
+  flex: 0 0 auto;
+}
+
+.confirm-dialog-description {
+  margin: 0;
+  padding: 0 20px 16px;
+  color: var(--color-text-subtle);
+  font-size: var(--text-14);
+  line-height: 1.5;
+}
+
+.confirm-dialog-footer {
+  display: flex;
+  width: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px 20px;
 }
 
 .settings-dialog-body {

@@ -112,7 +112,12 @@ Canvasight should use a restrained, professional interface:
 - Icon buttons should use recognizable icons and include tooltips for less common actions.
 - Selection should be visually obvious without hiding the content.
 - Contextual actions should appear near the object or in the inspector, not both unless there is a strong reason.
-- Destructive actions require confirmation or an easy undo path.
+- Destructive actions require either an app-local confirmation dialog or an immediate undo path.
+- Do not use native browser `alert`, `confirm`, or `prompt` for product workflows. Canvasight confirmations must use the app dialog system so visual style, localization, focus behavior, and keyboard handling stay consistent.
+- Destructive dialogs must be modal: show an overlay, keep the background inert, trap focus inside the dialog, and return focus to the triggering control after closing.
+- Backdrop clicks must not dismiss destructive confirmation dialogs. Users should explicitly choose Cancel, Close, or the destructive action.
+- Dialog copy must name the affected object and the consequence. For page deletion, mention that nodes and connections in that page will be deleted.
+- Destructive action buttons should use the destructive visual style; Cancel should remain visually available and safe as the non-destructive escape.
 - Dragging, resizing, zooming, and panning should feel stable and should not conflict with text selection or form input.
 - Inline name or title editing should commit when focus leaves or the user clicks outside the input. `Enter` commits and `Escape` cancels.
 
@@ -124,6 +129,7 @@ Every primary surface should define:
 - Loading state: compact and non-disruptive.
 - Error state: clear cause, recovery action, and preserved user input where possible.
 - Disabled state: visible reason when the reason is not obvious.
+- Confirmation dialogs should preserve user context: opening or closing a dialog must not change selection, canvas position, drawer state, or current page unless the confirmed action itself requires it.
 - Offline or unsaved state if persistence is added.
 
 ## Accessibility

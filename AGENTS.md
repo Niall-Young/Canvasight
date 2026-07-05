@@ -37,7 +37,8 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Reuse the fixed subagent for its role. Do not create a second Product, Design, Development, Test, Customer Support, Design Standards, Development Standards, or Project Management agent unless the user explicitly rebuilds the team again.
 - When the fixed roster is created or rebuilt, record each role, purpose, and agent id in the next `agent-reports/*-integration-summary.md`.
 - Historical extra subagents from earlier experiments should not receive new work. If their ids are unavailable, leave them alone and continue only with the fixed roster.
-- Role ownership still applies when the main thread performs a small change locally. In that case, the main thread must explicitly account for the relevant role's responsibility before final delivery.
+- There is no "small change" exception. Every code, UI, document, command, build artifact, or workflow change must go through the fixed agent team responsibilities before final delivery.
+- If a required fixed subagent cannot be spawned or reused because of tool limits, record the limitation in the integration summary and have the main thread explicitly perform that role's checklist for the current delivery.
 
 ## Agent Reports
 

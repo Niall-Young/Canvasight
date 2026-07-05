@@ -42,6 +42,7 @@ import { canvasightApi } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -768,6 +769,7 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
   const [markdownNodeId, setMarkdownNodeId] = useState<string | null>(null);
   const [renamingPage, setRenamingPage] = useState(false);
   const [pageNameDraft, setPageNameDraft] = useState("");
+  const [deletePageRequest, setDeletePageRequest] = useState<{ id: string; name: string } | null>(null);
   const [templates, setTemplates] = useState<NodeTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
   const hydratedRef = useRef(false);
@@ -1014,10 +1016,23 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
 
   const handleDeletePage = useCallback(() => {
     if (!activePage || !canDeletePage) return;
-    if (!window.confirm(t("page.deleteConfirm", { name: activePage.name }))) return;
+    setDeletePageRequest({ id: activePage.id, name: activePage.name });
+  }, [activePage, canDeletePage]);
+
+  const cancelDeletePage = useCallback(() => {
+    setDeletePageRequest(null);
+  }, []);
+
+  const confirmDeletePage = useCallback(() => {
+    if (!deletePageRequest || !canDeletePage) return;
+    if (activePageId !== deletePageRequest.id) {
+      setDeletePageRequest(null);
+      return;
+    }
     deleteActivePage();
-    setStatus(t("status.pageDeleted", { name: activePage.name }));
-  }, [activePage, canDeletePage, deleteActivePage, setStatus, t]);
+    setStatus(t("status.pageDeleted", { name: deletePageRequest.name }));
+    setDeletePageRequest(null);
+  }, [activePageId, canDeletePage, deleteActivePage, deletePageRequest, setStatus, t]);
 
   const getVisibleCanvasCenterPosition = useCallback((): FlowPosition => {
     const canvasRect = canvasShellRef.current?.getBoundingClientRect();
@@ -2129,6 +2144,18 @@ function CanvasightWorkspace({ onOpenSettings }: CanvasightWorkspaceProps): Reac
           onTemplateSearchChange={setTemplateSearch}
           onTemplateDragStart={handleTemplateDragStart}
           onTemplateDragEnd={handleTemplateDragEnd}
+        />
+        <ConfirmDialog
+          open={Boolean(deletePageRequest)}
+          title={t("page.deleteDialogTitle")}
+          description={t("page.deleteConfirm", { name: deletePageRequest?.name ?? t("page.untitled") })}
+          cancelLabel={t("page.deleteCancel")}
+          closeLabel={t("page.deleteClose")}
+          confirmLabel={t("page.deleteConfirmAction")}
+          onOpenChange={(open) => {
+            if (!open) cancelDeletePage();
+          }}
+          onConfirm={confirmDeletePage}
         />
       </main>
     </div>
