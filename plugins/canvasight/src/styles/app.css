@@ -1774,23 +1774,30 @@ button.achievement-card.is-unlocked:focus-visible {
 .canvas-page-trigger,
 .canvas-page-name-input {
   display: inline-flex;
-  width: min(260px, 38vw);
   height: 32px;
-  min-width: 132px;
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
   color: var(--color-text);
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   background: transparent;
   font: inherit;
   font-size: var(--text-14);
   line-height: var(--line-14);
+  opacity: 1;
 }
 
 .canvas-page-trigger {
+  width: 132px;
+  min-width: 132px;
+  flex: 0 0 132px;
   justify-content: flex-start;
+}
+
+.canvas-page-name-input {
+  width: min(260px, 38vw);
+  min-width: 132px;
 }
 
 .canvas-page-trigger:hover,
