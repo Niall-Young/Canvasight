@@ -72,14 +72,19 @@ codex plugin add canvasight@canvasight-local
 ```bash
 cd plugins/canvasight
 npm install
+npm run dev
+npm run dev:stop
 npm run daemon
 npm run daemon:stop
 npm run typecheck
 npm run build
+npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止常驻服务。`npm run dev` 只用于开发网页应用。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
+`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。需要手动停止时运行 `npm run dev:stop`。
+
+`npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止插件 daemon。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
 
 ### 插件校验
 
@@ -91,7 +96,7 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 
 **新线程还要重新 `npm run dev` 吗？**
 
-不需要。正常插件使用会通过项目级 daemon 打开已构建网页。只有开发调试前端时才需要 `npm run dev`。
+不需要重复启动。如果 `http://127.0.0.1:5173/` 上已经有持久 dev server，新线程会复用它。只有手动 `npm run dev:stop`、机器重启、端口失效或需要重启 dev server 时，才需要再次运行 `npm run dev`。
 
 **安装后看不到 Canvasight 工具怎么办？**
 
@@ -203,14 +208,19 @@ After installing or reinstalling the plugin, open a new Codex thread or reload t
 ```bash
 cd plugins/canvasight
 npm install
+npm run dev
+npm run dev:stop
 npm run daemon
 npm run daemon:stop
 npm run typecheck
 npm run build
+npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run daemon` and `npm run daemon:stop` are only for manual development or troubleshooting. `npm run dev` is only for web app development. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
+`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. Use `npm run dev:stop` when you explicitly need to stop it.
+
+`npm run daemon` and `npm run daemon:stop` are only for manual plugin-daemon development or troubleshooting. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
 
 ### Plugin Validation
 
@@ -222,7 +232,7 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 
 **Do I need to run `npm run dev` again in a new thread?**
 
-No. Normal plugin use opens the built web app through the project-level daemon. Use `npm run dev` only for frontend development.
+No, not if the persistent dev server is already alive at `http://127.0.0.1:5173/`. Run it again only after `npm run dev:stop`, a machine restart, port loss, or when you explicitly need to restart the dev server.
 
 **What if Canvasight tools do not appear after installation?**
 

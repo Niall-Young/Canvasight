@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "node scripts/dev-server.mjs start",
+    "dev:stop": "node scripts/dev-server.mjs stop",
+    "dev:status": "node scripts/dev-server.mjs status",
+    "dev:foreground": "vite --host 127.0.0.1",
     "daemon": "node mcp/server.mjs --daemon",
     "daemon:stop": "node mcp/server.mjs --stop-daemon",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --host 127.0.0.1",
+    "test:dev-server": "node tests/dev-server-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs"
   },
   "dependencies": {
