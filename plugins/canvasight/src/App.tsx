@@ -796,6 +796,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
   const markdownNode = useMemo(() => nodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, nodes]);
   const activePage = useMemo(() => pages.find((page) => page.id === activePageId) ?? pages[0] ?? null, [activePageId, pages]);
+  const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
   const canDeletePage = pages.length > 1;
@@ -1961,27 +1962,44 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                   />
                 ) : (
                   <RadixDropdownMenu.Root>
-                    <RadixDropdownMenu.Trigger asChild>
-                      <button className="canvas-page-trigger" type="button" aria-label={t("page.switch")}>
-                        <Icon name="stack" size={16} />
-                        <span className="canvas-page-trigger-label">{activePage?.name ?? t("page.untitled")}</span>
-                        <Icon name="chevron-down" size={16} />
-                      </button>
-                    </RadixDropdownMenu.Trigger>
+                    <TooltipAnchor
+                      className="canvas-page-trigger-tooltip"
+                      label={activePageName}
+                      side="bottom"
+                      align="start"
+                      tooltipClassName="kit-tooltip-wrap"
+                    >
+                      <RadixDropdownMenu.Trigger asChild>
+                        <button className="canvas-page-trigger" type="button" aria-label={`${t("page.switch")}: ${activePageName}`}>
+                          <Icon name="stack" size={16} />
+                          <span className="canvas-page-trigger-label">{activePageName}</span>
+                          <Icon name="chevron-down" size={16} />
+                        </button>
+                      </RadixDropdownMenu.Trigger>
+                    </TooltipAnchor>
                     <RadixDropdownMenu.Portal>
                       <RadixDropdownMenu.Content className="canvas-page-popover" side="bottom" sideOffset={8} align="start">
                         <DropdownMenu className="canvas-page-menu" role="menu">
                           {pages.map((page) => (
-                            <RadixDropdownMenu.Item key={page.id} asChild>
-                              <DropdownMenuItem
-                                icon="notebook"
-                                label={page.name}
-                                selected={page.id === activePageId}
-                                role="menuitemradio"
-                                aria-checked={page.id === activePageId}
-                                onClick={() => setActivePageId(page.id)}
-                              />
-                            </RadixDropdownMenu.Item>
+                            <TooltipAnchor
+                              key={page.id}
+                              className="canvas-page-menu-tooltip"
+                              label={page.name}
+                              side="right"
+                              align="center"
+                              tooltipClassName="kit-tooltip-wrap"
+                            >
+                              <RadixDropdownMenu.Item asChild>
+                                <DropdownMenuItem
+                                  icon="notebook"
+                                  label={page.name}
+                                  selected={page.id === activePageId}
+                                  role="menuitemradio"
+                                  aria-checked={page.id === activePageId}
+                                  onClick={() => setActivePageId(page.id)}
+                                />
+                              </RadixDropdownMenu.Item>
+                            </TooltipAnchor>
                           ))}
                           <span className="canvas-page-menu-divider" aria-hidden />
                           <RadixDropdownMenu.Item asChild>

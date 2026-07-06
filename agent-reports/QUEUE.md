@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1422-integration-summary-page-name-tooltip.md` - integrated full-name hover/focus tooltips for truncated Page switcher and menu names.
+- `agent-reports/resolved/20260706-1422-development-solution-page-name-tooltip.md` - implemented Page name tooltip support using the existing TooltipAnchor and long-text tooltip styling.
+- `agent-reports/resolved/20260706-1410-development-issue-page-name-tooltip.md` - resolved truncated Page names lacking full-name tooltip access.
 - `agent-reports/resolved/20260706-1402-integration-summary-run-direct-thread-delivery.md` - integrated direct Run delivery to the bound Codex thread with await fallback, docs, skills, tests, and version 0.1.17.
 - `agent-reports/resolved/20260706-1402-development-solution-run-direct-thread-delivery.md` - implemented Codex app-server turn/start delivery for Canvasight Run.
 - `agent-reports/resolved/20260706-1349-development-issue-run-not-sent-to-thread.md` - resolved Run clicking only opening Markdown without sending to the current Codex thread.

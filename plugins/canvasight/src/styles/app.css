@@ -1868,6 +1868,12 @@ button.achievement-card.is-unlocked:focus-visible {
   justify-content: flex-start;
 }
 
+.canvas-page-trigger-tooltip {
+  width: 132px;
+  flex: 0 0 132px;
+  justify-content: flex-start;
+}
+
 .canvas-page-name-input {
   width: min(260px, 38vw);
   min-width: 132px;
@@ -1909,6 +1915,11 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .canvas-page-menu .kit-dropdown-menu-item {
   min-width: 0;
+}
+
+.canvas-page-menu-tooltip {
+  width: 100%;
+  justify-content: stretch;
 }
 
 .canvas-page-menu .kit-dropdown-menu-item-label {
@@ -3160,6 +3171,20 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .kit-tooltip.has-shortcut {
   padding-right: 3px;
+}
+
+.kit-tooltip-wrap {
+  display: block;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.kit-tooltip-wrap > span:first-child {
+  display: block;
 }
 
 .kit-tooltip-anchor {

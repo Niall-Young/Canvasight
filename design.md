@@ -101,7 +101,7 @@ Canvasight should use a restrained, professional interface:
 - Controls should not resize the canvas unexpectedly.
 - Use stable dimensions for boards, tiles, icon buttons, and repeated objects so hover and loading states do not cause layout shift.
 - Text inside compact controls, triggers, segmented controls, and toolbar buttons must not push icons or affordances out of alignment. Reserve fixed space for leading and trailing icons, and truncate long labels with ellipsis.
-- Page, workspace, and record switchers should have a stable width contract: long names use single-line truncation, while icons, chevrons, add buttons, and overflow buttons keep their fixed size and position.
+- Page, workspace, and record switchers should have a stable width contract: long names use single-line truncation, while icons, chevrons, add buttons, and overflow buttons keep their fixed size and position. Truncated switcher names should expose the full name through hover/focus tooltips.
 - Compact triggers must use `min-width: 0` on the text region and non-shrinking icon slots so localized strings and renamed pages cannot distort the control.
 
 ## Typography
