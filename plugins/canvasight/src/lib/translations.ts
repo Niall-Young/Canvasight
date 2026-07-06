@@ -98,6 +98,8 @@ const zh = {
   "drawer.templateSearchPlaceholder": "搜索模板",
   "drawer.dragTemplate": "拖到画布创建节点",
   "drawer.templateAttachmentCount": "{count} 个附件",
+  "drawer.templateCapacity": "{count} / {max}",
+  "drawer.deleteTemplate": "删除模板",
   "drawer.unnamedTask": "未命名任务",
   "drawer.previewMode": "预览模式",
   "drawer.markdownSource": "Markdown 源码",
@@ -177,7 +179,10 @@ const zh = {
   "status.templatesLoadFailed": "加载模板失败",
   "status.templateSaveEmpty": "提示词为空，无法存为模板",
   "status.templateSaved": "已存为模板",
+  "status.templateLimitReached": "模板已满，最多保存 {max} 个",
   "status.templateSaveFailed": "保存模板失败",
+  "status.templateDeleted": "已删除模板",
+  "status.templateDeleteFailed": "删除模板失败",
   "status.templateInserted": "已从模板创建节点",
   "status.cannotSendEmpty": "暂未编辑，无法发送到运行器",
   "status.sendingAssistant": "正在提交 Canvasight Run...",
@@ -185,7 +190,17 @@ const zh = {
   "status.sendAssistantFailed": "提交 Canvasight Run 失败",
   "status.manualRunnerCopied": "已复制 Markdown",
   "status.manualRunnerCopyFailed": "复制失败，请打开 Markdown 预览后手动复制",
-  "status.addAttachmentFailed": "添加附件失败"
+  "status.addAttachmentFailed": "添加附件失败",
+  "templateLimit.title": "模板已满",
+  "templateLimit.description": "最多保存 {max} 个全局节点模板。你可以先管理并删除旧模板，或者明确替换最旧的模板。",
+  "templateLimit.manage": "管理模板",
+  "templateLimit.replaceOldest": "替换最旧模板",
+  "templateLimit.close": "关闭模板已满提示",
+  "templateDelete.title": "删除模板",
+  "templateDelete.description": "删除模板“{name}”？这个操作只会删除全局模板，不会影响已经放到画布里的节点。",
+  "templateDelete.cancel": "取消",
+  "templateDelete.confirm": "删除",
+  "templateDelete.close": "关闭删除模板确认"
 } as const;
 
 const en = {
@@ -286,6 +301,8 @@ const en = {
   "drawer.templateSearchPlaceholder": "Search templates",
   "drawer.dragTemplate": "Drag to the canvas to create a node",
   "drawer.templateAttachmentCount": "{count} attachments",
+  "drawer.templateCapacity": "{count} / {max}",
+  "drawer.deleteTemplate": "Delete template",
   "drawer.unnamedTask": "Untitled task",
   "drawer.previewMode": "Preview mode",
   "drawer.markdownSource": "Markdown source",
@@ -365,7 +382,10 @@ const en = {
   "status.templatesLoadFailed": "Failed to load templates",
   "status.templateSaveEmpty": "Prompt is empty, cannot save as template",
   "status.templateSaved": "Saved as template",
+  "status.templateLimitReached": "Template library is full. You can save up to {max} templates.",
   "status.templateSaveFailed": "Failed to save template",
+  "status.templateDeleted": "Template deleted",
+  "status.templateDeleteFailed": "Failed to delete template",
   "status.templateInserted": "Created node from template",
   "status.cannotSendEmpty": "Nothing edited yet, cannot send to runner",
   "status.sendingAssistant": "Submitting Canvasight Run...",
@@ -373,7 +393,17 @@ const en = {
   "status.sendAssistantFailed": "Failed to submit Canvasight Run",
   "status.manualRunnerCopied": "Markdown copied",
   "status.manualRunnerCopyFailed": "Copy failed. Open Markdown preview and copy it manually.",
-  "status.addAttachmentFailed": "Failed to add attachment"
+  "status.addAttachmentFailed": "Failed to add attachment",
+  "templateLimit.title": "Template library full",
+  "templateLimit.description": "Canvasight saves up to {max} global node templates. Manage and delete older templates first, or explicitly replace the oldest template.",
+  "templateLimit.manage": "Manage templates",
+  "templateLimit.replaceOldest": "Replace oldest",
+  "templateLimit.close": "Close template limit notice",
+  "templateDelete.title": "Delete template",
+  "templateDelete.description": "Delete template \"{name}\"? This only removes the global template and does not affect nodes already placed on the canvas.",
+  "templateDelete.cancel": "Cancel",
+  "templateDelete.confirm": "Delete",
+  "templateDelete.close": "Close delete template confirmation"
 } satisfies Record<keyof typeof zh, string>;
 
 export type TranslationKey = keyof typeof zh;

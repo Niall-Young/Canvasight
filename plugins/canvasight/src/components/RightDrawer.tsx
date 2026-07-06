@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
-import type { NodeTemplate, RunMode, ScatterEdge, ScatterNode } from "../../shared/types";
+import { nodeTemplateLimit, type NodeTemplate, type RunMode, type ScatterEdge, type ScatterNode } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { childCount } from "../lib/markdown";
 import type { Translate } from "../lib/translations";
@@ -24,6 +24,7 @@ interface RightDrawerProps {
   onLocateNode: (nodeId: string, mode: RunMode) => void;
   onSelectNode: (nodeId: string, mode: RunMode) => void;
   onRunNode: (nodeId: string, mode: RunMode) => void;
+  onDeleteTemplate: (templateId: string) => void;
   onTemplateSearchChange: (value: string) => void;
   onTemplateDragStart: (template: NodeTemplate, event: DragEvent<HTMLElement>) => void;
   onTemplateDragEnd: () => void;
@@ -239,6 +240,7 @@ export function RightDrawer({
   onLocateNode,
   onSelectNode,
   onRunNode,
+  onDeleteTemplate,
   onTemplateSearchChange,
   onTemplateDragStart,
   onTemplateDragEnd
@@ -322,7 +324,12 @@ export function RightDrawer({
         </div>
       ) : renderedDrawer === "templates" ? (
         <div className="template-sidebar">
-          <p className="right-sidebar-title">{t("drawer.templates")}</p>
+          <div className="template-sidebar-heading">
+            <p className="right-sidebar-title">{t("drawer.templates")}</p>
+            <span className={`template-capacity ${templates.length >= nodeTemplateLimit ? "is-full" : ""}`}>
+              {t("drawer.templateCapacity", { count: templates.length, max: nodeTemplateLimit })}
+            </span>
+          </div>
           <label className="template-search">
             <Icon name="search" size={16} />
             <input
@@ -354,6 +361,19 @@ export function RightDrawer({
                     </div>
                     <p>{templatePreview(template)}</p>
                   </div>
+                  <IconButton
+                    className="template-delete-button"
+                    filled={false}
+                    icon="trash"
+                    size="md"
+                    aria-label={t("drawer.deleteTemplate")}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDeleteTemplate(template.id);
+                    }}
+                  />
                 </article>
               ))
             )}

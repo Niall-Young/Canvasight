@@ -28,7 +28,9 @@ For each generated node, provide:
 
 ## Template Reuse
 
-Before writing a graph, call `list_canvasight_node_templates` to inspect saved global templates. Prefer exact `templateId` reuse when a template fits the node's purpose. A reused template provides default title, body, and attachments; explicit node fields can still override the title or body for the current graph.
+Before writing a graph, call `list_canvasight_node_templates` to inspect saved global template summaries. Use specific `query` values based on the intended node purpose instead of loading an unfiltered list whenever possible. The list result includes id, title, body preview, body length, attachment count, and timestamps, not full prompt bodies.
+
+Call `get_canvasight_node_template({ templateId })` only when a summary looks relevant and the full prompt body or attachment metadata is needed to decide reuse. Prefer exact `templateId` reuse when a template fits the node's purpose. A reused template provides default title, body, and attachments; explicit node fields can still override the title or body for the current graph.
 
 Do not force a template into an unrelated node. If no saved template fits, generate a normal node.
 

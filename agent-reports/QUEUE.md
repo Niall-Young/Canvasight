@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-0943-integration-summary-template-capacity-summary.md` - integrated template capacity management and summary-first AI template reads.
+- `agent-reports/resolved/20260706-0943-development-solution-template-capacity-summary.md` - implemented 200-template limit handling, delete/manage UI, and MCP get-by-id template retrieval.
+- `agent-reports/resolved/20260706-0943-product-issue-template-capacity-summary.md` - resolved global template capacity and AI context blow-up risk.
 - `agent-reports/resolved/20260705-2323-integration-summary-open-target-system-browser.md` - integrated Codex in-app browser as the default Canvasight open target.
 - `agent-reports/resolved/20260705-2323-development-solution-open-target-system-browser.md` - removed default system-browser launch and added explicit external-browser opt-in.
 - `agent-reports/resolved/20260705-2323-product-issue-open-target-system-browser.md` - resolved Canvasight opening directly in the system browser.

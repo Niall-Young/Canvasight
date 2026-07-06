@@ -8,6 +8,7 @@ interface ConfirmDialogProps {
   closeLabel: string;
   confirmLabel: string;
   description: string;
+  onCancel?: () => void;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   closeLabel,
   confirmLabel,
   description,
+  onCancel,
   onConfirm,
   onOpenChange,
   open,
@@ -61,7 +63,7 @@ export function ConfirmDialog({
           </RadixDialog.Description>
           <footer className="confirm-dialog-footer">
             <RadixDialog.Close asChild>
-              <KitButton ref={cancelButtonRef} className="confirm-dialog-cancel" filled={false} size="md">
+              <KitButton ref={cancelButtonRef} className="confirm-dialog-cancel" filled={false} size="md" onClick={onCancel}>
                 {cancelLabel}
               </KitButton>
             </RadixDialog.Close>

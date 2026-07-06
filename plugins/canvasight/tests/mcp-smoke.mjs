@@ -290,7 +290,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.11");
+    assert.equal(initialized.serverInfo.version, "0.1.12");
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -299,6 +299,7 @@ async function main() {
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
     assert.equal(toolNames.has("list_canvasight_node_templates"), true);
+    assert.equal(toolNames.has("get_canvasight_node_template"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
@@ -330,7 +331,7 @@ async function main() {
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.11");
+    assert.equal(autoHealth.serverVersion, "0.1.12");
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -710,8 +711,29 @@ async function main() {
       }
     });
     assert.equal(listedTemplates.structuredContent.status, "ok");
+    assert.equal(listedTemplates.structuredContent.resultMode, "summary");
     assert.equal(listedTemplates.structuredContent.count, 1);
+    assert.equal(listedTemplates.structuredContent.maxTemplates, 200);
     assert.equal(listedTemplates.structuredContent.templates[0].id, graphTemplate.id);
+    assert.equal(listedTemplates.structuredContent.templates[0].body, undefined);
+    assert.equal(listedTemplates.structuredContent.templates[0].attachments, undefined);
+    assert.equal(
+      listedTemplates.structuredContent.templates[0].bodyPreview,
+      "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling."
+    );
+    assert.equal(listedTemplates.structuredContent.templates[0].bodyLength, graphTemplate.body.length);
+    assert.equal(listedTemplates.structuredContent.templates[0].attachmentCount, 1);
+
+    const fullListedTemplate = await request("tools/call", {
+      name: "get_canvasight_node_template",
+      arguments: {
+        templateId: graphTemplate.id
+      }
+    });
+    assert.equal(fullListedTemplate.structuredContent.status, "ok");
+    assert.equal(fullListedTemplate.structuredContent.template.id, graphTemplate.id);
+    assert.equal(fullListedTemplate.structuredContent.template.body, graphTemplate.body);
+    assert.equal(fullListedTemplate.structuredContent.template.attachments[0].originalName, "figma-color-template.md");
 
     const templateGraph = await request("tools/call", {
       name: "write_canvasight_graph",
@@ -747,6 +769,64 @@ async function main() {
     assert.equal(templateScatterJson.nodes[0].data.templateId, graphTemplate.id);
     assert.equal(templateScatterJson.nodes[1].data.title, "Template query reuse");
     assert.equal(templateScatterJson.nodes[1].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
+
+    const fullTemplateSet = [
+      graphTemplate,
+      savedTemplate,
+      ...Array.from({ length: 198 }, (_, index) => ({
+        id: `bulk-template-${index}`,
+        title: `Bulk template ${index}`,
+        body: `Bulk template prompt ${index}`,
+        attachments: [],
+        createdAt: "2026-07-05T00:00:00.000Z",
+        updatedAt: "2026-07-05T00:00:00.000Z"
+      }))
+    ];
+    await fsp.writeFile(path.join(canvasightHome, "templates.json"), `${JSON.stringify(fullTemplateSet, null, 2)}\n`, "utf8");
+    const rejectedTemplateSave = await fetch(`${origin}/api/templates`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-canvasight-token": daemonToken
+      },
+      body: JSON.stringify({
+        template: {
+          title: "Template over limit",
+          body: "This save should be rejected until the user explicitly replaces the oldest template.",
+          attachments: []
+        }
+      })
+    });
+    assert.equal(rejectedTemplateSave.status, 409);
+    assert.deepEqual(await rejectedTemplateSave.json(), {
+      code: "template_limit_reached",
+      error: "Template limit reached (200)"
+    });
+    const replacementTemplate = await fetchJson(`${origin}/api/templates`, {
+      method: "POST",
+      body: JSON.stringify({
+        replaceOldest: true,
+        template: {
+          title: "Explicit replacement template",
+          body: "This template replaces the oldest saved template.",
+          attachments: []
+        }
+      })
+    });
+    assert.equal(replacementTemplate.title, "Explicit replacement template");
+    const templatesAfterReplacement = await fetchJson(`${origin}/api/templates`);
+    assert.equal(templatesAfterReplacement.length, 200);
+    assert.equal(templatesAfterReplacement[0].id, replacementTemplate.id);
+    assert.equal(templatesAfterReplacement.some((template) => template.id === "bulk-template-197"), false);
+    const deleteReplacement = await fetchJson(`${origin}/api/templates/${encodeURIComponent(replacementTemplate.id)}`, {
+      method: "DELETE"
+    });
+    assert.deepEqual(deleteReplacement, {
+      status: "deleted",
+      templateId: replacementTemplate.id
+    });
+    const templatesAfterDelete = await fetchJson(`${origin}/api/templates`);
+    assert.equal(templatesAfterDelete.length, 199);
 
     await assert.rejects(
       () =>

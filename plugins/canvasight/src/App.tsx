@@ -25,6 +25,7 @@ import {
 import { nanoid } from "nanoid";
 import {
   defaultAppSettings,
+  nodeTemplateLimit,
   type AppSettings,
   type AttachmentInput,
   type CodexMode,
@@ -38,7 +39,7 @@ import {
   type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
-import { canvasightApi } from "./lib/canvasightApi";
+import { canvasightApi, isTemplateLimitError } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
@@ -773,8 +774,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [renamingPage, setRenamingPage] = useState(false);
   const [pageNameDraft, setPageNameDraft] = useState("");
   const [deletePageRequest, setDeletePageRequest] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTemplateRequest, setDeleteTemplateRequest] = useState<{ id: string; title: string } | null>(null);
   const [templates, setTemplates] = useState<NodeTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
+  const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -1274,6 +1277,27 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [addFilesToNode]
   );
 
+  const persistTemplate = useCallback(
+    async (input: NodeTemplateInput, options: { replaceOldest?: boolean } = {}) => {
+      try {
+        const template = await canvasightApi.saveTemplate(input, options);
+        setTemplates((current) => [template, ...current.filter((item) => item.id !== template.id)]);
+        setDrawer("templates");
+        setStatus(t("status.templateSaved"));
+        setTemplateLimitRequest(null);
+      } catch (error) {
+        if (isTemplateLimitError(error)) {
+          setDrawer("templates");
+          setTemplateLimitRequest(input);
+          setStatus(t("status.templateLimitReached", { max: nodeTemplateLimit }));
+          return;
+        }
+        setStatus(t("status.templateSaveFailed"));
+      }
+    },
+    [setDrawer, setStatus, t]
+  );
+
   const saveNodeAsTemplate = useCallback(
     async (_nodeId: string, data: ScatterNodeData) => {
       const body = data.body.trim();
@@ -1288,16 +1312,46 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         attachments: data.attachments.map((attachment) => ({ ...attachment }))
       };
 
-      try {
-        const template = await canvasightApi.saveTemplate(input);
-        setTemplates((current) => [template, ...current.filter((item) => item.id !== template.id)].slice(0, 200));
+      if (templates.length >= nodeTemplateLimit) {
         setDrawer("templates");
-        setStatus(t("status.templateSaved"));
+        setTemplateLimitRequest(input);
+        setStatus(t("status.templateLimitReached", { max: nodeTemplateLimit }));
+        return;
+      }
+
+      await persistTemplate(input);
+    },
+    [persistTemplate, setDrawer, setStatus, t, templates.length]
+  );
+
+  const replaceOldestTemplate = useCallback(() => {
+    if (!templateLimitRequest) return;
+    void persistTemplate(templateLimitRequest, { replaceOldest: true });
+  }, [persistTemplate, templateLimitRequest]);
+
+  const requestDeleteTemplate = useCallback(
+    (templateId: string) => {
+      const template = templates.find((item) => item.id === templateId);
+      setDeleteTemplateRequest({
+        id: templateId,
+        title: template?.title || t("drawer.unnamedTemplate")
+      });
+    },
+    [t, templates]
+  );
+
+  const deleteTemplate = useCallback(
+    async (templateId: string) => {
+      try {
+        await canvasightApi.deleteTemplate(templateId);
+        setTemplates((current) => current.filter((template) => template.id !== templateId));
+        setDeleteTemplateRequest(null);
+        setStatus(t("status.templateDeleted"));
       } catch {
-        setStatus(t("status.templateSaveFailed"));
+        setStatus(t("status.templateDeleteFailed"));
       }
     },
-    [setDrawer, setStatus, t]
+    [setStatus, t]
   );
 
   const insertTemplateAtPosition = useCallback(
@@ -2162,6 +2216,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
           onSelectNode={(nodeId, mode) => selectNode(nodeId, mode)}
           onRunNode={(nodeId, mode) => void runNode(nodeId, mode)}
+          onDeleteTemplate={requestDeleteTemplate}
           onTemplateSearchChange={setTemplateSearch}
           onTemplateDragStart={handleTemplateDragStart}
           onTemplateDragEnd={handleTemplateDragEnd}
@@ -2177,6 +2232,35 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             if (!open) cancelDeletePage();
           }}
           onConfirm={confirmDeletePage}
+        />
+        <ConfirmDialog
+          open={Boolean(templateLimitRequest)}
+          title={t("templateLimit.title")}
+          description={t("templateLimit.description", { max: nodeTemplateLimit })}
+          cancelLabel={t("templateLimit.manage")}
+          closeLabel={t("templateLimit.close")}
+          confirmLabel={t("templateLimit.replaceOldest")}
+          onCancel={() => {
+            setDrawer("templates");
+          }}
+          onOpenChange={(open) => {
+            if (!open) setTemplateLimitRequest(null);
+          }}
+          onConfirm={replaceOldestTemplate}
+        />
+        <ConfirmDialog
+          open={Boolean(deleteTemplateRequest)}
+          title={t("templateDelete.title")}
+          description={t("templateDelete.description", { name: deleteTemplateRequest?.title ?? t("drawer.unnamedTemplate") })}
+          cancelLabel={t("templateDelete.cancel")}
+          closeLabel={t("templateDelete.close")}
+          confirmLabel={t("templateDelete.confirm")}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTemplateRequest(null);
+          }}
+          onConfirm={() => {
+            if (deleteTemplateRequest) void deleteTemplate(deleteTemplateRequest.id);
+          }}
         />
       </main>
     </div>

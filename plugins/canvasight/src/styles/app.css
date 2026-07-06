@@ -3855,6 +3855,24 @@ button.achievement-card.is-unlocked:focus-visible {
   padding-right: 2px;
 }
 
+.template-sidebar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-capacity {
+  flex: 0 0 auto;
+  color: var(--color-text-subtlest);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.template-capacity.is-full {
+  color: var(--color-negative);
+}
+
 .template-item {
   display: flex;
   align-items: center;
@@ -3880,6 +3898,17 @@ button.achievement-card.is-unlocked:focus-visible {
 .template-item-main {
   min-width: 0;
   flex: 1 1 0;
+}
+
+.template-delete-button {
+  flex: 0 0 auto;
+  opacity: 0;
+  cursor: default;
+}
+
+.template-item:hover .template-delete-button,
+.template-delete-button:focus-visible {
+  opacity: 1;
 }
 
 .template-item-heading {

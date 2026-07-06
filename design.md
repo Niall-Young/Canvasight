@@ -134,6 +134,16 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
 - AI-generated content must remain fully editable by the user.
 
+## Global Node Templates
+
+Node templates are reusable local assets, not project files. They should feel like a compact library inside the existing drawer system:
+
+- The template drawer should show the current template count against the maximum capacity.
+- The template library is capped at 200 saved templates. Saving template 201 must not silently delete an older template.
+- When the library is full, Canvasight should use an app-local modal dialog that lets users manage the template drawer or explicitly replace the oldest template.
+- Users must have a direct way to delete templates from the template drawer.
+- AI template discovery should be summary-first: list operations show lightweight previews, counts, and ids. Full prompt bodies and attachment metadata are loaded only for a selected template.
+
 ## AI-Generated Task Structure
 
 AI-generated canvas content may use scenario classification as a generation strategy, but classification should shape the task structure, not become visible navigation architecture by default.

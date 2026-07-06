@@ -1,3 +1,4 @@
+import { nodeTemplateLimit } from "../../shared/types";
 import type {
   AgentTeamRunConfig,
   Attachment,
@@ -41,6 +42,38 @@ function sessionTokenFromUrl(): string {
 }
 
 const templateStorageKey = "canvasight.nodeTemplates";
+
+class CanvasightApiError extends Error {
+  code?: string;
+  payload: unknown;
+  status: number;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = "CanvasightApiError";
+    this.status = status;
+    this.payload = payload;
+    if (payload && typeof payload === "object" && "code" in payload && typeof payload.code === "string") {
+      this.code = payload.code;
+    }
+  }
+}
+
+export class TemplateLimitError extends Error {
+  currentCount: number;
+  maxTemplates: number;
+
+  constructor(maxTemplates = nodeTemplateLimit, currentCount = nodeTemplateLimit) {
+    super(`Template limit reached (${maxTemplates})`);
+    this.name = "TemplateLimitError";
+    this.maxTemplates = maxTemplates;
+    this.currentCount = currentCount;
+  }
+}
+
+export function isTemplateLimitError(error: unknown): error is TemplateLimitError {
+  return error instanceof TemplateLimitError || (error instanceof CanvasightApiError && error.status === 409 && error.code === "template_limit_reached");
+}
 
 function createTemplateId(): string {
   return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -97,10 +130,14 @@ function saveLocalTemplates(templates: NodeTemplate[]): void {
   window.localStorage.setItem(templateStorageKey, JSON.stringify(templates));
 }
 
-function saveLocalTemplate(input: NodeTemplateInput): NodeTemplate {
+function saveLocalTemplate(input: NodeTemplateInput, options: { replaceOldest?: boolean } = {}): NodeTemplate {
   const now = new Date().toISOString();
   const body = input.body.trim();
   if (!body) throw new Error("Template body is required");
+  const existingTemplates = loadLocalTemplates();
+  if (existingTemplates.length >= nodeTemplateLimit && !options.replaceOldest) {
+    throw new TemplateLimitError(nodeTemplateLimit, existingTemplates.length);
+  }
   const template: NodeTemplate = {
     id: createTemplateId(),
     title: input.title.trim() || body.slice(0, 40),
@@ -109,9 +146,13 @@ function saveLocalTemplate(input: NodeTemplateInput): NodeTemplate {
     createdAt: now,
     updatedAt: now
   };
-  const templates = [template, ...loadLocalTemplates()];
-  saveLocalTemplates(templates.slice(0, 200));
+  const templates = options.replaceOldest ? [template, ...existingTemplates.slice(0, Math.max(0, existingTemplates.length - 1))] : [template, ...existingTemplates];
+  saveLocalTemplates(templates);
   return template;
+}
+
+function deleteLocalTemplate(templateId: string): void {
+  saveLocalTemplates(loadLocalTemplates().filter((template) => template.id !== templateId));
 }
 
 function shouldUseLocalTemplateStore(error: unknown): boolean {
@@ -136,7 +177,17 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || `Request failed: ${response.status}`);
+    let payload: unknown = null;
+    let message = detail || `Request failed: ${response.status}`;
+    try {
+      payload = detail ? JSON.parse(detail) : null;
+      if (payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string") {
+        message = payload.error;
+      }
+    } catch {
+      payload = null;
+    }
+    throw new CanvasightApiError(message, response.status, payload);
   }
   return response.json() as Promise<T>;
 }
@@ -221,14 +272,28 @@ export const canvasightApi = {
     }
   },
 
-  async saveTemplate(template: NodeTemplateInput): Promise<NodeTemplate> {
+  async saveTemplate(template: NodeTemplateInput, options: { replaceOldest?: boolean } = {}): Promise<NodeTemplate> {
     try {
       return await requestJson<NodeTemplate>(`/api/templates`, {
         method: "POST",
-        body: JSON.stringify({ template })
+        body: JSON.stringify({ template, replaceOldest: Boolean(options.replaceOldest) })
       });
     } catch (error) {
-      if (shouldUseLocalTemplateStore(error)) return saveLocalTemplate(template);
+      if (shouldUseLocalTemplateStore(error)) return saveLocalTemplate(template, options);
+      throw error;
+    }
+  },
+
+  async deleteTemplate(templateId: string): Promise<void> {
+    try {
+      await requestJson<{ status: "deleted"; templateId: string }>(`/api/templates/${encodeURIComponent(templateId)}`, {
+        method: "DELETE"
+      });
+    } catch (error) {
+      if (shouldUseLocalTemplateStore(error)) {
+        deleteLocalTemplate(templateId);
+        return;
+      }
       throw error;
     }
   }

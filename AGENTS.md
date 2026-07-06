@@ -81,6 +81,8 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Keep canvas state, persistence, and MCP contracts explicit. Do not hide run behavior inside presentation components when it can live in store or runtime helpers.
 - Use the existing app icon registry in `src/components/ui/icon.tsx` and SVG assets under `src/assets/icons` before adding another icon path.
 - When MCP runtime behavior changes, bump the plugin version in `.codex-plugin/plugin.json`, `package.json`, `package-lock.json`, and `mcp/server.mjs` `SERVER_VERSION` together. Codex may keep versioned plugin cache entries, so changing runtime code without a version bump can leave users running stale MCP servers.
+- MCP list tools that can expose large user-authored content should return lightweight summaries by default and provide a separate by-id read path for full content.
+- Persistent user-asset features with capacity limits must reject or ask for explicit replacement at the limit. Do not silently evict older user data through list slicing or hidden cleanup.
 
 ## Design Standards
 

@@ -18,6 +18,7 @@ export type AgentTeamRoleId =
   | "skill-expert-agent";
 export type AppUpdateStatus = "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "not-available" | "error";
 export type AppUpdateErrorCode = "development-mode" | "check-failed" | "install-failed";
+export const nodeTemplateLimit = 200;
 export const achievementIds = [
   "oneshot",
   "gunslinger",
@@ -110,6 +111,16 @@ export interface NodeTemplate {
 }
 
 export type NodeTemplateInput = Pick<NodeTemplate, "title" | "body" | "attachments">;
+
+export interface NodeTemplateSummary {
+  id: string;
+  title: string;
+  bodyPreview: string;
+  bodyLength: number;
+  attachmentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ScatterNode {
   id: string;

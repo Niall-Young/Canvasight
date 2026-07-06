@@ -9,11 +9,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.11";
+const SERVER_VERSION = "0.1.12";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
+const TEMPLATE_BODY_PREVIEW_CHARS = 240;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
@@ -109,9 +110,10 @@ let daemonAuthToken = process.env.CANVASIGHT_DAEMON_TOKEN || "";
 let daemonStartedAt = nowIso();
 
 class HttpError extends Error {
-  constructor(statusCode, message) {
+  constructor(statusCode, message, code = "") {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
   }
 }
 
@@ -477,7 +479,7 @@ async function readNodeTemplates() {
     const raw = await fsp.readFile(canvasightTemplatesPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map(normalizeNodeTemplate).filter(Boolean).slice(0, MAX_NODE_TEMPLATES);
+    return parsed.map(normalizeNodeTemplate).filter(Boolean);
   } catch (error) {
     if (error?.code === "ENOENT" || error instanceof SyntaxError) return [];
     throw error;
@@ -485,25 +487,81 @@ async function readNodeTemplates() {
 }
 
 async function writeNodeTemplates(templates) {
-  const normalized = Array.isArray(templates) ? templates.map(normalizeNodeTemplate).filter(Boolean).slice(0, MAX_NODE_TEMPLATES) : [];
+  const normalized = Array.isArray(templates) ? templates.map(normalizeNodeTemplate).filter(Boolean) : [];
   await fsp.mkdir(canvasightHome(), { recursive: true });
   await fsp.writeFile(canvasightTemplatesPath(), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
   return normalized;
 }
 
-async function createNodeTemplate(input) {
+async function createNodeTemplate(input, options = {}) {
+  const body = typeof input?.body === "string" ? input.body.trim() : "";
+  if (!body) throw new HttpError(400, "Template body is required");
+  const existingTemplates = await readNodeTemplates();
+  const replaceOldest = Boolean(options?.replaceOldest);
+  if (existingTemplates.length >= MAX_NODE_TEMPLATES && !replaceOldest) {
+    throw new HttpError(409, `Template limit reached (${MAX_NODE_TEMPLATES})`, "template_limit_reached");
+  }
   const attachments = await copyTemplateAttachments(input?.attachments);
   const template = normalizeNodeTemplate({
     ...input,
+    body,
     attachments,
     id: `template-${crypto.randomBytes(8).toString("hex")}`,
     createdAt: nowIso(),
     updatedAt: nowIso()
   });
   if (!template) throw new HttpError(400, "template body is required");
-  const templates = [template, ...(await readNodeTemplates())].slice(0, MAX_NODE_TEMPLATES);
+  const templates = replaceOldest ? [template, ...existingTemplates.slice(0, Math.max(0, existingTemplates.length - 1))] : [template, ...existingTemplates];
   await writeNodeTemplates(templates);
   return template;
+}
+
+async function deleteTemplateAssets(template) {
+  if (!template || !Array.isArray(template.attachments)) return;
+  await Promise.all(
+    template.attachments.map(async (attachment) => {
+      const storedPath = typeof attachment.storedPath === "string" ? path.resolve(attachment.storedPath) : "";
+      if (!storedPath || !isTemplateAssetPath(storedPath)) return;
+      try {
+        await fsp.unlink(storedPath);
+      } catch {
+        // Best effort cleanup. Template deletion must not fail because an asset is already gone.
+      }
+    })
+  );
+}
+
+async function deleteNodeTemplate(templateId) {
+  const templates = await readNodeTemplates();
+  const template = templates.find((item) => item.id === templateId);
+  if (!template) throw new HttpError(404, "Template not found", "template_not_found");
+  await writeNodeTemplates(templates.filter((item) => item.id !== templateId));
+  await deleteTemplateAssets(template);
+  return { status: "deleted", templateId };
+}
+
+function getNodeTemplate(templates, templateId) {
+  const template = templates.find((item) => item.id === templateId);
+  if (!template) throw new HttpError(404, "Template not found", "template_not_found");
+  return template;
+}
+
+function templateBodyPreview(body) {
+  const normalized = String(body || "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= TEMPLATE_BODY_PREVIEW_CHARS) return normalized;
+  return `${normalized.slice(0, TEMPLATE_BODY_PREVIEW_CHARS).trimEnd()}...`;
+}
+
+function summarizeNodeTemplate(template) {
+  return {
+    id: template.id,
+    title: template.title,
+    bodyPreview: templateBodyPreview(template.body),
+    bodyLength: template.body.length,
+    attachmentCount: template.attachments.length,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt
+  };
 }
 
 function normalizeTemplateQuery(value) {
@@ -2109,15 +2167,31 @@ async function handleHttp(req, res) {
       return;
     }
 
-    if (url.pathname === "/api/templates") {
+    if (url.pathname === "/api/templates" || url.pathname.startsWith("/api/templates/")) {
       assertDaemonAuthorized(req, url);
+      const templateId = url.pathname.startsWith("/api/templates/")
+        ? decodeURIComponent(url.pathname.slice("/api/templates/".length))
+        : "";
+      if (templateId) {
+        if (req.method === "GET") {
+          sendJson(res, 200, getNodeTemplate(await readNodeTemplates(), templateId));
+          return;
+        }
+        if (req.method === "DELETE") {
+          sendJson(res, 200, await deleteNodeTemplate(templateId));
+          return;
+        }
+        throw new HttpError(405, "Expected GET or DELETE");
+      }
       if (req.method === "GET") {
         sendJson(res, 200, await readNodeTemplates());
         return;
       }
       if (req.method === "POST") {
         const body = await readJsonBody(req);
-        const template = await createNodeTemplate(isObject(body.template) ? body.template : body);
+        const template = await createNodeTemplate(isObject(body.template) ? body.template : body, {
+          replaceOldest: Boolean(body.replaceOldest)
+        });
         sendJson(res, 200, template);
         return;
       }
@@ -2195,7 +2269,10 @@ async function handleHttp(req, res) {
       return;
     }
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
-    sendJson(res, statusCode, { error: error?.message || "Internal server error" });
+    sendJson(res, statusCode, {
+      error: error?.message || "Internal server error",
+      ...(error instanceof HttpError && error.code ? { code: error.code } : {})
+    });
   }
 }
 
@@ -2332,13 +2409,28 @@ async function toolListCanvasightNodeTemplates(args) {
     {
       status: "ok",
       query,
+      resultMode: "summary",
       count: limitedTemplates.length,
       total: matchedTemplates.length,
-      templates: limitedTemplates
+      maxTemplates: MAX_NODE_TEMPLATES,
+      templates: limitedTemplates.map(summarizeNodeTemplate)
     },
     limitedTemplates.length
       ? `Canvasight node templates: ${limitedTemplates.length}/${matchedTemplates.length}`
       : "No Canvasight node templates matched."
+  );
+}
+
+async function toolGetCanvasightNodeTemplate(args) {
+  const templateId = typeof args?.templateId === "string" ? args.templateId.trim() : "";
+  if (!templateId) throw new HttpError(400, "templateId is required");
+  const template = getNodeTemplate(await readNodeTemplates(), templateId);
+  return toolResult(
+    {
+      status: "ok",
+      template
+    },
+    `Canvasight node template: ${template.title}`
   );
 }
 
@@ -2503,7 +2595,7 @@ const tools = [
   },
   {
     name: "list_canvasight_node_templates",
-    description: "List saved global Canvasight node templates so AI graph generation can reuse existing user prompts and attachments.",
+    description: "List lightweight summaries of saved global Canvasight node templates so AI graph generation can choose reusable prompts without loading full template bodies.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2518,6 +2610,21 @@ const tools = [
           description: "Maximum number of templates to return. Defaults to 20."
         }
       },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "get_canvasight_node_template",
+    description: "Read one saved global Canvasight node template by id, including full prompt body and attachment metadata, after list_canvasight_node_templates identifies a useful match.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        templateId: {
+          type: "string",
+          description: "Template id returned by list_canvasight_node_templates."
+        }
+      },
+      required: ["templateId"],
       additionalProperties: false
     }
   },
@@ -2656,6 +2763,7 @@ async function callTool(name, args) {
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
+  if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});
