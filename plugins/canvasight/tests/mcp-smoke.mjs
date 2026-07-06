@@ -57,6 +57,10 @@ function handle(message) {
     write({ id: message.id, result: {} });
     return;
   }
+  if (message.method === "turn/start") {
+    write({ id: message.id, result: { turn: { id: "turn-smoke", threadId: message.params.threadId, status: "running" } } });
+    return;
+  }
   write({ id: message.id, error: { code: -32601, message: "Method not found" } });
 }
 
@@ -168,6 +172,10 @@ async function readNativeLog() {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchJson(url, init) {
@@ -1106,6 +1114,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
+    await sleep(20);
 
     const runPayload = {
       sessionId,
@@ -1145,6 +1154,7 @@ async function main() {
       body: JSON.stringify(runPayload)
     });
     assert.equal(queued.status, "queued");
+    assert.equal(queued.delivery.status, "awaited");
     assert.equal(queued.agentTeam.agentsMd.status, "created");
     assert.equal(queued.agentTeam.agentsMd.reason, "missing_agents_md");
 
@@ -1173,6 +1183,7 @@ async function main() {
 
     const goalNativeLog = await readNativeLog();
     assert.equal(goalNativeLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
+    assert.equal(goalNativeLog.some((entry) => entry.method === "turn/start"), false);
     assert.equal(
       goalNativeLog.some(
         (entry) =>
@@ -1183,6 +1194,51 @@ async function main() {
       true
     );
 
+    const directRunLogOffset = goalNativeLog.length;
+    const directRunPayload = {
+      ...runPayload,
+      threadName: "Scatter Direct Chat",
+      markdown: "# Direct Chat\n\nThis should start a Codex turn without await_canvasight_run.",
+      codexMode: "chat",
+      planMode: false,
+      agentTeam: {
+        enabled: false
+      },
+      nodeIds: ["node-a"],
+      attachments: []
+    };
+    const directRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify(directRunPayload)
+    });
+    assert.equal(directRun.status, "sent");
+    assert.equal(directRun.delivery.status, "sent");
+    assert.equal(directRun.delivery.via, "turn/start");
+    assert.equal(directRun.codexNative.status, "applied");
+    assert.equal(directRun.codexTurn.status, "started");
+    assert.equal(directRun.codexTurn.action, "turn/start");
+    assert.equal(directRun.codexTurn.threadId, "thread-smoke");
+    const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
+    assert.equal(
+      directRunLog.some(
+        (entry) =>
+          entry.method === "turn/start" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.cwd === projectPath &&
+          entry.params.input[0]?.type === "text" &&
+          entry.params.input[0]?.text === directRunPayload.markdown
+      ),
+      true
+    );
+    const directRunDrained = await request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 20
+      }
+    });
+    assert.equal(directRunDrained.structuredContent.status, "timeout");
+
     const waitForLegacyRun = request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -1190,6 +1246,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
+    await sleep(20);
     await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       body: JSON.stringify({
@@ -1229,6 +1286,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
+    await sleep(20);
     const appendQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       body: JSON.stringify({
@@ -1256,6 +1314,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
+    await sleep(20);
     const unchangedQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       body: JSON.stringify({
@@ -1284,6 +1343,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
+    await sleep(20);
     const disabledAgentTeamQueued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       body: JSON.stringify({
@@ -1368,6 +1428,7 @@ async function main() {
           timeoutMs: 5000
         }
       });
+      await sleep(20);
 
       const crossPayload = {
         sessionId: persistentSessionId,
@@ -1387,6 +1448,7 @@ async function main() {
         body: JSON.stringify(crossPayload)
       });
       assert.equal(crossQueued.status, "queued");
+      assert.equal(crossQueued.delivery.status, "awaited");
 
       const crossAwaited = await crossWait;
       assert.equal(crossAwaited.content[0].text, crossPayload.markdown);

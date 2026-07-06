@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.16";
+const SERVER_VERSION = "0.1.17";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -1705,9 +1705,15 @@ async function enqueueRun(session, payload) {
   const waiter = session.waiters.shift() || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
   if (waiter) {
     detachWaiter(waiter);
+    normalized.delivery = {
+      status: "awaited",
+      via: "await_canvasight_run",
+      threadId: null
+    };
     completeWaiter(waiter, normalized);
   } else {
-    session.runQueue.push(normalized);
+    normalized.delivery = await dispatchRunToCodexThread(session, normalized);
+    if (normalized.delivery.status !== "sent") session.runQueue.push(normalized);
   }
   return normalized;
 }
@@ -2113,6 +2119,50 @@ async function setCodexGoal(threadId, payload) {
   );
 }
 
+function runImageInputs(payload) {
+  return (payload.imagePaths || [])
+    .filter((imagePath) => typeof imagePath === "string" && imagePath)
+    .map((imagePath) => ({
+      type: "localImage",
+      path: imagePath
+    }));
+}
+
+function runTurnInput(payload) {
+  return [
+    {
+      type: "text",
+      text: payload.markdown || "",
+      text_elements: []
+    },
+    ...runImageInputs(payload)
+  ];
+}
+
+function turnIdFromResult(result) {
+  if (isObject(result?.turn) && typeof result.turn.id === "string") return result.turn.id;
+  if (typeof result?.turnId === "string") return result.turnId;
+  if (typeof result?.id === "string") return result.id;
+  return null;
+}
+
+async function startCodexTurn(threadId, payload) {
+  const result = await appServerRequest("turn/start", {
+    threadId,
+    clientUserMessageId: `canvasight-${payload.sessionId}-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`,
+    input: runTurnInput(payload),
+    cwd: payload.projectPath || null,
+    effort: payload.effort || null
+  });
+  return {
+    status: "started",
+    action: "turn/start",
+    threadId,
+    mode: payload.codexMode,
+    turnId: turnIdFromResult(result)
+  };
+}
+
 async function applyCodexNativeMode(session, payload) {
   if (!nativeCodexEnabled()) {
     return {
@@ -2158,6 +2208,56 @@ async function applyCodexNativeMode(session, payload) {
       error: error?.message || "Codex native mode request failed",
       threadId: session.codexThreadId,
       mode: payload.codexMode
+    };
+  }
+}
+
+async function dispatchRunToCodexThread(session, payload) {
+  const codexNative = await applyCodexNativeMode(session, payload);
+  payload.codexNative = codexNative;
+
+  if (codexNative.status !== "applied") {
+    payload.codexTurn = {
+      status: "skipped",
+      reason: "native_mode_not_applied",
+      threadId: codexNative.threadId,
+      mode: payload.codexMode
+    };
+    return {
+      status: "queued",
+      reason: codexNative.reason || codexNative.error || "native_mode_not_applied",
+      via: "await_canvasight_run",
+      threadId: codexNative.threadId,
+      codexNative,
+      codexTurn: payload.codexTurn
+    };
+  }
+
+  try {
+    const codexTurn = await startCodexTurn(codexNative.threadId || session.codexThreadId, payload);
+    payload.codexTurn = codexTurn;
+    return {
+      status: "sent",
+      via: "turn/start",
+      threadId: codexTurn.threadId,
+      codexNative,
+      codexTurn
+    };
+  } catch (error) {
+    payload.codexTurn = {
+      status: "failed",
+      action: "turn/start",
+      error: error?.message || "Codex turn/start request failed",
+      threadId: codexNative.threadId || session.codexThreadId,
+      mode: payload.codexMode
+    };
+    return {
+      status: "queued",
+      reason: "turn_start_failed",
+      via: "await_canvasight_run",
+      threadId: codexNative.threadId || session.codexThreadId,
+      codexNative,
+      codexTurn: payload.codexTurn
     };
   }
 }
@@ -2272,7 +2372,10 @@ async function handleSessionApi(req, res, url) {
     const body = await readJsonBody(req);
     const queued = await enqueueRun(session, body);
     sendJson(res, 200, {
-      status: "queued",
+      status: queued.delivery?.status === "sent" ? "sent" : "queued",
+      delivery: queued.delivery,
+      codexNative: queued.codexNative,
+      codexTurn: queued.codexTurn,
       agentTeam: queued.agentTeam
     });
     return true;
@@ -2685,7 +2788,7 @@ async function toolAwaitCanvasightRun(args) {
       projectPath: projectPathValue
     })
   });
-  if (run.status === "received") {
+  if (run.status === "received" && run.codexNative?.status !== "applied") {
     run.codexNative = await applyCodexNativeMode(
       {
         codexThreadId: optionalThreadId(args.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID)

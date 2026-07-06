@@ -68,6 +68,8 @@ Node-level Codex mode controls are part of the core workflow:
 
 These modes should be represented as a segmented control or similarly compact option set. The selected mode must be visually obvious, but the control should not dominate the node.
 
+Run is a submit action, not a Markdown preview action. A successful Run should report whether the payload was sent to the current Codex thread, delivered to a waiting thread, or queued for `await_canvasight_run`. Markdown preview remains a separate drawer command for reviewing generated content and must not be used as the only visual proof that a Run was sent.
+
 ## Icon Semantics
 
 Canvasight uses app-local SVG icons through the shared icon registry. Icons should map to the object or command they actually represent:

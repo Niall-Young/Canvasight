@@ -1480,7 +1480,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const threadName = mode === "flow" ? `Canvasight Flow: ${node.data.title || "Untitled"}` : `Canvasight: ${node.data.title || "Untitled"}`;
       setStatus(t("status.sendingAssistant"));
       try {
-        await canvasightApi.run({
+        const runResult = await canvasightApi.run({
           attachments: result.attachments,
           agentTeam: result.agentTeam,
           codexMode: result.codexMode,
@@ -1495,15 +1495,19 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           threadName
         });
         markNodeRun(nodeId, mode);
-        setMarkdownNodeId(nodeId);
-        setDrawer("markdown");
         setSelectedRunMode(mode);
-        setStatus(t("status.sentAssistant"));
+        if (runResult.delivery?.status === "awaited") {
+          setStatus(t("status.awaitedAssistant"));
+        } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
+          setStatus(t("status.sentAssistant"));
+        } else {
+          setStatus(t("status.queuedAssistant"));
+        }
       } catch (error) {
         setStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"));
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setDrawer, setStatus, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setStatus, t]
   );
 
   useEffect(() => {

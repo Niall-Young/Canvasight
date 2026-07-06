@@ -33,6 +33,35 @@ export interface RunPayload {
   threadName: string;
 }
 
+export interface RunResponse {
+  status: "queued" | "sent";
+  delivery?: {
+    status: "awaited" | "queued" | "sent";
+    reason?: string;
+    threadId?: string | null;
+    via?: string;
+  };
+  codexNative?: {
+    status: "applied" | "disabled" | "failed" | "pending" | "skipped";
+    action?: string;
+    collaborationMode?: string;
+    error?: string;
+    mode?: CodexMode;
+    reason?: string;
+    threadId?: string | null;
+  };
+  codexTurn?: {
+    status: "failed" | "skipped" | "started";
+    action?: string;
+    error?: string;
+    mode?: CodexMode;
+    reason?: string;
+    threadId?: string | null;
+    turnId?: string | null;
+  };
+  agentTeam?: AgentTeamRunConfig;
+}
+
 function sessionIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("sessionId") || "local";
 }
@@ -249,8 +278,8 @@ export const canvasightApi = {
     });
   },
 
-  run(payload: RunPayload): Promise<{ status: "queued" }> {
-    return requestJson<{ status: "queued" }>(`/api/sessions/${this.sessionId}/run`, {
+  run(payload: RunPayload): Promise<RunResponse> {
+    return requestJson<RunResponse>(`/api/sessions/${this.sessionId}/run`, {
       method: "POST",
       body: JSON.stringify(payload)
     });

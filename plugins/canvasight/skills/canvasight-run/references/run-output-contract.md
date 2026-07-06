@@ -1,6 +1,11 @@
 # Canvasight Run Output Contract
 
-After `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
+Canvasight Run can arrive in two ways:
+
+- Direct delivery: the browser session is bound to a Codex thread and the daemon starts a Codex `turn/start` with the generated Markdown.
+- Await fallback: the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
+
+For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 
 Then read `structuredContent.agentTeam`.
 

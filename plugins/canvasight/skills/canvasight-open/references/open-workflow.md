@@ -16,7 +16,7 @@ The web service is project-level and should survive the Codex thread that opened
 
 ## Attach From A New Thread
 
-Opening the browser and receiving the next Run payload are separate. A new Codex thread can attach to the same project queue by calling `await_canvasight_run` with `projectPath`; use `canvasight-run` for that part.
+Opening the browser and receiving the next Run payload are separate. Normal browser Run tries to send to the session's bound Codex thread through direct delivery. A new Codex thread can attach to an old browser tab, old session, or queued fallback by calling `await_canvasight_run` with `projectPath`; use `canvasight-run` for that part.
 
 ## Close A Session
 

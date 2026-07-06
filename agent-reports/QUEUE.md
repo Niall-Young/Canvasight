@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1402-integration-summary-run-direct-thread-delivery.md` - integrated direct Run delivery to the bound Codex thread with await fallback, docs, skills, tests, and version 0.1.17.
+- `agent-reports/resolved/20260706-1402-development-solution-run-direct-thread-delivery.md` - implemented Codex app-server turn/start delivery for Canvasight Run.
+- `agent-reports/resolved/20260706-1349-development-issue-run-not-sent-to-thread.md` - resolved Run clicking only opening Markdown without sending to the current Codex thread.
 - `agent-reports/resolved/20260706-1101-integration-summary-ai-graph-layout.md` - integrated edge-aware default graph layout, validation, docs, reports, and version 0.1.16.
 - `agent-reports/resolved/20260706-1101-development-solution-ai-graph-layout.md` - implemented dependency-layer graph layout with explicit coordinate preservation.
 - `agent-reports/resolved/20260706-1040-development-issue-ai-graph-layout-overlap.md` - resolved AI-generated Canvasight graphs clumping into unreadable layouts.
