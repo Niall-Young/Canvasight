@@ -52,6 +52,7 @@ import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { Icon } from "./components/ui/icon";
 import { IconButton } from "./components/ui/icon-button";
 import { TooltipAnchor } from "./components/ui/tooltip";
+import { Toast, ToastViewport, type ToastTone } from "./components/ui/toast";
 import { useScatterStore } from "./store/scatterStore";
 import "@xyflow/react/dist/style.css";
 import "./styles/app.css";
@@ -778,11 +779,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [templates, setTemplates] = useState<NodeTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
+  const [runFeedback, setRunFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const hydratedRef = useRef(false);
   const documentRevisionRef = useRef<number | null>(null);
   const skipNextSaveRef = useRef(false);
   const reloadingExternalDocumentRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
+  const runFeedbackTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const workspaceContentRef = useRef<HTMLElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
@@ -837,6 +840,40 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         "--markdown-panel-ratio": panelRatios.markdown
       }) as CSSProperties,
     [panelRatios]
+  );
+
+  const hideRunFeedback = useCallback(() => {
+    if (runFeedbackTimerRef.current) {
+      window.clearTimeout(runFeedbackTimerRef.current);
+      runFeedbackTimerRef.current = null;
+    }
+    setRunFeedback(null);
+  }, []);
+
+  const showRunFeedback = useCallback((message: string, tone: ToastTone = "information") => {
+    if (runFeedbackTimerRef.current) {
+      window.clearTimeout(runFeedbackTimerRef.current);
+    }
+    setRunFeedback({ message, tone });
+    runFeedbackTimerRef.current = window.setTimeout(() => {
+      setRunFeedback(null);
+      runFeedbackTimerRef.current = null;
+    }, tone === "negative" ? 9000 : 5200);
+  }, []);
+
+  const setRunStatus = useCallback(
+    (message: string, tone: ToastTone = "information") => {
+      setStatus(message);
+      showRunFeedback(message, tone);
+    },
+    [setStatus, showRunFeedback]
+  );
+
+  useEffect(
+    () => () => {
+      if (runFeedbackTimerRef.current) window.clearTimeout(runFeedbackTimerRef.current);
+    },
+    []
   );
 
   const updateConnectionHoverTarget = useCallback((target: ConnectionHoverTarget | null) => {
@@ -1530,7 +1567,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       if (!node) return;
       const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
       if (result.nodes.every((item) => item.data.body.trim().length === 0)) {
-        setStatus(t("status.cannotSendEmpty"));
+        setRunStatus(t("status.cannotSendEmpty"), "negative");
         return;
       }
 
@@ -1549,7 +1586,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         sessionId: canvasightApi.sessionId,
         threadName
       };
-      setStatus(t("status.sendingAssistant"));
+      setRunStatus(t("status.sendingAssistant"), "loading");
       try {
         if (canvasightApi.canSendFollowUpMessage()) {
           await canvasightApi.prepareWidgetRun(runPayload);
@@ -1559,7 +1596,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           });
           markNodeRun(nodeId, mode);
           setSelectedRunMode(mode);
-          setStatus(t("status.sentAssistant"));
+          setRunStatus(t("status.sentAssistant"), "positive");
           return;
         }
 
@@ -1567,15 +1604,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
         if (runResult.delivery?.status === "awaited") {
-          setStatus(t("status.awaitedAssistant"));
+          setRunStatus(t("status.awaitedAssistant"), "positive");
         } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-          setStatus(t("status.sentAssistant"));
+          setRunStatus(t("status.sentAssistant"), "positive");
         } else if (
-          runResult.delivery?.reason === "native_direct_requires_explicit_opt_in" ||
-          runResult.codexNative?.reason === "native_direct_requires_explicit_opt_in" ||
-          runResult.delivery?.codexNative?.reason === "native_direct_requires_explicit_opt_in"
+          runResult.delivery?.reason === "native_direct_disabled" ||
+          runResult.codexNative?.reason === "native_direct_disabled" ||
+          runResult.delivery?.codexNative?.reason === "native_direct_disabled"
         ) {
-          setStatus(t("status.queuedAssistantNativeUnavailable"));
+          setRunStatus(t("status.browserFallbackQueued"), "negative");
         } else if (runResult.codexTurn?.error || runResult.delivery?.codexTurn?.error || runResult.codexNative?.error || runResult.delivery?.codexNative?.error) {
           const reason =
             runResult.codexTurn?.error ||
@@ -1584,9 +1621,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             runResult.delivery?.codexNative?.error ||
             runResult.delivery?.reason ||
             "";
-          setStatus(t("status.queuedAssistantWithReason", { reason }));
+          setRunStatus(t("status.browserFallbackQueuedWithReason", { reason }), "negative");
         } else {
-          setStatus(t("status.queuedAssistant"));
+          setRunStatus(t("status.browserFallbackQueued"), "negative");
         }
       } catch (error) {
         if (canvasightApi.canSendFollowUpMessage()) {
@@ -1596,24 +1633,24 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             setSelectedRunMode(mode);
             const reason = error instanceof Error ? error.message : "";
             if (runResult.delivery?.status === "awaited") {
-              setStatus(t("status.awaitedAssistant"));
+              setRunStatus(t("status.awaitedAssistant"), "positive");
             } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-              setStatus(t("status.sentAssistant"));
+              setRunStatus(t("status.sentAssistant"), "positive");
             } else if (reason) {
-              setStatus(t("status.queuedAssistantWithReason", { reason }));
+              setRunStatus(t("status.queuedAssistantWithReason", { reason }), "negative");
             } else {
-              setStatus(t("status.queuedAssistant"));
+              setRunStatus(t("status.queuedAssistant"), "negative");
             }
             return;
           } catch (fallbackError) {
-            setStatus(fallbackError instanceof Error ? fallbackError.message : t("status.sendAssistantFailed"));
+            setRunStatus(fallbackError instanceof Error ? fallbackError.message : t("status.sendAssistantFailed"), "negative");
             return;
           }
         }
-        setStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"));
+        setRunStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"), "negative");
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setStatus, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
   );
 
   useEffect(() => {
@@ -2389,6 +2426,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             if (deleteTemplateRequest) void deleteTemplate(deleteTemplateRequest.id);
           }}
         />
+        {runFeedback ? (
+          <ToastViewport className="canvas-run-toast-viewport">
+            <Toast tone={runFeedback.tone} message={runFeedback.message} onClose={hideRunFeedback} />
+          </ToastViewport>
+        ) : null}
       </main>
     </div>
   );

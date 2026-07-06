@@ -14,6 +14,12 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-2043-integration-summary-dev-native-disabled.md` - integrated default daemon native Run delivery for browser/dev pages after current-thread claim.
+- `agent-reports/resolved/20260706-2043-development-solution-dev-native-disabled.md` - made native `turn/start` delivery default-on and corrected tests/docs.
+- `agent-reports/resolved/20260706-2043-development-issue-dev-native-disabled.md` - resolved test/default mismatch where real dev pages had native Run delivery disabled.
+- `agent-reports/resolved/20260706-2033-integration-summary-browser-fallback-run-silent.md` - integrated visible Run feedback for browser fallback, skill/README wording, version 0.1.27, dev server status version, validation, plugin reinstall.
+- `agent-reports/resolved/20260706-2033-development-solution-browser-fallback-run-silent.md` - implemented explicit browser fallback queued toast and docs.
+- `agent-reports/resolved/20260706-2018-development-issue-browser-fallback-run-silent.md` - resolved browser fallback Run appearing silent and not direct-sending to current Codex thread.
 - `agent-reports/resolved/20260706-2003-integration-summary.md` - integrated Cowart-style Canvasight native widget bridge, docs, skills, tests, version 0.1.26, and plugin reinstall.
 - `agent-reports/resolved/20260706-2003-development-solution-run-widget-bridge.md` - implemented `render_canvasight_canvas_widget`, widget resource, frontend bridge, and fallback handling.
 - `agent-reports/resolved/20260706-1935-development-issue-run-widget-bridge.md` - resolved Canvasight Run not reaching the current Codex thread by using native widget host bridge delivery.

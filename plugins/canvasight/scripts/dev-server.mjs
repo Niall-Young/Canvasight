@@ -10,8 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const viteBin = path.join(pluginRoot, "node_modules", "vite", "bin", "vite.js");
+const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8"));
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = typeof packageJson.version === "string" ? packageJson.version : "";
 
 function canvasightHome() {
   const configured = process.env.CANVASIGHT_HOME;

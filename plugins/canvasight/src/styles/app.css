@@ -3592,6 +3592,23 @@ button.achievement-card.is-unlocked:focus-visible {
   transform: translateX(-50%);
 }
 
+.canvas-run-toast-viewport {
+  top: 76px;
+  width: min(560px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.canvas-run-toast-viewport .kit-toast {
+  width: 100%;
+  max-width: 560px;
+  pointer-events: auto;
+}
+
+.canvas-run-toast-viewport .kit-toast-message {
+  min-width: 0;
+  white-space: normal;
+}
+
 .achievement-toast {
   display: flex;
   width: 342px;

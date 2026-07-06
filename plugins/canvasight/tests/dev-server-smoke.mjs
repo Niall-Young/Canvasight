@@ -139,11 +139,11 @@ function run(action, options = {}) {
   const env = {
     ...process.env,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
-    CANVASIGHT_CODEX_NATIVE: options.codexNative ?? "1",
     CANVASIGHT_HOME: options.canvasightHome || canvasightHome,
     CANVASIGHT_DEV_PORT: String(options.port || port),
     CANVASIGHT_NATIVE_LOG: nativeLogPath
   };
+  if (options.codexNative !== undefined) env.CANVASIGHT_CODEX_NATIVE = options.codexNative;
   delete env.CODEX_THREAD_ID;
   if (options.threadId !== null) env.CODEX_THREAD_ID = options.threadId || "thread-dev-smoke";
   return spawnSync(process.execPath, [scriptPath, action], {
@@ -464,10 +464,10 @@ async function main() {
     });
     assert.equal(queuedRun.status, "queued");
     assert.equal(queuedRun.delivery.status, "queued");
-    assert.equal(queuedRun.delivery.reason, "native_direct_requires_explicit_opt_in");
+    assert.equal(queuedRun.delivery.reason, "native_direct_disabled");
     assert.equal(queuedRun.delivery.via, "await_canvasight_run");
     assert.equal(queuedRun.codexNative.status, "disabled");
-    assert.equal(queuedRun.codexNative.reason, "native_direct_requires_explicit_opt_in");
+    assert.equal(queuedRun.codexNative.reason, "native_direct_disabled");
     assert.equal(queuedRun.codexTurn.status, "skipped");
     const queuedNativeLog = (await readNativeLog()).slice(queuedLogOffset);
     assert.equal(queuedNativeLog.some((entry) => entry.method === "thread/resume"), false);

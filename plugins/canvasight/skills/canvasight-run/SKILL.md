@@ -9,13 +9,13 @@ Use this skill to handle Canvasight Run payloads and their Codex mode.
 
 ## Workflow
 
-1. If the Run arrived as a normal Codex follow-up turn from the Canvasight native widget, use that Markdown directly.
-2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so queued payloads are filtered to the current thread.
-3. If the user already clicked Run but no Codex turn appeared, call `await_canvasight_run`.
+1. If the Run arrived as a normal Codex follow-up turn from the Canvasight native widget or daemon direct-delivery path, use that Markdown directly.
+2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so the daemon targets the current thread for direct `turn/start` delivery.
+3. If the user already clicked Run but no Codex turn appeared, call `await_canvasight_run`. If the current thread's Canvasight MCP transport is missing or closed, state that the fallback queue cannot be consumed from this stale thread and require a reload/new thread with current Canvasight tools.
 4. Prefer `sessionId` when available; use `projectPath` to attach to the next queued Run from any active session in that project.
 5. Treat returned Markdown and `structuredContent` as the source of truth for the next Codex action.
 6. If `structuredContent.agentTeam.enabled` is true, use `canvasight-agent-team` before executing the task.
 
-Normal Canvasight Run delivery should come from the Codex native widget host bridge. Browser URLs and bare dev pages remain fallback surfaces; they queue payloads for `await_canvasight_run` unless an explicit development native path is enabled. Do not assume a browser click reached the current Codex thread unless a real Codex turn appears.
+Normal Canvasight Run delivery should come from the Codex native widget host bridge or the project daemon's native app-server `turn/start` path after the current thread has claimed the project/session. Browser URLs and bare dev pages should not silently pretend success: report `sent` only when the daemon returns `turn/start`, and otherwise queue the payload for `await_canvasight_run` with the returned reason.
 
 For native Chat, Plan, and Goal handling, read `references/run-output-contract.md`.

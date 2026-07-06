@@ -4,7 +4,7 @@ import { useI18n } from "../../lib/i18n";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
 
-type ToastTone = "information" | "loading" | "negative" | "positive";
+export type ToastTone = "information" | "loading" | "negative" | "positive";
 
 interface ToastProps extends HTMLAttributes<HTMLDivElement> {
   message: string;
