@@ -132,7 +132,8 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - Active canvas context is a bias, not a hard override. Small direct commands, simple questions, Run payloads, and requests that explicitly ask for immediate direct execution should remain direct.
 - AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
 - AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
-- AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction.
+- AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction. When edges are present, generated nodes should be arranged by dependency layers rather than by simple index grid.
+- Explicit node coordinates from the user or AI should be preserved; automatic layout should only fill missing coordinates.
 - AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
 - AI-generated content must remain fully editable by the user.
 

@@ -186,6 +186,15 @@ async function fetchJson(url, init) {
   return text ? JSON.parse(text) : null;
 }
 
+function assertUniqueNodePositions(nodes, label) {
+  const seen = new Set();
+  for (const node of nodes) {
+    const key = `${node.position?.x},${node.position?.y}`;
+    assert.equal(seen.has(key), false, `${label} has overlapping node coordinates at ${key}`);
+    seen.add(key);
+  }
+}
+
 function createMcpClient(label, envOverrides = {}) {
   let clientNextId = 1;
   let clientStdoutBuffer = "";
@@ -548,7 +557,10 @@ async function main() {
     assert.equal(graphScatterJson.nodes[1].data.codexMode, "plan");
     assert.equal(graphScatterJson.nodes[1].data.planMode, true);
     assert.equal(graphScatterJson.nodes[2].data.codexMode, "goal");
-    assert.equal(graphScatterJson.nodes[2].position.x, 920);
+    assert.equal(graphScatterJson.nodes[0].position.x, 0);
+    assert.equal(graphScatterJson.nodes[1].position.x, 680);
+    assert.equal(graphScatterJson.nodes[2].position.x, 1360);
+    assert.equal(graphScatterJson.nodes[2].position.y, 0);
     assert.equal(graphScatterJson.edges[0].source, "entry");
     assert.equal(graphScatterJson.edges[1].target, "store");
 
@@ -574,7 +586,7 @@ async function main() {
     assert.equal(articleScatterJson.activePageId, graphWritten.structuredContent.activePageId);
     assert.equal(articleScatterJson.nodes.length, 2);
     assert.equal(articleScatterJson.nodes[0].position.y, 0);
-    assert.equal(articleScatterJson.nodes[1].position.y, 260);
+    assert.equal(articleScatterJson.nodes[1].position.y, 380);
 
     const fanOutGraph = await request("tools/call", {
       name: "write_canvasight_graph",
@@ -606,10 +618,49 @@ async function main() {
     assert.equal(fanOutScatterJson.pages.length, 3);
     assert.equal(fanOutScatterJson.nodes.length, 4);
     assert.equal(fanOutScatterJson.edges.length, 3);
+    assertUniqueNodePositions(fanOutScatterJson.nodes, "Fan-out graph");
     assert.equal(fanOutScatterJson.edges.every((edge) => edge.source === "root"), true);
     assert.deepEqual(
       fanOutScatterJson.edges.map((edge) => edge.target),
       ["research", "design", "build"]
+    );
+    assert.deepEqual(
+      fanOutScatterJson.nodes.map((node) => [node.id, node.position.x, node.position.y]),
+      [
+        ["root", 0, 380],
+        ["research", 680, 0],
+        ["design", 680, 380],
+        ["build", 680, 760]
+      ]
+    );
+
+    const explicitPositionGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        graphType: "task-plan",
+        pageName: "Explicit Position Preservation",
+        nodes: [
+          { id: "fixed-root", title: "Fixed root", body: "Keep both explicit coordinates.", position: { x: 111, y: 222 } },
+          { id: "auto-child", title: "Auto child", body: "Receive edge-aware automatic coordinates." },
+          { id: "fixed-x-child", title: "Fixed X child", body: "Keep explicit x and auto-place y.", x: 900 }
+        ],
+        edges: [
+          { id: "fixed-root-auto", source: "fixed-root", target: "auto-child" },
+          { id: "fixed-root-fixed-x", source: "fixed-root", target: "fixed-x-child" }
+        ]
+      }
+    });
+    assert.equal(explicitPositionGraph.structuredContent.status, "written");
+    const explicitPositionScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+    assertUniqueNodePositions(explicitPositionScatterJson.nodes, "Explicit position graph");
+    assert.deepEqual(
+      explicitPositionScatterJson.nodes.map((node) => [node.id, node.position.x, node.position.y]),
+      [
+        ["fixed-root", 111, 222],
+        ["auto-child", 680, 0],
+        ["fixed-x-child", 900, 380]
+      ]
     );
 
     const productGraph = await request("tools/call", {
@@ -657,8 +708,14 @@ async function main() {
       ["AGENTS.md", "design.md"]
     );
     const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
-    assert.equal(productScatterJson.pages.length, 4);
-    assert.equal(productScatterJson.nodes[2].position.x, 920);
+    assert.equal(productScatterJson.pages.length, 5);
+    assertUniqueNodePositions(productScatterJson.nodes, "Software product graph");
+    assert.equal(productScatterJson.nodes[0].position.x, 0);
+    assert.equal(productScatterJson.nodes[0].position.y, 950);
+    assert.equal(productScatterJson.nodes[2].position.x, 680);
+    assert.equal(productScatterJson.nodes[2].position.y, 380);
+    assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").position.y, 1520);
+    assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-design-md").position.y, 1900);
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").data.projectGuidanceFile, "AGENTS.md");
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-design-md").data.projectGuidanceFile, "design.md");
 
@@ -711,6 +768,36 @@ async function main() {
     });
     assert.deepEqual(nonProductGraph.structuredContent.nodeIds, ["task-root"]);
     assert.deepEqual(nonProductGraph.structuredContent.projectGuidanceNodes, []);
+
+    const isolatedLayoutProjectPath = path.join(tempRoot, "isolated-layout-project");
+    await fsp.mkdir(isolatedLayoutProjectPath, { recursive: true });
+    const isolatedLayoutGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath: isolatedLayoutProjectPath,
+        graphType: "task-plan",
+        pageName: "Connected And Isolated Nodes",
+        nodes: [
+          { id: "connected-root", title: "Connected root", body: "Start the connected workflow." },
+          { id: "connected-child", title: "Connected child", body: "Continue the connected workflow." },
+          { id: "loose-note", title: "Loose note", body: "Stay outside the connected workflow." },
+          { id: "loose-reference", title: "Loose reference", body: "Stay grouped with other isolated nodes." }
+        ],
+        edges: [{ id: "connected-root-child", source: "connected-root", target: "connected-child" }]
+      }
+    });
+    assert.equal(isolatedLayoutGraph.structuredContent.status, "written");
+    const isolatedLayoutScatterJson = JSON.parse(await fsp.readFile(path.join(isolatedLayoutProjectPath, ".scatter", "scatter.json"), "utf8"));
+    assertUniqueNodePositions(isolatedLayoutScatterJson.nodes, "Isolated node graph");
+    assert.deepEqual(
+      isolatedLayoutScatterJson.nodes.map((node) => [node.id, node.position.x, node.position.y]),
+      [
+        ["connected-root", 0, 0],
+        ["connected-child", 680, 0],
+        ["loose-note", 0, 380],
+        ["loose-reference", 680, 380]
+      ]
+    );
 
     const templateAssetPath = path.join(tempRoot, "figma-color-template.md");
     await fsp.writeFile(templateAssetPath, "# Figma color variable checklist\n", "utf8");

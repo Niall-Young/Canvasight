@@ -62,6 +62,8 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 
 Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认写入模式是 `append-page`，用于避免覆盖现有画布；这只是安全默认值，不是任务分类规则。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：支持一个节点连接多个下游节点，但不能自连、不能重复、一个节点不能有多个父节点。
 
+默认布局会根据节点连线做分层排列：父节点在左，子节点在右，同层节点纵向错开并保留安全间距；没有连线的节点才使用线性或网格 fallback。AI 或用户显式传入的 `position` / `x` / `y` 会被保留，不会被自动布局覆盖。
+
 AI 生成前应先调用 `list_canvasight_node_templates` 扫描本机全局节点模板摘要。它默认只返回轻量预览，不返回完整提示词正文和附件；若需要查看某个候选模板全文，再调用 `get_canvasight_node_template({ templateId })`。若模板符合当前节点用途，写入节点时使用 `templateId` 复用模板标题、提示词正文和附件；如果没有合适模板，再生成普通节点。
 
 AI 生成时可以使用 `graphType` 选择节点组织策略，但分类只影响节点标题、提示词、连线结构和默认布局，不决定是否创建、切换或替换 Page：
@@ -85,7 +87,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.15` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8`、`0.1.9`、`0.1.10`、`0.1.11`、`0.1.12`、`0.1.13` 或 `0.1.14`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.16` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8`、`0.1.9`、`0.1.10`、`0.1.11`、`0.1.12`、`0.1.13`、`0.1.14` 或 `0.1.15`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -279,6 +281,8 @@ When Canvasight is already open, the user does not need to repeat "generate Canv
 
 Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project and defaults to `mode: "append-page"` to avoid overwriting existing canvas content; this is a safe write default, not a task classification rule. It validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicates, and no more than one parent edge into the same target node.
 
+Default layout is edge-aware: parents are placed to the left, children to the right, nodes in the same layer are vertically staggered with safe spacing, and unconnected nodes use the linear or grid fallback. Explicit `position`, `x`, or `y` values from AI or the user are preserved instead of being overwritten by automatic layout.
+
 Before generating a graph, Codex should call `list_canvasight_node_templates` to scan lightweight local global template summaries. It does not return full prompt bodies or attachments by default; call `get_canvasight_node_template({ templateId })` only for a selected candidate. When a template fits the current node purpose, pass its `templateId` to reuse the saved title, prompt body, and attachments; generate a normal node when no template fits.
 
 AI generation can use `graphType` to choose a node organization strategy, but classification only affects node titles, prompt bodies, edge structure, and default layout. It does not decide whether a Page is created, switched, or replaced:
@@ -302,7 +306,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.15` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, `0.1.9`, `0.1.10`, `0.1.11`, `0.1.12`, `0.1.13`, or `0.1.14`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.16` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, `0.1.9`, `0.1.10`, `0.1.11`, `0.1.12`, `0.1.13`, `0.1.14`, or `0.1.15`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 

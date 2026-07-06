@@ -26,6 +26,7 @@ Use this skill when Codex should create or update Canvasight nodes and connectio
 - Template reuse does not control `graphType`, `mode`, Page behavior, or node Codex mode.
 - One node may connect to multiple downstream nodes.
 - Self-connections, duplicate `source -> target` edges, and multiple parent edges into the same target are invalid.
+- For nontrivial graphs, prefer dependency or stage-based positions over a simple grid; explicit user positions always win.
 - Do not force graph writing for small direct commands, simple explanations, Run payloads, or requests that explicitly ask for immediate direct execution.
 
 Read `references/graph-writing.md` for input rules and `references/graph-types.md` for task classification.

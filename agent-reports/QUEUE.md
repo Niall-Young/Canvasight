@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1101-integration-summary-ai-graph-layout.md` - integrated edge-aware default graph layout, validation, docs, reports, and version 0.1.16.
+- `agent-reports/resolved/20260706-1101-development-solution-ai-graph-layout.md` - implemented dependency-layer graph layout with explicit coordinate preservation.
+- `agent-reports/resolved/20260706-1040-development-issue-ai-graph-layout-overlap.md` - resolved AI-generated Canvasight graphs clumping into unreadable layouts.
 - `agent-reports/resolved/20260706-1035-integration-summary-active-canvas-routing.md` - integrated active Canvasight context routing so later medium or complex requests prefer graph-first handling.
 - `agent-reports/resolved/20260706-1035-development-solution-active-canvas-routing.md` - added MCP routing metadata, Skill trigger updates, docs, tests, and version 0.1.15.
 - `agent-reports/resolved/20260706-1024-product-issue-active-canvas-routing.md` - resolved the gap where an opened Canvasight canvas did not bias later structured requests toward the canvas.

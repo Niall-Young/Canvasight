@@ -49,7 +49,9 @@ Generated edges must follow the same rules as manual canvas connections:
 
 ## Layout
 
-Use `layout: "horizontal"` for linear flows, `layout: "vertical"` for staged outlines, and `layout: "grid"` for architecture or requirement maps when exact positions are not important.
+Use `layout: "horizontal"` for left-to-right flows, `layout: "vertical"` for top-to-bottom staged outlines, and `layout: "grid"` for maps when exact positions are not important.
+
+When edges exist, Canvasight lays out nodes by dependency layers rather than by raw input index: parents are placed before children, same-layer nodes are staggered with safe spacing, and fan-out branches are separated. Explicit `position`, `x`, or `y` values still win for the coordinates they provide.
 
 If `layout` is omitted, Canvasight may choose a default from `graphType`. This default affects node placement only; it does not affect Page write behavior.
 

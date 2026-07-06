@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.15";
+const SERVER_VERSION = "0.1.16";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -22,6 +22,11 @@ const VALID_RUN_MODES = new Set(["flow", "node"]);
 const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
 const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codebase-structure", "task-plan", "general"]);
+const GRAPH_NODE_WIDTH = 400;
+const GRAPH_NODE_HEIGHT = 220;
+const GRAPH_LAYER_GAP = 280;
+const GRAPH_ROW_GAP = 160;
+const GRAPH_GRID_COLUMNS = 3;
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
@@ -1040,17 +1045,173 @@ function softwareProductGuidanceNodes(projectPath, graphType, pageIndex, rawNode
 }
 
 function normalizeGraphNodePosition(node, index, layout) {
-  const column = layout === "vertical" ? 0 : layout === "grid" ? index % 3 : index;
-  const row = layout === "horizontal" ? 0 : layout === "grid" ? Math.floor(index / 3) : index;
+  const column = layout === "vertical" ? 0 : layout === "grid" ? index % GRAPH_GRID_COLUMNS : index;
+  const row = layout === "horizontal" ? 0 : layout === "grid" ? Math.floor(index / GRAPH_GRID_COLUMNS) : index;
   const fallback = {
-    x: column * 460,
-    y: row * 260
+    x: column * (GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP),
+    y: row * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP)
   };
   const position = isObject(node.position) ? node.position : {};
   return {
-    x: coerceNumber(position.x ?? node.x, fallback.x),
-    y: coerceNumber(position.y ?? node.y, fallback.y)
+    x: coerceGraphCoordinate(position.x ?? node.x, fallback.x),
+    y: coerceGraphCoordinate(position.y ?? node.y, fallback.y)
   };
+}
+
+function hasGraphCoordinate(value) {
+  if (typeof value === "string" && !value.trim()) return false;
+  return Number.isFinite(Number(value));
+}
+
+function coerceGraphCoordinate(value, fallback) {
+  return hasGraphCoordinate(value) ? Number(value) : fallback;
+}
+
+function graphNodePositionAxes(value) {
+  const position = isObject(value?.position) ? value.position : {};
+  return {
+    x: hasGraphCoordinate(position.x ?? value?.x),
+    y: hasGraphCoordinate(position.y ?? value?.y)
+  };
+}
+
+function fallbackGraphNodePosition(index, layout) {
+  const stepX = GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP;
+  const stepY = GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP;
+  if (layout === "vertical") {
+    return { x: 0, y: index * stepY };
+  }
+  if (layout === "grid") {
+    return {
+      x: (index % GRAPH_GRID_COLUMNS) * stepX,
+      y: Math.floor(index / GRAPH_GRID_COLUMNS) * stepY
+    };
+  }
+  return { x: index * stepX, y: 0 };
+}
+
+function graphLayoutLayers(nodes, edges) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const nodeIndex = new Map(nodes.map((node, index) => [node.id, index]));
+  const indegree = new Map(nodes.map((node) => [node.id, 0]));
+  const children = new Map(nodes.map((node) => [node.id, []]));
+  const parent = new Map();
+
+  edges.forEach((edge) => {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) return;
+    children.get(edge.source)?.push(edge.target);
+    indegree.set(edge.target, (indegree.get(edge.target) || 0) + 1);
+    parent.set(edge.target, edge.source);
+  });
+
+  const layers = new Map();
+  const queue = nodes.filter((node) => (indegree.get(node.id) || 0) === 0).map((node) => node.id);
+  queue.forEach((id) => layers.set(id, 0));
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const id = queue[index];
+    const nextLayer = (layers.get(id) || 0) + 1;
+    const childIds = [...(children.get(id) || [])].sort((a, b) => (nodeIndex.get(a) || 0) - (nodeIndex.get(b) || 0));
+    childIds.forEach((childId) => {
+      layers.set(childId, Math.max(layers.get(childId) || 0, nextLayer));
+      const nextIndegree = Math.max(0, (indegree.get(childId) || 0) - 1);
+      indegree.set(childId, nextIndegree);
+      if (nextIndegree === 0) queue.push(childId);
+    });
+  }
+
+  nodes.forEach((node, index) => {
+    if (!layers.has(node.id)) layers.set(node.id, Math.floor(index / GRAPH_GRID_COLUMNS));
+  });
+
+  const grouped = [];
+  nodes.forEach((node) => {
+    const layer = layers.get(node.id) || 0;
+    if (!grouped[layer]) grouped[layer] = [];
+    grouped[layer].push(node);
+  });
+
+  grouped.forEach((group) => {
+    group.sort((a, b) => {
+      const parentA = parent.get(a.id);
+      const parentB = parent.get(b.id);
+      const parentDelta = (parentA ? nodeIndex.get(parentA) || 0 : -1) - (parentB ? nodeIndex.get(parentB) || 0 : -1);
+      return parentDelta || (nodeIndex.get(a.id) || 0) - (nodeIndex.get(b.id) || 0);
+    });
+  });
+
+  return grouped;
+}
+
+function edgeAwareGraphNodePositions(nodes, edges, layout) {
+  if (!edges.length) return new Map(nodes.map((node, index) => [node.id, fallbackGraphNodePosition(index, layout)]));
+
+  const stepX = GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP;
+  const stepY = GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP;
+  const connectedIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
+  const connectedNodes = nodes.filter((node) => connectedIds.has(node.id));
+  const isolatedNodes = nodes.filter((node) => !connectedIds.has(node.id));
+  const layers = graphLayoutLayers(connectedNodes.length ? connectedNodes : nodes, edges);
+  const positions = new Map();
+
+  layers.forEach((group, layerIndex) => {
+    group.forEach((node, rowIndex) => {
+      const offset = rowIndex - (group.length - 1) / 2;
+      positions.set(
+        node.id,
+        layout === "vertical"
+          ? {
+              x: offset * stepX,
+              y: layerIndex * stepY
+            }
+          : {
+              x: layerIndex * stepX,
+              y: offset * stepY
+            }
+      );
+    });
+  });
+
+  const values = [...positions.values()];
+  const minX = Math.min(...values.map((position) => position.x));
+  const minY = Math.min(...values.map((position) => position.y));
+  if (minX < 0 || minY < 0) {
+    positions.forEach((position, id) => {
+      positions.set(id, {
+        x: position.x - Math.min(0, minX),
+        y: position.y - Math.min(0, minY)
+      });
+    });
+  }
+
+  if (isolatedNodes.length) {
+    const currentPositions = [...positions.values()];
+    const isolatedStartY = currentPositions.length ? Math.max(...currentPositions.map((position) => position.y)) + stepY : 0;
+    isolatedNodes.forEach((node, index) => {
+      positions.set(node.id, {
+        x: (index % GRAPH_GRID_COLUMNS) * stepX,
+        y: isolatedStartY + Math.floor(index / GRAPH_GRID_COLUMNS) * stepY
+      });
+    });
+  }
+
+  return positions;
+}
+
+function applyGraphAutoLayout(nodes, edges, layout, positionAxesByNodeId) {
+  const autoPositions = edgeAwareGraphNodePositions(nodes, edges, layout);
+  return nodes.map((node) => {
+    const axes = positionAxesByNodeId.get(node.id) || { x: false, y: false };
+    const autoPosition = autoPositions.get(node.id);
+    if (!autoPosition || (axes.x && axes.y)) return node;
+    return {
+      ...node,
+      position: {
+        x: axes.x ? node.position.x : autoPosition.x,
+        y: axes.y ? node.position.y : autoPosition.y
+      }
+    };
+  });
 }
 
 function graphNodeTemplateRequest(value, data) {
@@ -1187,6 +1348,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
   const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = new Set();
   const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
+  const positionAxesByNodeId = new Map(nodes.map((node, nodeIndex) => [node.id, graphNodePositionAxes(rawNodeInputs[nodeIndex])]));
   const nodeIds = new Set(nodes.map((node) => node.id));
   const usedEdgeIds = new Set();
   const usedTargetIds = new Set();
@@ -1202,6 +1364,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
         }))
       : [];
   const edges = [...rawEdges, ...autoGuidanceEdges].map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs));
+  const layoutedNodes = applyGraphAutoLayout(nodes, edges, layout, positionAxesByNodeId);
   guidanceNodes.forEach((node) => {
     projectGuidanceNodes.push({
       pageIndex: index,
@@ -1220,7 +1383,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
     createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
     updatedAt: now,
     viewport: normalizeScatterViewport(page.viewport || args?.viewport),
-    nodes,
+    nodes: layoutedNodes,
     edges
   };
 }
@@ -2708,7 +2871,7 @@ const tools = [
         layout: {
           type: "string",
           enum: ["horizontal", "vertical", "grid"],
-          description: "Default layout for nodes without explicit x/y or position. Defaults to horizontal."
+          description: "Preferred fallback orientation for nodes without explicit x/y or position. When omitted, Canvasight chooses a default from graphType and uses edge-aware dependency layers when edges exist."
         },
         viewport: {
           type: "object",
