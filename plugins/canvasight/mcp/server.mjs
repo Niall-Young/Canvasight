@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.22";
+const SERVER_VERSION = "0.1.23";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -2142,9 +2142,10 @@ function openExternalBrowser(url) {
   };
 }
 
-function appServerRequest(method, params, { experimentalApi = false } = {}) {
+function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
   const bin = codexAppBin();
   const timeoutMs = nativeCodexTimeoutMs();
+  const requestFactories = Array.isArray(requests) ? requests : [];
 
   return new Promise((resolve, reject) => {
     const child = spawn(bin, ["app-server", "--stdio"], {
@@ -2154,6 +2155,8 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
     let stderr = "";
     let settled = false;
     let initialized = false;
+    let currentRequest = null;
+    const results = [];
 
     const timer = setTimeout(() => {
       finish(new Error(`Codex app-server request timed out after ${timeoutMs}ms`));
@@ -2175,6 +2178,35 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
       child.stdin.write(`${JSON.stringify(message)}\n`);
     }
 
+    function nextRequest() {
+      if (results.length >= requestFactories.length) {
+        finish(null, results);
+        return;
+      }
+      const specFactory = requestFactories[results.length];
+      let spec;
+      try {
+        spec = typeof specFactory === "function" ? specFactory(results) : specFactory;
+      } catch (error) {
+        finish(error);
+        return;
+      }
+      if (!isObject(spec) || typeof spec.method !== "string" || !spec.method) {
+        finish(new Error("Invalid Codex app-server request sequence item"));
+        return;
+      }
+      currentRequest = {
+        id: results.length + 2,
+        method: spec.method
+      };
+      send({
+        jsonrpc: "2.0",
+        id: currentRequest.id,
+        method: spec.method,
+        params: isObject(spec.params) ? spec.params : {}
+      });
+    }
+
     function handleMessage(message) {
       if (!isObject(message) || !Object.prototype.hasOwnProperty.call(message, "id")) return;
       if (message.id === 1) {
@@ -2183,19 +2215,16 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
           return;
         }
         initialized = true;
-        send({
-          jsonrpc: "2.0",
-          id: 2,
-          method,
-          params
-        });
+        nextRequest();
         return;
       }
-      if (message.id === 2) {
+      if (currentRequest && message.id === currentRequest.id) {
         if (message.error) {
-          finish(new Error(message.error.message || `Codex app-server ${method} failed`));
+          finish(new Error(message.error.message || `Codex app-server ${currentRequest.method} failed`));
         } else {
-          finish(null, message.result || {});
+          results.push(message.result || {});
+          currentRequest = null;
+          nextRequest();
         }
       }
     }
@@ -2245,8 +2274,12 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
   });
 }
 
-function codexCollaborationMode(mode) {
-  const settings = {};
+function appServerRequest(method, params, { experimentalApi = false } = {}) {
+  return appServerRequestSequence([{ method, params }], { experimentalApi }).then((results) => results[0] || {});
+}
+
+function codexCollaborationMode(mode, model) {
+  const settings = { model };
   if (mode === "plan") settings.reasoning_effort = "medium";
   return {
     mode,
@@ -2262,26 +2295,50 @@ function goalObjectiveFromRun(payload) {
 }
 
 async function setCodexCollaborationMode(threadId, mode) {
-  return appServerRequest(
-    "thread/settings/update",
-    {
-      threadId,
-      collaborationMode: codexCollaborationMode(mode)
-    },
+  return appServerRequestSequence(
+    [
+      {
+        method: "thread/resume",
+        params: {
+          threadId
+        }
+      },
+      ([resumeResult]) => {
+        const model = typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : "";
+        if (!model) throw new Error("Codex thread/resume did not return a model for settings update");
+        return {
+          method: "thread/settings/update",
+          params: {
+            threadId,
+            collaborationMode: codexCollaborationMode(mode, model)
+          }
+        };
+      }
+    ],
     { experimentalApi: true }
-  );
+  ).then((results) => results[1] || {});
 }
 
 async function setCodexGoal(threadId, payload) {
-  return appServerRequest(
-    "thread/goal/set",
-    {
-      threadId,
-      objective: goalObjectiveFromRun(payload),
-      status: "active"
-    },
+  return appServerRequestSequence(
+    [
+      {
+        method: "thread/resume",
+        params: {
+          threadId
+        }
+      },
+      {
+        method: "thread/goal/set",
+        params: {
+          threadId,
+          objective: goalObjectiveFromRun(payload),
+          status: "active"
+        }
+      }
+    ],
     { experimentalApi: false }
-  );
+  ).then((results) => results[1] || {});
 }
 
 function runImageInputs(payload) {
@@ -2319,7 +2376,21 @@ async function startCodexTurn(threadId, payload) {
   };
   if (payload.projectPath) params.cwd = payload.projectPath;
   if (payload.effort) params.effort = payload.effort;
-  const result = await appServerRequest("turn/start", params);
+  const result = await appServerRequestSequence(
+    [
+      {
+        method: "thread/resume",
+        params: {
+          threadId
+        }
+      },
+      {
+        method: "turn/start",
+        params
+      }
+    ],
+    { experimentalApi: true }
+  ).then((results) => results[1] || {});
   return {
     status: "started",
     action: "turn/start",

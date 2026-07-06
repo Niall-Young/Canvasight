@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1645-integration-summary-turn-start-thread-not-loaded.md` - integrated same-connection `thread/resume` before Canvasight native Run delivery and bumped Canvasight to 0.1.23.
+- `agent-reports/resolved/20260706-1645-development-solution-turn-start-thread-not-loaded.md` - implemented the notLoaded Codex thread Run delivery fix.
+- `agent-reports/resolved/20260706-1638-development-issue-turn-start-thread-not-loaded.md` - resolved direct `turn/start` failure against notLoaded Codex threads.
 - `agent-reports/resolved/20260706-1626-integration-summary-chat-settings-update-model-required.md` - integrated Chat Run direct `turn/start` delivery without settings update and installed Canvasight 0.1.22.
 - `agent-reports/resolved/20260706-1626-development-solution-chat-settings-update-model-required.md` - changed Chat native handling to skip `thread/settings/update` and strengthened run smoke tests.
 - `agent-reports/resolved/20260706-1618-development-issue-chat-settings-update-model-required.md` - resolved Chat Run being blocked by real app-server `thread/settings/update` requiring `model`.

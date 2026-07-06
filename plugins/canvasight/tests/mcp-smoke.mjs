@@ -33,6 +33,7 @@ import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 let buffer = "";
+const loadedThreads = new Set();
 
 function write(message) {
   process.stdout.write(JSON.stringify(message) + "\\n");
@@ -60,8 +61,35 @@ function handle(message) {
     write({ id: message.id, error: { code: -32602, message: "Invalid request: null values are not accepted" } });
     return;
   }
+  if (message.method === "thread/resume") {
+    loadedThreads.add(message.params.threadId);
+    write({
+      id: message.id,
+      result: {
+        thread: { id: message.params.threadId, status: { type: "running" } },
+        model: "gpt-5.5",
+        modelProvider: "openai",
+        serviceTier: null,
+        cwd: process.cwd(),
+        instructionSources: [],
+        approvalPolicy: "never",
+        approvalsReviewer: "user",
+        sandbox: { type: "dangerFullAccess" },
+        reasoningEffort: "medium"
+      }
+    });
+    return;
+  }
+  if (["thread/goal/set", "thread/settings/update", "turn/start"].includes(message.method) && !loadedThreads.has(message.params?.threadId)) {
+    write({ id: message.id, error: { code: -32602, message: "thread not found: " + message.params?.threadId } });
+    return;
+  }
   if (message.method === "thread/settings/update" && !message.params?.collaborationMode?.settings) {
     write({ id: message.id, error: { code: -32602, message: "Invalid request: missing field settings" } });
+    return;
+  }
+  if (message.method === "thread/settings/update" && !message.params?.collaborationMode?.settings?.model) {
+    write({ id: message.id, error: { code: -32602, message: "Invalid request: missing field model" } });
     return;
   }
   if (message.method === "thread/goal/set") {
@@ -1246,7 +1274,12 @@ async function main() {
     assert.match(createdAgentsMd, /## Canvasight Agent Team/);
 
     const goalNativeLog = await readNativeLog();
+    assert.equal(goalNativeLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke"), true);
     assert.equal(goalNativeLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
+    assert.ok(
+      goalNativeLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke") <
+        goalNativeLog.findIndex((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke")
+    );
     assert.equal(goalNativeLog.some((entry) => entry.method === "turn/start"), false);
     assert.equal(
       goalNativeLog.some(
@@ -1286,6 +1319,7 @@ async function main() {
     assert.equal(directRun.codexTurn.threadId, "thread-smoke");
     const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
     assert.equal(directRunLog.some((entry) => entry.method === "thread/goal/set"), false);
+    assert.equal(directRunLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke").length, 1);
     assert.equal(
       directRunLog.some(
         (entry) =>
@@ -1297,6 +1331,10 @@ async function main() {
       false
     );
     assert.equal(directRunLog.filter((entry) => entry.method === "turn/start").length, 1);
+    assert.ok(
+      directRunLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke") <
+        directRunLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke")
+    );
     assert.equal(
       directRunLog.some(
         (entry) =>
@@ -1350,6 +1388,7 @@ async function main() {
           entry.method === "thread/settings/update" &&
           entry.params.threadId === "thread-smoke" &&
           entry.params.collaborationMode.mode === "plan" &&
+          entry.params.collaborationMode.settings.model === "gpt-5.5" &&
           entry.params.collaborationMode.settings.reasoning_effort === "medium"
       ),
       true
@@ -1533,17 +1572,27 @@ async function main() {
       assert.equal(crossSent.codexNative.threadId, "thread-smoke-b");
       assert.equal(crossSent.codexTurn.threadId, "thread-smoke-b");
       const crossLog = (await readNativeLog()).slice(crossLogOffset);
+      assert.equal(crossLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b").length, 2);
       assert.equal(
         crossLog.some(
           (entry) =>
             entry.method === "thread/settings/update" &&
             entry.params.threadId === "thread-smoke-b" &&
             entry.params.collaborationMode.mode === "plan" &&
+            entry.params.collaborationMode.settings.model === "gpt-5.5" &&
             entry.params.collaborationMode.settings.reasoning_effort === "medium"
         ),
         true
       );
       assert.equal(crossLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b"), true);
+      assert.ok(
+        crossLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b") <
+          crossLog.findIndex((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-smoke-b")
+      );
+      assert.ok(
+        crossLog.findLastIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b") <
+          crossLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b")
+      );
 
       const drained = await mcpB.request("tools/call", {
         name: "await_canvasight_run",
@@ -1632,6 +1681,7 @@ async function main() {
       assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
       const claimNativeLog = (await readNativeLog()).slice(claimLogOffset);
       assert.equal(claimNativeLog.some((entry) => entry.method === "thread/goal/set"), false);
+      assert.equal(claimNativeLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-c").length, 1);
       assert.equal(
         claimNativeLog.some(
           (entry) =>
@@ -1643,6 +1693,10 @@ async function main() {
         false
       );
       assert.equal(claimNativeLog.filter((entry) => entry.method === "turn/start").length, 1);
+      assert.ok(
+        claimNativeLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-c") <
+          claimNativeLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-c")
+      );
       assert.equal(
         claimNativeLog.some(
           (entry) =>
