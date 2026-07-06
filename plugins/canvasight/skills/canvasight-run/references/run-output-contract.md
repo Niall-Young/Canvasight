@@ -2,8 +2,10 @@
 
 Canvasight Run can arrive in two ways:
 
-- Direct delivery: the browser session or project is claimed by a Codex thread and the daemon starts a Codex `turn/start` with the generated Markdown.
+- Direct delivery: experimental development opt-in only. It requires `CANVASIGHT_CODEX_NATIVE=1` and a Codex app-server path that is known to affect the live Desktop thread.
 - Await fallback: the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
+
+Default browser Run clicks should be treated as queued fallback payloads. A `sent` result from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown.
 
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 

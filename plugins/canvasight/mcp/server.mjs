@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.23";
+const SERVER_VERSION = "0.1.25";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -220,11 +220,11 @@ function optionalThreadId(threadId) {
 
 function nativeCodexEnabled() {
   const value = String(process.env.CANVASIGHT_CODEX_NATIVE || "").toLowerCase();
-  return value !== "0" && value !== "false" && value !== "off";
+  return value === "1" || value === "true" || value === "on" || value === "yes";
 }
 
 function nativeCodexTimeoutMs() {
-  return Math.max(500, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_TIMEOUT_MS), 5000), 30000));
+  return Math.max(1000, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_TIMEOUT_MS), 30000), 120000));
 }
 
 function codexAppBin() {
@@ -2158,14 +2158,23 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
     let currentRequest = null;
     const results = [];
 
-    const timer = setTimeout(() => {
-      finish(new Error(`Codex app-server request timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
+    let timer = null;
+    let timeoutLabel = "initialize";
+
+    function resetTimer(label) {
+      timeoutLabel = label;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const error = new Error(`Codex app-server ${timeoutLabel} timed out after ${timeoutMs}ms`);
+        error.canvasightAppServerMethod = timeoutLabel;
+        finish(error);
+      }, timeoutMs);
+    }
 
     function finish(error, value) {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       child.kill("SIGTERM");
       if (error) {
         reject(error);
@@ -2199,6 +2208,7 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
         id: results.length + 2,
         method: spec.method
       };
+      resetTimer(spec.method);
       send({
         jsonrpc: "2.0",
         id: currentRequest.id,
@@ -2220,7 +2230,9 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
       }
       if (currentRequest && message.id === currentRequest.id) {
         if (message.error) {
-          finish(new Error(message.error.message || `Codex app-server ${currentRequest.method} failed`));
+          const error = new Error(message.error.message || `Codex app-server ${currentRequest.method} failed`);
+          error.canvasightAppServerMethod = currentRequest.method;
+          finish(error);
         } else {
           results.push(message.result || {});
           currentRequest = null;
@@ -2257,6 +2269,7 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
       if (!settled && initialized) finish(new Error(`Codex app-server exited early: code=${code} signal=${signal} stderr=${stderr}`));
     });
 
+    resetTimer("initialize");
     send({
       jsonrpc: "2.0",
       id: 1,
@@ -2404,6 +2417,7 @@ async function applyCodexNativeMode(session, payload) {
   if (!nativeCodexEnabled()) {
     return {
       status: "disabled",
+      reason: "native_direct_requires_explicit_opt_in",
       threadId: session.codexThreadId,
       mode: payload.codexMode
     };
@@ -2490,16 +2504,18 @@ async function dispatchRunToCodexThread(session, payload) {
       codexTurn
     };
   } catch (error) {
+    const failedMethod = typeof error?.canvasightAppServerMethod === "string" ? error.canvasightAppServerMethod : "turn/start";
+    const failedReason = failedMethod === "thread/resume" ? "thread_resume_failed" : "turn_start_failed";
     payload.codexTurn = {
       status: "failed",
-      action: "turn/start",
+      action: failedMethod,
       error: error?.message || "Codex turn/start request failed",
       threadId: codexNative.threadId || session.codexThreadId,
       mode: payload.codexMode
     };
     return {
       status: "queued",
-      reason: "turn_start_failed",
+      reason: failedReason,
       via: "await_canvasight_run",
       threadId: codexNative.threadId || session.codexThreadId,
       codexNative,

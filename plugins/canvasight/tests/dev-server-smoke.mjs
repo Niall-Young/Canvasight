@@ -19,9 +19,12 @@ const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
 const port = await findFreePort();
 const unboundPort = await findFreePort();
+const queuedPort = await findFreePort();
 const origin = `http://127.0.0.1:${port}`;
 const unboundOrigin = `http://127.0.0.1:${unboundPort}`;
+const queuedOrigin = `http://127.0.0.1:${queuedPort}`;
 const unboundCanvasightHome = path.join(tempRoot, "home-unbound");
+const queuedCanvasightHome = path.join(tempRoot, "home-queued");
 
 fs.writeFileSync(
   fakeCodexPath,
@@ -136,6 +139,7 @@ function run(action, options = {}) {
   const env = {
     ...process.env,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
+    CANVASIGHT_CODEX_NATIVE: options.codexNative ?? "1",
     CANVASIGHT_HOME: options.canvasightHome || canvasightHome,
     CANVASIGHT_DEV_PORT: String(options.port || port),
     CANVASIGHT_NATIVE_LOG: nativeLogPath
@@ -432,6 +436,65 @@ async function main() {
       claimedLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev"),
       true
     );
+
+    const queuedStarted = run("start", {
+      canvasightHome: queuedCanvasightHome,
+      codexNative: "0",
+      port: queuedPort,
+      threadId: "thread-queued-dev"
+    });
+    assert.equal(queuedStarted.status, 0, queuedStarted.stderr || queuedStarted.stdout);
+    const queuedOpened = await fetchJson(`${queuedOrigin}/api/sessions/local/open-project`, {
+      method: "POST",
+      body: JSON.stringify({ projectPath: path.join(tempRoot, "queued-project") })
+    });
+    const queuedLogOffset = (await readNativeLog()).length;
+    const queuedRun = await fetchJson(`${queuedOrigin}/api/sessions/local/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        attachments: [],
+        codexMode: "chat",
+        markdown: "# Queued Dev Run",
+        nodeIds: ["node-queued-dev"],
+        projectPath: queuedOpened.project.path,
+        runMode: "node",
+        sessionId: "local",
+        threadName: "Queued Dev Run"
+      })
+    });
+    assert.equal(queuedRun.status, "queued");
+    assert.equal(queuedRun.delivery.status, "queued");
+    assert.equal(queuedRun.delivery.reason, "native_direct_requires_explicit_opt_in");
+    assert.equal(queuedRun.delivery.via, "await_canvasight_run");
+    assert.equal(queuedRun.codexNative.status, "disabled");
+    assert.equal(queuedRun.codexNative.reason, "native_direct_requires_explicit_opt_in");
+    assert.equal(queuedRun.codexTurn.status, "skipped");
+    const queuedNativeLog = (await readNativeLog()).slice(queuedLogOffset);
+    assert.equal(queuedNativeLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(queuedNativeLog.some((entry) => entry.method === "turn/start"), false);
+    const queuedDaemon = await readDaemonState(queuedCanvasightHome);
+    const queuedAwaited = await fetchJson(`${queuedDaemon.origin}/api/runs/await`, {
+      method: "POST",
+      headers: {
+        "x-canvasight-token": queuedDaemon.token
+      },
+      body: JSON.stringify({
+        projectPath: queuedOpened.project.path,
+        threadId: "thread-queued-dev",
+        timeoutMs: 20
+      })
+    });
+    assert.equal(queuedAwaited.status, "received");
+    assert.equal(queuedAwaited.markdown, "# Queued Dev Run");
+    assert.equal(queuedAwaited.delivery.status, "queued");
+    const queuedStopped = run("stop", {
+      canvasightHome: queuedCanvasightHome,
+      codexNative: "0",
+      port: queuedPort,
+      threadId: "thread-queued-dev"
+    });
+    assert.equal(queuedStopped.status, 0, queuedStopped.stderr || queuedStopped.stdout);
+
     const unboundStopped = run("stop", {
       canvasightHome: unboundCanvasightHome,
       port: unboundPort,
@@ -447,8 +510,15 @@ async function main() {
       port: unboundPort,
       threadId: null
     });
+    run("stop", {
+      canvasightHome: queuedCanvasightHome,
+      codexNative: "0",
+      port: queuedPort,
+      threadId: "thread-queued-dev"
+    });
     stopDaemon();
     stopDaemon(unboundCanvasightHome);
+    stopDaemon(queuedCanvasightHome);
     await fsp.rm(tempRoot, { recursive: true, force: true });
   }
 }

@@ -42,6 +42,8 @@ export interface RunResponse {
     reason?: string;
     threadId?: string | null;
     via?: string;
+    codexNative?: RunResponse["codexNative"];
+    codexTurn?: RunResponse["codexTurn"];
   };
   codexNative?: {
     status: "applied" | "disabled" | "failed" | "pending" | "skipped";

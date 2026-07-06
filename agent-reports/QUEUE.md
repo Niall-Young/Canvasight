@@ -14,6 +14,10 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1718-integration-summary-run-native-false-sent.md` - integrated default queued Run fallback, explicit native opt-in, docs, tests, and version 0.1.25.
+- `agent-reports/resolved/20260706-1718-development-solution-run-native-false-sent.md` - fixed false-positive direct delivery through isolated Codex app-server.
+- `agent-reports/resolved/20260706-1718-development-issue-run-native-false-sent.md` - resolved Canvasight Run returning sent without reaching the current Codex Desktop thread.
+- `agent-reports/resolved/20260706-1656-development-issue-run-native-timeout-status.md` - resolved timeout diagnostics and superseded the issue with the isolated app-server root cause.
 - `agent-reports/resolved/20260706-1645-integration-summary-turn-start-thread-not-loaded.md` - integrated same-connection `thread/resume` before Canvasight native Run delivery and bumped Canvasight to 0.1.23.
 - `agent-reports/resolved/20260706-1645-development-solution-turn-start-thread-not-loaded.md` - implemented the notLoaded Codex thread Run delivery fix.
 - `agent-reports/resolved/20260706-1638-development-issue-turn-start-thread-not-loaded.md` - resolved direct `turn/start` failure against notLoaded Codex threads.

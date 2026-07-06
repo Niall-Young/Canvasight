@@ -1557,6 +1557,21 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           setStatus(t("status.awaitedAssistant"));
         } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
           setStatus(t("status.sentAssistant"));
+        } else if (
+          runResult.delivery?.reason === "native_direct_requires_explicit_opt_in" ||
+          runResult.codexNative?.reason === "native_direct_requires_explicit_opt_in" ||
+          runResult.delivery?.codexNative?.reason === "native_direct_requires_explicit_opt_in"
+        ) {
+          setStatus(t("status.queuedAssistantNativeUnavailable"));
+        } else if (runResult.codexTurn?.error || runResult.delivery?.codexTurn?.error || runResult.codexNative?.error || runResult.delivery?.codexNative?.error) {
+          const reason =
+            runResult.codexTurn?.error ||
+            runResult.delivery?.codexTurn?.error ||
+            runResult.codexNative?.error ||
+            runResult.delivery?.codexNative?.error ||
+            runResult.delivery?.reason ||
+            "";
+          setStatus(t("status.queuedAssistantWithReason", { reason }));
         } else {
           setStatus(t("status.queuedAssistant"));
         }

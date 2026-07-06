@@ -24,6 +24,7 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
 const canvasightHome = path.join(tempRoot, "canvasight-home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
+const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
 
 fs.writeFileSync(
@@ -32,6 +33,7 @@ fs.writeFileSync(
 import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
+const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
 let buffer = "";
 const loadedThreads = new Set();
 
@@ -51,6 +53,15 @@ function hasNull(value) {
   return false;
 }
 
+function shouldFailResume(threadId) {
+  if (!resumeFailPath) return false;
+  try {
+    return fs.readFileSync(resumeFailPath, "utf8").split(/\\s+/).filter(Boolean).includes(threadId);
+  } catch {
+    return false;
+  }
+}
+
 function handle(message) {
   if (message.method === "initialize") {
     write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
@@ -62,6 +73,10 @@ function handle(message) {
     return;
   }
   if (message.method === "thread/resume") {
+    if (shouldFailResume(message.params.threadId)) {
+      write({ id: message.id, error: { code: -32603, message: "fake thread/resume failure: " + message.params.threadId } });
+      return;
+    }
     loadedThreads.add(message.params.threadId);
     write({
       id: message.id,
@@ -136,7 +151,9 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
     CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
+    CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
+    CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
     CODEX_THREAD_ID: "thread-smoke"
@@ -259,6 +276,7 @@ function createMcpClient(label, envOverrides = {}) {
       CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_CODEX_NATIVE: "1",
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
       CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
       CANVASIGHT_OPEN_BROWSER: "0",
@@ -1354,6 +1372,33 @@ async function main() {
       }
     });
     assert.equal(directRunDrained.structuredContent.status, "timeout");
+
+    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
+    const resumeFailureRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...directRunPayload,
+        threadName: "Scatter Direct Chat Resume Failure",
+        markdown: "# Direct Chat Resume Failure\n\nThis should queue with a specific thread_resume_failed reason."
+      })
+    });
+    await fsp.writeFile(resumeFailPath, "", "utf8");
+    assert.equal(resumeFailureRun.status, "queued");
+    assert.equal(resumeFailureRun.delivery.status, "queued");
+    assert.equal(resumeFailureRun.delivery.reason, "thread_resume_failed");
+    assert.equal(resumeFailureRun.codexTurn.status, "failed");
+    assert.equal(resumeFailureRun.codexTurn.action, "thread/resume");
+    assert.match(resumeFailureRun.codexTurn.error, /fake thread\/resume failure/);
+    const resumeFailureDrained = await request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 20
+      }
+    });
+    assert.equal(resumeFailureDrained.structuredContent.status, "received");
+    assert.equal(resumeFailureDrained.structuredContent.delivery.reason, "thread_resume_failed");
+    assert.equal(resumeFailureDrained.structuredContent.codexTurn.action, "thread/resume");
 
     const waitForLegacyRun = request("tools/call", {
       name: "await_canvasight_run",
