@@ -14,6 +14,7 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-0957-integration-summary-logo-favicon.md` - integrated the new Canvasight plugin logo and browser favicon assets.
 - `agent-reports/resolved/20260706-0943-integration-summary-template-capacity-summary.md` - integrated template capacity management and summary-first AI template reads.
 - `agent-reports/resolved/20260706-0943-development-solution-template-capacity-summary.md` - implemented 200-template limit handling, delete/manage UI, and MCP get-by-id template retrieval.
 - `agent-reports/resolved/20260706-0943-product-issue-template-capacity-summary.md` - resolved global template capacity and AI context blow-up risk.
