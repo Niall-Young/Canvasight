@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.19";
+const SERVER_VERSION = "0.1.20";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -2246,14 +2246,14 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
 }
 
 function codexCollaborationMode(mode) {
-  return {
-    mode,
-    settings: {
-      model: null,
-      reasoning_effort: mode === "plan" ? "medium" : null,
-      developer_instructions: null
-    }
-  };
+  const settings = {};
+  if (mode === "plan") settings.reasoning_effort = "medium";
+  return Object.keys(settings).length
+    ? {
+        mode,
+        settings
+      }
+    : { mode };
 }
 
 function goalObjectiveFromRun(payload) {
@@ -2280,8 +2280,7 @@ async function setCodexGoal(threadId, payload) {
     {
       threadId,
       objective: goalObjectiveFromRun(payload),
-      status: "active",
-      tokenBudget: null
+      status: "active"
     },
     { experimentalApi: false }
   );
@@ -2315,13 +2314,14 @@ function turnIdFromResult(result) {
 }
 
 async function startCodexTurn(threadId, payload) {
-  const result = await appServerRequest("turn/start", {
+  const params = {
     threadId,
     clientUserMessageId: `canvasight-${payload.sessionId}-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`,
-    input: runTurnInput(payload),
-    cwd: payload.projectPath || null,
-    effort: payload.effort || null
-  });
+    input: runTurnInput(payload)
+  };
+  if (payload.projectPath) params.cwd = payload.projectPath;
+  if (payload.effort) params.effort = payload.effort;
+  const result = await appServerRequest("turn/start", params);
   return {
     status: "started",
     action: "turn/start",

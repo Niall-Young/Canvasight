@@ -40,12 +40,23 @@ function append(method, params) {
   fs.appendFileSync(logPath, JSON.stringify({ method, params }) + "\\n");
 }
 
+function hasNull(value) {
+  if (value === null) return true;
+  if (Array.isArray(value)) return value.some(hasNull);
+  if (value && typeof value === "object") return Object.values(value).some(hasNull);
+  return false;
+}
+
 function handle(message) {
   if (message.method === "initialize") {
     write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
     return;
   }
   append(message.method, message.params);
+  if (hasNull(message.params)) {
+    write({ id: message.id, error: { code: -32602, message: "Invalid request: null values are not accepted" } });
+    return;
+  }
   if (message.method === "thread/goal/set") {
     write({ id: message.id, result: { goal: { threadId: message.params.threadId, objective: message.params.objective, status: "active" } } });
     return;

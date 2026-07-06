@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1557-integration-summary-run-click-not-delivered.md` - integrated the fix for real Run clicks not starting a Codex turn because app-server payloads contained null values.
+- `agent-reports/resolved/20260706-1557-development-solution-run-click-not-delivered.md` - removed null optional fields from Codex app-server requests and tightened native smoke tests.
+- `agent-reports/resolved/20260706-1549-product-issue-run-click-not-delivered.md` - resolved real Canvasight Run clicks queueing instead of sending to the current Codex thread.
 - `agent-reports/resolved/20260706-1536-integration-summary-current-thread-claim.md` - integrated current-thread claim routing so archived launch threads do not own future Canvasight Run output.
 - `agent-reports/resolved/20260706-1536-development-solution-current-thread-claim.md` - implemented `claim_canvasight_thread`, daemon claim/resolve APIs, and thread-filtered Run delivery.
 - `agent-reports/resolved/20260706-1519-product-issue-current-thread-claim.md` - resolved the missing current Codex thread claim mechanism for persistent Canvasight pages.
