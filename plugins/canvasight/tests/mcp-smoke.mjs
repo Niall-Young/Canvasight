@@ -1256,7 +1256,7 @@ async function main() {
           entry.params.collaborationMode.mode === "default" &&
           Object.keys(entry.params.collaborationMode.settings).length === 0
       ),
-      true
+      false
     );
 
     const directRunLogOffset = goalNativeLog.length;
@@ -1280,10 +1280,12 @@ async function main() {
     assert.equal(directRun.delivery.status, "sent");
     assert.equal(directRun.delivery.via, "turn/start");
     assert.equal(directRun.codexNative.status, "applied");
+    assert.equal(directRun.codexNative.action, "chat/no-settings-update");
     assert.equal(directRun.codexTurn.status, "started");
     assert.equal(directRun.codexTurn.action, "turn/start");
     assert.equal(directRun.codexTurn.threadId, "thread-smoke");
     const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
+    assert.equal(directRunLog.some((entry) => entry.method === "thread/goal/set"), false);
     assert.equal(
       directRunLog.some(
         (entry) =>
@@ -1292,8 +1294,9 @@ async function main() {
           entry.params.collaborationMode.mode === "default" &&
           Object.keys(entry.params.collaborationMode.settings).length === 0
       ),
-      true
+      false
     );
+    assert.equal(directRunLog.filter((entry) => entry.method === "turn/start").length, 1);
     assert.equal(
       directRunLog.some(
         (entry) =>
@@ -1625,8 +1628,10 @@ async function main() {
       assert.equal(claimedRun.delivery.status, "sent");
       assert.equal(claimedRun.delivery.via, "turn/start");
       assert.equal(claimedRun.codexNative.threadId, "thread-smoke-c");
+      assert.equal(claimedRun.codexNative.action, "chat/no-settings-update");
       assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
       const claimNativeLog = (await readNativeLog()).slice(claimLogOffset);
+      assert.equal(claimNativeLog.some((entry) => entry.method === "thread/goal/set"), false);
       assert.equal(
         claimNativeLog.some(
           (entry) =>
@@ -1635,8 +1640,9 @@ async function main() {
             entry.params.collaborationMode.mode === "default" &&
             Object.keys(entry.params.collaborationMode.settings).length === 0
         ),
-        true
+        false
       );
+      assert.equal(claimNativeLog.filter((entry) => entry.method === "turn/start").length, 1);
       assert.equal(
         claimNativeLog.some(
           (entry) =>

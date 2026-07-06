@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.21";
+const SERVER_VERSION = "0.1.22";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -2348,9 +2348,18 @@ async function applyCodexNativeMode(session, payload) {
   }
 
   try {
+    if (payload.codexMode === "chat") {
+      return {
+        status: "applied",
+        action: "chat/no-settings-update",
+        threadId: session.codexThreadId,
+        mode: payload.codexMode,
+        collaborationMode: "default"
+      };
+    }
+
     if (payload.codexMode === "goal") {
       await setCodexGoal(session.codexThreadId, payload);
-      await setCodexCollaborationMode(session.codexThreadId, "default");
       return {
         status: "applied",
         action: "thread/goal/set",

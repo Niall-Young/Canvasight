@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1626-integration-summary-chat-settings-update-model-required.md` - integrated Chat Run direct `turn/start` delivery without settings update and installed Canvasight 0.1.22.
+- `agent-reports/resolved/20260706-1626-development-solution-chat-settings-update-model-required.md` - changed Chat native handling to skip `thread/settings/update` and strengthened run smoke tests.
+- `agent-reports/resolved/20260706-1618-development-issue-chat-settings-update-model-required.md` - resolved Chat Run being blocked by real app-server `thread/settings/update` requiring `model`.
 - `agent-reports/resolved/20260706-1612-integration-summary-app-server-settings-required.md` - integrated required `collaborationMode.settings` support for Codex app-server Run delivery.
 - `agent-reports/resolved/20260706-1612-development-solution-app-server-settings-required.md` - added default/plan settings payloads and strict app-server smoke assertions.
 - `agent-reports/resolved/20260706-1606-development-issue-app-server-settings-required.md` - resolved `Invalid request: missing field settings` after real Canvasight Run clicks.
