@@ -131,6 +131,7 @@ Canvasight should use a restrained, professional interface:
 Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to create pages, nodes, edges, and attachments. AI-generated canvas content should feel like normal editable canvas state, not a separate imported artifact.
 
 - When a Canvasight project is open, it becomes active canvas context for later medium or complex requests. Product planning, codebase architecture analysis, article mapping, complex fixes, and multi-step task plans should prefer a graph-first pass before direct execution when decomposition would help.
+- In active Canvasight context, user phrases such as "用画布", "放到画布", "写到画布", or "use Canvasight to plan/break down this" refer to Canvasight graph writing by default. Only treat them as HTML canvas or frontend drawing work when the user explicitly says so.
 - Active canvas context is a bias, not a hard override. Small direct commands, simple questions, Run payloads, and requests that explicitly ask for immediate direct execution should remain direct.
 - AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
 - AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
@@ -138,6 +139,7 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - Explicit node coordinates from the user or AI should be preserved; automatic layout should only fill missing coordinates.
 - AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
 - AI-generated content must remain fully editable by the user.
+- External AI writes and browser autosave must coordinate through a document revision contract. When AI writes a graph through the daemon, open browser sessions should reload the newer document automatically; stale browser saves must be rejected and reload the latest `.scatter/scatter.json` instead of overwriting externally generated Pages.
 
 ## Global Node Templates
 
@@ -212,6 +214,8 @@ Canvasight can include an Agent Team / agent-report protocol section in generate
 The `.scatter/scatter.json` file is a user-editable and AI-editable canvas protocol.
 
 - External file writes must be validated before becoming visible canvas state.
+- Project document revisions should advance on every daemon-mediated document write, including AI graph writes and browser saves.
+- Browser saves should include the expected document revision. If the expected revision is stale, the app should preserve user orientation as much as possible, reject the stale write, and reload the latest valid document.
 - Invalid or partially valid canvas files should show a recoverable error instead of blanking the workspace.
 - Unknown fields should be preserved when possible to protect forward compatibility.
 - Missing optional fields should fall back to stable defaults.

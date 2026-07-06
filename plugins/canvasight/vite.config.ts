@@ -10,6 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultProjectPath = path.resolve(process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH || path.resolve(__dirname, "../.."));
 process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH = defaultProjectPath;
 const devSessions = new Map<string, { id: string; language: "zh"; projectPath: string; runQueue: unknown[] }>();
+const projectDocumentRevisions = new Map<string, number>();
+const projectWriteLocks = new Map<string, Promise<unknown>>();
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -17,6 +19,54 @@ function nowIso(): string {
 
 function projectNameFromPath(projectPath: string): string {
   return path.basename(projectPath) || projectPath;
+}
+
+function projectRevisionKey(projectPath: string): string {
+  return path.resolve(projectPath);
+}
+
+function projectDocumentRevision(projectPath: string): number {
+  return projectDocumentRevisions.get(projectRevisionKey(projectPath)) || 0;
+}
+
+function bumpProjectDocumentRevision(projectPath: string): number {
+  const key = projectRevisionKey(projectPath);
+  const revision = (projectDocumentRevisions.get(key) || 0) + 1;
+  projectDocumentRevisions.set(key, revision);
+  return revision;
+}
+
+async function withProjectWriteLock<T>(projectPath: string, operation: () => Promise<T>): Promise<T> {
+  const key = projectRevisionKey(projectPath);
+  const previous = projectWriteLocks.get(key) || Promise.resolve();
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const current = previous.catch(() => undefined).then(() => gate);
+  projectWriteLocks.set(key, current);
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (projectWriteLocks.get(key) === current) projectWriteLocks.delete(key);
+  }
+}
+
+function assertCurrentDocumentRevision(projectPath: string, expectedRevision: unknown): void {
+  if (typeof expectedRevision !== "number" || !Number.isFinite(expectedRevision)) {
+    const error = new Error("Canvasight document revision is required. Reload required.") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "stale_document";
+    throw error;
+  }
+  if (expectedRevision !== projectDocumentRevision(projectPath)) {
+    const error = new Error("Canvasight document changed outside this session. Reload required.") as Error & { statusCode?: number; code?: string };
+    error.statusCode = 409;
+    error.code = "stale_document";
+    throw error;
+  }
 }
 
 function scatterDir(projectPath: string): string {
@@ -211,6 +261,7 @@ function canvasightDevApiPlugin() {
           const action = sessionMatch[2] || "";
           if (!action) {
             sendJson(res, 200, {
+              documentRevision: projectDocumentRevision(session.projectPath),
               language: session.language,
               projectPath: session.projectPath,
               sessionId: session.id
@@ -223,6 +274,7 @@ function canvasightDevApiPlugin() {
           if (action === "open-project") {
             const document = await readScatterDocument(projectPath);
             sendJson(res, 200, {
+              documentRevision: projectDocumentRevision(projectPath),
               project: {
                 name: projectNameFromPath(projectPath),
                 path: projectPath,
@@ -233,7 +285,15 @@ function canvasightDevApiPlugin() {
             return;
           }
           if (action === "document") {
-            sendJson(res, 200, await writeScatterDocument(projectPath, (body.document || {}) as Record<string, unknown>));
+            const result = await withProjectWriteLock(projectPath, async () => {
+              assertCurrentDocumentRevision(projectPath, body.expectedRevision);
+              const document = await writeScatterDocument(projectPath, (body.document || {}) as Record<string, unknown>);
+              return {
+                document,
+                documentRevision: bumpProjectDocumentRevision(projectPath)
+              };
+            });
+            sendJson(res, 200, result);
             return;
           }
           if (action === "attachments") {
@@ -247,7 +307,13 @@ function canvasightDevApiPlugin() {
           }
           sendJson(res, 404, { error: "API route not found" });
         })().catch((error) => {
-          sendJson(res, 500, { error: error instanceof Error ? error.message : "Internal server error" });
+          const statusCode =
+            typeof (error as { statusCode?: unknown }).statusCode === "number" ? ((error as { statusCode: number }).statusCode) : 500;
+          const code = typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : undefined;
+          sendJson(res, statusCode, {
+            ...(code ? { code } : {}),
+            error: error instanceof Error ? error.message : "Internal server error"
+          });
         });
       });
     }

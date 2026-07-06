@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.17";
+const SERVER_VERSION = "0.1.18";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -107,6 +107,8 @@ const isDaemonMode = process.argv.includes("--daemon");
 const isStopDaemonMode = process.argv.includes("--stop-daemon");
 
 const sessions = new Map();
+const projectDocumentRevisions = new Map();
+const projectWriteLocks = new Map();
 const globalRunWaiters = [];
 let httpState = null;
 let inputBuffer = Buffer.alloc(0);
@@ -119,6 +121,48 @@ class HttpError extends Error {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+  }
+}
+
+function projectRevisionKey(projectPath) {
+  return path.resolve(projectPath);
+}
+
+function projectDocumentRevision(projectPath) {
+  return projectDocumentRevisions.get(projectRevisionKey(projectPath)) || 0;
+}
+
+function bumpProjectDocumentRevision(projectPath) {
+  const key = projectRevisionKey(projectPath);
+  const revision = (projectDocumentRevisions.get(key) || 0) + 1;
+  projectDocumentRevisions.set(key, revision);
+  return revision;
+}
+
+async function withProjectWriteLock(projectPath, operation) {
+  const key = projectRevisionKey(projectPath);
+  const previous = projectWriteLocks.get(key) || Promise.resolve();
+  let release = () => {};
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const current = previous.catch(() => {}).then(() => gate);
+  projectWriteLocks.set(key, current);
+  await previous.catch(() => {});
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (projectWriteLocks.get(key) === current) projectWriteLocks.delete(key);
+  }
+}
+
+function assertCurrentDocumentRevision(projectPath, expectedRevision) {
+  if (typeof expectedRevision !== "number" || !Number.isFinite(expectedRevision)) {
+    throw new HttpError(409, "Canvasight document revision is required. Reload required.", "stale_document");
+  }
+  if (expectedRevision !== projectDocumentRevision(projectPath)) {
+    throw new HttpError(409, "Canvasight document changed outside this session. Reload required.", "stale_document");
   }
 }
 
@@ -1404,56 +1448,59 @@ function replaceActivePage(existingDocument, incomingPage) {
 }
 
 async function writeScatterGraph(projectPath, args) {
-  const mode = normalizeGraphWriteMode(args?.mode);
-  const existingDocument = await readScatterDocument(projectPath);
-  const reusedTemplates = [];
-  const projectGuidanceNodes = [];
-  const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
-  const incomingPages = graphPageInputs(args).map((page, index) =>
-    buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
-  );
-  const now = nowIso();
-  let pages;
-  let activePageId;
+  return withProjectWriteLock(projectPath, async () => {
+    const mode = normalizeGraphWriteMode(args?.mode);
+    const existingDocument = await readScatterDocument(projectPath);
+    const reusedTemplates = [];
+    const projectGuidanceNodes = [];
+    const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
+    const incomingPages = graphPageInputs(args).map((page, index) =>
+      buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
+    );
+    const now = nowIso();
+    let pages;
+    let activePageId;
 
-  if (mode === "replace-document") {
-    pages = incomingPages;
-    activePageId =
-      typeof args?.activePageId === "string" && incomingPages.some((page) => page.id === args.activePageId)
-        ? args.activePageId
-        : incomingPages[0].id;
-  } else if (mode === "replace-active-page") {
-    pages = replaceActivePage(existingDocument, incomingPages[0]);
-    activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
-  } else {
-    pages = [...existingDocument.pages, ...incomingPages];
-    activePageId = incomingPages[incomingPages.length - 1].id;
-  }
+    if (mode === "replace-document") {
+      pages = incomingPages;
+      activePageId =
+        typeof args?.activePageId === "string" && incomingPages.some((page) => page.id === args.activePageId)
+          ? args.activePageId
+          : incomingPages[0].id;
+    } else if (mode === "replace-active-page") {
+      pages = replaceActivePage(existingDocument, incomingPages[0]);
+      activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
+    } else {
+      pages = [...existingDocument.pages, ...incomingPages];
+      activePageId = incomingPages[incomingPages.length - 1].id;
+    }
 
-  const activePage = pages.find((page) => page.id === activePageId) || pages[0];
-  const document = await writeScatterDocument(projectPath, {
-    version: 1,
-    projectName:
-      typeof args?.projectName === "string" && args.projectName.trim()
-        ? args.projectName.trim()
-        : existingDocument.projectName || projectNameFromPath(projectPath),
-    updatedAt: now,
-    activePageId: activePage.id,
-    pages: pages.map((page) => ({
-      ...page,
-      updatedAt: page.id === activePage.id ? now : page.updatedAt
-    })),
-    viewport: activePage.viewport,
-    nodes: activePage.nodes,
-    edges: activePage.edges
+    const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+    const document = await writeScatterDocument(projectPath, {
+      version: 1,
+      projectName:
+        typeof args?.projectName === "string" && args.projectName.trim()
+          ? args.projectName.trim()
+          : existingDocument.projectName || projectNameFromPath(projectPath),
+      updatedAt: now,
+      activePageId: activePage.id,
+      pages: pages.map((page) => ({
+        ...page,
+        updatedAt: page.id === activePage.id ? now : page.updatedAt
+      })),
+      viewport: activePage.viewport,
+      nodes: activePage.nodes,
+      edges: activePage.edges
+    });
+    const documentRevision = bumpProjectDocumentRevision(projectPath);
+
+    await rememberProjectBestEffort(projectPath, {
+      name: document.projectName,
+      updatedAt: document.updatedAt
+    });
+
+    return { document, documentRevision, reusedTemplates, projectGuidanceNodes };
   });
-
-  await rememberProjectBestEffort(projectPath, {
-    name: document.projectName,
-    updatedAt: document.updatedAt
-  });
-
-  return { document, reusedTemplates, projectGuidanceNodes };
 }
 
 async function openProject(projectPath) {
@@ -1480,6 +1527,7 @@ function createSession({ projectPath, language, threadId }) {
     projectPath: resolvedProjectPath,
     language: normalizeLanguage(language),
     codexThreadId: optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID),
+    documentRevision: projectDocumentRevision(resolvedProjectPath),
     createdAt: nowIso(),
     runQueue: [],
     waiters: []
@@ -1491,6 +1539,7 @@ function createSession({ projectPath, language, threadId }) {
 function sessionInfo(session) {
   return {
     codexThreadId: session.codexThreadId,
+    documentRevision: projectDocumentRevision(session.projectPath),
     language: session.language,
     projectPath: session.projectPath,
     sessionId: session.id
@@ -2337,8 +2386,13 @@ async function handleSessionApi(req, res, url) {
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
     session.projectPath = projectPath;
     const openedProject = await openProject(projectPath);
+    const documentRevision = projectDocumentRevision(projectPath);
+    session.documentRevision = documentRevision;
     await rememberProjectBestEffort(projectPath, openedProject.project);
-    sendJson(res, 200, openedProject);
+    sendJson(res, 200, {
+      ...openedProject,
+      documentRevision
+    });
     return true;
   }
 
@@ -2346,13 +2400,25 @@ async function handleSessionApi(req, res, url) {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
-    const document = await writeScatterDocument(projectPath, body.document);
+    const { document, documentRevision } = await withProjectWriteLock(projectPath, async () => {
+      assertCurrentDocumentRevision(projectPath, body.expectedRevision);
+      const savedDocument = await writeScatterDocument(projectPath, body.document);
+      const nextRevision = bumpProjectDocumentRevision(projectPath);
+      return {
+        document: savedDocument,
+        documentRevision: nextRevision
+      };
+    });
     session.projectPath = projectPath;
+    session.documentRevision = documentRevision;
     await rememberProjectBestEffort(projectPath, {
       name: document.projectName,
       updatedAt: document.updatedAt
     });
-    sendJson(res, 200, document);
+    sendJson(res, 200, {
+      document,
+      documentRevision
+    });
     return true;
   }
 
@@ -2464,6 +2530,21 @@ async function handleHttp(req, res) {
       throw new HttpError(405, "Expected GET or POST");
     }
 
+    if (url.pathname === "/api/graphs/write") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const projectPath = normalizeProjectPath(body.projectPath || defaultProjectPath());
+      const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, body.args || body);
+      sendJson(res, 200, {
+        document,
+        documentRevision,
+        reusedTemplates,
+        projectGuidanceNodes
+      });
+      return;
+    }
+
     if (url.pathname === "/api/sessions") {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
@@ -2474,11 +2555,13 @@ async function handleHttp(req, res) {
         threadId: body?.threadId
       });
       const openedProject = await openProject(session.projectPath);
+      session.documentRevision = projectDocumentRevision(session.projectPath);
       await rememberProjectBestEffort(session.projectPath, openedProject.project);
       sendJson(res, 200, {
         session: sessionInfo(session),
         project: openedProject.project,
-        document: openedProject.document
+        document: openedProject.document,
+        documentRevision: session.documentRevision
       });
       return;
     }
@@ -2739,7 +2822,17 @@ async function toolGetCanvasightNodeTemplate(args) {
 
 async function toolWriteCanvasightGraph(args) {
   const projectPath = normalizeProjectPath(args?.projectPath || defaultProjectPath());
-  const { document, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, args || {});
+  const daemon = await ensureDaemonServer();
+  const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await daemonJson(daemon, "/api/graphs/write", {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath,
+      args: {
+        ...(args || {}),
+        projectPath
+      }
+    })
+  });
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
@@ -2763,6 +2856,7 @@ async function toolWriteCanvasightGraph(args) {
       graphType,
       activePageId: activePage.id,
       activePageName: activePage.name,
+      documentRevision,
       nodeIds,
       edgeIds,
       reusedTemplates,

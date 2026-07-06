@@ -384,6 +384,7 @@ async function main() {
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
+      documentRevision: 0,
       language: "zh",
       projectPath: defaultProjectPath,
       sessionId: autoOpened.structuredContent.sessionId
@@ -452,6 +453,7 @@ async function main() {
     const session = await fetchJson(`${origin}/api/sessions/${sessionId}`);
     assert.deepEqual(session, {
       codexThreadId: "thread-smoke",
+      documentRevision: 0,
       language: "en",
       projectPath,
       sessionId
@@ -501,6 +503,7 @@ async function main() {
       body: JSON.stringify({ projectPath })
     });
     assert.equal(openProject.document.version, 1);
+    assert.equal(openProject.documentRevision, 0);
     assert.equal(openProject.project.path, projectPath);
     assert.equal(Array.isArray(openProject.document.pages), true);
     assert.equal(openProject.document.pages.length, 1);
@@ -554,6 +557,44 @@ async function main() {
     assert.equal(graphWritten.structuredContent.activePageName, "Code Architecture");
     assert.deepEqual(graphWritten.structuredContent.nodeIds, ["entry", "api", "store"]);
     assert.deepEqual(graphWritten.structuredContent.edgeIds, ["entry-api", "api-store"]);
+    assert.equal(typeof graphWritten.structuredContent.documentRevision, "number");
+    assert.equal(graphWritten.structuredContent.documentRevision > openProject.documentRevision, true);
+    const sessionAfterGraphWrite = await fetchJson(`${origin}/api/sessions/${sessionId}`);
+    assert.equal(sessionAfterGraphWrite.documentRevision, graphWritten.structuredContent.documentRevision);
+
+    const staleDocumentSave = await fetch(`${origin}/api/sessions/${sessionId}/document`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-canvasight-token": daemonToken
+      },
+      body: JSON.stringify({
+        projectPath,
+        document: openProject.document,
+        expectedRevision: openProject.documentRevision
+      })
+    });
+    assert.equal(staleDocumentSave.status, 409);
+    assert.deepEqual(await staleDocumentSave.json(), {
+      code: "stale_document",
+      error: "Canvasight document changed outside this session. Reload required."
+    });
+    const missingRevisionDocumentSave = await fetch(`${origin}/api/sessions/${sessionId}/document`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-canvasight-token": daemonToken
+      },
+      body: JSON.stringify({
+        projectPath,
+        document: openProject.document
+      })
+    });
+    assert.equal(missingRevisionDocumentSave.status, 409);
+    assert.deepEqual(await missingRevisionDocumentSave.json(), {
+      code: "stale_document",
+      error: "Canvasight document revision is required. Reload required."
+    });
 
     const graphScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(graphScatterJson.version, 1);
@@ -1063,10 +1104,13 @@ async function main() {
         }
       ]
     };
-    const savedDocument = await fetchJson(`${origin}/api/sessions/${sessionId}/document`, {
+    const sessionBeforeDocumentSave = await fetchJson(`${origin}/api/sessions/${sessionId}`);
+    const savedDocumentResult = await fetchJson(`${origin}/api/sessions/${sessionId}/document`, {
       method: "POST",
-      body: JSON.stringify({ projectPath, document })
+      body: JSON.stringify({ projectPath, document, expectedRevision: sessionBeforeDocumentSave.documentRevision })
     });
+    const savedDocument = savedDocumentResult.document;
+    assert.equal(savedDocumentResult.documentRevision, sessionBeforeDocumentSave.documentRevision + 1);
     assert.equal(savedDocument.nodes[0].id, "node-a");
     assert.equal(savedDocument.activePageId, "page-main");
     assert.equal(savedDocument.pages.length, 2);

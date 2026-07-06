@@ -35,6 +35,15 @@ Canvasight Run should use Codex app-server direct delivery when the browser sess
 
 Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automation to push text into Codex.
 
+## AI Graph Written But Browser Did Not Change
+
+`write_canvasight_graph` should write through the daemon and advance the project document revision. If the browser does not show the generated Page:
+
+1. Confirm the tool wrote to the same `projectPath` that the browser session has open.
+2. Confirm `codex plugin list` shows the current Canvasight version and reinstall if an old cache is active.
+3. Wait briefly for the browser revision poll, then reopen the same project with `open_canvasight` or `open_canvasight_recent_project`.
+4. If a browser save reports `stale_document`, reload the project instead of retrying the old save payload.
+
 ## Development Server Confusion
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.

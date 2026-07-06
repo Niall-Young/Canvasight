@@ -39,7 +39,7 @@ import {
   type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
-import { canvasightApi, isTemplateLimitError } from "./lib/canvasightApi";
+import { canvasightApi, isStaleDocumentError, isTemplateLimitError } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
@@ -779,6 +779,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
   const hydratedRef = useRef(false);
+  const documentRevisionRef = useRef<number | null>(null);
+  const skipNextSaveRef = useRef(false);
+  const reloadingExternalDocumentRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const workspaceContentRef = useRef<HTMLElement | null>(null);
@@ -903,30 +906,36 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const openProjectPath = useCallback(
-    async (projectPath: string) => {
+    async (projectPath: string, options: { silent?: boolean; status?: string } = {}) => {
       const trimmedPath = projectPath.trim();
       if (!trimmedPath) return;
-      setLoadingProject(true);
-      setStatus("Opening project...");
+      if (!options.silent) {
+        setLoadingProject(true);
+        setStatus("Opening project...");
+      }
       try {
         const result = await canvasightApi.openProject(trimmedPath);
         const document = normalizeDocument(trimmedPath, result.document);
+        documentRevisionRef.current = result.documentRevision;
+        skipNextSaveRef.current = true;
         setProjectDocument(result.project, document);
         setProjectPathInput(result.project.path);
         hydratedRef.current = true;
-        setStatus(t("app.openedProject", { name: result.project.name }));
+        setStatus(options.status ?? t("app.openedProject", { name: result.project.name }));
       } catch (error) {
         const fallbackProject = {
           name: projectNameFromPath(trimmedPath),
           path: trimmedPath,
           updatedAt: new Date().toISOString()
         };
+        documentRevisionRef.current = null;
+        skipNextSaveRef.current = true;
         setProjectDocument(fallbackProject, emptyDocument(trimmedPath));
         setProjectPathInput(trimmedPath);
         hydratedRef.current = true;
         setStatus(error instanceof Error ? error.message : t("app.genericError"));
       } finally {
-        setLoadingProject(false);
+        if (!options.silent) setLoadingProject(false);
       }
     },
     [setProjectDocument, setStatus, t]
@@ -980,20 +989,67 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   useEffect(() => {
     if (!hydratedRef.current || !project) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
+      const expectedRevision = documentRevisionRef.current;
       setSaving(true);
       canvasightApi
-        .saveDocument(project.path, toDocument(project, pages, activePageId, nodes, edges))
-        .then(() => setStatus(t("status.saved")))
-        .catch((error) => setStatus(error instanceof Error ? error.message : t("status.saveFailed")))
+        .saveDocument(project.path, toDocument(project, pages, activePageId, nodes, edges), expectedRevision)
+        .then((result) => {
+          documentRevisionRef.current = result.documentRevision;
+          setStatus(t("status.saved"));
+        })
+        .catch((error) => {
+          if (isStaleDocumentError(error)) {
+            void openProjectPath(project.path, { silent: true, status: t("status.externalDocumentReloaded") });
+            return;
+          }
+          setStatus(error instanceof Error ? error.message : t("status.saveFailed"));
+        })
         .finally(() => setSaving(false));
     }, saveDebounceMs);
 
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
-  }, [activePageId, edges, nodes, pages, project, setSaving, setStatus, t]);
+  }, [activePageId, edges, nodes, openProjectPath, pages, project, setSaving, setStatus, t]);
+
+  useEffect(() => {
+    if (!hydratedRef.current || !project) return;
+    let cancelled = false;
+
+    const reloadIfExternalDocumentChanged = async (): Promise<void> => {
+      if (reloadingExternalDocumentRef.current) return;
+      try {
+        const session = await canvasightApi.getSession();
+        if (cancelled || session.projectPath !== project.path) return;
+        const currentRevision = documentRevisionRef.current;
+        if (currentRevision === null || session.documentRevision <= currentRevision) return;
+        reloadingExternalDocumentRef.current = true;
+        try {
+          await openProjectPath(project.path, { silent: true, status: t("status.externalDocumentReloaded") });
+        } finally {
+          reloadingExternalDocumentRef.current = false;
+        }
+      } catch {
+        // Background revision checks should not interrupt editing.
+      }
+    };
+
+    void reloadIfExternalDocumentChanged();
+    const timer = window.setInterval(() => {
+      void reloadIfExternalDocumentChanged();
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [openProjectPath, project, t]);
 
   const beginRenamePage = useCallback(() => {
     if (!activePage) return;

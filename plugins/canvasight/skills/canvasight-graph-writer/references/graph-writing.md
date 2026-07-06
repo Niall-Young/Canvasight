@@ -4,6 +4,8 @@ Use `write_canvasight_graph` when the user asks Codex to create or update a Canv
 
 When `open_canvasight` or `open_canvasight_recent_project` has made a project active, treat later medium or complex multi-step requests as candidates for graph writing before direct execution, even if the user does not repeat "Canvasight." Do not force graph writing for small direct commands, simple questions, Run payloads, or requests that explicitly ask Codex to execute immediately.
 
+In active Canvasight context, phrases like "用画布", "放到画布", "写到画布", "use the canvas", or "use Canvasight to plan/break down this" mean Canvasight graph writing. Treat them as HTML canvas/frontend drawing requests only when the user explicitly says HTML canvas, web canvas, React canvas component, `<canvas>`, or drawing API.
+
 Prefer the MCP tool over hand-editing `.scatter/scatter.json` unless the user explicitly asks for raw file editing. The tool writes a valid v1 `.scatter/scatter.json`, validates node and edge references, and remembers the project for reopening.
 
 ## Write Mode
@@ -59,4 +61,4 @@ If `layout` is omitted, Canvasight may choose a default from `graphType`. This d
 
 After writing a graph, call `open_canvasight` or `open_canvasight_recent_project` when the user wants to inspect it in the browser.
 
-If the web app was already open, tell the user to refresh or reopen the project to load the external file update.
+`write_canvasight_graph` writes through the Canvasight daemon and advances the project document revision. If the web app is already open on that project, it should detect the newer revision and reload; if a stale browser session tries to save, the daemon rejects the save with `stale_document` so old in-memory state cannot overwrite the graph that was just generated.

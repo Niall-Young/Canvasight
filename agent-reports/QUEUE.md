@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1446-integration-summary-graph-write-session-drift.md` - integrated daemon-backed AI graph writes, document revision sync, stale-save rejection, docs, skills, tests, and version 0.1.18.
+- `agent-reports/resolved/20260706-1446-development-solution-graph-write-session-drift.md` - implemented project document revision, per-project write lock, stale save handling, and dev API parity.
+- `agent-reports/resolved/20260706-1429-development-issue-graph-write-session-drift.md` - resolved AI graph writes drifting from current Canvasight browser sessions and stale autosave overwrites.
 - `agent-reports/resolved/20260706-1422-integration-summary-page-name-tooltip.md` - integrated full-name hover/focus tooltips for truncated Page switcher and menu names.
 - `agent-reports/resolved/20260706-1422-development-solution-page-name-tooltip.md` - implemented Page name tooltip support using the existing TooltipAnchor and long-text tooltip styling.
 - `agent-reports/resolved/20260706-1410-development-issue-page-name-tooltip.md` - resolved truncated Page names lacking full-name tooltip access.

@@ -161,8 +161,14 @@ export interface ScatterDocument {
 }
 
 export interface OpenProjectResult {
+  documentRevision: number;
   project: ScatterProjectInfo;
   document: ScatterDocument;
+}
+
+export interface SaveDocumentResult {
+  document: ScatterDocument;
+  documentRevision: number;
 }
 
 export interface AssistantRunInput {

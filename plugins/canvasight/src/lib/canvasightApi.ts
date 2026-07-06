@@ -9,10 +9,12 @@ import type {
   NodeTemplateInput,
   OpenProjectResult,
   RunMode,
+  SaveDocumentResult,
   ScatterDocument
 } from "../../shared/types";
 
 export interface SessionInfo {
+  documentRevision: number;
   language: LanguagePreference;
   projectPath: string | null;
   sessionId: string;
@@ -184,6 +186,10 @@ function deleteLocalTemplate(templateId: string): void {
   saveLocalTemplates(loadLocalTemplates().filter((template) => template.id !== templateId));
 }
 
+export function isStaleDocumentError(error: unknown): boolean {
+  return error instanceof CanvasightApiError && error.status === 409 && error.code === "stale_document";
+}
+
 function shouldUseLocalTemplateStore(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return (
@@ -263,10 +269,10 @@ export const canvasightApi = {
     });
   },
 
-  saveDocument(projectPath: string, document: ScatterDocument): Promise<ScatterDocument> {
-    return requestJson<ScatterDocument>(`/api/sessions/${this.sessionId}/document`, {
+  saveDocument(projectPath: string, document: ScatterDocument, expectedRevision: number | null): Promise<SaveDocumentResult> {
+    return requestJson<SaveDocumentResult>(`/api/sessions/${this.sessionId}/document`, {
       method: "POST",
-      body: JSON.stringify({ document, projectPath })
+      body: JSON.stringify({ document, expectedRevision, projectPath })
     });
   },
 
