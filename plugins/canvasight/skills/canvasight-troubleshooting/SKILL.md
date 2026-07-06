@@ -1,6 +1,6 @@
 ---
 name: canvasight-troubleshooting
-description: Diagnose and fix Canvasight plugin, MCP, daemon, browser URL, installation, cache, or connection problems. Use when Canvasight tools are missing, codex plugin list shows an old version, the browser URL returns connection refused, an archived thread stopped the old page, the daemon state is stale, or the user asks why Canvasight plugin behavior is not updating.
+description: Diagnose and fix Canvasight plugin, MCP, daemon, browser URL, Run delivery, installation, cache, or connection problems. Use when Canvasight tools are missing, codex plugin list shows an old version, the browser URL returns connection refused, an archived thread stopped the old page, the daemon state is stale, Run does not appear in Codex, a bare 5173 dev page reports unbound_dev_session, or the user asks why Canvasight plugin behavior is not updating.
 ---
 
 # Canvasight Troubleshooting

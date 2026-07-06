@@ -111,7 +111,7 @@ Canvasight is currently implemented as a repo-local Codex plugin under `plugins/
 
 Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasight`:
 
-- `npm run dev` starts or reuses the project-level persistent Canvasight dev server at `http://127.0.0.1:5173/`. The command exits after the server is ready; archiving the launching Codex thread should not stop the dev server.
+- `npm run dev` starts or reuses the project-level persistent Canvasight dev server at `http://127.0.0.1:5173/`. The command exits after the server is ready; archiving the launching Codex thread should not stop the dev server. Bare dev Run can direct-send only when the dev server process has `CODEX_THREAD_ID`, and it is bound to the thread that started that process; otherwise it returns `unbound_dev_session`.
 - `npm run dev:stop` stops the persistent Canvasight dev server.
 - `npm run dev:status` reports whether the persistent Canvasight dev server is running.
 - `npm run dev:foreground` starts Vite in the foreground when live terminal logs are explicitly needed.

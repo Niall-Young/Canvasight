@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1511-integration-summary-dev-run-not-sent.md` - integrated daemon-backed Run delivery for bare dev pages with explicit unbound dev-session failure.
+- `agent-reports/resolved/20260706-1511-development-solution-dev-run-not-sent.md` - implemented Vite dev Run proxying through the Canvasight daemon and expanded dev-server smoke coverage.
+- `agent-reports/resolved/20260706-1457-development-issue-dev-run-not-sent.md` - resolved bare `5173` dev page Run not sending Markdown to Codex.
 - `agent-reports/resolved/20260706-1446-integration-summary-graph-write-session-drift.md` - integrated daemon-backed AI graph writes, document revision sync, stale-save rejection, docs, skills, tests, and version 0.1.18.
 - `agent-reports/resolved/20260706-1446-development-solution-graph-write-session-drift.md` - implemented project document revision, per-project write lock, stale save handling, and dev API parity.
 - `agent-reports/resolved/20260706-1429-development-issue-graph-write-session-drift.md` - resolved AI graph writes drifting from current Canvasight browser sessions and stale autosave overwrites.

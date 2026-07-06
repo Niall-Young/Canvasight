@@ -150,7 +150,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。需要手动停止时运行 `npm run dev:stop`。
+`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。裸 `5173` 页面只有在 dev server 进程带有 `CODEX_THREAD_ID` 时才能通过 daemon 直发 Run，绑定的是启动该 dev server 的 thread；未绑定时会返回 `unbound_dev_session`，不再静默排队。正常插件使用和跨 thread 测试应通过 `open_canvasight` 返回的完整 `browserUrl` / `url` 打开。需要手动停止时运行 `npm run dev:stop`。
 
 `npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止插件 daemon。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
 
@@ -374,7 +374,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. Use `npm run dev:stop` when you explicitly need to stop it.
+`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. A bare `5173` page can direct-send Run through the daemon only when the dev server process has `CODEX_THREAD_ID`, and it is bound to the thread that started that dev server; otherwise it returns `unbound_dev_session` instead of silently queueing. Normal plugin usage and cross-thread testing should open the full `browserUrl` / `url` returned by `open_canvasight`. Use `npm run dev:stop` when you explicitly need to stop it.
 
 `npm run daemon` and `npm run daemon:stop` are only for manual plugin-daemon development or troubleshooting. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
 

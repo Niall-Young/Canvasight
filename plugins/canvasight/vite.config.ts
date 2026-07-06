@@ -1,15 +1,39 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultProjectPath = path.resolve(process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH || path.resolve(__dirname, "../.."));
 process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH = defaultProjectPath;
-const devSessions = new Map<string, { id: string; language: "zh"; projectPath: string; runQueue: unknown[] }>();
+const pluginRoot = __dirname;
+const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
+const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8")) as { version?: string };
+const serverVersion = typeof packageJson.version === "string" ? packageJson.version : "";
+const defaultCanvasightHome = path.join(os.homedir(), ".canvasight");
+type DaemonState = {
+  origin: string;
+  pid: number | null;
+  pluginRoot: string;
+  port: number | null;
+  serverVersion: string;
+  startedAt: string;
+  token: string;
+  version: 1;
+};
+type DevSession = {
+  daemonSessionId?: string;
+  id: string;
+  language: "zh";
+  projectPath: string;
+  runQueue: unknown[];
+};
+const devSessions = new Map<string, DevSession>();
 const projectDocumentRevisions = new Map<string, number>();
 const projectWriteLocks = new Map<string, Promise<unknown>>();
 
@@ -19,6 +43,115 @@ function nowIso(): string {
 
 function projectNameFromPath(projectPath: string): string {
   return path.basename(projectPath) || projectPath;
+}
+
+function canvasightHome(): string {
+  const configured = process.env.CANVASIGHT_HOME;
+  return path.resolve(typeof configured === "string" && configured.trim() ? configured : defaultCanvasightHome);
+}
+
+function canvasightDaemonStatePath(): string {
+  return path.join(canvasightHome(), "daemon.json");
+}
+
+function normalizeDaemonState(value: unknown): DaemonState | null {
+  if (!value || typeof value !== "object") return null;
+  const state = value as Partial<DaemonState>;
+  if (typeof state.origin !== "string" || !state.origin.startsWith("http://127.0.0.1:")) return null;
+  return {
+    version: 1,
+    pid: Number.isFinite(Number(state.pid)) ? Number(state.pid) : null,
+    origin: state.origin,
+    port: Number.isFinite(Number(state.port)) ? Number(state.port) : null,
+    token: typeof state.token === "string" ? state.token : "",
+    pluginRoot: typeof state.pluginRoot === "string" ? state.pluginRoot : "",
+    serverVersion: typeof state.serverVersion === "string" ? state.serverVersion : "",
+    startedAt: typeof state.startedAt === "string" ? state.startedAt : ""
+  };
+}
+
+async function readDaemonState(): Promise<DaemonState | null> {
+  try {
+    const raw = await fsp.readFile(canvasightDaemonStatePath(), "utf8");
+    return normalizeDaemonState(JSON.parse(raw));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+function daemonHeaders(state: DaemonState, headers: Record<string, string> = {}): Record<string, string> {
+  return {
+    ...(state.token ? { "x-canvasight-token": state.token } : {}),
+    ...headers
+  };
+}
+
+async function daemonJson<T = unknown>(state: DaemonState, route: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(new URL(route, state.origin), {
+    ...init,
+    headers: daemonHeaders(state, {
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...((init.headers as Record<string, string> | undefined) ?? {})
+    })
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(text || `Canvasight daemon request failed: ${response.status}`);
+  return (text ? JSON.parse(text) : null) as T;
+}
+
+async function healthyDaemonState(state: DaemonState | null): Promise<DaemonState | null> {
+  if (!state) return null;
+  try {
+    const health = await daemonJson<Partial<DaemonState> & { status?: string }>(
+      { ...state, token: "" },
+      "/api/health"
+    );
+    if (health.status !== "ok" || health.pluginRoot !== pluginRoot || health.serverVersion !== serverVersion) return null;
+    return {
+      ...state,
+      origin: health.origin || state.origin,
+      port: Number.isFinite(Number(health.port)) ? Number(health.port) : state.port,
+      pid: Number.isFinite(Number(health.pid)) ? Number(health.pid) : state.pid
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForDaemon(token: string): Promise<DaemonState> {
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    const state = await readDaemonState();
+    if (state && state.token === token) {
+      const healthy = await healthyDaemonState(state);
+      if (healthy) return healthy;
+    }
+    await sleep(120);
+  }
+  throw new Error("Canvasight daemon did not start in time");
+}
+
+async function ensureDaemonServer(): Promise<DaemonState> {
+  const existing = await healthyDaemonState(await readDaemonState());
+  if (existing) return existing;
+
+  const token = crypto.randomBytes(24).toString("base64url");
+  const child = spawn(process.execPath, [serverPath, "--daemon"], {
+    cwd: pluginRoot,
+    detached: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      CANVASIGHT_DAEMON_TOKEN: token
+    }
+  });
+  child.unref();
+  return waitForDaemon(token);
 }
 
 function projectRevisionKey(projectPath: string): string {
@@ -122,12 +255,47 @@ async function writeScatterDocument(projectPath: string, document: Record<string
   return normalized;
 }
 
-function devSession(id: string): { id: string; language: "zh"; projectPath: string; runQueue: unknown[] } {
+function devSession(id: string): DevSession {
   const existing = devSessions.get(id);
   if (existing) return existing;
   const session = { id, language: "zh" as const, projectPath: defaultProjectPath, runQueue: [] };
   devSessions.set(id, session);
   return session;
+}
+
+async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: DaemonState; sessionId: string }> {
+  const daemon = await ensureDaemonServer();
+  const threadId = process.env.CODEX_THREAD_ID || null;
+  if (session.daemonSessionId) {
+    try {
+      const info = await daemonJson<{ codexThreadId: string | null; projectPath: string | null }>(
+        daemon,
+        `/api/sessions/${encodeURIComponent(session.daemonSessionId)}`
+      );
+      if (info.projectPath && path.resolve(info.projectPath) === path.resolve(session.projectPath) && info.codexThreadId === threadId) {
+        return {
+          daemon,
+          sessionId: session.daemonSessionId
+        };
+      }
+    } catch {
+      session.daemonSessionId = undefined;
+    }
+  }
+
+  const opened = await daemonJson<{ session: { sessionId: string } }>(daemon, "/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      language: session.language,
+      projectPath: session.projectPath,
+      threadId
+    })
+  });
+  session.daemonSessionId = opened.session.sessionId;
+  return {
+    daemon,
+    sessionId: session.daemonSessionId
+  };
 }
 
 function sendJson(res: { statusCode: number; setHeader(name: string, value: string): void; end(body?: string): void }, statusCode: number, payload: unknown): void {
@@ -301,8 +469,23 @@ function canvasightDevApiPlugin() {
             return;
           }
           if (action === "run") {
-            session.runQueue.push(body);
-            sendJson(res, 200, { status: "queued" });
+            if (!process.env.CODEX_THREAD_ID) {
+              sendJson(res, 409, {
+                code: "unbound_dev_session",
+                error: "Dev preview is not bound to a Codex thread. Open Canvasight with open_canvasight and use the full session URL before running nodes."
+              });
+              return;
+            }
+            const { daemon, sessionId } = await ensureDevDaemonSession(session);
+            const result = await daemonJson(daemon, `/api/sessions/${encodeURIComponent(sessionId)}/run`, {
+              method: "POST",
+              body: JSON.stringify({
+                ...body,
+                projectPath,
+                sessionId
+              })
+            });
+            sendJson(res, 200, result);
             return;
           }
           sendJson(res, 404, { error: "API route not found" });

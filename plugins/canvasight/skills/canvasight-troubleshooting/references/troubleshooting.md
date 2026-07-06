@@ -31,7 +31,8 @@ Canvasight Run should use Codex app-server direct delivery when the browser sess
 1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
 2. Reopen the canvas from the intended current thread so the session stores the right thread id.
 3. Check the Run response or `await_canvasight_run` result for `codexNative.status` and `codexTurn.status`.
-4. If direct delivery is unavailable or failed, call `await_canvasight_run` with `sessionId` or `projectPath` to receive the queued fallback payload.
+4. If the response has `code: "unbound_dev_session"`, the browser is using a bare dev preview such as `http://127.0.0.1:5173/` without a bound Codex thread. Open Canvasight through `open_canvasight` and use the returned full URL, or restart the dev server from the intended Codex thread so the process receives `CODEX_THREAD_ID`.
+5. If direct delivery is unavailable or failed, call `await_canvasight_run` with `sessionId` or `projectPath` to receive the queued fallback payload.
 
 Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automation to push text into Codex.
 
@@ -47,6 +48,8 @@ Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automa
 ## Development Server Confusion
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.
+
+The bare `http://127.0.0.1:5173/` dev URL is not a cross-thread routing surface by itself. It can only direct-send Run when the Vite process was started with `CODEX_THREAD_ID`, and that binding points at the thread that started the process. Otherwise Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. For normal current-thread behavior, reopen the canvas from that thread with `open_canvasight` or `open_canvasight_recent_project`.
 
 ## Validation Commands
 
