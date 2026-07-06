@@ -128,6 +128,8 @@ Canvasight should use a restrained, professional interface:
 
 Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to create pages, nodes, edges, and attachments. AI-generated canvas content should feel like normal editable canvas state, not a separate imported artifact.
 
+- When a Canvasight project is open, it becomes active canvas context for later medium or complex requests. Product planning, codebase architecture analysis, article mapping, complex fixes, and multi-step task plans should prefer a graph-first pass before direct execution when decomposition would help.
+- Active canvas context is a bias, not a hard override. Small direct commands, simple questions, Run payloads, and requests that explicitly ask for immediate direct execution should remain direct.
 - AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
 - AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
 - AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction.

@@ -74,6 +74,7 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 ## Implementation Standards
 
 - Follow the conventions already present in the codebase once source files exist.
+- When Canvasight is already open or recently attached, treat medium or complex follow-up requests as active canvas context. Prefer `write_canvasight_graph` before direct execution when the request benefits from decomposition, dependencies, stages, or visual review. Do not force graph writing for small direct commands, simple questions, Canvasight Run payloads, or requests that explicitly ask for immediate direct execution.
 - Prefer typed, explicit data structures for product state and UI contracts.
 - Keep business logic separate from presentation when the framework makes that practical.
 - Make UI components reusable only after the same pattern appears more than once or clearly belongs to a shared system.

@@ -1,6 +1,6 @@
 ---
 name: canvasight-graph-writer
-description: Create or update Canvasight task nodes and edges with AI through write_canvasight_graph, including scanning and reusing saved global node templates. Use when the user asks Codex to generate Canvasight nodes, write a Canvasight graph, turn product requirements into Canvasight structure, map an article into Canvasight nodes, analyze a codebase into a Canvasight graph, reuse Canvasight node templates, or create/update .scatter/scatter.json through the Canvasight plugin.
+description: "Create or update Canvasight task nodes and edges with AI through write_canvasight_graph, including scanning and reusing saved global node templates. Use when the user asks Codex to generate Canvasight nodes, write a Canvasight graph, turn product requirements into Canvasight structure, map an article into Canvasight nodes, analyze a codebase into a Canvasight graph, reuse Canvasight node templates, or create/update .scatter/scatter.json. Also use when a Canvasight canvas is already open or attached and the user gives a medium or large multi-step request that should be decomposed into task nodes before direct execution, even if they do not explicitly ask for graph or nodes."
 ---
 
 # Canvasight Graph Writer
@@ -26,5 +26,6 @@ Use this skill when Codex should create or update Canvasight nodes and connectio
 - Template reuse does not control `graphType`, `mode`, Page behavior, or node Codex mode.
 - One node may connect to multiple downstream nodes.
 - Self-connections, duplicate `source -> target` edges, and multiple parent edges into the same target are invalid.
+- Do not force graph writing for small direct commands, simple explanations, Run payloads, or requests that explicitly ask for immediate direct execution.
 
 Read `references/graph-writing.md` for input rules and `references/graph-types.md` for task classification.

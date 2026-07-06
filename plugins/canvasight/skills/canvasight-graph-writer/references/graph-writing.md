@@ -2,6 +2,8 @@
 
 Use `write_canvasight_graph` when the user asks Codex to create or update a Canvasight canvas from analysis, code architecture, product requirements, task planning, or another structured breakdown.
 
+When `open_canvasight` or `open_canvasight_recent_project` has made a project active, treat later medium or complex multi-step requests as candidates for graph writing before direct execution, even if the user does not repeat "Canvasight." Do not force graph writing for small direct commands, simple questions, Run payloads, or requests that explicitly ask Codex to execute immediately.
+
 Prefer the MCP tool over hand-editing `.scatter/scatter.json` unless the user explicitly asks for raw file editing. The tool writes a valid v1 `.scatter/scatter.json`, validates node and edge references, and remembers the project for reopening.
 
 ## Write Mode

@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.14";
+const SERVER_VERSION = "0.1.15";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -2335,6 +2335,36 @@ function toolResult(structuredContent, text = "") {
   };
 }
 
+function canvasRoutingContext() {
+  return {
+    status: "active",
+    activeCanvasContext: true,
+    preferredTool: "write_canvasight_graph",
+    preferredMode: "append-page",
+    templateDiscoveryTool: "list_canvasight_node_templates",
+    fullTemplateTool: "get_canvasight_node_template",
+    templateLookup: "Call list_canvasight_node_templates with targeted queries before graph writing, then get_canvasight_node_template only for likely matches.",
+    preferCanvasFor: [
+      "medium_or_large_multi_step_requests",
+      "product_or_feature_planning",
+      "codebase_architecture_analysis",
+      "article_or_document_structure_mapping",
+      "task_plans_with_dependencies_or_risks"
+    ],
+    bypassCanvasFor: [
+      "small_direct_commands",
+      "simple_questions_or_explanations",
+      "canvasight_run_payloads",
+      "requests_that_explicitly_ask_for_direct_execution",
+      "requests_that_explicitly_disable_canvas_use"
+    ],
+    userFacingInstruction:
+      "Canvasight is now active for this project. For later medium or complex work, prepare or update an editable canvas page first when breakdown would help. Keep small direct tasks, Run payloads, and explicit direct-execution requests on their normal path.",
+    instruction:
+      "Canvasight is active for this project. For later medium or complex requests that benefit from decomposition, prefer creating or updating the canvas with write_canvasight_graph before direct execution. Do not force Canvasight for small direct tasks, Run payloads, or requests that ask to execute immediately."
+  };
+}
+
 async function toolOpenCanvasight(args) {
   const daemon = await ensureDaemonServer();
   const opened = await daemonJson(daemon, "/api/sessions", {
@@ -2349,6 +2379,7 @@ async function toolOpenCanvasight(args) {
   const url = daemonSessionUrl(daemon, session.sessionId);
   await waitForReachableUrl(url, "Canvasight browser session");
   const externalBrowser = openExternalBrowser(url);
+  const canvasRouting = canvasRoutingContext();
   return toolResult(
     {
       status: "opened",
@@ -2361,9 +2392,15 @@ async function toolOpenCanvasight(args) {
       projectPath: session.projectPath,
       codexThreadId: session.codexThreadId,
       project: opened.project,
-      language: session.language
+      language: session.language,
+      activeCanvasContext: true,
+      canvasRouting,
+      activeCanvasRouting: canvasRouting
     },
-    `Canvasight session opened. Open this URL in the Codex in-app browser sidebar: ${url}`
+    [
+      `Canvasight session opened. Open this URL in the Codex in-app browser sidebar: ${url}`,
+      canvasRouting.userFacingInstruction
+    ].join("\n\n")
   );
 }
 
@@ -2528,7 +2565,8 @@ async function toolCloseCanvasight(args) {
 const tools = [
   {
     name: "open_canvasight",
-    description: "Open a Canvasight browser session and start or reuse the project-level local daemon.",
+    description:
+      "Open a Canvasight browser session in Codex's in-app browser/sidebar and start or reuse the project-level local daemon without launching the system browser by default. Use the full returned browserUrl/url. The opened project becomes active Canvasight context: later medium or complex requests should prefer write_canvasight_graph before direct execution when decomposition is useful.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2567,7 +2605,8 @@ const tools = [
   },
   {
     name: "open_canvasight_recent_project",
-    description: "Open the most recent remembered Canvasight project, or a chosen recent project path/index.",
+    description:
+      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, in Codex's in-app browser/sidebar. Use the full returned browserUrl/url. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2631,7 +2670,7 @@ const tools = [
   {
     name: "write_canvasight_graph",
     description:
-      "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Can reuse saved global node templates through templateId or templateQuery.",
+      "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Can reuse saved global node templates through templateId or templateQuery.",
     inputSchema: {
       type: "object",
       properties: {

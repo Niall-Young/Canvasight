@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1035-integration-summary-active-canvas-routing.md` - integrated active Canvasight context routing so later medium or complex requests prefer graph-first handling.
+- `agent-reports/resolved/20260706-1035-development-solution-active-canvas-routing.md` - added MCP routing metadata, Skill trigger updates, docs, tests, and version 0.1.15.
+- `agent-reports/resolved/20260706-1024-product-issue-active-canvas-routing.md` - resolved the gap where an opened Canvasight canvas did not bias later structured requests toward the canvas.
 - `agent-reports/resolved/20260706-1006-integration-summary-compact-plugin-icon.md` - integrated a dedicated Canvasight compact plugin icon for the installed plugins list.
 - `agent-reports/resolved/20260706-1006-development-solution-compact-plugin-icon.md` - added a separate composer icon asset and bumped Canvasight to 0.1.14.
 - `agent-reports/resolved/20260706-1006-product-issue-compact-plugin-icon.md` - resolved the installed plugins list still showing the fallback Canvasight icon.

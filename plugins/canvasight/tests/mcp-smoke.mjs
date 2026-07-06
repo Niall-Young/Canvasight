@@ -11,6 +11,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
+const pluginJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"));
+const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8"));
+const packageLockJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package-lock.json"), "utf8"));
+const expectedPluginVersion = pluginJson.version;
+
+assert.equal(packageJson.version, expectedPluginVersion);
+assert.equal(packageLockJson.version, expectedPluginVersion);
+assert.equal(packageLockJson.packages[""].version, expectedPluginVersion);
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
@@ -82,6 +90,8 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
+    CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
+    CANVASIGHT_OPEN_BROWSER: "0",
     CODEX_THREAD_ID: "thread-smoke"
   },
   stdio: ["pipe", "pipe", "pipe"]
@@ -189,6 +199,8 @@ function createMcpClient(label, envOverrides = {}) {
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
+      CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
+      CANVASIGHT_OPEN_BROWSER: "0",
       CODEX_THREAD_ID: `thread-${label}`,
       ...envOverrides
     },
@@ -290,7 +302,7 @@ async function main() {
       }
     });
     assert.equal(initialized.serverInfo.name, "canvasight");
-    assert.equal(initialized.serverInfo.version, "0.1.14");
+    assert.equal(initialized.serverInfo.version, expectedPluginVersion);
     notify("notifications/initialized", {});
 
     const listed = await request("tools/list", {});
@@ -303,7 +315,17 @@ async function main() {
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
+    const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
+    assert.match(openTool.description, /in-app browser\/sidebar/);
+    assert.match(openTool.description, /full returned browserUrl\/url/);
+    assert.match(openTool.description, /without launching the system browser by default/);
+    assert.match(openTool.description, /active Canvasight context/);
+    const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
+    assert.match(recentOpenTool.description, /in-app browser\/sidebar/);
+    assert.match(recentOpenTool.description, /active Canvasight context/);
     const writeGraphTool = listed.tools.find((tool) => tool.name === "write_canvasight_graph");
+    assert.match(writeGraphTool.description, /Canvasight is active/);
+    assert.match(writeGraphTool.description, /before direct execution/);
     assert.deepEqual(writeGraphTool.inputSchema.properties.graphType.enum, [
       "software-product",
       "article-outline",
@@ -325,13 +347,23 @@ async function main() {
     assert.equal(autoOpened.structuredContent.externalBrowser.status, "skipped");
     assert.equal(autoOpened.structuredContent.externalBrowser.reason, "codex_in_app_browser_default");
     assert.match(autoOpened.content[0].text, /Codex in-app browser sidebar/);
+    assert.equal(autoOpened.structuredContent.activeCanvasContext, true);
+    assert.equal(autoOpened.structuredContent.activeCanvasRouting.status, "active");
+    assert.equal(autoOpened.structuredContent.canvasRouting.activeCanvasContext, true);
+    assert.equal(autoOpened.structuredContent.canvasRouting.preferredTool, "write_canvasight_graph");
+    assert.equal(autoOpened.structuredContent.canvasRouting.preferredMode, "append-page");
+    assert.equal(autoOpened.structuredContent.canvasRouting.templateDiscoveryTool, "list_canvasight_node_templates");
+    assert.equal(autoOpened.structuredContent.canvasRouting.fullTemplateTool, "get_canvasight_node_template");
+    assert.match(autoOpened.content[0].text, /Canvasight is now active for this project/);
+    assert.match(autoOpened.content[0].text, /editable canvas page/);
+    assert.match(autoOpened.structuredContent.canvasRouting.instruction, /write_canvasight_graph/);
     assert.equal(autoOpened.structuredContent.projectPath, defaultProjectPath);
     assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
     const autoPageResponse = await fetch(autoOpened.structuredContent.browserUrl);
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
-    assert.equal(autoHealth.serverVersion, "0.1.14");
+    assert.equal(autoHealth.serverVersion, expectedPluginVersion);
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.deepEqual(autoSession, {
       codexThreadId: "thread-smoke",
@@ -366,6 +398,9 @@ async function main() {
     assert.equal(opened.structuredContent.browserUrl, opened.structuredContent.url);
     assert.equal(opened.structuredContent.openTarget, "codex_in_app_browser");
     assert.equal(opened.structuredContent.externalBrowser.status, "skipped");
+    assert.equal(opened.structuredContent.activeCanvasContext, true);
+    assert.equal(opened.structuredContent.canvasRouting.preferredTool, "write_canvasight_graph");
+    assert.equal(opened.structuredContent.activeCanvasRouting.preferredMode, "append-page");
     assert.equal(opened.structuredContent.projectPath, projectPath);
     assert.equal(opened.structuredContent.codexThreadId, "thread-smoke");
 

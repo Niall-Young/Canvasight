@@ -16,6 +16,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - 选择 Chat、Plan 或 Goal 模式，把画布内容交给 Codex 执行。
 - 默认在 Run 输出中包含 Agent Team 协作协议，让复杂任务按需使用产品、设计、开发、测试、文档、Skill 和项目管理角色。
 - 让 Codex 根据代码架构、产品需求或任务计划直接生成 Canvasight 节点和连线。
+- 开启画布后，让后续中大型、需要拆解的需求优先考虑写入或更新画布，再决定是否直接执行。
 - 保存常用节点的标题、提示词和附件为全局模板，并在任意项目里拖回画布复用。
 - 在新 Codex 线程里恢复最近使用的 Canvasight 项目。
 - 让网页画布独立于单个 Codex thread 存活，当前在哪个 thread，就由哪个 thread 获取 Run payload。
@@ -46,6 +47,8 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 7. 点击节点或流程的 Run。
 8. 当前 Codex 线程调用 `await_canvasight_run` 读取生成的 Markdown 和结构化数据，然后继续执行任务。新线程可以用 `projectPath` attach 到同一项目队列。
 
+画布打开后，Canvasight 会把该项目标记为 active canvas context。之后如果用户提出产品规划、代码架构分析、文章脉络梳理、复杂修复或多步骤任务，Codex 应优先判断是否调用 `write_canvasight_graph` 以 `append-page` 写入一个可编辑画布 Page，并先扫描全局节点模板摘要。简单命令、普通问答、Canvasight Run payload，或用户明确要求“直接执行”的任务，不应被强制写入画布。
+
 ### AI 直接创建画布
 
 当你希望 Codex 把代码架构、产品需求、文章脉络或执行计划变成 Canvasight 画布时，可以直接提出类似请求：
@@ -54,6 +57,8 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - “把这份产品需求拆成 Canvasight 节点，按用户流程连接起来。”
 - “按这篇文章的脉络生成阅读梳理节点。”
 - “新增一个 Canvasight Page，包含调研、设计、开发、测试四个节点。”
+
+如果 Canvasight 已经开启，用户不必每次重复说“生成 Canvasight 节点”。只要后续需求适合拆解、依赖关系或阶段规划，Codex 就应先考虑画布；不适合画布的轻量任务仍然直接处理。
 
 Codex 应优先调用 `write_canvasight_graph`，而不是手写完整 JSON。该工具会写入项目下的 `.scatter/scatter.json`，默认写入模式是 `append-page`，用于避免覆盖现有画布；这只是安全默认值，不是任务分类规则。它会校验节点 id 唯一性，并要求每条连线的 `source` / `target` 都引用同一 Page 内存在的节点；连线也会遵守手动画布规则：支持一个节点连接多个下游节点，但不能自连、不能重复、一个节点不能有多个父节点。
 
@@ -80,17 +85,17 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.14` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8`、`0.1.9`、`0.1.10`、`0.1.11`、`0.1.12` 或 `0.1.13`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.15` 或更高版本。如果仍是 `0.1.0`、`0.1.1`、`0.1.2`、`0.1.3`、`0.1.4`、`0.1.5`、`0.1.6`、`0.1.7`、`0.1.8`、`0.1.9`、`0.1.10`、`0.1.11`、`0.1.12`、`0.1.13` 或 `0.1.14`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
 Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口误触发所有场景：
 
-- `canvasight`：薄索引，只在明确提到 Canvasight/Scatter 且任务跨多个能力或不清楚该用哪个细分 skill 时使用。
+- `canvasight`：薄索引，用于明确提到 Canvasight/Scatter 的跨能力任务，或画布已开启后需要判断是否先写入画布的中大型请求。
 - `canvasight-open`：打开网页画布、恢复最近项目、从新 Codex 线程重新 attach 到 Canvasight。
 - `canvasight-run`：接收 Run payload，处理 Markdown、结构化数据和 Chat / Plan / Goal 模式。
 - `canvasight-agent-team`：处理 Run 输出中的 Agent Team 协作协议，说明何时按需调用已有固定角色 agent、何时创建缺失角色、如何用带状态的 `agent-reports/` 通讯，以及如何避免把内部协作协议当成普通用户操作。
-- `canvasight-graph-writer`：用 `write_canvasight_graph` 让 AI 创建或更新 Canvasight 节点和连线。
+- `canvasight-graph-writer`：用 `write_canvasight_graph` 让 AI 创建或更新 Canvasight 节点和连线；画布已开启后的中大型、多步骤需求也优先由它判断是否先落成 Page。
 - `canvasight-troubleshooting`：处理插件安装、MCP cache、daemon、URL 失效、连接拒绝等问题。
 
 这些 Skill 只是 Codex 的触发与工作流分工，不改变 Canvasight 的用户界面，也不改变 Page 或节点的编辑模型。`canvasight-agent-team` 只会在 Run 输出中增加可关闭的协作协议提示。
@@ -106,7 +111,7 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认面向 Codex 侧边栏内置浏览器，不会再直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
+`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认面向 Codex 侧边栏内置浏览器，不会再直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列；payload 由当前调用它的 Codex thread 接收。正常插件使用不需要手动运行 `npm run dev`。
 
 `list_canvasight_node_templates` 返回本机全局节点模板摘要，供 AI 写图前低上下文扫描和复用；`get_canvasight_node_template` 只在选中某个候选模板后按 ID 读取完整正文和附件 metadata。`write_canvasight_graph` 让 Codex/AI 直接创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线。`mode` 决定 Page 写入行为，`graphType` 决定任务节点结构。默认模式是 `append-page`，适合在未明确要求覆盖时保护现有画布；只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。节点可传 `templateId` 或 `templateQuery` 复用模板标题、正文和附件。
 
@@ -228,6 +233,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - Send canvas output to Codex in Chat, Plan, or Goal mode.
 - Include Agent Team collaboration instructions in Run output by default so complex tasks can use product, design, development, testing, documentation, skill, and project-management roles when needed.
 - Let Codex generate Canvasight nodes and edges directly from code architecture, product requirements, or task plans.
+- After the canvas is open, let later medium or complex requests prefer creating or updating the canvas before direct execution.
 - Save reusable node titles, prompts, and attachments as global templates and drag them back into any project canvas.
 - Reopen recent Canvasight projects from a new Codex thread.
 - Keep the browser canvas alive outside a single Codex thread, so whichever thread is current can receive the next Run payload.
@@ -258,6 +264,8 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 7. Click Run on a node or flow.
 8. The current Codex thread calls `await_canvasight_run` to receive Markdown and structured data, then continues the task. A new thread can attach to the same project queue with `projectPath`.
 
+After opening, Canvasight marks the project as active canvas context. For later product planning, codebase architecture analysis, article mapping, complex fixes, or multi-step tasks, Codex should first decide whether to call `write_canvasight_graph` with `append-page` and scan global node template summaries. Small commands, simple Q&A, Canvasight Run payloads, and requests that explicitly ask for direct execution should not be forced into the canvas.
+
 ### AI-Generated Canvas Data
 
 When you want Codex to turn code architecture, product requirements, an article outline, or an execution plan into a Canvasight canvas, ask for it directly:
@@ -266,6 +274,8 @@ When you want Codex to turn code architecture, product requirements, an article 
 - “Break this product requirement into Canvasight nodes and connect them by user flow.”
 - “Generate reading-outline nodes that follow this article's structure.”
 - “Add a Canvasight Page with research, design, development, and testing nodes.”
+
+When Canvasight is already open, the user does not need to repeat "generate Canvasight nodes" every time. If the follow-up request benefits from decomposition, dependencies, or staged planning, Codex should consider the canvas first; lightweight tasks should still be handled directly.
 
 Codex should prefer `write_canvasight_graph` instead of hand-writing the full JSON file. The tool writes `.scatter/scatter.json` in the target project and defaults to `mode: "append-page"` to avoid overwriting existing canvas content; this is a safe write default, not a task classification rule. It validates unique node ids plus edge `source` / `target` references within the same Page. Edges follow the same rules as manual canvas connections: one node can connect to multiple downstream nodes, but there are no self-connections, no duplicates, and no more than one parent edge into the same target node.
 
@@ -292,17 +302,17 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.14` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, `0.1.9`, `0.1.10`, `0.1.11`, `0.1.12`, or `0.1.13`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.15` or newer. If it still shows `0.1.0`, `0.1.1`, `0.1.2`, `0.1.3`, `0.1.4`, `0.1.5`, `0.1.6`, `0.1.7`, `0.1.8`, `0.1.9`, `0.1.10`, `0.1.11`, `0.1.12`, `0.1.13`, or `0.1.14`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
 The Canvasight plugin now uses multiple Codex Skills so one broad entrypoint does not trigger for every Canvasight-related task:
 
-- `canvasight`: a thin index for explicit Canvasight/Scatter requests that span multiple capabilities or do not clearly match a narrower skill.
+- `canvasight`: a thin index for explicit Canvasight/Scatter requests that span multiple capabilities, or active-canvas follow-up requests that need a decision about graph-first handling.
 - `canvasight-open`: opens the browser canvas, recovers recent projects, and attaches a new Codex thread to Canvasight.
 - `canvasight-run`: receives Run payloads and handles Markdown, structured data, and Chat / Plan / Goal mode.
 - `canvasight-agent-team`: handles Agent Team collaboration instructions included in Run output, including when Codex should call existing fixed role agents, when it may create a missing role, how status-bearing `agent-reports/` should be used for communication, and how to keep the internal collaboration protocol separate from normal user workflow.
-- `canvasight-graph-writer`: uses `write_canvasight_graph` so AI can create or update Canvasight nodes and edges.
+- `canvasight-graph-writer`: uses `write_canvasight_graph` so AI can create or update Canvasight nodes and edges; it also handles medium or complex active-canvas follow-up requests that should be considered for graph-first Page handling.
 - `canvasight-troubleshooting`: handles plugin installation, MCP cache, daemon, stale URL, and connection-refused issues.
 
 These Skills only affect Codex routing and workflow instructions. They do not change the Canvasight UI, Page model, or node editing model. `canvasight-agent-team` only adds an optional collaboration protocol hint to Run output.
@@ -318,7 +328,7 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It targets Codex's in-app browser sidebar by default and no longer launches the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
+`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It targets Codex's in-app browser sidebar by default and no longer launches the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. `await_canvasight_run` can wait by `sessionId`, or attach to the same project run queue by `projectPath`; the payload is received by the current Codex thread that calls it. Normal plugin use does not require running `npm run dev`.
 
 `list_canvasight_node_templates` returns local global node template summaries so AI can scan and reuse them with low context cost. `get_canvasight_node_template` reads the full body and attachment metadata for one selected template id. `write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json`. `mode` controls Page write behavior, while `graphType` controls the task node structure. Its default mode is `append-page`, which protects existing canvas content when replacement was not explicitly requested. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit. Nodes can pass `templateId` or `templateQuery` to reuse a template title, body, and attachments.
 
