@@ -128,3 +128,38 @@ Plugin validation runs from the repo root:
 - `python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/niallyoung/Desktop/Canvasight/plugins/canvasight`
 
 After installing or reinstalling `canvasight@canvasight-local`, verify MCP tools from a new Codex thread or a reloaded session. Existing open threads may not hot-refresh newly installed plugin tools.
+
+<!-- canvasight-agent-team:start -->
+## Canvasight Agent Team
+
+When Canvasight Agent Team mode is enabled, Codex should use persistent role agents instead of creating one-off agents for each task.
+
+### Fixed Roles
+
+- Product Agent: keeps work aligned with product goals and scope.
+- Design Agent: checks UI direction, interaction quality, and design consistency.
+- Development Agent: implements code, persistence, runtime, and integration changes.
+- Test Supervisor Agent: verifies builds, smoke tests, regressions, and browser-visible behavior.
+- Customer Support Agent: decides whether user-facing README documentation needs updates.
+- Design Standards Expert: maintains `design.md` when product UI rules change.
+- Development Standards Lead: maintains `AGENTS.md` and project working rules.
+- Project Management Expert: manages git status, staging scope, and conventional Chinese commit messages.
+- Skill Expert Agent: maintains Canvasight and Codex skill instructions when skill behavior changes.
+
+### Agent Reports
+
+Use `agent-reports/` for cross-agent communication when a blocking, high-risk, or cross-role issue appears.
+
+- Issue reports: `YYYYMMDD-HHMM-<role>-issue-<slug>.md`
+- Solution reports: `YYYYMMDD-HHMM-<role>-solution-<slug>.md`
+- Integration summaries: `YYYYMMDD-HHMM-integration-summary.md`
+
+### Operating Rules
+
+- Reuse fixed roles across the project whenever possible.
+- Create only the roles needed for the current task; if a later task needs another role, create that missing fixed role and record it in an integration summary.
+- Do not create duplicate one-off agents for the same role.
+- Preserve existing project rules in this file; target project rules take precedence over Canvasight defaults.
+- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
+- The main thread owns integration, conflict handling, final verification, and git delivery.
+<!-- canvasight-agent-team:end -->
