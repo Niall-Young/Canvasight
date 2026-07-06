@@ -253,7 +253,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ projectPath })
     });
-    const runResult = await fetchJson(`${origin}/api/sessions/local/run`, {
+    const unclaimedRun = await fetchJsonResult(`${origin}/api/sessions/local/run`, {
       method: "POST",
       body: JSON.stringify({
         agentTeam: { enabled: false, recommendedRoles: [] },
@@ -270,32 +270,15 @@ async function main() {
         threadName: "Dev Server Run"
       })
     });
-    assert.equal(runResult.status, "sent");
-    assert.equal(runResult.delivery.via, "turn/start");
-    assert.equal(runResult.codexNative.status, "applied");
-    assert.equal(runResult.codexNative.action, "chat/no-settings-update");
-    assert.equal(runResult.codexTurn.threadId, "thread-dev-smoke");
+    assert.equal(unclaimedRun.status, 409);
+    assert.equal(unclaimedRun.json.code, "unbound_dev_session");
     const nativeLog = await readNativeLog();
     assert.equal(nativeLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(nativeLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-smoke").length, 1);
-    const settingsEntry = nativeLog.find((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-dev-smoke");
-    assert.equal(settingsEntry, undefined);
-    assert.equal(nativeLog.filter((entry) => entry.method === "turn/start").length, 1);
-    assert.ok(
-      nativeLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-smoke") <
-        nativeLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke")
-    );
-    const turnEntry = nativeLog.find((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke");
-    assert.ok(turnEntry);
-    assert.equal(turnEntry.params.cwd, opened.project.path);
-    assert.equal(turnEntry.params.input[0].text.includes("Dev Server Run"), true);
+    assert.equal(nativeLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(nativeLog.some((entry) => entry.method === "turn/start"), false);
 
-    const boundDaemon = await readDaemonState(canvasightHome);
-    const rebound = await fetchJson(`${boundDaemon.origin}/api/sessions/claim`, {
+    const rebound = await fetchJson(`${origin}/api/sessions/local/claim`, {
       method: "POST",
-      headers: {
-        "x-canvasight-token": boundDaemon.token
-      },
       body: JSON.stringify({
         projectPath: opened.project.path,
         threadId: "thread-dev-claimed"
@@ -448,6 +431,15 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ projectPath: path.join(tempRoot, "queued-project") })
     });
+    const queuedClaimed = await fetchJson(`${queuedOrigin}/api/sessions/local/claim`, {
+      method: "POST",
+      body: JSON.stringify({
+        projectPath: queuedOpened.project.path,
+        threadId: "thread-queued-dev"
+      })
+    });
+    assert.equal(queuedClaimed.status, "claimed");
+    assert.equal(queuedClaimed.codexThreadId, "thread-queued-dev");
     const queuedLogOffset = (await readNativeLog()).length;
     const queuedRun = await fetchJson(`${queuedOrigin}/api/sessions/local/run`, {
       method: "POST",

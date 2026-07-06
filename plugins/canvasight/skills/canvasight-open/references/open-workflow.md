@@ -10,6 +10,8 @@ Use `open_canvasight` when widget rendering is unavailable or a browser URL fall
 
 In fallback cases, open the full returned `browserUrl` / `url` in Codex's in-app Browser/sidebar. Do not navigate only to the origin because the session id and token are part of the usable URL. Canvasight does not launch the system browser by default; set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` only for local development debugging.
 
+If the current thread does not expose Canvasight MCP tools and the only practical fallback is the generic dev server at `http://127.0.0.1:5173/`, read the current shell `CODEX_THREAD_ID` first and include it as `?threadId=<current-thread-id>` when opening the page. The dev server no longer falls back to the process that originally launched it, because that can send Run output to an archived or unrelated thread.
+
 The returned `canvasRouting` marks the project as active Canvasight context. For later medium or complex requests that benefit from decomposition, prefer `write_canvasight_graph` with `append-page` before direct execution. Do not route small direct commands, simple questions, or Canvasight Run payloads back into graph writing.
 
 ## Recover A Recent Project
@@ -22,7 +24,7 @@ The web service is project-level and should survive the Codex thread that opened
 
 ## Attach From A New Thread
 
-Opening the native widget and receiving Run output should be one flow: the widget host bridge sends a follow-up message to the current thread. Browser fallback pages are different: a browser Run should first try daemon native app-server delivery for the latest thread that claimed the project/session, then queue for `await_canvasight_run` only if direct delivery fails. A new Codex thread should call `claim_canvasight_thread` before the user clicks Run in an old browser tab; use `canvasight-run` to recover queued payloads when needed.
+Opening the native widget and receiving Run output should be one flow: the widget host bridge sends a follow-up message to the current thread. Browser fallback pages are different: a browser Run should first try daemon native app-server delivery for the latest thread that explicitly claimed the project/session, then queue for `await_canvasight_run` only if direct delivery fails. A new Codex thread should call `claim_canvasight_thread` before the user clicks Run in an old browser tab; an unclaimed bare dev page must report `unbound_dev_session` instead of sending to an old launch thread. Use `canvasight-run` to recover queued payloads when needed.
 
 ## Close A Session
 

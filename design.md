@@ -41,6 +41,7 @@ The active implementation is a Codex plugin workspace, not a landing page. The f
 - Right drawer: contextual workspace surfaces such as task list, Markdown/run output, and related inspection views.
 - Sidebar or project list: secondary navigation only; it must not compete visually with the active canvas.
 - Toast/status layer: short-lived feedback for save, run, achievement, and error events.
+- Run toast width should hug its content with a modest max-width and mobile safe margins. It must not stretch into a full horizontal banner unless the message itself requires wrapping.
 
 Keep these regions stable. Opening drawers, changing node state, or hovering connected edges should clarify the current context without resizing the canvas unpredictably.
 
@@ -70,7 +71,7 @@ These modes should be represented as a segmented control or similarly compact op
 
 Run is a submit action, not a Markdown preview action. A successful Run should report whether the payload was sent to the current Codex thread, delivered to a waiting thread, or queued for `await_canvasight_run`. Markdown preview remains a separate drawer command for reviewing generated content and must not be used as the only visual proof that a Run was sent.
 
-Normal plugin Run delivery happens from the Codex native widget host bridge. Browser URL and bare dev-server surfaces are fallback contexts; they may queue the payload for `await_canvasight_run` and must label that state honestly. The app must not imply that a browser fallback click reached the current thread unless a real Codex turn was created.
+Normal plugin Run delivery happens from the Codex native widget host bridge. Browser URL and bare dev-server surfaces are fallback contexts; they require an explicit current-thread claim before daemon direct delivery and may queue the payload for `await_canvasight_run`. The app must label unbound, queued, sent-to-bound-thread, and current-thread widget states distinctly.
 
 ## Icon Semantics
 

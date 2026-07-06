@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-2059-integration-summary-run-wrong-thread-toast-width.md` - integrated explicit dev-thread claim routing and compact Run toast.
+- `agent-reports/resolved/20260706-2059-development-solution-run-wrong-thread-toast-width.md` - removed stale `CODEX_THREAD_ID` dev fallback and added URL/local claim handling.
+- `agent-reports/resolved/20260706-2059-development-issue-run-wrong-thread-toast-width.md` - resolved Run being sent to an old thread while the UI claimed current-thread success.
 - `agent-reports/resolved/20260706-2043-integration-summary-dev-native-disabled.md` - integrated default daemon native Run delivery for browser/dev pages after current-thread claim.
 - `agent-reports/resolved/20260706-2043-development-solution-dev-native-disabled.md` - made native `turn/start` delivery default-on and corrected tests/docs.
 - `agent-reports/resolved/20260706-2043-development-issue-dev-native-disabled.md` - resolved test/default mismatch where real dev pages had native Run delivery disabled.

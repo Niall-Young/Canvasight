@@ -14,10 +14,12 @@ import type {
 } from "../../shared/types";
 
 export interface SessionInfo {
+  codexThreadId?: string | null;
   documentRevision: number;
   language: LanguagePreference;
   projectPath: string | null;
   sessionId: string;
+  threadClaimedAt?: string | null;
 }
 
 export interface RunPayload {
@@ -66,6 +68,16 @@ export interface RunResponse {
   agentTeam?: AgentTeamRunConfig;
 }
 
+export interface ThreadClaimResponse {
+  claimedAt: string;
+  claimedSessionIds: string[];
+  codexThreadId: string;
+  projectPath: string;
+  session: SessionInfo;
+  sessionId: string;
+  status: "claimed";
+}
+
 interface WidgetFollowUpMessage {
   content: Array<Record<string, unknown>>;
   prompt: string;
@@ -77,6 +89,10 @@ function sessionIdFromUrl(): string {
 
 function sessionTokenFromUrl(): string {
   return new URLSearchParams(window.location.search).get("token") || "";
+}
+
+export function threadIdFromUrl(): string {
+  return new URLSearchParams(window.location.search).get("threadId") || "";
 }
 
 const templateStorageKey = "canvasight.nodeTemplates";
@@ -95,6 +111,10 @@ class CanvasightApiError extends Error {
       this.code = payload.code;
     }
   }
+}
+
+export function isCanvasightApiErrorCode(error: unknown, code: string): boolean {
+  return error instanceof CanvasightApiError && error.code === code;
 }
 
 export class TemplateLimitError extends Error {
@@ -322,6 +342,19 @@ export const canvasightApi = {
     return requestJson<OpenProjectResult>(`/api/sessions/${this.sessionId}/open-project`, {
       method: "POST",
       body: JSON.stringify({ projectPath })
+    });
+  },
+
+  claimThread(projectPath: string, threadId: string, language?: LanguagePreference): Promise<ThreadClaimResponse> {
+    const path = this.sessionId === "local" ? "/api/sessions/local/claim" : "/api/sessions/claim";
+    return requestJson<ThreadClaimResponse>(path, {
+      method: "POST",
+      body: JSON.stringify({
+        language,
+        projectPath,
+        sessionId: this.sessionId,
+        threadId
+      })
     });
   },
 

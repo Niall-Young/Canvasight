@@ -39,7 +39,7 @@ import {
   type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
-import { canvasightApi, isStaleDocumentError, isTemplateLimitError } from "./lib/canvasightApi";
+import { canvasightApi, isCanvasightApiErrorCode, isStaleDocumentError, isTemplateLimitError, threadIdFromUrl } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
@@ -786,6 +786,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const reloadingExternalDocumentRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const runFeedbackTimerRef = useRef<number | null>(null);
+  const urlThreadIdRef = useRef(threadIdFromUrl());
+  const claimedThreadProjectRef = useRef<string | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const workspaceContentRef = useRef<HTMLElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
@@ -942,6 +944,22 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [nodes, selectNode, viewportZoom]
   );
 
+  const claimUrlThreadForProject = useCallback(
+    async (projectPath: string): Promise<void> => {
+      const threadId = urlThreadIdRef.current.trim();
+      if (!threadId) return;
+      const claimKey = `${projectPath}:${threadId}`;
+      if (claimedThreadProjectRef.current === claimKey) return;
+      try {
+        const claimed = await canvasightApi.claimThread(projectPath, threadId, language);
+        claimedThreadProjectRef.current = `${claimed.projectPath}:${claimed.codexThreadId}`;
+      } catch {
+        setStatus(t("status.threadClaimFailed"));
+      }
+    },
+    [language, setStatus, t]
+  );
+
   const openProjectPath = useCallback(
     async (projectPath: string, options: { silent?: boolean; status?: string } = {}) => {
       const trimmedPath = projectPath.trim();
@@ -959,6 +977,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setProjectPathInput(result.project.path);
         hydratedRef.current = true;
         setStatus(options.status ?? t("app.openedProject", { name: result.project.name }));
+        await claimUrlThreadForProject(result.project.path);
       } catch (error) {
         const fallbackProject = {
           name: projectNameFromPath(trimmedPath),
@@ -975,7 +994,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         if (!options.silent) setLoadingProject(false);
       }
     },
-    [setProjectDocument, setStatus, t]
+    [claimUrlThreadForProject, setProjectDocument, setStatus, t]
   );
 
   useEffect(() => {
@@ -1606,7 +1625,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         if (runResult.delivery?.status === "awaited") {
           setRunStatus(t("status.awaitedAssistant"), "positive");
         } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-          setRunStatus(t("status.sentAssistant"), "positive");
+          setRunStatus(t("status.sentBoundThread"), "positive");
         } else if (
           runResult.delivery?.reason === "native_direct_disabled" ||
           runResult.codexNative?.reason === "native_direct_disabled" ||
@@ -1635,7 +1654,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             if (runResult.delivery?.status === "awaited") {
               setRunStatus(t("status.awaitedAssistant"), "positive");
             } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-              setRunStatus(t("status.sentAssistant"), "positive");
+              setRunStatus(t("status.sentBoundThread"), "positive");
             } else if (reason) {
               setRunStatus(t("status.queuedAssistantWithReason", { reason }), "negative");
             } else {
@@ -1643,9 +1662,17 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             }
             return;
           } catch (fallbackError) {
+            if (isCanvasightApiErrorCode(fallbackError, "unbound_dev_session")) {
+              setRunStatus(t("status.unboundDevSession"), "negative");
+              return;
+            }
             setRunStatus(fallbackError instanceof Error ? fallbackError.message : t("status.sendAssistantFailed"), "negative");
             return;
           }
+        }
+        if (isCanvasightApiErrorCode(error, "unbound_dev_session")) {
+          setRunStatus(t("status.unboundDevSession"), "negative");
+          return;
         }
         setRunStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"), "negative");
       }

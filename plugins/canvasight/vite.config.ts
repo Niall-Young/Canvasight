@@ -274,7 +274,6 @@ function unboundDevSessionError(): Error & { statusCode?: number; code?: string 
 
 async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: DaemonState; sessionId: string }> {
   const daemon = await ensureDaemonServer();
-  const threadId = process.env.CODEX_THREAD_ID || null;
   if (session.daemonSessionId) {
     try {
       const info = await daemonJson<{ codexThreadId: string | null; projectPath: string | null }>(
@@ -309,21 +308,7 @@ async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: Da
     };
   }
 
-  if (!threadId) throw unboundDevSessionError();
-
-  const opened = await daemonJson<{ session: { sessionId: string } }>(daemon, "/api/sessions", {
-    method: "POST",
-    body: JSON.stringify({
-      language: session.language,
-      projectPath: session.projectPath,
-      threadId
-    })
-  });
-  session.daemonSessionId = opened.session.sessionId;
-  return {
-    daemon,
-    sessionId: session.daemonSessionId
-  };
+  throw unboundDevSessionError();
 }
 
 function sendJson(res: { statusCode: number; setHeader(name: string, value: string): void; end(body?: string): void }, statusCode: number, payload: unknown): void {
@@ -494,6 +479,29 @@ function canvasightDevApiPlugin() {
           }
           if (action === "attachments") {
             sendJson(res, 200, await saveDevAttachments(projectPath, body.files));
+            return;
+          }
+          if (action === "claim") {
+            const threadId = typeof body.threadId === "string" ? body.threadId.trim() : "";
+            if (!threadId) {
+              const error = unboundDevSessionError();
+              error.message = "Cannot claim Canvasight without a Codex thread id.";
+              error.code = "missing_thread_id";
+              error.statusCode = 400;
+              throw error;
+            }
+            const daemon = await ensureDaemonServer();
+            const claimed = await daemonJson<{ sessionId: string }>(daemon, "/api/sessions/claim", {
+              method: "POST",
+              body: JSON.stringify({
+                language: body.language || session.language,
+                projectPath,
+                sessionId: session.daemonSessionId || "",
+                threadId
+              })
+            });
+            session.daemonSessionId = claimed.sessionId;
+            sendJson(res, 200, claimed);
             return;
           }
           if (action === "run") {
