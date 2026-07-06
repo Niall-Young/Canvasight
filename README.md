@@ -19,7 +19,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 - 开启画布后，让后续中大型、需要拆解的需求优先考虑写入或更新画布，再决定是否直接执行。
 - 保存常用节点的标题、提示词和附件为全局模板，并在任意项目里拖回画布复用。
 - 在新 Codex 线程里恢复最近使用的 Canvasight 项目。
-- 让网页画布独立于单个 Codex thread 存活，当前在哪个 thread，就由哪个 thread 获取 Run payload。
+- 让网页画布独立于单个 Codex thread 存活，当前在哪个 thread，就由哪个 thread claim 已打开项目并接收后续 Run payload。
 
 ### 核心功能
 
@@ -45,7 +45,7 @@ Canvasight 是一个 repo-local Codex 插件。它会打开一个项目级常驻
 5. 需要复用提示词时，从节点菜单选择“存为模板”；再从右上角模板按钮打开模板抽屉，搜索模板并拖到画布。
 6. Agent Team 默认开启；如果只想让 Codex 按普通单线程上下文处理 Run，可以在设置里关闭“开启 Agent Team”。
 7. 点击节点或流程的 Run。
-8. 如果网页 session 已绑定当前 Codex 线程，Run 会直接发送并启动当前线程的任务；如果没有可用 thread 或需要从旧网页 attach，新线程可以用 `await_canvasight_run` 加 `sessionId` 或 `projectPath` 接收队列里的 Run payload。
+8. 如果换到新的 Codex 线程继续使用同一个常驻网页，先调用 `claim_canvasight_thread` claim 该项目；之后网页里的 Run 会直接发送到最新 claim 的线程。如果 direct delivery 失败，仍可用 `await_canvasight_run` 加 `sessionId` 或 `projectPath` 接收队列里的 Run payload。
 
 画布打开后，Canvasight 会把该项目标记为 active canvas context。之后如果用户提出产品规划、代码架构分析、文章脉络梳理、复杂修复或多步骤任务，Codex 应优先判断是否调用 `write_canvasight_graph` 以 `append-page` 写入一个可编辑画布 Page，并先扫描全局节点模板摘要。简单命令、普通问答、Canvasight Run payload，或用户明确要求“直接执行”的任务，不应被强制写入画布。
 
@@ -111,13 +111,14 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `open_canvasight`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
+- `claim_canvasight_thread`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
 - `write_canvasight_graph`
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认面向 Codex 侧边栏内置浏览器，不会再直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。新 Codex 线程里可以先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project` 恢复最近画布。网页点击 Run 会优先通过 Codex app-server `turn/start` 发送到绑定的当前 thread；如果没有绑定 thread、原生模式失败或需要跨线程接收，`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。
+`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认面向 Codex 侧边栏内置浏览器，不会再直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。新 Codex 线程里如果网页已经打开，先调用 `claim_canvasight_thread` claim 最近项目或指定 `projectPath`，不需要重新开网页；如果需要新 URL，再调用 `list_canvasight_recent_projects` 和 `open_canvasight_recent_project`。网页点击 Run 会优先通过 Codex app-server `turn/start` 发送到最新 claim 的 thread；如果没有绑定 thread、原生模式失败或需要跨线程接收，`await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。
 
 `list_canvasight_node_templates` 返回本机全局节点模板摘要，供 AI 写图前低上下文扫描和复用；`get_canvasight_node_template` 只在选中某个候选模板后按 ID 读取完整正文和附件 metadata。`write_canvasight_graph` 让 Codex/AI 通过项目级 daemon 创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线，并同步文档 revision 给当前网页会话。`mode` 决定 Page 写入行为，`graphType` 决定任务节点结构。默认模式是 `append-page`，适合在未明确要求覆盖时保护现有画布；只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。节点可传 `templateId` 或 `templateQuery` 复用模板标题、正文和附件。
 
@@ -150,7 +151,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。裸 `5173` 页面只有在 dev server 进程带有 `CODEX_THREAD_ID` 时才能通过 daemon 直发 Run，绑定的是启动该 dev server 的 thread；未绑定时会返回 `unbound_dev_session`，不再静默排队。正常插件使用和跨 thread 测试应通过 `open_canvasight` 返回的完整 `browserUrl` / `url` 打开。需要手动停止时运行 `npm run dev:stop`。
+`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。裸 `5173` 页面会优先使用 daemon 里最新的 `claim_canvasight_thread` 项目绑定来直发 Run；没有 claim 时才退回启动 dev server 时的 `CODEX_THREAD_ID`；两者都没有时返回 `unbound_dev_session`，不再静默排队。需要手动停止时运行 `npm run dev:stop`。
 
 `npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止插件 daemon。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
 
@@ -192,11 +193,11 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **最近项目怎么恢复？**
 
-在新线程里先调用 `list_canvasight_recent_projects`，再调用 `open_canvasight_recent_project`。
+如果旧网页还开着，在新线程里先调用 `claim_canvasight_thread`；如果需要重新打开网页，再调用 `list_canvasight_recent_projects` 和 `open_canvasight_recent_project`。
 
 **归档启动 Canvasight 的 thread 后，网页还会活着吗？**
 
-会。网页服务由项目级 daemon 托管，不再绑定打开它的 thread-local MCP 进程。归档旧 thread 后，旧浏览器 tab 仍可继续使用；如果手动停止 daemon 或机器重启导致旧 URL 失效，再从当前 thread 重新打开最近项目即可。
+会。网页服务由项目级 daemon 托管，不再绑定打开它的 thread-local MCP 进程。归档旧 thread 后，旧浏览器 tab 仍可继续使用；在新 thread 继续操作前先调用 `claim_canvasight_thread`，后续 Run 就会发到新 thread。如果手动停止 daemon 或机器重启导致旧 URL 失效，再从当前 thread 重新打开最近项目即可。
 
 **内置浏览器打不开 Canvasight 怎么办？**
 
@@ -204,7 +205,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **当前 thread 怎么接收旧网页里的 Run？**
 
-通常点击 Run 会直接发到打开该网页的 Codex thread。要从旧网页、旧 session 或没有自动发送成功的队列接收，在当前 Codex thread 里调用 `await_canvasight_run`。如果知道旧 URL 的 `sessionId` 可以传 `sessionId`；否则传 `projectPath`，Canvasight 会等待该项目下任意活跃网页 session 投递的 Run payload。
+通常点击 Run 会直接发到最新 claim 该项目的 Codex thread。要让旧网页后续直接发到当前线程，在当前 Codex thread 里调用 `claim_canvasight_thread`，传 `projectPath` 或 `sessionId`。如果某次 direct delivery 已失败并进入队列，再调用 `await_canvasight_run`；知道旧 URL 的 `sessionId` 可以传 `sessionId`，否则传 `projectPath`。
 
 **`close_canvasight` 会停止项目级 daemon 吗？**
 
@@ -243,7 +244,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 - After the canvas is open, let later medium or complex requests prefer creating or updating the canvas before direct execution.
 - Save reusable node titles, prompts, and attachments as global templates and drag them back into any project canvas.
 - Reopen recent Canvasight projects from a new Codex thread.
-- Keep the browser canvas alive outside a single Codex thread, so whichever thread is current can receive the next Run payload.
+- Keep the browser canvas alive outside a single Codex thread, so whichever thread is current can claim the opened project and receive the next Run payload.
 
 ### Core Features
 
@@ -269,7 +270,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 5. To reuse a prompt, choose “Save as template” from a node menu. Open the template drawer from the top-right template button, search templates, then drag one onto the canvas.
 6. Agent Team is enabled by default. Turn it off in Settings if you want Codex to handle Run output as a normal single-thread task.
 7. Click Run on a node or flow.
-8. If the browser session is bound to the current Codex thread, Run sends directly and starts work in that thread. If no thread is available or a new thread needs to attach to an older browser session, call `await_canvasight_run` with `sessionId` or `projectPath`.
+8. If you move to a new Codex thread while keeping the same persistent browser page, call `claim_canvasight_thread` for that project first; later Run clicks send directly to the latest claimed thread. If direct delivery fails, `await_canvasight_run` can still receive the queued payload by `sessionId` or `projectPath`.
 
 After opening, Canvasight marks the project as active canvas context. For later product planning, codebase architecture analysis, article mapping, complex fixes, or multi-step tasks, Codex should first decide whether to call `write_canvasight_graph` with `append-page` and scan global node template summaries. Small commands, simple Q&A, Canvasight Run payloads, and requests that explicitly ask for direct execution should not be forced into the canvas.
 
@@ -335,13 +336,14 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 - `open_canvasight`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
+- `claim_canvasight_thread`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
 - `write_canvasight_graph`
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It targets Codex's in-app browser sidebar by default and no longer launches the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path. In a new Codex thread, call `list_canvasight_recent_projects` and then `open_canvasight_recent_project` to reopen the last canvas. Clicking Run in the web app first tries Codex app-server `turn/start` for the bound current thread; if there is no bound thread, native mode fails, or a new thread needs to attach, `await_canvasight_run` can wait by `sessionId` or `projectPath`. Normal plugin use does not require running `npm run dev`.
+`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It targets Codex's in-app browser sidebar by default and no longer launches the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path. In a new Codex thread, if the browser page is already open, call `claim_canvasight_thread` for the recent or explicit `projectPath` instead of opening another page; call `list_canvasight_recent_projects` and `open_canvasight_recent_project` only when a fresh URL is needed. Clicking Run in the web app first tries Codex app-server `turn/start` for the latest claimed thread; if there is no bound thread, native mode fails, or a queued fallback needs pickup, `await_canvasight_run` can wait by `sessionId` or `projectPath`. Normal plugin use does not require running `npm run dev`.
 
 `list_canvasight_node_templates` returns local global node template summaries so AI can scan and reuse them with low context cost. `get_canvasight_node_template` reads the full body and attachment metadata for one selected template id. `write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json` through the project-level daemon, and it synchronizes the document revision with current web sessions. `mode` controls Page write behavior, while `graphType` controls the task node structure. Its default mode is `append-page`, which protects existing canvas content when replacement was not explicitly requested. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit. Nodes can pass `templateId` or `templateQuery` to reuse a template title, body, and attachments.
 
@@ -374,7 +376,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. A bare `5173` page can direct-send Run through the daemon only when the dev server process has `CODEX_THREAD_ID`, and it is bound to the thread that started that dev server; otherwise it returns `unbound_dev_session` instead of silently queueing. Normal plugin usage and cross-thread testing should open the full `browserUrl` / `url` returned by `open_canvasight`. Use `npm run dev:stop` when you explicitly need to stop it.
+`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. A bare `5173` page first uses the daemon's latest `claim_canvasight_thread` binding for the project; without a claim it falls back to the dev server process `CODEX_THREAD_ID`; if neither exists, it returns `unbound_dev_session` instead of silently queueing. Use `npm run dev:stop` when you explicitly need to stop it.
 
 `npm run daemon` and `npm run daemon:stop` are only for manual plugin-daemon development or troubleshooting. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
 
@@ -416,11 +418,11 @@ By default, no. `list_canvasight_node_templates` returns summaries and body prev
 
 **How do I recover a recent project?**
 
-In a new thread, call `list_canvasight_recent_projects`, then call `open_canvasight_recent_project`.
+If the old browser page is still open, call `claim_canvasight_thread` in the new thread. If you need to reopen the page, call `list_canvasight_recent_projects`, then `open_canvasight_recent_project`.
 
 **Will the page stay alive after I archive the thread that opened Canvasight?**
 
-Yes. The web service is hosted by the project-level daemon, not the thread-local MCP process that opened it. The old browser tab can continue working after that thread is archived. If the daemon is manually stopped or the machine restarts and the old URL becomes invalid, reopen the recent project from the current thread.
+Yes. The web service is hosted by the project-level daemon, not the thread-local MCP process that opened it. The old browser tab can continue working after that thread is archived. Before continuing from a new thread, call `claim_canvasight_thread`; later Run clicks will send to that new thread. If the daemon is manually stopped or the machine restarts and the old URL becomes invalid, reopen the recent project from the current thread.
 
 **What if the in-app browser cannot open Canvasight?**
 
@@ -428,7 +430,7 @@ Yes. The web service is hosted by the project-level daemon, not the thread-local
 
 **How does the current thread receive a Run from an old browser tab?**
 
-Usually Run sends directly to the Codex thread that opened the browser session. To receive from an older browser tab, old session, or queued fallback, call `await_canvasight_run` in the current Codex thread. Pass `sessionId` if you know it from the old URL; otherwise pass `projectPath`, and Canvasight will wait for any active browser session in that project to submit a Run payload.
+Usually Run sends directly to the latest Codex thread that claimed the project. To make an older browser tab send future Runs to the current thread, call `claim_canvasight_thread` with `projectPath` or `sessionId`. If a direct delivery already failed and entered the fallback queue, call `await_canvasight_run`; pass `sessionId` if you know it from the old URL, otherwise pass `projectPath`.
 
 **Does `close_canvasight` stop the project-level daemon?**
 

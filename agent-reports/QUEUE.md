@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1536-integration-summary-current-thread-claim.md` - integrated current-thread claim routing so archived launch threads do not own future Canvasight Run output.
+- `agent-reports/resolved/20260706-1536-development-solution-current-thread-claim.md` - implemented `claim_canvasight_thread`, daemon claim/resolve APIs, and thread-filtered Run delivery.
+- `agent-reports/resolved/20260706-1519-product-issue-current-thread-claim.md` - resolved the missing current Codex thread claim mechanism for persistent Canvasight pages.
 - `agent-reports/resolved/20260706-1511-integration-summary-dev-run-not-sent.md` - integrated daemon-backed Run delivery for bare dev pages with explicit unbound dev-session failure.
 - `agent-reports/resolved/20260706-1511-development-solution-dev-run-not-sent.md` - implemented Vite dev Run proxying through the Canvasight daemon and expanded dev-server smoke coverage.
 - `agent-reports/resolved/20260706-1457-development-issue-dev-run-not-sent.md` - resolved bare `5173` dev page Run not sending Markdown to Codex.

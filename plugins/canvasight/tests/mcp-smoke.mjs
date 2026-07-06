@@ -207,6 +207,7 @@ function createMcpClient(label, envOverrides = {}) {
   let clientNextId = 1;
   let clientStdoutBuffer = "";
   let clientStderrBuffer = "";
+  let clientStopping = false;
   const clientPending = new Map();
   const clientChild = spawn(process.execPath, [serverPath], {
     cwd: pluginRoot,
@@ -259,7 +260,7 @@ function createMcpClient(label, envOverrides = {}) {
   });
 
   clientChild.on("exit", (code, signal) => {
-    if (clientPending.size) {
+    if (!clientStopping && clientPending.size) {
       rejectClientPending(new Error(`MCP ${label} exited early: code=${code} signal=${signal} stderr=${clientStderrBuffer}`));
     }
   });
@@ -279,6 +280,8 @@ function createMcpClient(label, envOverrides = {}) {
       clientChild.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
     },
     stop() {
+      clientStopping = true;
+      clientPending.clear();
       clientChild.stdin.end();
       clientChild.kill("SIGTERM");
     },
@@ -307,7 +310,7 @@ async function main() {
   const killTimer = setTimeout(() => {
     child.kill("SIGTERM");
     rejectPending(new Error(`MCP smoke test timed out. stderr=${stderrBuffer}`));
-  }, 20000);
+  }, 30000);
 
   try {
     const initialized = await request("initialize", {
@@ -327,6 +330,7 @@ async function main() {
     assert.equal(toolNames.has("open_canvasight"), true);
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
+    assert.equal(toolNames.has("claim_canvasight_thread"), true);
     assert.equal(toolNames.has("list_canvasight_node_templates"), true);
     assert.equal(toolNames.has("get_canvasight_node_template"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
@@ -340,6 +344,9 @@ async function main() {
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
     assert.match(recentOpenTool.description, /in-app browser\/sidebar/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
+    const claimTool = listed.tools.find((tool) => tool.name === "claim_canvasight_thread");
+    assert.match(claimTool.description, /current Codex thread/);
+    assert.match(claimTool.description, /without opening a new browser tab/);
     const writeGraphTool = listed.tools.find((tool) => tool.name === "write_canvasight_graph");
     assert.match(writeGraphTool.description, /Canvasight is active/);
     assert.match(writeGraphTool.description, /before direct execution/);
@@ -382,13 +389,12 @@ async function main() {
     const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
     assert.equal(autoHealth.serverVersion, expectedPluginVersion);
     const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
-    assert.deepEqual(autoSession, {
-      codexThreadId: "thread-smoke",
-      documentRevision: 0,
-      language: "zh",
-      projectPath: defaultProjectPath,
-      sessionId: autoOpened.structuredContent.sessionId
-    });
+    assert.equal(autoSession.codexThreadId, "thread-smoke");
+    assert.equal(autoSession.documentRevision, 0);
+    assert.equal(autoSession.language, "zh");
+    assert.equal(autoSession.projectPath, defaultProjectPath);
+    assert.equal(autoSession.sessionId, autoOpened.structuredContent.sessionId);
+    assert.equal(typeof autoSession.threadClaimedAt, "string");
     const recentAfterAutoOpen = await request("tools/call", {
       name: "list_canvasight_recent_projects",
       arguments: {}
@@ -451,13 +457,12 @@ async function main() {
     const sessionId = opened.structuredContent.sessionId;
     const origin = opened.structuredContent.origin;
     const session = await fetchJson(`${origin}/api/sessions/${sessionId}`);
-    assert.deepEqual(session, {
-      codexThreadId: "thread-smoke",
-      documentRevision: 0,
-      language: "en",
-      projectPath,
-      sessionId
-    });
+    assert.equal(session.codexThreadId, "thread-smoke");
+    assert.equal(session.documentRevision, 0);
+    assert.equal(session.language, "en");
+    assert.equal(session.projectPath, projectPath);
+    assert.equal(session.sessionId, sessionId);
+    assert.equal(typeof session.threadClaimedAt, "string");
 
     const emptyTemplates = await fetchJson(`${origin}/api/templates`);
     assert.deepEqual(emptyTemplates, []);
@@ -1465,14 +1470,14 @@ async function main() {
       assert.equal(initializedB.serverInfo.name, "canvasight");
       mcpB.notify("notifications/initialized", {});
 
-      const crossWait = mcpB.request("tools/call", {
-        name: "await_canvasight_run",
+      const crossClaim = await mcpB.request("tools/call", {
+        name: "claim_canvasight_thread",
         arguments: {
-          projectPath: persistentProjectPath,
-          timeoutMs: 5000
+          projectPath: persistentProjectPath
         }
       });
-      await sleep(20);
+      assert.equal(crossClaim.structuredContent.status, "claimed");
+      assert.equal(crossClaim.structuredContent.codexThreadId, "thread-smoke-b");
 
       const crossPayload = {
         sessionId: persistentSessionId,
@@ -1487,21 +1492,18 @@ async function main() {
         nodeIds: ["persistent-node"],
         attachments: []
       };
-      const crossQueued = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}/run`, {
+      const crossLogOffset = (await readNativeLog()).length;
+      const crossSent = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}/run`, {
         method: "POST",
         body: JSON.stringify(crossPayload)
       });
-      assert.equal(crossQueued.status, "queued");
-      assert.equal(crossQueued.delivery.status, "awaited");
-
-      const crossAwaited = await crossWait;
-      assert.equal(crossAwaited.content[0].text, crossPayload.markdown);
-      assert.equal(crossAwaited.structuredContent.status, "received");
-      assert.equal(crossAwaited.structuredContent.sessionId, persistentSessionId);
-      assert.equal(crossAwaited.structuredContent.projectPath, persistentProjectPath);
-      assert.equal(crossAwaited.structuredContent.codexMode, "plan");
-      assert.equal(crossAwaited.structuredContent.codexNative.status, "disabled");
-      assert.deepEqual(crossAwaited.structuredContent.nodeIds, ["persistent-node"]);
+      assert.equal(crossSent.status, "sent");
+      assert.equal(crossSent.delivery.status, "sent");
+      assert.equal(crossSent.delivery.threadId, "thread-smoke-b");
+      assert.equal(crossSent.codexNative.threadId, "thread-smoke-b");
+      assert.equal(crossSent.codexTurn.threadId, "thread-smoke-b");
+      const crossLog = (await readNativeLog()).slice(crossLogOffset);
+      assert.equal(crossLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b"), true);
 
       const drained = await mcpB.request("tools/call", {
         name: "await_canvasight_run",
@@ -1513,6 +1515,97 @@ async function main() {
       assert.equal(drained.structuredContent.status, "timeout");
     } finally {
       mcpB.stop();
+    }
+
+    const mcpOldWaiter = createMcpClient("old-waiter", {
+      CANVASIGHT_CODEX_NATIVE: "0",
+      CODEX_THREAD_ID: "thread-old-waiter"
+    });
+    const mcpC = createMcpClient("smoke-c", {
+      CODEX_THREAD_ID: "thread-smoke-c"
+    });
+    try {
+      const initializedOldWaiter = await mcpOldWaiter.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-old-waiter",
+          version: "0.0.0"
+        }
+      });
+      assert.equal(initializedOldWaiter.serverInfo.name, "canvasight");
+      mcpOldWaiter.notify("notifications/initialized", {});
+      const oldWaiter = mcpOldWaiter.request("tools/call", {
+        name: "await_canvasight_run",
+        arguments: {
+          sessionId: persistentSessionId,
+          timeoutMs: 200
+        }
+      });
+      await sleep(20);
+
+      const initializedC = await mcpC.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-smoke-c",
+          version: "0.0.0"
+        }
+      });
+      assert.equal(initializedC.serverInfo.name, "canvasight");
+      mcpC.notify("notifications/initialized", {});
+
+      const claimed = await mcpC.request("tools/call", {
+        name: "claim_canvasight_thread",
+        arguments: {
+          projectPath: persistentProjectPath
+        }
+      });
+      assert.equal(claimed.structuredContent.status, "claimed");
+      assert.equal(claimed.structuredContent.codexThreadId, "thread-smoke-c");
+      assert.equal(claimed.structuredContent.projectPath, persistentProjectPath);
+      assert.equal(claimed.structuredContent.claimedSessionIds.includes(persistentSessionId), true);
+
+      const claimLogOffset = (await readNativeLog()).length;
+      const claimedPayload = {
+        sessionId: persistentSessionId,
+        threadName: "Claimed Current Thread",
+        projectPath: persistentProjectPath,
+        markdown: "# Claimed Current Thread\n\nRun should go to thread-smoke-c.",
+        imagePaths: [],
+        codexMode: "chat",
+        effort: "high",
+        planMode: false,
+        runMode: "node",
+        nodeIds: ["claimed-node"],
+        attachments: []
+      };
+      const claimedRun = await fetchJson(`${persistentOrigin}/api/sessions/${persistentSessionId}/run`, {
+        method: "POST",
+        body: JSON.stringify(claimedPayload)
+      });
+      assert.equal(claimedRun.status, "sent");
+      assert.equal(claimedRun.delivery.status, "sent");
+      assert.equal(claimedRun.delivery.via, "turn/start");
+      assert.equal(claimedRun.codexNative.threadId, "thread-smoke-c");
+      assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
+      const claimNativeLog = (await readNativeLog()).slice(claimLogOffset);
+      assert.equal(
+        claimNativeLog.some(
+          (entry) =>
+            entry.method === "turn/start" &&
+            entry.params.threadId === "thread-smoke-c" &&
+            entry.params.cwd === persistentProjectPath &&
+            entry.params.input[0]?.text === claimedPayload.markdown
+        ),
+        true
+      );
+      assert.equal(claimNativeLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke"), false);
+      const oldWaiterResult = await oldWaiter;
+      assert.equal(oldWaiterResult.structuredContent.status, "timeout");
+    } finally {
+      mcpOldWaiter.stop();
+      mcpC.stop();
     }
 
     clearTimeout(killTimer);

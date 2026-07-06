@@ -10,13 +10,15 @@ The returned `canvasRouting` marks the project as active Canvasight context. For
 
 ## Recover A Recent Project
 
-Use `list_canvasight_recent_projects` followed by `open_canvasight_recent_project` when the user wants to reopen Canvasight from a new Codex thread or recover the last canvas.
+If the browser page is still open and the user moved to a new Codex thread, call `claim_canvasight_thread` with the known `projectPath`, `sessionId`, or most recent project. This updates the daemon so future Run clicks go to the current thread without opening another page.
+
+Use `list_canvasight_recent_projects` followed by `open_canvasight_recent_project` when the user wants a fresh Canvasight URL from a new Codex thread or the existing page is not usable.
 
 The web service is project-level and should survive the Codex thread that opened it. If an older URL was created before persistent daemon support, reopen with `open_canvasight_recent_project`.
 
 ## Attach From A New Thread
 
-Opening the browser and receiving the next Run payload are separate. Normal browser Run tries to send to the session's bound Codex thread through direct delivery. A new Codex thread can attach to an old browser tab, old session, or queued fallback by calling `await_canvasight_run` with `projectPath`; use `canvasight-run` for that part.
+Opening the browser and receiving queued fallback payloads are separate. Normal browser Run tries to send to the latest thread that claimed the project/session through direct delivery. A new Codex thread should call `claim_canvasight_thread` before the user clicks Run in an old browser tab. If a Run has already fallen back to the queue, call `await_canvasight_run` with `projectPath`; use `canvasight-run` for that part.
 
 ## Close A Session
 

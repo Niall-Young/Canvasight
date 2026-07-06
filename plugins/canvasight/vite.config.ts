@@ -263,6 +263,15 @@ function devSession(id: string): DevSession {
   return session;
 }
 
+function unboundDevSessionError(): Error & { statusCode?: number; code?: string } {
+  const error = new Error(
+    "Dev preview is not claimed by a Codex thread. Call claim_canvasight_thread or open_canvasight from the current thread before running nodes."
+  ) as Error & { statusCode?: number; code?: string };
+  error.statusCode = 409;
+  error.code = "unbound_dev_session";
+  return error;
+}
+
 async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: DaemonState; sessionId: string }> {
   const daemon = await ensureDaemonServer();
   const threadId = process.env.CODEX_THREAD_ID || null;
@@ -272,7 +281,7 @@ async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: Da
         daemon,
         `/api/sessions/${encodeURIComponent(session.daemonSessionId)}`
       );
-      if (info.projectPath && path.resolve(info.projectPath) === path.resolve(session.projectPath) && info.codexThreadId === threadId) {
+      if (info.projectPath && path.resolve(info.projectPath) === path.resolve(session.projectPath) && info.codexThreadId) {
         return {
           daemon,
           sessionId: session.daemonSessionId
@@ -282,6 +291,25 @@ async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: Da
       session.daemonSessionId = undefined;
     }
   }
+
+  const resolved = await daemonJson<{
+    status: "resolved" | "unbound";
+    session: { codexThreadId: string | null; projectPath: string | null; sessionId: string } | null;
+  }>(daemon, "/api/sessions/resolve", {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath: session.projectPath
+    })
+  });
+  if (resolved.status === "resolved" && resolved.session?.sessionId && resolved.session.codexThreadId) {
+    session.daemonSessionId = resolved.session.sessionId;
+    return {
+      daemon,
+      sessionId: session.daemonSessionId
+    };
+  }
+
+  if (!threadId) throw unboundDevSessionError();
 
   const opened = await daemonJson<{ session: { sessionId: string } }>(daemon, "/api/sessions", {
     method: "POST",
@@ -469,13 +497,6 @@ function canvasightDevApiPlugin() {
             return;
           }
           if (action === "run") {
-            if (!process.env.CODEX_THREAD_ID) {
-              sendJson(res, 409, {
-                code: "unbound_dev_session",
-                error: "Dev preview is not bound to a Codex thread. Open Canvasight with open_canvasight and use the full session URL before running nodes."
-              });
-              return;
-            }
             const { daemon, sessionId } = await ensureDevDaemonSession(session);
             const result = await daemonJson(daemon, `/api/sessions/${encodeURIComponent(sessionId)}/run`, {
               method: "POST",

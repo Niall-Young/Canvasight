@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.18";
+const SERVER_VERSION = "0.1.19";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -107,6 +107,7 @@ const isDaemonMode = process.argv.includes("--daemon");
 const isStopDaemonMode = process.argv.includes("--stop-daemon");
 
 const sessions = new Map();
+const projectThreadClaims = new Map();
 const projectDocumentRevisions = new Map();
 const projectWriteLocks = new Map();
 const globalRunWaiters = [];
@@ -1533,12 +1534,14 @@ function createSession({ projectPath, language, threadId }) {
     waiters: []
   };
   sessions.set(id, session);
+  if (session.codexThreadId) rememberThreadClaim(session, session.codexThreadId);
   return session;
 }
 
 function sessionInfo(session) {
   return {
     codexThreadId: session.codexThreadId,
+    threadClaimedAt: session.threadClaimedAt || null,
     documentRevision: projectDocumentRevision(session.projectPath),
     language: session.language,
     projectPath: session.projectPath,
@@ -1550,6 +1553,104 @@ function getSession(id) {
   const session = sessions.get(id);
   if (!session) throw new HttpError(404, "Session not found");
   return session;
+}
+
+function projectThreadClaimKey(projectPath) {
+  return path.resolve(projectPath);
+}
+
+function sessionsForProject(projectPath) {
+  const resolved = path.resolve(projectPath);
+  return Array.from(sessions.values()).filter((session) => path.resolve(session.projectPath) === resolved);
+}
+
+function sessionSortTime(session) {
+  return Date.parse(session.threadClaimedAt || session.createdAt || "") || 0;
+}
+
+function newestSessionForProject(projectPath) {
+  return sessionsForProject(projectPath).sort((a, b) => sessionSortTime(b) - sessionSortTime(a))[0] || null;
+}
+
+function rememberThreadClaim(session, threadId) {
+  const claimedAt = nowIso();
+  session.codexThreadId = threadId;
+  session.threadClaimedAt = claimedAt;
+  projectThreadClaims.set(projectThreadClaimKey(session.projectPath), {
+    projectPath: session.projectPath,
+    sessionId: session.id,
+    threadId,
+    claimedAt
+  });
+  return claimedAt;
+}
+
+function resolvedThreadClaim(projectPath) {
+  const claim = projectThreadClaims.get(projectThreadClaimKey(projectPath));
+  if (claim) {
+    const session = sessions.get(claim.sessionId);
+    if (session && path.resolve(session.projectPath) === path.resolve(projectPath) && session.codexThreadId === claim.threadId) {
+      return {
+        claim,
+        session
+      };
+    }
+  }
+  const newestClaimed = sessionsForProject(projectPath)
+    .filter((session) => session.codexThreadId)
+    .sort((a, b) => sessionSortTime(b) - sessionSortTime(a))[0];
+  if (!newestClaimed) return null;
+  return {
+    claim: {
+      projectPath: newestClaimed.projectPath,
+      sessionId: newestClaimed.id,
+      threadId: newestClaimed.codexThreadId,
+      claimedAt: newestClaimed.threadClaimedAt || newestClaimed.createdAt
+    },
+    session: newestClaimed
+  };
+}
+
+function claimThreadForProject({ projectPath, sessionId, language, threadId }) {
+  const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  if (!resolvedThreadId) {
+    throw new HttpError(400, "Cannot claim Canvasight without a current Codex thread id.", "missing_thread_id");
+  }
+
+  let targetSession = sessionId ? getSession(sessionId) : null;
+  const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || defaultProjectPath();
+  const projectSessions = sessionsForProject(resolvedProjectPath);
+  if (!targetSession) targetSession = newestSessionForProject(resolvedProjectPath);
+  if (!targetSession) {
+    targetSession = createSession({
+      projectPath: resolvedProjectPath,
+      language,
+      threadId: resolvedThreadId
+    });
+    projectSessions.push(targetSession);
+  }
+
+  const claimedSessionIds = [];
+  for (const session of projectSessions) {
+    if (path.resolve(session.projectPath) !== path.resolve(resolvedProjectPath)) continue;
+    rememberThreadClaim(session, resolvedThreadId);
+    claimedSessionIds.push(session.id);
+  }
+  if (!claimedSessionIds.includes(targetSession.id)) {
+    rememberThreadClaim(targetSession, resolvedThreadId);
+    claimedSessionIds.push(targetSession.id);
+  }
+
+  const claim = projectThreadClaims.get(projectThreadClaimKey(targetSession.projectPath));
+  return {
+    status: "claimed",
+    projectPath: targetSession.projectPath,
+    sessionId: targetSession.id,
+    claimedSessionIds,
+    codexThreadId: resolvedThreadId,
+    claimedAt: claim?.claimedAt || targetSession.threadClaimedAt || nowIso(),
+    session: sessionInfo(targetSession)
+  };
 }
 
 function normalizeAgentTeamPayload(value) {
@@ -1684,6 +1785,7 @@ function completeWaiter(waiter, payload) {
 function waiterMatches(waiter, session, payload) {
   if (waiter.sessionId && waiter.sessionId !== session.id) return false;
   if (waiter.projectPath && path.resolve(waiter.projectPath) !== path.resolve(payload.projectPath || session.projectPath)) return false;
+  if (waiter.threadId && session.codexThreadId && waiter.threadId !== session.codexThreadId) return false;
   return true;
 }
 
@@ -1751,7 +1853,9 @@ function timeoutRunPayload(sessionIdValue, projectPath = null, threadId = null) 
 async function enqueueRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
   normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
-  const waiter = session.waiters.shift() || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
+  const sessionWaiterIndex = session.waiters.findIndex((candidate) => waiterMatches(candidate, session, normalized));
+  const sessionWaiter = sessionWaiterIndex >= 0 ? session.waiters.splice(sessionWaiterIndex, 1)[0] : null;
+  const waiter = sessionWaiter || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
   if (waiter) {
     detachWaiter(waiter);
     normalized.delivery = {
@@ -1767,20 +1871,30 @@ async function enqueueRun(session, payload) {
   return normalized;
 }
 
-function takeQueuedRun(sessionIdValue, projectPath) {
+function queuedRunMatchesThread(run, threadId) {
+  if (!threadId) return true;
+  const runThreadId = run?.delivery?.threadId || run?.codexNative?.threadId || run?.codexTurn?.threadId || null;
+  return !runThreadId || runThreadId === threadId;
+}
+
+function takeQueuedRun(sessionIdValue, projectPath, threadId = null) {
   if (sessionIdValue) {
     const session = sessions.get(sessionIdValue);
     if (!session) return null;
     if (projectPath) {
-      const index = session.runQueue.findIndex((run) => path.resolve(run.projectPath || session.projectPath) === path.resolve(projectPath));
+      const index = session.runQueue.findIndex(
+        (run) => queuedRunMatchesThread(run, threadId) && path.resolve(run.projectPath || session.projectPath) === path.resolve(projectPath)
+      );
       return index >= 0 ? session.runQueue.splice(index, 1)[0] : null;
     }
-    return session.runQueue.shift() || null;
+    const index = session.runQueue.findIndex((run) => queuedRunMatchesThread(run, threadId));
+    return index >= 0 ? session.runQueue.splice(index, 1)[0] : null;
   }
 
   const resolvedProjectPath = optionalProjectPath(projectPath);
   for (const session of sessions.values()) {
     const index = session.runQueue.findIndex((run) => {
+      if (!queuedRunMatchesThread(run, threadId)) return false;
       if (!resolvedProjectPath) return true;
       return path.resolve(run.projectPath || session.projectPath) === resolvedProjectPath;
     });
@@ -1792,17 +1906,19 @@ function takeQueuedRun(sessionIdValue, projectPath) {
 function waitForRun(sessionIdValue, timeoutMs, options = {}) {
   const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 60000), 300000));
   const projectPath = optionalProjectPath(options.projectPath);
+  const threadId = optionalThreadId(options.threadId);
   const session = sessions.get(sessionIdValue);
   if (sessionIdValue && !session) {
     return Promise.resolve(closedRunPayload(sessionIdValue, projectPath));
   }
-  const queued = takeQueuedRun(sessionIdValue || null, projectPath);
+  const queued = takeQueuedRun(sessionIdValue || null, projectPath, threadId);
   if (queued) return Promise.resolve(queued);
 
   return new Promise((resolve) => {
     const waiter = {
       sessionId: sessionIdValue || null,
       projectPath,
+      threadId,
       resolve,
       timer: setTimeout(() => {
         detachWaiter(waiter);
@@ -1831,6 +1947,9 @@ function closeSession(sessionIdValue) {
   const session = sessions.get(sessionIdValue);
   if (!session) return false;
   sessions.delete(sessionIdValue);
+  const claimKey = projectThreadClaimKey(session.projectPath);
+  const claim = projectThreadClaims.get(claimKey);
+  if (claim?.sessionId === sessionIdValue) projectThreadClaims.delete(claimKey);
   while (session.waiters.length) {
     completeWaiter(session.waiters.shift(), {
       status: "closed",
@@ -2545,6 +2664,45 @@ async function handleHttp(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/sessions/claim") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const claimed = claimThreadForProject({
+        projectPath: body?.projectPath,
+        sessionId: typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : "",
+        language: body?.language,
+        threadId: body?.threadId
+      });
+      await rememberProjectBestEffort(claimed.projectPath);
+      sendJson(res, 200, claimed);
+      return;
+    }
+
+    if (url.pathname === "/api/sessions/resolve") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const projectPath = normalizeProjectPath(body.projectPath || defaultProjectPath());
+      const resolved = resolvedThreadClaim(projectPath);
+      if (!resolved) {
+        sendJson(res, 200, {
+          status: "unbound",
+          projectPath,
+          session: null,
+          claim: null
+        });
+        return;
+      }
+      sendJson(res, 200, {
+        status: "resolved",
+        projectPath,
+        session: sessionInfo(resolved.session),
+        claim: resolved.claim
+      });
+      return;
+    }
+
     if (url.pathname === "/api/sessions") {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
@@ -2580,6 +2738,7 @@ async function handleHttp(req, res) {
         body?.timeoutMs,
         {
           projectPath: body?.projectPath,
+          threadId: body?.threadId,
           abortSignal: abortController.signal
         }
       );
@@ -2785,6 +2944,38 @@ async function toolOpenCanvasightRecentProject(args) {
   });
 }
 
+async function toolClaimCanvasightThread(args) {
+  let projectPath = optionalProjectPath(args?.projectPath);
+  if (!projectPath && typeof args?.sessionId !== "string") {
+    projectPath = (await recentProjects(1))[0]?.path || defaultProjectPath();
+  }
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const daemon = await ensureDaemonServer();
+  const claimed = await daemonJson(daemon, "/api/sessions/claim", {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath,
+      sessionId: typeof args?.sessionId === "string" && args.sessionId ? args.sessionId : "",
+      language: args?.language,
+      threadId
+    })
+  });
+  const canvasRouting = canvasRoutingContext();
+  return toolResult(
+    {
+      ...claimed,
+      activeCanvasContext: true,
+      canvasRouting,
+      activeCanvasRouting: canvasRouting
+    },
+    [
+      `Canvasight project claimed by the current Codex thread: ${claimed.projectPath}`,
+      `Run target thread: ${claimed.codexThreadId}`,
+      canvasRouting.userFacingInstruction
+    ].join("\n")
+  );
+}
+
 async function toolListCanvasightNodeTemplates(args) {
   const templates = await readNodeTemplates();
   const query = typeof args?.query === "string" ? args.query : "";
@@ -2874,18 +3065,20 @@ async function toolAwaitCanvasightRun(args) {
     projectPathValue = (await recentProjects(1))[0]?.path || defaultProjectPath();
   }
   const daemon = await ensureDaemonServer();
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const run = await daemonJson(daemon, "/api/runs/await", {
     method: "POST",
     body: JSON.stringify({
       sessionId: sessionIdValue,
       timeoutMs: args.timeoutMs,
-      projectPath: projectPathValue
+      projectPath: projectPathValue,
+      threadId
     })
   });
   if (run.status === "received" && run.codexNative?.status !== "applied") {
     run.codexNative = await applyCodexNativeMode(
       {
-        codexThreadId: optionalThreadId(args.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID)
+        codexThreadId: threadId
       },
       run
     );
@@ -2987,6 +3180,34 @@ const tools = [
         threadId: {
           type: "string",
           description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "claim_canvasight_thread",
+    description:
+      "Claim an already-open Canvasight project or session for the current Codex thread without opening a new browser tab. Use this from a new thread when a Canvasight browser/daemon is already running and future Run clicks should go to this current thread.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Optional project path to claim. Defaults to the most recent Canvasight project when sessionId is omitted."
+        },
+        sessionId: {
+          type: "string",
+          description: "Optional existing Canvasight session id to claim. When omitted, Canvasight claims active sessions for the project."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Optional UI and markdown language preference for a session created during claim."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional current Codex thread id. Defaults to CODEX_THREAD_ID when available."
         }
       },
       additionalProperties: false
@@ -3161,6 +3382,7 @@ async function callTool(name, args) {
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
+  if (name === "claim_canvasight_thread") return toolClaimCanvasightThread(args || {});
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});

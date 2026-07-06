@@ -181,6 +181,10 @@ async function readNativeLog() {
   }
 }
 
+async function readDaemonState(home) {
+  return JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8"));
+}
+
 async function main() {
   try {
     const started = run("start");
@@ -229,6 +233,44 @@ async function main() {
     assert.equal(turnEntry.params.cwd, opened.project.path);
     assert.equal(turnEntry.params.input[0].text.includes("Dev Server Run"), true);
 
+    const boundDaemon = await readDaemonState(canvasightHome);
+    const rebound = await fetchJson(`${boundDaemon.origin}/api/sessions/claim`, {
+      method: "POST",
+      headers: {
+        "x-canvasight-token": boundDaemon.token
+      },
+      body: JSON.stringify({
+        projectPath: opened.project.path,
+        threadId: "thread-dev-claimed"
+      })
+    });
+    assert.equal(rebound.status, "claimed");
+    assert.equal(rebound.codexThreadId, "thread-dev-claimed");
+    const reboundLogOffset = (await readNativeLog()).length;
+    const reboundRun = await fetchJson(`${origin}/api/sessions/local/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        agentTeam: { enabled: false, recommendedRoles: [] },
+        attachments: [],
+        codexMode: "chat",
+        effort: "high",
+        imagePaths: [],
+        markdown: "# Claimed Dev Server Run\\n\\nThis should be delivered to the claimed thread.",
+        nodeIds: ["node-claimed"],
+        planMode: false,
+        projectPath: opened.project.path,
+        runMode: "node",
+        sessionId: "local",
+        threadName: "Claimed Dev Server Run"
+      })
+    });
+    assert.equal(reboundRun.status, "sent");
+    assert.equal(reboundRun.delivery.via, "turn/start");
+    assert.equal(reboundRun.codexTurn.threadId, "thread-dev-claimed");
+    const reboundLog = (await readNativeLog()).slice(reboundLogOffset);
+    assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed"), true);
+    assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke"), false);
+
     const status = run("status");
     assert.equal(status.status, 0, status.stderr || status.stdout);
     assert.match(status.stdout, /running/);
@@ -264,7 +306,43 @@ async function main() {
     });
     assert.equal(unboundRun.status, 409);
     assert.equal(unboundRun.json.code, "unbound_dev_session");
-    assert.equal(String(unboundRun.json.error).includes("open_canvasight"), true);
+    assert.equal(String(unboundRun.json.error).includes("claim_canvasight_thread"), true);
+
+    const unboundDaemon = await readDaemonState(unboundCanvasightHome);
+    const claimed = await fetchJson(`${unboundDaemon.origin}/api/sessions/claim`, {
+      method: "POST",
+      headers: {
+        "x-canvasight-token": unboundDaemon.token
+      },
+      body: JSON.stringify({
+        projectPath: unboundOpened.project.path,
+        threadId: "thread-claimed-dev"
+      })
+    });
+    assert.equal(claimed.status, "claimed");
+    assert.equal(claimed.codexThreadId, "thread-claimed-dev");
+    const claimedLogOffset = (await readNativeLog()).length;
+    const claimedRun = await fetchJson(`${unboundOrigin}/api/sessions/local/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        attachments: [],
+        codexMode: "chat",
+        markdown: "# Claimed Dev Run",
+        nodeIds: ["node-claimed-dev"],
+        projectPath: unboundOpened.project.path,
+        runMode: "node",
+        sessionId: "local",
+        threadName: "Claimed Dev Run"
+      })
+    });
+    assert.equal(claimedRun.status, "sent");
+    assert.equal(claimedRun.delivery.via, "turn/start");
+    assert.equal(claimedRun.codexTurn.threadId, "thread-claimed-dev");
+    const claimedLog = (await readNativeLog()).slice(claimedLogOffset);
+    assert.equal(
+      claimedLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev"),
+      true
+    );
     const unboundStopped = run("stop", {
       canvasightHome: unboundCanvasightHome,
       port: unboundPort,

@@ -9,10 +9,11 @@ Use this skill to open or recover Canvasight's browser canvas through MCP.
 
 ## Workflow
 
-1. Call `open_canvasight` with the current workspace path when available.
-2. Navigate Codex's in-app Browser/sidebar to the full returned `browserUrl` / `url`, including query parameters. The MCP server should not open the system browser by default.
-3. Use `list_canvasight_recent_projects` and `open_canvasight_recent_project` when the user wants the last Canvasight project from a new Codex thread.
-4. Call `close_canvasight` only when the specific session is no longer needed. It does not stop the project-level daemon.
+1. If the Canvasight browser page is already open in this project and the user moved to a new Codex thread, call `claim_canvasight_thread` with the current workspace path or recent project first.
+2. Call `open_canvasight` with the current workspace path when a fresh browser URL is needed.
+3. Navigate Codex's in-app Browser/sidebar to the full returned `browserUrl` / `url`, including query parameters. The MCP server should not open the system browser by default.
+4. Use `list_canvasight_recent_projects` and `open_canvasight_recent_project` when the user wants the last Canvasight project from a new Codex thread and no browser page is currently usable.
+5. Call `close_canvasight` only when the specific session is no longer needed. It does not stop the project-level daemon.
 
 Normal plugin use should not ask the user to run `npm run dev`. The plugin daemon serves the built app and is meant to outlive a thread-local MCP process.
 
