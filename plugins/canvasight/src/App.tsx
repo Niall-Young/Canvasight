@@ -1535,22 +1535,35 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }
 
       const threadName = mode === "flow" ? `Canvasight Flow: ${node.data.title || "Untitled"}` : `Canvasight: ${node.data.title || "Untitled"}`;
+      const runPayload = {
+        attachments: result.attachments,
+        agentTeam: result.agentTeam,
+        codexMode: result.codexMode,
+        effort: node.data.effort || "xhigh",
+        imagePaths: result.imagePaths,
+        markdown: result.markdown,
+        nodeIds: result.nodes.map((item) => item.id),
+        planMode: result.planMode,
+        projectPath: project.path,
+        runMode: mode,
+        sessionId: canvasightApi.sessionId,
+        threadName
+      };
       setStatus(t("status.sendingAssistant"));
       try {
-        const runResult = await canvasightApi.run({
-          attachments: result.attachments,
-          agentTeam: result.agentTeam,
-          codexMode: result.codexMode,
-          effort: node.data.effort || "xhigh",
-          imagePaths: result.imagePaths,
-          markdown: result.markdown,
-          nodeIds: result.nodes.map((item) => item.id),
-          planMode: result.planMode,
-          projectPath: project.path,
-          runMode: mode,
-          sessionId: canvasightApi.sessionId,
-          threadName
-        });
+        if (canvasightApi.canSendFollowUpMessage()) {
+          await canvasightApi.prepareWidgetRun(runPayload);
+          await canvasightApi.sendFollowUpMessage({
+            prompt: result.markdown,
+            content: [{ type: "text", text: result.markdown }]
+          });
+          markNodeRun(nodeId, mode);
+          setSelectedRunMode(mode);
+          setStatus(t("status.sentAssistant"));
+          return;
+        }
+
+        const runResult = await canvasightApi.run(runPayload);
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
         if (runResult.delivery?.status === "awaited") {
@@ -1576,6 +1589,27 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           setStatus(t("status.queuedAssistant"));
         }
       } catch (error) {
+        if (canvasightApi.canSendFollowUpMessage()) {
+          try {
+            const runResult = await canvasightApi.run(runPayload);
+            markNodeRun(nodeId, mode);
+            setSelectedRunMode(mode);
+            const reason = error instanceof Error ? error.message : "";
+            if (runResult.delivery?.status === "awaited") {
+              setStatus(t("status.awaitedAssistant"));
+            } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
+              setStatus(t("status.sentAssistant"));
+            } else if (reason) {
+              setStatus(t("status.queuedAssistantWithReason", { reason }));
+            } else {
+              setStatus(t("status.queuedAssistant"));
+            }
+            return;
+          } catch (fallbackError) {
+            setStatus(fallbackError instanceof Error ? fallbackError.message : t("status.sendAssistantFailed"));
+            return;
+          }
+        }
         setStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"));
       }
     },

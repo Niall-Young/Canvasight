@@ -4,13 +4,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import http from "node:http";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.25";
+const SERVER_VERSION = "0.1.26";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
+const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
@@ -101,6 +104,7 @@ const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 const pluginRoot = path.resolve(__dirname, "..");
 const distRoot = path.join(pluginRoot, "dist");
 const isDaemonMode = process.argv.includes("--daemon");
@@ -1871,6 +1875,32 @@ async function enqueueRun(session, payload) {
   return normalized;
 }
 
+async function prepareWidgetRun(session, payload) {
+  const normalized = normalizeRunPayload(session, payload);
+  normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
+  normalized.codexNative = {
+    status: "not_applicable",
+    reason: "widget_bridge",
+    threadId: null,
+    mode: normalized.codexMode
+  };
+  normalized.codexTurn = {
+    status: "skipped",
+    reason: "widget_bridge",
+    threadId: null,
+    mode: normalized.codexMode
+  };
+  normalized.delivery = {
+    status: "prepared",
+    reason: "widget_bridge",
+    via: "widget_bridge",
+    threadId: null,
+    codexNative: normalized.codexNative,
+    codexTurn: normalized.codexTurn
+  };
+  return normalized;
+}
+
 function queuedRunMatchesThread(run, threadId) {
   if (!threadId) return true;
   const runThreadId = run?.delivery?.threadId || run?.codexNative?.threadId || run?.codexTurn?.threadId || null;
@@ -2140,6 +2170,367 @@ function openExternalBrowser(url) {
     status: "opened",
     reason: "explicit_external_browser"
   };
+}
+
+let cachedMcpAppsGlobalScript = "";
+
+function escapeInlineScript(source) {
+  return source.replaceAll("</script", "<\\/script").replaceAll("</SCRIPT", "<\\/SCRIPT");
+}
+
+function parseExportMap(body) {
+  const exportMap = new Map();
+  for (const rawEntry of body.split(",")) {
+    const entry = rawEntry.trim();
+    if (!entry) continue;
+    const parts = entry.split(/\s+as\s+/);
+    const local = parts[0]?.trim();
+    const exported = (parts[1] || parts[0])?.trim();
+    if (local && exported) exportMap.set(exported, local);
+  }
+  return exportMap;
+}
+
+function mcpAppsGlobalScript() {
+  if (cachedMcpAppsGlobalScript) return cachedMcpAppsGlobalScript;
+
+  const sourcePath = require.resolve("@modelcontextprotocol/ext-apps/app-with-deps");
+  const source = fs.readFileSync(sourcePath, "utf8");
+  const exportStart = source.lastIndexOf("export{");
+  if (exportStart === -1) throw new Error("Could not find ext-apps browser export block.");
+  const exportBlock = source.slice(exportStart).match(/^export\{([^}]+)\};?\s*$/s);
+  if (!exportBlock) throw new Error("Could not parse ext-apps browser export block.");
+  const exportMap = parseExportMap(exportBlock[1]);
+  const requiredExports = ["App", "applyDocumentTheme", "applyHostFonts", "applyHostStyleVariables"];
+  for (const name of requiredExports) {
+    if (!exportMap.has(name)) throw new Error(`Missing ext-apps browser export: ${name}`);
+  }
+  cachedMcpAppsGlobalScript = [
+    source.slice(0, exportStart),
+    ";globalThis.__CANVASIGHT_MCP_APPS__={",
+    requiredExports.map((name) => `${JSON.stringify(name)}:${exportMap.get(name)}`).join(","),
+    "};"
+  ].join("");
+  return cachedMcpAppsGlobalScript;
+}
+
+function canvasightWidgetResourceMeta() {
+  return {
+    ui: {
+      prefersBorder: false,
+      csp: {
+        connectDomains: ["http://127.0.0.1:*", "http://localhost:*"],
+        frameDomains: ["http://127.0.0.1:*", "http://localhost:*"],
+        resourceDomains: ["http://127.0.0.1:*", "http://localhost:*", "data:", "blob:"]
+      }
+    },
+    "openai/widgetDescription": "Canvasight native Codex widget shell for the project canvas.",
+    "openai/widgetPrefersBorder": false,
+    "openai/widgetCSP": {
+      connect_domains: ["http://127.0.0.1:*", "http://localhost:*"],
+      frame_domains: ["http://127.0.0.1:*", "http://localhost:*"],
+      resource_domains: ["http://127.0.0.1:*", "http://localhost:*", "data:", "blob:"]
+    }
+  };
+}
+
+function canvasightWidgetBridgeScript() {
+  return `(() => {
+  "use strict";
+
+  const apps = globalThis.__CANVASIGHT_MCP_APPS__;
+  const frame = document.getElementById("canvasight-frame");
+  const status = document.getElementById("canvasight-widget-status");
+  let mcpApp = null;
+  let toolOutput = null;
+  let statusTimer = null;
+
+  function setStatus(message, tone = "muted") {
+    if (!status) return;
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+    status.textContent = message || "";
+    status.dataset.tone = tone;
+    if (message && tone === "ok") {
+      statusTimer = setTimeout(() => {
+        status.textContent = "";
+        statusTimer = null;
+      }, 1400);
+    }
+  }
+
+  function publishHostGlobals(globals) {
+    window.openai = Object.assign(window.openai || {}, globals);
+    window.dispatchEvent(new CustomEvent("openai:set_globals", {
+      detail: { globals: window.openai },
+    }));
+  }
+
+  function withTimeout(promise, ms, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(label)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  function toBridgeError(error) {
+    if (error instanceof Error) return error;
+    return new Error(String(error || "Canvasight host bridge is unavailable."));
+  }
+
+  async function waitForReady() {
+    if (mcpApp?.ready) await withTimeout(mcpApp.ready, 4000, "Canvasight host bridge did not become ready.");
+    if (globalThis.__CANVASIGHT_MCP_HOST_ERROR__) throw toBridgeError(globalThis.__CANVASIGHT_MCP_HOST_ERROR__);
+  }
+
+  function currentSize() {
+    const root = document.documentElement;
+    const body = document.body;
+    return {
+      width: Math.ceil(window.innerWidth || root.clientWidth || 0),
+      height: Math.ceil(Math.max(root.scrollHeight || 0, root.offsetHeight || 0, body?.scrollHeight || 0, body?.offsetHeight || 0)),
+    };
+  }
+
+  function sendCurrentSize() {
+    try {
+      if (mcpApp && typeof mcpApp.sendSizeChanged === "function") mcpApp.sendSizeChanged(currentSize());
+    } catch (_error) {
+      // Hosts without size notifications can keep the default widget size.
+    }
+  }
+
+  function applyHostContext(context) {
+    if (!context) return;
+    try {
+      if (context.theme && typeof apps.applyDocumentTheme === "function") apps.applyDocumentTheme(context.theme);
+      if (context.styles?.variables && typeof apps.applyHostStyleVariables === "function") apps.applyHostStyleVariables(context.styles.variables);
+      if (context.styles?.css?.fonts && typeof apps.applyHostFonts === "function") apps.applyHostFonts(context.styles.css.fonts);
+    } catch (_error) {
+      // Host styling is a progressive enhancement.
+    }
+    publishHostGlobals({
+      hostContext: context,
+      displayMode: context.displayMode,
+      availableDisplayModes: context.availableDisplayModes,
+      widgetInstanceId: context.widgetInstanceId || context.widgetId,
+    });
+  }
+
+  function payloadFromToolResult(result) {
+    const metadata = result?._meta || {};
+    const payload = metadata.widgetData || result?.structuredContent || result || {};
+    return { metadata, payload };
+  }
+
+  function setFrameSource(payload) {
+    if (!payload || !frame) return;
+    const url = payload.browserUrl || payload.url;
+    if (!url) return;
+    toolOutput = payload;
+    publishHostGlobals({
+      toolOutput: payload,
+      toolResponseMetadata: payload,
+    });
+    const frameUrl = new URL(url);
+    frameUrl.searchParams.set("canvasightHost", "widget");
+    const href = frameUrl.toString();
+    if (frame.src !== href) frame.src = href;
+    setStatus("Canvasight ready", "ok");
+  }
+
+  function handleToolResult(result) {
+    const { metadata, payload } = payloadFromToolResult(result);
+    toolOutput = payload;
+    publishHostGlobals({
+      rawToolResult: result,
+      toolOutput: payload,
+      toolResponseMetadata: metadata,
+    });
+    setFrameSource(payload);
+    sendCurrentSize();
+  }
+
+  async function sendFollowUpMessage(message) {
+    const prompt = typeof message?.prompt === "string" ? message.prompt : "";
+    const content = Array.isArray(message?.content) ? message.content : [{ type: "text", text: prompt }];
+    if (!prompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
+    if (!mcpApp || typeof mcpApp.sendMessage !== "function") throw new Error("Host bridge is unavailable.");
+    await waitForReady();
+    const result = await withTimeout(mcpApp.sendMessage({ role: "user", content }), 8000, "Host did not accept the Canvasight Run.");
+    if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+    return result || {};
+  }
+
+  async function callServerTool(request, options) {
+    if (!mcpApp || typeof mcpApp.callServerTool !== "function") throw new Error("Host tool bridge is unavailable.");
+    await waitForReady();
+    return withTimeout(mcpApp.callServerTool(request, options), options?.timeoutMs || 30000, "Canvasight server tool call timed out.");
+  }
+
+  function installCanvasightApi() {
+    const api = window.canvasightMcp || {};
+    api.sendFollowUpMessage = sendFollowUpMessage;
+    api.callServerTool = callServerTool;
+    api.getHostCapabilities = () => {
+      try {
+        return mcpApp?.getHostCapabilities?.() || null;
+      } catch (_error) {
+        return null;
+      }
+    };
+    api.toolOutput = () => toolOutput;
+    window.canvasightMcp = api;
+  }
+
+  window.addEventListener("message", async (event) => {
+    const data = event.data || {};
+    if (data.source !== "canvasight-web" || data.type !== "canvasight:send-follow-up") return;
+    if (frame && event.source !== frame.contentWindow) return;
+    try {
+      setStatus("Sending Canvasight Run to current thread...", "muted");
+      await sendFollowUpMessage(data);
+      event.source?.postMessage({
+        source: "canvasight-widget",
+        type: "canvasight:send-follow-up-result",
+        requestId: data.requestId,
+        ok: true,
+      }, event.origin || "*");
+      setStatus("Sent to current Codex thread", "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      event.source?.postMessage({
+        source: "canvasight-widget",
+        type: "canvasight:send-follow-up-result",
+        requestId: data.requestId,
+        ok: false,
+        error: message,
+      }, event.origin || "*");
+      setStatus(message, "error");
+    }
+  });
+
+  window.addEventListener("message", (event) => {
+    const result = event.data?.params?.result;
+    if (event.data?.method === "ui/notifications/tool-result" && result) handleToolResult(result);
+  });
+
+  try {
+    if (!apps || typeof apps.App !== "function") throw new Error("Canvasight MCP Apps bridge bundle is unavailable.");
+    mcpApp = new apps.App(
+      { name: "canvasight", version: ${JSON.stringify(SERVER_VERSION)} },
+      { availableDisplayModes: ["inline", "fullscreen"] },
+      { autoResize: true },
+    );
+    globalThis.__CANVASIGHT_MCP_APP__ = mcpApp;
+    installCanvasightApi();
+    mcpApp.addEventListener("hostcontextchanged", applyHostContext);
+    mcpApp.addEventListener("toolresult", handleToolResult);
+    mcpApp.ready = mcpApp.connect()
+      .then(() => {
+        installCanvasightApi();
+        publishHostGlobals({
+          hostCapabilities: mcpApp.getHostCapabilities && mcpApp.getHostCapabilities(),
+          hostInfo: mcpApp.getHostVersion && mcpApp.getHostVersion(),
+        });
+        applyHostContext(mcpApp.getHostContext && mcpApp.getHostContext());
+        mcpApp.requestDisplayMode?.({ mode: "fullscreen" }).catch(() => {});
+        sendCurrentSize();
+      })
+      .catch((error) => {
+        globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
+        setStatus(error instanceof Error ? error.message : String(error), "error");
+      });
+    setStatus("Opening Canvasight...", "muted");
+  } catch (error) {
+    globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
+    setStatus(error instanceof Error ? error.message : String(error), "error");
+  }
+})();`;
+}
+
+function canvasightWidgetHtml() {
+  const bridgeBundle = escapeInlineScript(mcpAppsGlobalScript());
+  const bridgeScript = escapeInlineScript(canvasightWidgetBridgeScript());
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canvasight</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #f7f7f7;
+      color: #333;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #canvasight-widget-root {
+      position: fixed;
+      inset: 0;
+      min-width: 0;
+      min-height: 0;
+      background: #f7f7f7;
+    }
+    #canvasight-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #f7f7f7;
+    }
+    #canvasight-widget-status {
+      position: absolute;
+      left: 50%;
+      top: 18px;
+      z-index: 2;
+      max-width: min(560px, calc(100% - 48px));
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #666;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      font-size: 13px;
+      line-height: 18px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+    #canvasight-widget-status:not(:empty) {
+      opacity: 1;
+    }
+    #canvasight-widget-status[data-tone="ok"] {
+      color: #146c2e;
+    }
+    #canvasight-widget-status[data-tone="error"] {
+      color: #a62626;
+    }
+  </style>
+  <script id="canvasightMcpAppsBundle">${bridgeBundle}</script>
+</head>
+<body>
+  <div id="canvasight-widget-root">
+    <iframe
+      id="canvasight-frame"
+      title="Canvasight"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-modals"
+      allow="clipboard-read; clipboard-write"
+      referrerpolicy="no-referrer"
+    ></iframe>
+    <div id="canvasight-widget-status" role="status" aria-live="polite"></div>
+  </div>
+  <script id="canvasightMcpHostBridge">${bridgeScript}</script>
+</body>
+</html>`;
 }
 
 function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
@@ -2649,6 +3040,17 @@ async function handleSessionApi(req, res, url) {
   if (action === "run") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
+    if (body?.deliveryMode === "widget_bridge_prepare") {
+      const prepared = await prepareWidgetRun(session, body);
+      sendJson(res, 200, {
+        status: "prepared",
+        delivery: prepared.delivery,
+        codexNative: prepared.codexNative,
+        codexTurn: prepared.codexTurn,
+        agentTeam: prepared.agentTeam
+      });
+      return true;
+    }
     const queued = await enqueueRun(session, body);
     sendJson(res, 200, {
       status: queued.delivery?.status === "sent" ? "sent" : "queued",
@@ -2925,7 +3327,7 @@ async function shutdownDaemon() {
   if (isDaemonMode) await removeDaemonState();
 }
 
-function toolResult(structuredContent, text = "") {
+function toolResult(structuredContent, text = "", meta) {
   return {
     content: [
       {
@@ -2933,7 +3335,42 @@ function toolResult(structuredContent, text = "") {
         text: text || structuredContent.markdown || ""
       }
     ],
-    structuredContent
+    structuredContent,
+    ...(meta ? { _meta: meta } : {})
+  };
+}
+
+function widgetResourceDescriptor() {
+  return {
+    uri: CANVASIGHT_WIDGET_URI,
+    name: "canvasight-canvas-widget",
+    title: "Canvasight",
+    description: "Native Codex widget shell for the Canvasight project canvas.",
+    mimeType: RESOURCE_MIME_TYPE,
+    _meta: canvasightWidgetResourceMeta()
+  };
+}
+
+function listCanvasightResources() {
+  return {
+    resources: [widgetResourceDescriptor()]
+  };
+}
+
+function readCanvasightResource(uri) {
+  if (uri !== CANVASIGHT_WIDGET_URI) {
+    throw new HttpError(404, `Unknown Canvasight resource: ${uri}`, "resource_not_found");
+  }
+  const meta = canvasightWidgetResourceMeta();
+  return {
+    contents: [
+      {
+        uri: CANVASIGHT_WIDGET_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: canvasightWidgetHtml(),
+        _meta: meta
+      }
+    ]
   };
 }
 
@@ -2967,7 +3404,7 @@ function canvasRoutingContext() {
   };
 }
 
-async function toolOpenCanvasight(args) {
+async function createBrowserSession(args) {
   const daemon = await ensureDaemonServer();
   const opened = await daemonJson(daemon, "/api/sessions", {
     method: "POST",
@@ -2980,6 +3417,56 @@ async function toolOpenCanvasight(args) {
   const session = opened.session;
   const url = daemonSessionUrl(daemon, session.sessionId);
   await waitForReachableUrl(url, "Canvasight browser session");
+  return {
+    daemon,
+    opened,
+    session,
+    url
+  };
+}
+
+function widgetToolMeta(widgetData) {
+  return {
+    "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
+    "ui/resourceUri": CANVASIGHT_WIDGET_URI,
+    widgetData
+  };
+}
+
+async function toolRenderCanvasightCanvasWidget(args) {
+  const { daemon, opened, session, url } = await createBrowserSession(args);
+  const canvasRouting = canvasRoutingContext();
+  const widgetData = {
+    status: "opened",
+    rendering: "native-widget",
+    widget: "canvasight-canvas-widget",
+    sessionId: session.sessionId,
+    url,
+    browserUrl: url,
+    origin: daemon.origin,
+    projectPath: session.projectPath,
+    codexThreadId: session.codexThreadId,
+    project: opened.project,
+    language: session.language,
+    activeCanvasContext: true,
+    canvasRouting,
+    activeCanvasRouting: canvasRouting
+  };
+  return toolResult(
+    {
+      ...widgetData,
+      openTarget: "codex_native_widget"
+    },
+    [
+      `Canvasight native widget opened for project: ${session.projectPath}`,
+      canvasRouting.userFacingInstruction
+    ].join("\n\n"),
+    widgetToolMeta(widgetData)
+  );
+}
+
+async function toolOpenCanvasight(args) {
+  const { daemon, opened, session, url } = await createBrowserSession(args);
   const externalBrowser = openExternalBrowser(url);
   const canvasRouting = canvasRoutingContext();
   return toolResult(
@@ -3211,9 +3698,44 @@ async function toolCloseCanvasight(args) {
 
 const tools = [
   {
+    name: "render_canvasight_canvas_widget",
+    description:
+      "Open Canvasight as a native Codex widget for the active project. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Optional local project path to associate with the widget session."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Optional UI and markdown language preference."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional Codex thread id for fallback queue filtering. Native widget Run delivery does not require this when the host bridge is available."
+        }
+      },
+      additionalProperties: false
+    },
+    _meta: {
+      ui: {
+        resourceUri: CANVASIGHT_WIDGET_URI,
+        visibility: ["model", "app"]
+      },
+      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
+      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
+      "openai/widgetAccessible": true,
+      "openai/toolInvocation/invoking": "Opening Canvasight widget...",
+      "openai/toolInvocation/invoked": "Canvasight widget ready"
+    }
+  },
+  {
     name: "open_canvasight",
     description:
-      "Open a Canvasight browser session in Codex's in-app browser/sidebar and start or reuse the project-level local daemon without launching the system browser by default. Use the full returned browserUrl/url. The opened project becomes active Canvasight context: later medium or complex requests should prefer write_canvasight_graph before direct execution when decomposition is useful.",
+      "Open a Canvasight browser session in Codex's in-app browser/sidebar and start or reuse the project-level local daemon without launching the system browser by default. Prefer render_canvasight_canvas_widget for normal use when Run buttons should send to the current thread through the native widget bridge. Use this browser URL fallback only when widget rendering is unavailable.",
     inputSchema: {
       type: "object",
       properties: {
@@ -3473,6 +3995,7 @@ const tools = [
 ];
 
 async function callTool(name, args) {
+  if (name === "render_canvasight_canvas_widget") return toolRenderCanvasightCanvasWidget(args || {});
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
@@ -3532,7 +4055,8 @@ async function handleJsonRpc(message) {
         writeResult(id, {
           protocolVersion: params?.protocolVersion || DEFAULT_PROTOCOL_VERSION,
           capabilities: {
-            tools: {}
+            tools: {},
+            resources: {}
           },
           serverInfo: {
             name: SERVER_NAME,
@@ -3549,6 +4073,21 @@ async function handleJsonRpc(message) {
 
     if (method === "tools/list") {
       if (hasId) writeResult(id, { tools });
+      return;
+    }
+
+    if (method === "resources/list") {
+      if (hasId) writeResult(id, listCanvasightResources());
+      return;
+    }
+
+    if (method === "resources/templates/list") {
+      if (hasId) writeResult(id, { resourceTemplates: [] });
+      return;
+    }
+
+    if (method === "resources/read") {
+      if (hasId) writeResult(id, readCanvasightResource(params?.uri));
       return;
     }
 

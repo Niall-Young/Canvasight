@@ -1,6 +1,6 @@
 {
   "name": "canvasight",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "description": "A local canvas workspace that turns connected task nodes and attachments into structured Codex prompts.",
   "author": {
     "name": "Niall Young"
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Canvasight",
     "shortDescription": "Build prompt flows on a local canvas",
-    "longDescription": "Canvasight opens a persistent local browser canvas for arranging task nodes, attachments, and flows, then sends generated Markdown and structured run data to the bound Codex thread with await-based fallback for older or cross-thread sessions.",
+    "longDescription": "Canvasight opens a native Codex widget canvas for arranging task nodes, attachments, and flows, then sends generated Markdown to the current Codex thread through the widget host bridge with browser and await-based fallback for older sessions.",
     "developerName": "Niall Young",
     "category": "Productivity",
     "capabilities": [

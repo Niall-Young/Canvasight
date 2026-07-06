@@ -70,6 +70,8 @@ These modes should be represented as a segmented control or similarly compact op
 
 Run is a submit action, not a Markdown preview action. A successful Run should report whether the payload was sent to the current Codex thread, delivered to a waiting thread, or queued for `await_canvasight_run`. Markdown preview remains a separate drawer command for reviewing generated content and must not be used as the only visual proof that a Run was sent.
 
+Normal plugin Run delivery happens from the Codex native widget host bridge. Browser URL and bare dev-server surfaces are fallback contexts; they may queue the payload for `await_canvasight_run` and must label that state honestly. The app must not imply that a browser fallback click reached the current thread unless a real Codex turn was created.
+
 ## Icon Semantics
 
 Canvasight uses app-local SVG icons through the shared icon registry. Icons should map to the object or command they actually represent:

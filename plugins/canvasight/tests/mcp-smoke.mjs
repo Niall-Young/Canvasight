@@ -388,6 +388,7 @@ async function main() {
 
     const listed = await request("tools/list", {});
     const toolNames = new Set(listed.tools.map((tool) => tool.name));
+    assert.equal(toolNames.has("render_canvasight_canvas_widget"), true);
     assert.equal(toolNames.has("open_canvasight"), true);
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
@@ -397,11 +398,14 @@ async function main() {
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
+    const renderTool = listed.tools.find((tool) => tool.name === "render_canvasight_canvas_widget");
+    assert.match(renderTool.description, /native Codex widget/);
+    assert.match(renderTool.description, /send follow-up messages to the current thread/);
+    assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.equal(renderTool._meta["openai/widgetAccessible"], true);
     const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
-    assert.match(openTool.description, /in-app browser\/sidebar/);
-    assert.match(openTool.description, /full returned browserUrl\/url/);
-    assert.match(openTool.description, /without launching the system browser by default/);
-    assert.match(openTool.description, /active Canvasight context/);
+    assert.match(openTool.description, /browser session/);
+    assert.match(openTool.description, /Prefer render_canvasight_canvas_widget/);
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
     assert.match(recentOpenTool.description, /in-app browser\/sidebar/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
@@ -418,6 +422,48 @@ async function main() {
       "task-plan",
       "general"
     ]);
+
+    const resources = await request("resources/list", {});
+    assert.equal(resources.resources.length, 1);
+    assert.equal(resources.resources[0].uri, "ui://widget/canvasight/canvas.html");
+    assert.equal(resources.resources[0].mimeType, "text/html;profile=mcp-app");
+    const widgetResource = await request("resources/read", {
+      uri: "ui://widget/canvasight/canvas.html"
+    });
+    assert.equal(widgetResource.contents[0].uri, "ui://widget/canvasight/canvas.html");
+    assert.equal(widgetResource.contents[0].mimeType, "text/html;profile=mcp-app");
+    assert.match(widgetResource.contents[0].text, /canvasight-frame/);
+    assert.match(widgetResource.contents[0].text, /canvasightHost/);
+    assert.match(widgetResource.contents[0].text, /canvasight:send-follow-up/);
+    assert.match(widgetResource.contents[0].text, /sendMessage/);
+    assert.ok(
+      widgetResource.contents[0].text.indexOf('id="canvasight-frame"') < widgetResource.contents[0].text.indexOf('id="canvasightMcpHostBridge"')
+    );
+
+    const widgetOpened = await request("tools/call", {
+      name: "render_canvasight_canvas_widget",
+      arguments: {
+        language: "zh"
+      }
+    });
+    assert.equal(widgetOpened.structuredContent.status, "opened");
+    assert.equal(widgetOpened.structuredContent.openTarget, "codex_native_widget");
+    assert.equal(widgetOpened.structuredContent.activeCanvasContext, true);
+    assert.equal(widgetOpened.structuredContent.browserUrl, widgetOpened.structuredContent.url);
+    assert.equal(widgetOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.equal(widgetOpened._meta.widgetData.url, widgetOpened.structuredContent.url);
+    daemonToken = new URL(widgetOpened.structuredContent.url).searchParams.get("token") || daemonToken;
+    const widgetPageResponse = await fetch(widgetOpened.structuredContent.browserUrl);
+    assert.equal(widgetPageResponse.ok, true);
+    assert.match(await widgetPageResponse.text(), /id="root"/);
+    const widgetSession = await fetchJson(`${widgetOpened.structuredContent.origin}/api/sessions/${widgetOpened.structuredContent.sessionId}`);
+    assert.equal(widgetSession.codexThreadId, "thread-smoke");
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: widgetOpened.structuredContent.sessionId
+      }
+    });
 
     const autoOpened = await request("tools/call", {
       name: "open_canvasight",
@@ -1217,15 +1263,6 @@ async function main() {
     assert.equal(assetResponse.ok, true);
     assert.equal(await assetResponse.text(), "hello canvasight");
 
-    const waitForRun = request("tools/call", {
-      name: "await_canvasight_run",
-      arguments: {
-        sessionId,
-        timeoutMs: 5000
-      }
-    });
-    await sleep(20);
-
     const runPayload = {
       sessionId,
       threadName: "Scatter Flow: Smoke task",
@@ -1259,14 +1296,48 @@ async function main() {
       nodeIds: ["node-a"],
       attachments
     };
+
+    const widgetPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Prepared Run",
+        markdown: "# Widget Prepared Run\n\nThis is sent by the native widget bridge.",
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(widgetPrepared.status, "prepared");
+    assert.equal(widgetPrepared.delivery.status, "prepared");
+    assert.equal(widgetPrepared.delivery.via, "widget_bridge");
+    assert.equal(widgetPrepared.codexNative.status, "not_applicable");
+    assert.equal(widgetPrepared.codexNative.reason, "widget_bridge");
+    assert.equal(widgetPrepared.agentTeam.agentsMd.status, "created");
+    const widgetPreparedDrain = await request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 20
+      }
+    });
+    assert.equal(widgetPreparedDrain.structuredContent.status, "timeout");
+
+    const waitForRun = request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 5000
+      }
+    });
+    await sleep(20);
+
     const queued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       body: JSON.stringify(runPayload)
     });
     assert.equal(queued.status, "queued");
     assert.equal(queued.delivery.status, "awaited");
-    assert.equal(queued.agentTeam.agentsMd.status, "created");
-    assert.equal(queued.agentTeam.agentsMd.reason, "missing_agents_md");
+    assert.equal(queued.agentTeam.agentsMd.status, "unchanged");
+    assert.equal(queued.agentTeam.agentsMd.reason, "managed_block_present");
 
     const awaited = await waitForRun;
     assert.equal(awaited.content[0].text, runPayload.markdown);
@@ -1284,7 +1355,7 @@ async function main() {
       ["development-agent", "test-supervisor-agent"]
     );
     assert.deepEqual(awaited.structuredContent.agentTeam.reportProtocol.statuses, ["open", "assigned", "resolved", "archived"]);
-    assert.equal(awaited.structuredContent.agentTeam.agentsMd.status, "created");
+    assert.equal(awaited.structuredContent.agentTeam.agentsMd.status, "unchanged");
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
     const createdAgentsMd = await fsp.readFile(path.join(projectPath, "AGENTS.md"), "utf8");

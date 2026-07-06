@@ -4,7 +4,7 @@
 
 Canvasight is an early-stage repo-local Codex plugin. The active product lives under `plugins/canvasight` as a Vite, React, TypeScript, XYFlow, Zustand, and Radix UI application. Preserve room for the final stack, but do not treat the repository as an empty baseline anymore.
 
-The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Running a node or flow sends Markdown and structured run data to the latest Codex thread that claimed the project/session through native app-server `turn/start` when possible; `await_canvasight_run` remains the fallback queue pickup path.
+The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Normal plugin use renders Canvasight inside a Codex native widget through `render_canvasight_canvas_widget`; running a node or flow sends Markdown to the current Codex thread through the widget host bridge. Browser URLs, bare dev pages, native app-server `turn/start`, and `await_canvasight_run` remain fallback or development paths.
 
 Use `design.md` as the product and UI design baseline when adding user-facing screens.
 
@@ -111,6 +111,7 @@ Canvasight is currently implemented as a repo-local Codex plugin under `plugins/
 
 Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasight`:
 
+- Normal plugin opening should use `render_canvasight_canvas_widget`, which renders the Canvasight native widget and lets Run send a follow-up message to the current Codex thread through the host bridge. Use `open_canvasight` only as a browser fallback or debugging path.
 - `npm run dev` starts or reuses the project-level persistent Canvasight dev server at `http://127.0.0.1:5173/`. The command exits after the server is ready; archiving the launching Codex thread should not stop the dev server. Bare dev Run first uses the daemon's latest `claim_canvasight_thread` binding for the project, falls back to the dev server process `CODEX_THREAD_ID` only when no claim exists, and returns `unbound_dev_session` when neither exists.
 - `npm run dev:stop` stops the persistent Canvasight dev server.
 - `npm run dev:status` reports whether the persistent Canvasight dev server is running.

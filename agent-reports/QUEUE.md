@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-2003-integration-summary.md` - integrated Cowart-style Canvasight native widget bridge, docs, skills, tests, version 0.1.26, and plugin reinstall.
+- `agent-reports/resolved/20260706-2003-development-solution-run-widget-bridge.md` - implemented `render_canvasight_canvas_widget`, widget resource, frontend bridge, and fallback handling.
+- `agent-reports/resolved/20260706-1935-development-issue-run-widget-bridge.md` - resolved Canvasight Run not reaching the current Codex thread by using native widget host bridge delivery.
 - `agent-reports/resolved/20260706-1718-integration-summary-run-native-false-sent.md` - integrated default queued Run fallback, explicit native opt-in, docs, tests, and version 0.1.25.
 - `agent-reports/resolved/20260706-1718-development-solution-run-native-false-sent.md` - fixed false-positive direct delivery through isolated Codex app-server.
 - `agent-reports/resolved/20260706-1718-development-issue-run-native-false-sent.md` - resolved Canvasight Run returning sent without reaching the current Codex Desktop thread.

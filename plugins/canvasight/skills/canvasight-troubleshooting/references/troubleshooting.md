@@ -16,23 +16,34 @@ Connection refused usually means the URL points at an old thread-local dev serve
 
 Use `open_canvasight` or `open_canvasight_recent_project` to get a fresh full `browserUrl`. Do not reuse only the old origin.
 
+## Native Widget Does Not Render
+
+Normal Canvasight use should call `render_canvasight_canvas_widget`. The tool result must include `openai/outputTemplate: ui://widget/canvasight/canvas.html`, and the resource must be readable through `resources/read`.
+
+If the widget does not render:
+
+1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
+2. Open a new Codex thread or reload the session so the new MCP tool descriptor and widget resource metadata are loaded.
+3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, and `render_canvasight_canvas_widget` all pass.
+4. Use `open_canvasight` only as a browser fallback while investigating widget host support.
+
 ## Opens In System Browser
 
 `open_canvasight` should target Codex's in-app browser sidebar and should not launch the system default browser unless `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` is explicitly set for development debugging. If an old plugin cache still opens Safari or Chrome directly, reinstall `canvasight@canvasight-local` and start a new Codex thread.
 
 ## Archived Opening Thread
 
-The browser page should not depend on the Codex thread that originally opened it. If the old browser page is still usable, call `claim_canvasight_thread` from the current thread before clicking Run so future queued Run payloads are scoped to the current thread. If a page was opened before persistent daemon support or the URL is stale, reopen the recent project. Use `await_canvasight_run` to receive queued payloads.
+The native widget sends Run output to the thread that owns the widget, so it does not need the old thread id. Browser fallback pages should not depend on the Codex thread that originally opened them. If an old browser page is still usable, call `claim_canvasight_thread` from the current thread before clicking Run so future queued Run payloads are scoped to the current thread. If a page was opened before persistent daemon support or the URL is stale, reopen the recent project. Use `await_canvasight_run` to receive queued browser fallback payloads.
 
 ## Run Does Not Appear In Codex
 
-Canvasight Run defaults to queued fallback delivery. Direct Codex app-server delivery is experimental and must be explicitly enabled with `CANVASIGHT_CODEX_NATIVE=1`; it is not reliable unless it can reach the live Codex Desktop app-server. If clicking Run only changes the web UI, check these in order:
+Canvasight Run should arrive as a normal follow-up turn when the canvas was opened with `render_canvasight_canvas_widget`. The widget uses the Codex host bridge, not a thread id, virtual click, clipboard paste, or localhost browser trick. If clicking Run only changes the UI and no Codex turn appears, check these in order:
 
-1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
-2. From the intended current thread, call `claim_canvasight_thread` for the project or session so queued fallback payloads are scoped to this thread. If the URL is stale or the page is gone, reopen the canvas from that thread.
-3. Check the Run response or `await_canvasight_run` result for `codexNative.status` and `codexTurn.status`.
-4. If the response has `code: "unbound_dev_session"`, the browser is using a bare dev preview such as `http://127.0.0.1:5173/` without a claimed Codex thread. Call `claim_canvasight_thread` from the intended current thread, or open Canvasight through `open_canvasight` if a fresh URL is needed.
-5. Call `await_canvasight_run` with `sessionId` or `projectPath` to receive the queued fallback payload.
+1. Confirm the canvas was opened through `render_canvasight_canvas_widget`, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
+2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
+3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasight-frame`, and `canvasight:send-follow-up`.
+4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run, then call `await_canvasight_run` with `sessionId` or `projectPath`.
+5. If a bare dev page returns `code: "unbound_dev_session"`, it has no claimed Codex thread. Claim the project from the intended thread or reopen Canvasight through the plugin.
 
 Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automation to push text into Codex.
 
@@ -49,7 +60,7 @@ Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automa
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a cross-thread routing surface by itself. It sends Run payloads to the daemon session resolved from the latest `claim_canvasight_thread` project binding, or falls back to the Vite process `CODEX_THREAD_ID`; if neither exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. By default the resolved daemon session queues the payload for `await_canvasight_run`; direct `turn/start` is only tested when `CANVASIGHT_CODEX_NATIVE=1` is explicitly enabled for development.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It sends Run payloads to the daemon session resolved from the latest `claim_canvasight_thread` project binding, or falls back to the Vite process `CODEX_THREAD_ID`; if neither exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. By default the resolved daemon session queues the payload for `await_canvasight_run`; direct `turn/start` is only tested when `CANVASIGHT_CODEX_NATIVE=1` is explicitly enabled for development.
 
 ## Validation Commands
 

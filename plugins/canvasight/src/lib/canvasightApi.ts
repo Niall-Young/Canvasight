@@ -36,9 +36,9 @@ export interface RunPayload {
 }
 
 export interface RunResponse {
-  status: "queued" | "sent";
+  status: "prepared" | "queued" | "sent";
   delivery?: {
-    status: "awaited" | "queued" | "sent";
+    status: "awaited" | "prepared" | "queued" | "sent";
     reason?: string;
     threadId?: string | null;
     via?: string;
@@ -46,7 +46,7 @@ export interface RunResponse {
     codexTurn?: RunResponse["codexTurn"];
   };
   codexNative?: {
-    status: "applied" | "disabled" | "failed" | "pending" | "skipped";
+    status: "applied" | "disabled" | "failed" | "not_applicable" | "pending" | "skipped";
     action?: string;
     collaborationMode?: string;
     error?: string;
@@ -64,6 +64,11 @@ export interface RunResponse {
     turnId?: string | null;
   };
   agentTeam?: AgentTeamRunConfig;
+}
+
+interface WidgetFollowUpMessage {
+  content: Array<Record<string, unknown>>;
+  prompt: string;
 }
 
 function sessionIdFromUrl(): string {
@@ -229,6 +234,55 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function createRequestId(): string {
+  return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `canvasight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function canAttemptWidgetFollowUp(): boolean {
+  return window.parent !== window && new URLSearchParams(window.location.search).get("canvasightHost") === "widget";
+}
+
+function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9000): Promise<void> {
+  if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight widget bridge is not available."));
+  const requestId = createRequestId();
+
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      window.removeEventListener("message", handleMessage);
+      reject(new Error("Canvasight widget bridge timed out."));
+    }, timeoutMs);
+
+    function finish(error?: Error): void {
+      window.clearTimeout(timer);
+      window.removeEventListener("message", handleMessage);
+      if (error) reject(error);
+      else resolve();
+    }
+
+    function handleMessage(event: MessageEvent): void {
+      const data = event.data as { error?: string; ok?: boolean; requestId?: string; source?: string; type?: string } | null;
+      if (!data || data.source !== "canvasight-widget" || data.type !== "canvasight:send-follow-up-result") return;
+      if (data.requestId !== requestId) return;
+      if (data.ok) {
+        finish();
+        return;
+      }
+      finish(new Error(data.error || "Canvasight widget bridge rejected the Run."));
+    }
+
+    window.addEventListener("message", handleMessage);
+    window.parent.postMessage(
+      {
+        source: "canvasight-web",
+        type: "canvasight:send-follow-up",
+        requestId,
+        ...message
+      },
+      "*"
+    );
+  });
+}
+
 async function fileInputToPayload(input: AttachmentInput): Promise<{
   dataBase64?: string;
   mime?: string;
@@ -291,6 +345,24 @@ export const canvasightApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+
+  prepareWidgetRun(payload: RunPayload): Promise<RunResponse> {
+    return requestJson<RunResponse>(`/api/sessions/${this.sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+  },
+
+  canSendFollowUpMessage(): boolean {
+    return canAttemptWidgetFollowUp();
+  },
+
+  sendFollowUpMessage(message: WidgetFollowUpMessage): Promise<void> {
+    return sendWidgetFollowUpMessage(message);
   },
 
   showInFolder(targetPath: string): Promise<void> {
