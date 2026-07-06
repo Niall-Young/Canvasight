@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.30";
+const SERVER_VERSION = "0.1.31";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -3468,6 +3468,10 @@ async function toolRenderCanvasightCanvasWidget(args) {
 }
 
 async function toolOpenCanvasight(args) {
+  return toolRenderCanvasightCanvasWidget(args);
+}
+
+async function toolOpenCanvasightBrowserFallback(args) {
   const { daemon, opened, session, url } = await createBrowserSession(args);
   const externalBrowser = openExternalBrowser(url);
   const canvasRouting = canvasRoutingContext();
@@ -3489,7 +3493,7 @@ async function toolOpenCanvasight(args) {
       activeCanvasRouting: canvasRouting
     },
     [
-      `Canvasight session opened. Open this URL in the Codex in-app browser sidebar: ${url}`,
+      `Canvasight browser fallback opened. Open this URL in the Codex in-app browser sidebar: ${url}`,
       canvasRouting.userFacingInstruction
     ].join("\n\n")
   );
@@ -3737,7 +3741,7 @@ const tools = [
   {
     name: "open_canvasight",
     description:
-      "Open a Canvasight browser session in Codex's in-app browser/sidebar and start or reuse the project-level local daemon without launching the system browser by default. Prefer render_canvasight_canvas_widget for normal use when Run buttons should send to the current thread through the native widget bridge. Use this browser URL fallback only when widget rendering is unavailable.",
+      "Open Canvasight as the default native Codex widget for the active project. This is the normal path: the widget has the Codex host bridge, so Run buttons can send follow-up messages to the current thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -3753,6 +3757,41 @@ const tools = [
         threadId: {
           type: "string",
           description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+        }
+      },
+      additionalProperties: false
+    },
+    _meta: {
+      ui: {
+        resourceUri: CANVASIGHT_WIDGET_URI,
+        visibility: ["model", "app"]
+      },
+      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
+      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
+      "openai/widgetAccessible": true,
+      "openai/toolInvocation/invoking": "Opening Canvasight widget...",
+      "openai/toolInvocation/invoked": "Canvasight widget ready"
+    }
+  },
+  {
+    name: "open_canvasight_browser_fallback",
+    description:
+      "Open a Canvasight browser fallback URL in Codex's in-app browser/sidebar. Use only for debugging or when native widget rendering is unavailable; browser fallback pages queue Run payloads for await_canvasight_run instead of direct widget delivery.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Optional local project path to associate with the browser fallback session."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Optional UI and markdown language preference."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional Codex thread id for fallback queue filtering. Defaults to CODEX_THREAD_ID when available."
         }
       },
       additionalProperties: false
@@ -3777,7 +3816,7 @@ const tools = [
   {
     name: "open_canvasight_recent_project",
     description:
-      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, in Codex's in-app browser/sidebar. Use the full returned browserUrl/url. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
+      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, as the default native Codex widget. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
     inputSchema: {
       type: "object",
       properties: {
@@ -3801,6 +3840,17 @@ const tools = [
         }
       },
       additionalProperties: false
+    },
+    _meta: {
+      ui: {
+        resourceUri: CANVASIGHT_WIDGET_URI,
+        visibility: ["model", "app"]
+      },
+      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
+      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
+      "openai/widgetAccessible": true,
+      "openai/toolInvocation/invoking": "Opening Canvasight widget...",
+      "openai/toolInvocation/invoked": "Canvasight widget ready"
     }
   },
   {
@@ -3999,6 +4049,7 @@ const tools = [
 async function callTool(name, args) {
   if (name === "render_canvasight_canvas_widget") return toolRenderCanvasightCanvasWidget(args || {});
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
+  if (name === "open_canvasight_browser_fallback") return toolOpenCanvasightBrowserFallback(args || {});
   if (name === "list_canvasight_recent_projects") return toolListCanvasightRecentProjects(args || {});
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
   if (name === "claim_canvasight_thread") return toolClaimCanvasightThread(args || {});

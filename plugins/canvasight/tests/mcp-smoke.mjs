@@ -390,6 +390,7 @@ async function main() {
     const toolNames = new Set(listed.tools.map((tool) => tool.name));
     assert.equal(toolNames.has("render_canvasight_canvas_widget"), true);
     assert.equal(toolNames.has("open_canvasight"), true);
+    assert.equal(toolNames.has("open_canvasight_browser_fallback"), true);
     assert.equal(toolNames.has("list_canvasight_recent_projects"), true);
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
     assert.equal(toolNames.has("claim_canvasight_thread"), true);
@@ -404,11 +405,17 @@ async function main() {
     assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(renderTool._meta["openai/widgetAccessible"], true);
     const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
-    assert.match(openTool.description, /browser session/);
-    assert.match(openTool.description, /Prefer render_canvasight_canvas_widget/);
+    assert.match(openTool.description, /default native Codex widget/);
+    assert.match(openTool.description, /send follow-up messages to the current thread/);
+    assert.equal(openTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.equal(openTool._meta["openai/widgetAccessible"], true);
+    const browserFallbackTool = listed.tools.find((tool) => tool.name === "open_canvasight_browser_fallback");
+    assert.match(browserFallbackTool.description, /browser fallback URL/);
+    assert.match(browserFallbackTool.description, /queue Run payloads/);
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
-    assert.match(recentOpenTool.description, /in-app browser\/sidebar/);
+    assert.match(recentOpenTool.description, /default native Codex widget/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
+    assert.equal(recentOpenTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     const claimTool = listed.tools.find((tool) => tool.name === "claim_canvasight_thread");
     assert.match(claimTool.description, /current Codex thread/);
     assert.match(claimTool.description, /without opening a new browser tab/);
@@ -465,6 +472,38 @@ async function main() {
       }
     });
 
+    const defaultOpened = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: {
+        language: "zh"
+      }
+    });
+    assert.equal(defaultOpened.structuredContent.status, "opened");
+    assert.equal(defaultOpened.structuredContent.openTarget, "codex_native_widget");
+    assert.equal(defaultOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: defaultOpened.structuredContent.sessionId
+      }
+    });
+
+    const browserFallbackOpened = await request("tools/call", {
+      name: "open_canvasight_browser_fallback",
+      arguments: {
+        language: "zh"
+      }
+    });
+    assert.equal(browserFallbackOpened.structuredContent.status, "opened");
+    assert.equal(browserFallbackOpened.structuredContent.openTarget, "codex_in_app_browser");
+    assert.equal(browserFallbackOpened._meta?.["openai/outputTemplate"], undefined);
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: browserFallbackOpened.structuredContent.sessionId
+      }
+    });
+
     const autoOpened = await request("tools/call", {
       name: "open_canvasight",
       arguments: {
@@ -474,10 +513,9 @@ async function main() {
     assert.equal(autoOpened.structuredContent.status, "opened");
     daemonToken = new URL(autoOpened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(autoOpened.structuredContent.browserUrl, autoOpened.structuredContent.url);
-    assert.equal(autoOpened.structuredContent.openTarget, "codex_in_app_browser");
-    assert.equal(autoOpened.structuredContent.externalBrowser.status, "skipped");
-    assert.equal(autoOpened.structuredContent.externalBrowser.reason, "codex_in_app_browser_default");
-    assert.match(autoOpened.content[0].text, /Codex in-app browser sidebar/);
+    assert.equal(autoOpened.structuredContent.openTarget, "codex_native_widget");
+    assert.equal(autoOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.match(autoOpened.content[0].text, /native widget opened/);
     assert.equal(autoOpened.structuredContent.activeCanvasContext, true);
     assert.equal(autoOpened.structuredContent.activeCanvasRouting.status, "active");
     assert.equal(autoOpened.structuredContent.canvasRouting.activeCanvasContext, true);
@@ -527,8 +565,8 @@ async function main() {
     assert.equal(opened.structuredContent.status, "opened");
     daemonToken = new URL(opened.structuredContent.url).searchParams.get("token") || daemonToken;
     assert.equal(opened.structuredContent.browserUrl, opened.structuredContent.url);
-    assert.equal(opened.structuredContent.openTarget, "codex_in_app_browser");
-    assert.equal(opened.structuredContent.externalBrowser.status, "skipped");
+    assert.equal(opened.structuredContent.openTarget, "codex_native_widget");
+    assert.equal(opened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(opened.structuredContent.activeCanvasContext, true);
     assert.equal(opened.structuredContent.canvasRouting.preferredTool, "write_canvasight_graph");
     assert.equal(opened.structuredContent.activeCanvasRouting.preferredMode, "append-page");
@@ -552,6 +590,8 @@ async function main() {
       }
     });
     assert.equal(recentOpened.structuredContent.status, "opened");
+    assert.equal(recentOpened.structuredContent.openTarget, "codex_native_widget");
+    assert.equal(recentOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(recentOpened.structuredContent.projectPath, projectPath);
     assert.equal(recentOpened.structuredContent.language, "zh");
     await request("tools/call", {

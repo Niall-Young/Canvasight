@@ -38,7 +38,7 @@ Canvasight 是一个 repo-local Codex 插件。它默认在 Codex native widget 
 
 ### 基础用法
 
-1. 在 Codex 中调用 `render_canvasight_canvas_widget` 打开 Canvasight；它会启动或复用项目级本地 daemon，并在 Codex native widget 中渲染画布。
+1. 在 Codex 中调用 `open_canvasight` 打开 Canvasight；它会启动或复用项目级本地 daemon，并在 Codex native widget 中渲染画布。
 2. 在浏览器画布里创建任务节点，填写提示词，按需要添加附件。
 3. 用连接线组织节点关系，或者在左上角创建多个 Page 管理不同工作区。
 4. 选择节点的 Codex 模式：Chat、Plan 或 Goal。
@@ -91,7 +91,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.30` 或更高版本。如果显示低于 `0.1.30`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.31` 或更高版本。如果显示低于 `0.1.31`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -110,6 +110,7 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 
 - `render_canvasight_canvas_widget`
 - `open_canvasight`
+- `open_canvasight_browser_fallback`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
 - `claim_canvasight_thread`
@@ -119,9 +120,9 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `await_canvasight_run`
 - `close_canvasight`
 
-`render_canvasight_canvas_widget` 会记住已打开项目并启动或复用项目级 daemon。它默认渲染 Codex native widget，Run 按钮通过 host bridge 发送 follow-up message 到当前 Codex thread，不需要 thread id，也不使用虚拟点击、辅助功能权限或剪贴板。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。
+`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认渲染 Codex native widget，Run 按钮通过 host bridge 发送 follow-up message 到当前 Codex thread，不需要 thread id，也不使用虚拟点击、辅助功能权限或剪贴板。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。`render_canvasight_canvas_widget` 保留为显式 widget 兼容入口。
 
-`open_canvasight` 保留为浏览器 URL fallback。它默认面向 Codex 侧边栏内置浏览器，不会直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里如果旧浏览器 fallback 已经打开，先调用 `claim_canvasight_thread` claim 最近项目或指定 `projectPath`；如果需要新 URL，再调用 `list_canvasight_recent_projects` 和 `open_canvasight_recent_project`。浏览器 fallback 点击 Run 会进入 daemon 队列，随后 `await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。native app-server `turn/start` 只作为显式诊断路径，accepted 不代表当前 Codex Desktop thread 已经可见收到消息。
+`open_canvasight_browser_fallback` 是浏览器 URL fallback。它默认面向 Codex 侧边栏内置浏览器，不会直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里如果旧浏览器 fallback 已经打开，先调用 `claim_canvasight_thread` claim 最近项目或指定 `projectPath`；如果需要重新进入正常 widget，调用 `open_canvasight` 或 `open_canvasight_recent_project`。浏览器 fallback 点击 Run 会进入 daemon 队列，随后 `await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。native app-server `turn/start` 只作为显式诊断路径，accepted 不代表当前 Codex Desktop thread 已经可见收到消息。
 
 `list_canvasight_node_templates` 返回本机全局节点模板摘要，供 AI 写图前低上下文扫描和复用；`get_canvasight_node_template` 只在选中某个候选模板后按 ID 读取完整正文和附件 metadata。`write_canvasight_graph` 让 Codex/AI 通过项目级 daemon 创建或替换 `.scatter/scatter.json` 里的 Page、节点和连线，并同步文档 revision 给当前网页会话。`mode` 决定 Page 写入行为，`graphType` 决定任务节点结构。默认模式是 `append-page`，适合在未明确要求覆盖时保护现有画布；只有在明确要覆盖内容时才使用 `replace-active-page` 或 `replace-document`。节点可传 `templateId` 或 `templateQuery` 复用模板标题、正文和附件。
 
@@ -196,23 +197,23 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **最近项目怎么恢复？**
 
-优先在新线程里调用 `render_canvasight_canvas_widget` 打开最近项目。如果旧浏览器 fallback 还开着，在新线程里先调用 `claim_canvasight_thread`；如果需要重新打开浏览器 URL，再调用 `list_canvasight_recent_projects` 和 `open_canvasight_recent_project`。
+优先在新线程里调用 `open_canvasight_recent_project` 或 `open_canvasight` 打开最近项目的 native widget。如果旧浏览器 fallback 还开着，在新线程里先调用 `claim_canvasight_thread`；如果需要重新打开浏览器 URL，再调用 `open_canvasight_browser_fallback`。
 
 **归档启动 Canvasight 的 thread 后，画布还会活着吗？**
 
-会。本地画布服务由项目级 daemon 托管，不再绑定打开它的 thread-local MCP 进程。归档旧 thread 后，从当前 thread 重新调用 `render_canvasight_canvas_widget` 即可得到当前 thread 的 widget bridge。旧浏览器 fallback tab 也可继续编辑；在新 thread 接收 fallback Run 前先调用 `claim_canvasight_thread`，后续 Run payload 会归属到新 thread 队列并等待 `await_canvasight_run` 接收。如果手动停止 daemon 或机器重启导致旧 URL 失效，再从当前 thread 重新打开最近项目即可。
+会。本地画布服务由项目级 daemon 托管，不再绑定打开它的 thread-local MCP 进程。归档旧 thread 后，从当前 thread 重新调用 `open_canvasight` 即可得到当前 thread 的 widget bridge。旧浏览器 fallback tab 也可继续编辑；在新 thread 接收 fallback Run 前先调用 `claim_canvasight_thread`，后续 Run payload 会归属到新 thread 队列并等待 `await_canvasight_run` 接收。如果手动停止 daemon 或机器重启导致旧 URL 失效，再从当前 thread 重新打开最近项目即可。
 
 **native widget 或内置浏览器打不开 Canvasight 怎么办？**
 
-正常入口是 `render_canvasight_canvas_widget`。如果 widget 没渲染，先确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。如果使用 `open_canvasight` 浏览器 fallback，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请打开完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight` 或 `open_canvasight_recent_project` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
+正常入口是 `open_canvasight`。如果 widget 没渲染，先确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请打开完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight_browser_fallback` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
 
 **当前 thread 怎么接收旧浏览器 fallback 里的 Run？**
 
-在当前 Codex thread 里调用 `claim_canvasight_thread`，传 `projectPath` 或 `sessionId`，让旧网页后续 Run payload 归属到当前线程。点击 Run 后应先直接出现在当前线程；如果 UI 或返回值提示 queued，再调用 `await_canvasight_run`。知道旧 URL 的 `sessionId` 可以传 `sessionId`，否则传 `projectPath`。
+在当前 Codex thread 里调用 `claim_canvasight_thread`，传 `projectPath` 或 `sessionId`，让旧网页后续 Run payload 归属到当前线程。浏览器 fallback 点击 Run 后会进入当前线程的 Canvasight 队列，再调用 `await_canvasight_run` 接收。知道旧 URL 的 `sessionId` 可以传 `sessionId`，否则传 `projectPath`。
 
 **Run 没有出现在当前 thread 怎么办？**
 
-先确认 Canvasight 是通过 `render_canvasight_canvas_widget` 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.30` 或更高。
+先确认 Canvasight 是通过 `open_canvasight` native widget 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight_browser_fallback` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.31` 或更高。
 
 **`close_canvasight` 会停止项目级 daemon 吗？**
 
@@ -270,7 +271,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 
 ### Basic Workflow
 
-1. Call `render_canvasight_canvas_widget` from Codex; it starts or reuses the project-level local daemon and renders Canvasight inside a Codex native widget.
+1. Call `open_canvasight` from Codex; it starts or reuses the project-level local daemon and renders Canvasight inside a Codex native widget.
 2. Create task nodes in the canvas, write prompts, and add attachments when needed.
 3. Connect nodes into flows, or create multiple Pages from the top-left Page switcher.
 4. Choose the node's Codex mode: Chat, Plan, or Goal.
@@ -323,7 +324,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.30` or newer. If it shows a version below `0.1.30`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.31` or newer. If it shows a version below `0.1.31`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -342,6 +343,7 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 
 - `render_canvasight_canvas_widget`
 - `open_canvasight`
+- `open_canvasight_browser_fallback`
 - `list_canvasight_recent_projects`
 - `open_canvasight_recent_project`
 - `claim_canvasight_thread`
@@ -351,9 +353,9 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 - `await_canvasight_run`
 - `close_canvasight`
 
-`render_canvasight_canvas_widget` remembers opened projects and starts or reuses the project-level daemon. It renders a Codex native widget by default, and the Run button sends a follow-up message to the current Codex thread through the host bridge without a thread id, virtual click, Accessibility automation, or clipboard paste. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path.
+`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It renders a Codex native widget by default, and the Run button sends a follow-up message to the current Codex thread through the host bridge without a thread id, virtual click, Accessibility automation, or clipboard paste. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path. `render_canvasight_canvas_widget` remains as an explicit widget compatibility entrypoint.
 
-`open_canvasight` remains the browser URL fallback. It targets Codex's in-app browser sidebar by default and does not launch the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, if an old browser fallback page is already open, call `claim_canvasight_thread` for the recent or explicit `projectPath`; call `list_canvasight_recent_projects` and `open_canvasight_recent_project` only when a fresh URL is needed. Clicking Run in a browser fallback queues the payload for `await_canvasight_run`. Native app-server `turn/start` is diagnostic only and an accepted request is not proof that the live Codex Desktop thread visibly received the Markdown. Normal plugin use does not require running `npm run dev`.
+`open_canvasight_browser_fallback` is the browser URL fallback. It targets Codex's in-app browser sidebar by default and does not launch the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, if an old browser fallback page is already open, call `claim_canvasight_thread` for the recent or explicit `projectPath`; call `open_canvasight` or `open_canvasight_recent_project` when you want the normal widget again. Clicking Run in a browser fallback queues the payload for `await_canvasight_run`. Native app-server `turn/start` is diagnostic only and an accepted request is not proof that the live Codex Desktop thread visibly received the Markdown. Normal plugin use does not require running `npm run dev`.
 
 `list_canvasight_node_templates` returns local global node template summaries so AI can scan and reuse them with low context cost. `get_canvasight_node_template` reads the full body and attachment metadata for one selected template id. `write_canvasight_graph` lets Codex/AI create or replace Pages, nodes, and edges in `.scatter/scatter.json` through the project-level daemon, and it synchronizes the document revision with current web sessions. `mode` controls Page write behavior, while `graphType` controls the task node structure. Its default mode is `append-page`, which protects existing canvas content when replacement was not explicitly requested. Use `replace-active-page` or `replace-document` only when replacing existing content is explicit. Nodes can pass `templateId` or `templateQuery` to reuse a template title, body, and attachments.
 
@@ -428,15 +430,15 @@ By default, no. `list_canvasight_node_templates` returns summaries and body prev
 
 **How do I recover a recent project?**
 
-Prefer calling `render_canvasight_canvas_widget` from the new thread. If an old browser fallback page is still open, call `claim_canvasight_thread` in the new thread. If you need to reopen a browser URL, call `list_canvasight_recent_projects`, then `open_canvasight_recent_project`.
+Prefer calling `open_canvasight_recent_project` or `open_canvasight` from the new thread to open the native widget. If an old browser fallback page is still open, call `claim_canvasight_thread` in the new thread. If you need to reopen a browser URL, call `open_canvasight_browser_fallback`.
 
 **Will the page stay alive after I archive the thread that opened Canvasight?**
 
-Yes. The local canvas service is hosted by the project-level daemon, not the thread-local MCP process that opened it. From the current thread, call `render_canvasight_canvas_widget` again to get that thread's widget bridge. Old browser fallback tabs can continue editing too; before receiving fallback Runs from a new thread, call `claim_canvasight_thread`, then receive them with `await_canvasight_run`. If the daemon is manually stopped or the machine restarts and the old URL becomes invalid, reopen the recent project from the current thread.
+Yes. The local canvas service is hosted by the project-level daemon, not the thread-local MCP process that opened it. From the current thread, call `open_canvasight` again to get that thread's widget bridge. Old browser fallback tabs can continue editing too; before receiving fallback Runs from a new thread, call `claim_canvasight_thread`, then receive them with `await_canvasight_run`. If the daemon is manually stopped or the machine restarts and the old URL becomes invalid, reopen the recent project from the current thread.
 
 **What if the native widget or in-app browser cannot open Canvasight?**
 
-The normal entrypoint is `render_canvasight_canvas_widget`. If the widget does not render, first confirm the plugin version was updated and open a new Codex thread or reload the session; older threads may still use stale tool or resource metadata. If you use the `open_canvasight` browser fallback, it verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url`, not only the `origin`. If it still cannot load, call `open_canvasight` or `open_canvasight_recent_project` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
+The normal entrypoint is `open_canvasight`. If the widget does not render, first confirm the plugin version was updated and open a new Codex thread or reload the session; older threads may still use stale tool or resource metadata. If you use `open_canvasight_browser_fallback`, it verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url`, not only the `origin`. If it still cannot load, call `open_canvasight_browser_fallback` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
 
 **How does the current thread receive a Run from an old browser fallback tab?**
 
@@ -444,7 +446,7 @@ Call `claim_canvasight_thread` with `projectPath` or `sessionId` from the curren
 
 **What if Run does not appear in the current thread?**
 
-First confirm Canvasight was opened with `render_canvasight_canvas_widget`; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.30` or newer.
+First confirm Canvasight was opened with `open_canvasight` native widget output; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight_browser_fallback` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.31` or newer.
 
 **Does `close_canvasight` stop the project-level daemon?**
 

@@ -59,6 +59,6 @@ If `layout` is omitted, Canvasight may choose a default from `graphType`. This d
 
 ## After Writing
 
-After writing a graph, call `open_canvasight` or `open_canvasight_recent_project` when the user wants to inspect it in the browser.
+After writing a graph, call `open_canvasight` or `open_canvasight_recent_project` when the user wants to inspect it in Canvasight. Use `open_canvasight_browser_fallback` only when an explicit browser fallback is needed.
 
 `write_canvasight_graph` writes through the Canvasight daemon and advances the project document revision. If the web app is already open on that project, it should detect the newer revision and reload; if a stale browser session tries to save, the daemon rejects the save with `stale_document` so old in-memory state cannot overwrite the graph that was just generated.

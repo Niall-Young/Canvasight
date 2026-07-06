@@ -14,22 +14,22 @@ codex plugin list
 
 Connection refused usually means the URL points at an old thread-local dev server or stale daemon port.
 
-Use `open_canvasight` or `open_canvasight_recent_project` to get a fresh full `browserUrl`. Do not reuse only the old origin.
+Use `open_canvasight_browser_fallback` to get a fresh full `browserUrl` when browser fallback is explicitly needed. For normal use, call `open_canvasight` or `open_canvasight_recent_project` to render the native widget.
 
 ## Native Widget Does Not Render
 
-Normal Canvasight use should call `render_canvasight_canvas_widget`. The tool result must include `openai/outputTemplate: ui://widget/canvasight/canvas.html`, and the resource must be readable through `resources/read`.
+Normal Canvasight use should call `open_canvasight`. The tool result must include `openai/outputTemplate: ui://widget/canvasight/canvas.html`, and the resource must be readable through `resources/read`.
 
 If the widget does not render:
 
 1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
 2. Open a new Codex thread or reload the session so the new MCP tool descriptor and widget resource metadata are loaded.
-3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, and `render_canvasight_canvas_widget` all pass.
-4. Use `open_canvasight` as a browser fallback while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
+3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, `open_canvasight`, and `render_canvasight_canvas_widget` all pass.
+4. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
 
 ## Opens In System Browser
 
-`open_canvasight` should target Codex's in-app browser sidebar and should not launch the system default browser unless `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` is explicitly set for development debugging. If an old plugin cache still opens Safari or Chrome directly, reinstall `canvasight@canvasight-local` and start a new Codex thread.
+`open_canvasight_browser_fallback` should target Codex's in-app browser sidebar and should not launch the system default browser unless `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` is explicitly set for development debugging. Normal `open_canvasight` should render the native widget. If an old plugin cache still opens Safari or Chrome directly, reinstall `canvasight@canvasight-local` and start a new Codex thread.
 
 ## Archived Opening Thread
 
@@ -37,9 +37,9 @@ The native widget sends Run output to the thread that owns the widget, so it doe
 
 ## Run Does Not Appear In Codex
 
-Canvasight Run should arrive as a normal follow-up turn when the canvas was opened with `render_canvasight_canvas_widget`. The widget uses the Codex host bridge, not a thread id, virtual click, clipboard paste, or localhost browser trick. If clicking Run only changes the UI and no Codex turn appears, check these in order:
+Canvasight Run should arrive as a normal follow-up turn when the canvas was opened with `open_canvasight` native widget output. The widget uses the Codex host bridge, not a thread id, virtual click, clipboard paste, or localhost browser trick. If clicking Run only changes the UI and no Codex turn appears, check these in order:
 
-1. Confirm the canvas was opened through `render_canvasight_canvas_widget`, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
+1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
 2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
 3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasight-frame`, and `canvasight:send-follow-up`.
 4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. If the Run still does not appear, call `await_canvasight_run` with `sessionId` or `projectPath`.

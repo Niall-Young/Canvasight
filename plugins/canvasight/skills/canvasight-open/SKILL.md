@@ -9,13 +9,13 @@ Use this skill to open or recover Canvasight through MCP.
 
 ## Workflow
 
-1. Prefer `render_canvasight_canvas_widget` for normal use. It opens Canvasight as a Codex native widget, and Run can send a follow-up message to the current thread through the host bridge.
-2. If the current Codex thread does not expose `render_canvasight_canvas_widget`, report that the thread is using stale plugin tools and should be reloaded or replaced before promising direct Run delivery.
-3. Use `open_canvasight` when widget rendering is unavailable or the user needs the in-app browser/dev page. This fallback must claim the current thread before Run so the daemon can scope the queued payload for `await_canvasight_run`; native app-server delivery is diagnostic only unless a future verified host bridge proves current-thread visibility.
+1. Prefer `open_canvasight` for normal use. It opens Canvasight as a Codex native widget by default, and Run can send a follow-up message to the current thread through the host bridge.
+2. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering. If neither `open_canvasight` nor the widget alias exposes `openai/outputTemplate`, report that the thread is using stale plugin tools and should be reloaded or replaced before promising direct Run delivery.
+3. Use `open_canvasight_browser_fallback` only when widget rendering is unavailable or the user explicitly needs the in-app browser/dev page. This fallback must claim the current thread before Run so the daemon can scope the queued payload for `await_canvasight_run`; native app-server delivery is diagnostic only unless a future verified host bridge proves current-thread visibility.
 4. If Canvasight MCP tools are unavailable and you must open the already running dev page with generic browser control, read the current shell `CODEX_THREAD_ID` and open `http://127.0.0.1:5173/?threadId=<current-thread-id>`. Do not open bare `http://127.0.0.1:5173/` for a thread that expects Run delivery.
 5. If a browser fallback URL is returned, open the full `browserUrl` / `url`, including query parameters, in Codex's in-app Browser/sidebar. Do not navigate only to the origin.
 6. If an old browser page is already open and the user moved to a new Codex thread, call `claim_canvasight_thread` before Run. Browser fallback Runs should be received with `await_canvasight_run` when the UI says the payload was queued.
-7. Use `list_canvasight_recent_projects` and `open_canvasight_recent_project` when the user wants the last Canvasight project from a new Codex thread and no widget/browser page is currently usable.
+7. Use `list_canvasight_recent_projects` and `open_canvasight_recent_project` when the user wants the last Canvasight project from a new Codex thread; `open_canvasight_recent_project` also defaults to the native widget.
 8. Call `close_canvasight` only when the specific session is no longer needed. It does not stop the project-level daemon.
 
 Normal plugin use should not ask the user to run `npm run dev`. The plugin daemon serves the built app and is meant to outlive a thread-local MCP process.

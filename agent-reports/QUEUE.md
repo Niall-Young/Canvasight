@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-2202-development-solution-open-defaults-widget.md` - changed default `open_canvasight` path to native widget and split browser fallback into an explicit tool.
+- `agent-reports/resolved/20260706-2202-integration-summary-open-defaults-widget.md` - integrated default native widget opening, explicit browser fallback, docs, tests, version 0.1.31, validation, and plugin reinstall.
+- `agent-reports/resolved/20260706-2150-development-issue-open-defaults-browser-not-widget.md` - resolved default Canvasight open path using browser fallback and causing Run queue instead of widget direct delivery.
 - `agent-reports/resolved/20260706-2141-integration-summary-run-false-sent-drops-payload.md` - integrated false-sent removal, queue-first fallback, docs/tests/version, and browser-visible verification.
 - `agent-reports/resolved/20260706-2141-development-solution-run-false-sent-drops-payload.md` - implemented queue-first Run fallback and removed unverified sent semantics.
 - `agent-reports/resolved/20260706-2128-development-issue-run-false-sent-drops-payload.md` - resolved browser/dev Run showing sent while current thread had no message and payload was not queued.

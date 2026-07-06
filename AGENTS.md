@@ -4,7 +4,7 @@
 
 Canvasight is an early-stage repo-local Codex plugin. The active product lives under `plugins/canvasight` as a Vite, React, TypeScript, XYFlow, Zustand, and Radix UI application. Preserve room for the final stack, but do not treat the repository as an empty baseline anymore.
 
-The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Normal plugin use renders Canvasight inside a Codex native widget through `render_canvasight_canvas_widget`; running a node or flow sends Markdown to the current Codex thread through the widget host bridge. Browser URLs and bare dev pages are fallback/development surfaces that queue Run payloads for `await_canvasight_run`; native app-server `turn/start` is an explicit diagnostic path and is not proof that the live Codex Desktop thread visibly received a message.
+The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Normal plugin use renders Canvasight inside a Codex native widget through `open_canvasight`; running a node or flow sends Markdown to the current Codex thread through the widget host bridge. Browser URLs and bare dev pages are fallback/development surfaces that queue Run payloads for `await_canvasight_run`; native app-server `turn/start` is an explicit diagnostic path and is not proof that the live Codex Desktop thread visibly received a message.
 
 Use `design.md` as the product and UI design baseline when adding user-facing screens.
 
@@ -111,7 +111,7 @@ Canvasight is currently implemented as a repo-local Codex plugin under `plugins/
 
 Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasight`:
 
-- Normal plugin opening should use `render_canvasight_canvas_widget`, which renders the Canvasight native widget and lets Run send a follow-up message to the current Codex thread through the host bridge. Use `open_canvasight` only as a browser fallback or debugging path.
+- Normal plugin opening should use `open_canvasight`, which renders the Canvasight native widget and lets Run send a follow-up message to the current Codex thread through the host bridge. Use `open_canvasight_browser_fallback` only as a browser fallback or debugging path.
 - `npm run dev` starts or reuses the project-level persistent Canvasight dev server at `http://127.0.0.1:5173/`. The command exits after the server is ready; archiving the launching Codex thread should not stop the dev server. Bare dev Run uses only the daemon's latest `claim_canvasight_thread` binding for the project or an explicit URL `threadId` claim. It must not fall back to the dev server process `CODEX_THREAD_ID`; when no claim exists, it returns `unbound_dev_session`. When a claim exists, the payload is queued for `await_canvasight_run` unless a future verified host bridge can prove current-thread delivery.
 - `npm run dev:stop` stops the persistent Canvasight dev server.
 - `npm run dev:status` reports whether the persistent Canvasight dev server is running.
