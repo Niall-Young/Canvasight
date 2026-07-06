@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-1612-integration-summary-app-server-settings-required.md` - integrated required `collaborationMode.settings` support for Codex app-server Run delivery.
+- `agent-reports/resolved/20260706-1612-development-solution-app-server-settings-required.md` - added default/plan settings payloads and strict app-server smoke assertions.
+- `agent-reports/resolved/20260706-1606-development-issue-app-server-settings-required.md` - resolved `Invalid request: missing field settings` after real Canvasight Run clicks.
 - `agent-reports/resolved/20260706-1557-integration-summary-run-click-not-delivered.md` - integrated the fix for real Run clicks not starting a Codex turn because app-server payloads contained null values.
 - `agent-reports/resolved/20260706-1557-development-solution-run-click-not-delivered.md` - removed null optional fields from Codex app-server requests and tightened native smoke tests.
 - `agent-reports/resolved/20260706-1549-product-issue-run-click-not-delivered.md` - resolved real Canvasight Run clicks queueing instead of sending to the current Codex thread.

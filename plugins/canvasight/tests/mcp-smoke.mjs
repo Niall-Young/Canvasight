@@ -60,6 +60,10 @@ function handle(message) {
     write({ id: message.id, error: { code: -32602, message: "Invalid request: null values are not accepted" } });
     return;
   }
+  if (message.method === "thread/settings/update" && !message.params?.collaborationMode?.settings) {
+    write({ id: message.id, error: { code: -32602, message: "Invalid request: missing field settings" } });
+    return;
+  }
   if (message.method === "thread/goal/set") {
     write({ id: message.id, result: { goal: { threadId: message.params.threadId, objective: message.params.objective, status: "active", tokensUsed: 0, timeUsedSeconds: 0, createdAt: 0, updatedAt: 0 } } });
     return;
@@ -1249,7 +1253,8 @@ async function main() {
         (entry) =>
           entry.method === "thread/settings/update" &&
           entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "default"
+          entry.params.collaborationMode.mode === "default" &&
+          Object.keys(entry.params.collaborationMode.settings).length === 0
       ),
       true
     );
@@ -1279,6 +1284,16 @@ async function main() {
     assert.equal(directRun.codexTurn.action, "turn/start");
     assert.equal(directRun.codexTurn.threadId, "thread-smoke");
     const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
+    assert.equal(
+      directRunLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "default" &&
+          Object.keys(entry.params.collaborationMode.settings).length === 0
+      ),
+      true
+    );
     assert.equal(
       directRunLog.some(
         (entry) =>
@@ -1331,7 +1346,8 @@ async function main() {
         (entry) =>
           entry.method === "thread/settings/update" &&
           entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "plan"
+          entry.params.collaborationMode.mode === "plan" &&
+          entry.params.collaborationMode.settings.reasoning_effort === "medium"
       ),
       true
     );
@@ -1514,6 +1530,16 @@ async function main() {
       assert.equal(crossSent.codexNative.threadId, "thread-smoke-b");
       assert.equal(crossSent.codexTurn.threadId, "thread-smoke-b");
       const crossLog = (await readNativeLog()).slice(crossLogOffset);
+      assert.equal(
+        crossLog.some(
+          (entry) =>
+            entry.method === "thread/settings/update" &&
+            entry.params.threadId === "thread-smoke-b" &&
+            entry.params.collaborationMode.mode === "plan" &&
+            entry.params.collaborationMode.settings.reasoning_effort === "medium"
+        ),
+        true
+      );
       assert.equal(crossLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b"), true);
 
       const drained = await mcpB.request("tools/call", {
@@ -1601,6 +1627,16 @@ async function main() {
       assert.equal(claimedRun.codexNative.threadId, "thread-smoke-c");
       assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
       const claimNativeLog = (await readNativeLog()).slice(claimLogOffset);
+      assert.equal(
+        claimNativeLog.some(
+          (entry) =>
+            entry.method === "thread/settings/update" &&
+            entry.params.threadId === "thread-smoke-c" &&
+            entry.params.collaborationMode.mode === "default" &&
+            Object.keys(entry.params.collaborationMode.settings).length === 0
+        ),
+        true
+      );
       assert.equal(
         claimNativeLog.some(
           (entry) =>

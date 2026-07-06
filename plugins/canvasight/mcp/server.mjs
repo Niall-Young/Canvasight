@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.20";
+const SERVER_VERSION = "0.1.21";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
@@ -2248,12 +2248,10 @@ function appServerRequest(method, params, { experimentalApi = false } = {}) {
 function codexCollaborationMode(mode) {
   const settings = {};
   if (mode === "plan") settings.reasoning_effort = "medium";
-  return Object.keys(settings).length
-    ? {
-        mode,
-        settings
-      }
-    : { mode };
+  return {
+    mode,
+    settings
+  };
 }
 
 function goalObjectiveFromRun(payload) {

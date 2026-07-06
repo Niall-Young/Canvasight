@@ -57,6 +57,10 @@ function handle(message) {
     write({ id: message.id, error: { code: -32602, message: "Invalid request: null values are not accepted" } });
     return;
   }
+  if (message.method === "thread/settings/update" && !message.params?.collaborationMode?.settings) {
+    write({ id: message.id, error: { code: -32602, message: "Invalid request: missing field settings" } });
+    return;
+  }
   if (message.method === "thread/goal/set") {
     write({ id: message.id, result: { goal: { threadId: message.params.threadId, objective: message.params.objective, status: "active" } } });
     return;
@@ -239,6 +243,10 @@ async function main() {
     assert.equal(runResult.codexNative.status, "applied");
     assert.equal(runResult.codexTurn.threadId, "thread-dev-smoke");
     const nativeLog = await readNativeLog();
+    const settingsEntry = nativeLog.find((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-dev-smoke");
+    assert.ok(settingsEntry);
+    assert.equal(settingsEntry.params.collaborationMode.mode, "default");
+    assert.deepEqual(settingsEntry.params.collaborationMode.settings, {});
     const turnEntry = nativeLog.find((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke");
     assert.ok(turnEntry);
     assert.equal(turnEntry.params.cwd, opened.project.path);
@@ -279,6 +287,16 @@ async function main() {
     assert.equal(reboundRun.delivery.via, "turn/start");
     assert.equal(reboundRun.codexTurn.threadId, "thread-dev-claimed");
     const reboundLog = (await readNativeLog()).slice(reboundLogOffset);
+    assert.equal(
+      reboundLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-dev-claimed" &&
+          entry.params.collaborationMode.mode === "default" &&
+          Object.keys(entry.params.collaborationMode.settings).length === 0
+      ),
+      true
+    );
     assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed"), true);
     assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke"), false);
 
@@ -350,6 +368,16 @@ async function main() {
     assert.equal(claimedRun.delivery.via, "turn/start");
     assert.equal(claimedRun.codexTurn.threadId, "thread-claimed-dev");
     const claimedLog = (await readNativeLog()).slice(claimedLogOffset);
+    assert.equal(
+      claimedLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-claimed-dev" &&
+          entry.params.collaborationMode.mode === "default" &&
+          Object.keys(entry.params.collaborationMode.settings).length === 0
+      ),
+      true
+    );
     assert.equal(
       claimedLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev"),
       true
