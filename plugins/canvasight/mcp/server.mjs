@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.29";
+const SERVER_VERSION = "0.1.30";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -224,8 +224,8 @@ function optionalThreadId(threadId) {
 
 function nativeCodexEnabled() {
   const value = String(process.env.CANVASIGHT_CODEX_NATIVE || "").trim().toLowerCase();
-  if (!value) return true;
-  return !(value === "0" || value === "false" || value === "off" || value === "no");
+  if (!value) return false;
+  return value === "1" || value === "true" || value === "on" || value === "yes";
 }
 
 function nativeCodexTimeoutMs() {
@@ -2889,8 +2889,9 @@ async function dispatchRunToCodexThread(session, payload) {
     const codexTurn = await startCodexTurn(codexNative.threadId || session.codexThreadId, payload);
     payload.codexTurn = codexTurn;
     return {
-      status: "sent",
-      via: "turn/start",
+      status: "queued",
+      reason: "turn_start_unverified",
+      via: "await_canvasight_run",
       threadId: codexTurn.threadId,
       codexNative,
       codexTurn

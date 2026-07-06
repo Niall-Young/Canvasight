@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260706-2141-integration-summary-run-false-sent-drops-payload.md` - integrated false-sent removal, queue-first fallback, docs/tests/version, and browser-visible verification.
+- `agent-reports/resolved/20260706-2141-development-solution-run-false-sent-drops-payload.md` - implemented queue-first Run fallback and removed unverified sent semantics.
+- `agent-reports/resolved/20260706-2128-development-issue-run-false-sent-drops-payload.md` - resolved browser/dev Run showing sent while current thread had no message and payload was not queued.
 - `agent-reports/resolved/20260706-2059-integration-summary-run-wrong-thread-toast-width.md` - integrated explicit dev-thread claim routing and compact Run toast.
 - `agent-reports/resolved/20260706-2059-development-solution-run-wrong-thread-toast-width.md` - removed stale `CODEX_THREAD_ID` dev fallback and added URL/local claim handling.
 - `agent-reports/resolved/20260706-2059-development-issue-run-wrong-thread-toast-width.md` - resolved Run being sent to an old thread while the UI claimed current-thread success.

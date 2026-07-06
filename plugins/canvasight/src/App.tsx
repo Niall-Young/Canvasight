@@ -1625,11 +1625,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         if (runResult.delivery?.status === "awaited") {
           setRunStatus(t("status.awaitedAssistant"), "positive");
         } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-          setRunStatus(t("status.sentBoundThread"), "positive");
+          setRunStatus(t("status.browserFallbackQueued"), "negative");
         } else if (
           runResult.delivery?.reason === "native_direct_disabled" ||
           runResult.codexNative?.reason === "native_direct_disabled" ||
-          runResult.delivery?.codexNative?.reason === "native_direct_disabled"
+          runResult.delivery?.codexNative?.reason === "native_direct_disabled" ||
+          runResult.delivery?.reason === "turn_start_unverified"
         ) {
           setRunStatus(t("status.browserFallbackQueued"), "negative");
         } else if (runResult.codexTurn?.error || runResult.delivery?.codexTurn?.error || runResult.codexNative?.error || runResult.delivery?.codexNative?.error) {
@@ -1654,7 +1655,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             if (runResult.delivery?.status === "awaited") {
               setRunStatus(t("status.awaitedAssistant"), "positive");
             } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-              setRunStatus(t("status.sentBoundThread"), "positive");
+              setRunStatus(t("status.browserFallbackQueued"), "negative");
             } else if (reason) {
               setRunStatus(t("status.queuedAssistantWithReason", { reason }), "negative");
             } else {

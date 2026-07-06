@@ -25,7 +25,7 @@ If the widget does not render:
 1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
 2. Open a new Codex thread or reload the session so the new MCP tool descriptor and widget resource metadata are loaded.
 3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, and `render_canvasight_canvas_widget` all pass.
-4. Use `open_canvasight` as a browser fallback while investigating widget host support. Tell the user this fallback lacks the widget bridge, but after `claim_canvasight_thread` it should target the current thread through daemon native `turn/start`; queued Runs are the fallback, not the normal result.
+4. Use `open_canvasight` as a browser fallback while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
 
 ## Opens In System Browser
 
@@ -60,7 +60,7 @@ Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automa
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It sends Run payloads to the daemon session resolved from the latest `claim_canvasight_thread` project binding, or falls back to the Vite process `CODEX_THREAD_ID`; if neither exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. By default the resolved daemon session attempts native app-server `turn/start`; if that fails or `CANVASIGHT_CODEX_NATIVE=0` is explicitly set, the payload is queued for `await_canvasight_run` with a reason.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It queues Run payloads against the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Native app-server `turn/start` may be enabled only for diagnostics, and accepted requests still stay queued because they are not proof of live thread visibility.
 
 ## Validation Commands
 

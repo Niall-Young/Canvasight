@@ -151,7 +151,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
     CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
-    CANVASIGHT_CODEX_NATIVE: "",
+    CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
@@ -276,7 +276,7 @@ function createMcpClient(label, envOverrides = {}) {
       CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
-      CANVASIGHT_CODEX_NATIVE: "",
+      CANVASIGHT_CODEX_NATIVE: "1",
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
       CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
       CANVASIGHT_OPEN_BROWSER: "0",
@@ -1398,9 +1398,10 @@ async function main() {
       method: "POST",
       body: JSON.stringify(directRunPayload)
     });
-    assert.equal(directRun.status, "sent");
-    assert.equal(directRun.delivery.status, "sent");
-    assert.equal(directRun.delivery.via, "turn/start");
+    assert.equal(directRun.status, "queued");
+    assert.equal(directRun.delivery.status, "queued");
+    assert.equal(directRun.delivery.reason, "turn_start_unverified");
+    assert.equal(directRun.delivery.via, "await_canvasight_run");
     assert.equal(directRun.codexNative.status, "applied");
     assert.equal(directRun.codexNative.action, "chat/no-settings-update");
     assert.equal(directRun.codexTurn.status, "started");
@@ -1442,7 +1443,9 @@ async function main() {
         timeoutMs: 20
       }
     });
-    assert.equal(directRunDrained.structuredContent.status, "timeout");
+    assert.equal(directRunDrained.structuredContent.status, "received");
+    assert.equal(directRunDrained.structuredContent.markdown, directRunPayload.markdown);
+    assert.equal(directRunDrained.structuredContent.delivery.reason, "turn_start_unverified");
 
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     const resumeFailureRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
@@ -1682,8 +1685,10 @@ async function main() {
         method: "POST",
         body: JSON.stringify(crossPayload)
       });
-      assert.equal(crossSent.status, "sent");
-      assert.equal(crossSent.delivery.status, "sent");
+      assert.equal(crossSent.status, "queued");
+      assert.equal(crossSent.delivery.status, "queued");
+      assert.equal(crossSent.delivery.reason, "turn_start_unverified");
+      assert.equal(crossSent.delivery.via, "await_canvasight_run");
       assert.equal(crossSent.delivery.threadId, "thread-smoke-b");
       assert.equal(crossSent.codexNative.threadId, "thread-smoke-b");
       assert.equal(crossSent.codexTurn.threadId, "thread-smoke-b");
@@ -1717,7 +1722,9 @@ async function main() {
           timeoutMs: 20
         }
       });
-      assert.equal(drained.structuredContent.status, "timeout");
+      assert.equal(drained.structuredContent.status, "received");
+      assert.equal(drained.structuredContent.markdown, crossPayload.markdown);
+      assert.equal(drained.structuredContent.delivery.reason, "turn_start_unverified");
     } finally {
       mcpB.stop();
     }
@@ -1789,9 +1796,10 @@ async function main() {
         method: "POST",
         body: JSON.stringify(claimedPayload)
       });
-      assert.equal(claimedRun.status, "sent");
-      assert.equal(claimedRun.delivery.status, "sent");
-      assert.equal(claimedRun.delivery.via, "turn/start");
+      assert.equal(claimedRun.status, "queued");
+      assert.equal(claimedRun.delivery.status, "queued");
+      assert.equal(claimedRun.delivery.reason, "turn_start_unverified");
+      assert.equal(claimedRun.delivery.via, "await_canvasight_run");
       assert.equal(claimedRun.codexNative.threadId, "thread-smoke-c");
       assert.equal(claimedRun.codexNative.action, "chat/no-settings-update");
       assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
@@ -1826,6 +1834,16 @@ async function main() {
       assert.equal(claimNativeLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke"), false);
       const oldWaiterResult = await oldWaiter;
       assert.equal(oldWaiterResult.structuredContent.status, "timeout");
+      const claimedDrained = await mcpC.request("tools/call", {
+        name: "await_canvasight_run",
+        arguments: {
+          projectPath: persistentProjectPath,
+          timeoutMs: 20
+        }
+      });
+      assert.equal(claimedDrained.structuredContent.status, "received");
+      assert.equal(claimedDrained.structuredContent.markdown, claimedPayload.markdown);
+      assert.equal(claimedDrained.structuredContent.delivery.reason, "turn_start_unverified");
     } finally {
       mcpOldWaiter.stop();
       mcpC.stop();

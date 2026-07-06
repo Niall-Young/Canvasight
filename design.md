@@ -71,7 +71,7 @@ These modes should be represented as a segmented control or similarly compact op
 
 Run is a submit action, not a Markdown preview action. A successful Run should report whether the payload was sent to the current Codex thread, delivered to a waiting thread, or queued for `await_canvasight_run`. Markdown preview remains a separate drawer command for reviewing generated content and must not be used as the only visual proof that a Run was sent.
 
-Normal plugin Run delivery happens from the Codex native widget host bridge. Browser URL and bare dev-server surfaces are fallback contexts; they require an explicit current-thread claim before daemon direct delivery and may queue the payload for `await_canvasight_run`. The app must label unbound, queued, sent-to-bound-thread, and current-thread widget states distinctly.
+Normal plugin Run delivery happens from the Codex native widget host bridge. Browser URL and bare dev-server surfaces are fallback contexts; they require an explicit current-thread claim before the payload can be scoped to a thread queue. The app must not label app-server `turn/start` acceptance as sent unless the live host bridge proves current-thread visibility. It must label unbound, queued, and current-thread widget sent states distinctly.
 
 ## Icon Semantics
 

@@ -5,7 +5,7 @@ Canvasight Run can arrive in two ways:
 - Native widget delivery: the Canvasight Codex widget receives the host bridge and sends the Run as a follow-up message to the current Codex thread.
 - Await fallback: browser/dev fallback pages queue the payload, then the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
 
-Default plugin Run clicks should come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before daemon direct delivery; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. A `sent` result from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown.
+Default plugin Run clicks should come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before they can be queued for that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. A `sent` result from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown, so browser/dev fallback must not use it as success proof.
 
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 

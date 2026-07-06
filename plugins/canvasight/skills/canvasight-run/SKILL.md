@@ -9,13 +9,13 @@ Use this skill to handle Canvasight Run payloads and their Codex mode.
 
 ## Workflow
 
-1. If the Run arrived as a normal Codex follow-up turn from the Canvasight native widget or daemon direct-delivery path, use that Markdown directly.
-2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so the daemon targets the current thread for direct `turn/start` delivery. A bare `5173` page without an explicit claim must be treated as unbound, not as a sent Run.
+1. If the Run arrived as a normal Codex follow-up turn from the Canvasight native widget host bridge, use that Markdown directly.
+2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so the daemon scopes the Run to the current thread queue. A bare `5173` page without an explicit claim must be treated as unbound, not as a sent Run.
 3. If the user already clicked Run but no Codex turn appeared, call `await_canvasight_run`. If the current thread's Canvasight MCP transport is missing or closed, state that the fallback queue cannot be consumed from this stale thread and require a reload/new thread with current Canvasight tools.
 4. Prefer `sessionId` when available; use `projectPath` to attach to the next queued Run from any active session in that project.
 5. Treat returned Markdown and `structuredContent` as the source of truth for the next Codex action.
 6. If `structuredContent.agentTeam.enabled` is true, use `canvasight-agent-team` before executing the task.
 
-Normal Canvasight Run delivery should come from the Codex native widget host bridge or the project daemon's native app-server `turn/start` path after the current thread has explicitly claimed the project/session. Browser URLs and bare dev pages should not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; if direct delivery fails, queue the payload for `await_canvasight_run` with the returned reason.
+Normal Canvasight Run delivery should come from the Codex native widget host bridge. Browser URLs and bare dev pages should not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; otherwise queue the payload for `await_canvasight_run` with the returned reason. A native app-server `turn/start` accepted response is diagnostic only and is not evidence that the live Codex Desktop thread visibly received the Markdown.
 
 For native Chat, Plan, and Goal handling, read `references/run-output-contract.md`.

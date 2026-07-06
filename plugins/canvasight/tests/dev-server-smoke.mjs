@@ -304,30 +304,33 @@ async function main() {
         threadName: "Claimed Dev Server Run"
       })
     });
-    assert.equal(reboundRun.status, "sent");
-    assert.equal(reboundRun.delivery.via, "turn/start");
-    assert.equal(reboundRun.codexNative.action, "chat/no-settings-update");
-    assert.equal(reboundRun.codexTurn.threadId, "thread-dev-claimed");
+    assert.equal(reboundRun.status, "queued");
+    assert.equal(reboundRun.delivery.status, "queued");
+    assert.equal(reboundRun.delivery.reason, "native_direct_disabled");
+    assert.equal(reboundRun.delivery.via, "await_canvasight_run");
+    assert.equal(reboundRun.codexNative.status, "disabled");
+    assert.equal(reboundRun.codexNative.reason, "native_direct_disabled");
+    assert.equal(reboundRun.codexTurn.status, "skipped");
     const reboundLog = (await readNativeLog()).slice(reboundLogOffset);
     assert.equal(reboundLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(reboundLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-claimed").length, 1);
-    assert.equal(
-      reboundLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-dev-claimed" &&
-          entry.params.collaborationMode.mode === "default" &&
-          Object.keys(entry.params.collaborationMode.settings).length === 0
-      ),
-      false
-    );
-    assert.equal(reboundLog.filter((entry) => entry.method === "turn/start").length, 1);
-    assert.ok(
-      reboundLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-claimed") <
-        reboundLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed")
-    );
-    assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed"), true);
+    assert.equal(reboundLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(reboundLog.filter((entry) => entry.method === "turn/start").length, 0);
     assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke"), false);
+    const reboundDaemon = await readDaemonState(canvasightHome);
+    const reboundAwaited = await fetchJson(`${reboundDaemon.origin}/api/runs/await`, {
+      method: "POST",
+      headers: {
+        "x-canvasight-token": reboundDaemon.token
+      },
+      body: JSON.stringify({
+        projectPath: opened.project.path,
+        threadId: "thread-dev-claimed",
+        timeoutMs: 20
+      })
+    });
+    assert.equal(reboundAwaited.status, "received");
+    assert.equal(reboundAwaited.markdown, "# Claimed Dev Server Run\\n\\nThis should be delivered to the claimed thread.");
+    assert.equal(reboundAwaited.delivery.reason, "native_direct_disabled");
 
     const status = run("status");
     assert.equal(status.status, 0, status.stderr || status.stdout);
@@ -393,32 +396,31 @@ async function main() {
         threadName: "Claimed Dev Run"
       })
     });
-    assert.equal(claimedRun.status, "sent");
-    assert.equal(claimedRun.delivery.via, "turn/start");
-    assert.equal(claimedRun.codexNative.action, "chat/no-settings-update");
-    assert.equal(claimedRun.codexTurn.threadId, "thread-claimed-dev");
+    assert.equal(claimedRun.status, "queued");
+    assert.equal(claimedRun.delivery.status, "queued");
+    assert.equal(claimedRun.delivery.reason, "native_direct_disabled");
+    assert.equal(claimedRun.delivery.via, "await_canvasight_run");
+    assert.equal(claimedRun.codexNative.status, "disabled");
+    assert.equal(claimedRun.codexNative.reason, "native_direct_disabled");
+    assert.equal(claimedRun.codexTurn.status, "skipped");
     const claimedLog = (await readNativeLog()).slice(claimedLogOffset);
     assert.equal(claimedLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(claimedLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-claimed-dev").length, 1);
-    assert.equal(
-      claimedLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-claimed-dev" &&
-          entry.params.collaborationMode.mode === "default" &&
-          Object.keys(entry.params.collaborationMode.settings).length === 0
-      ),
-      false
-    );
-    assert.equal(claimedLog.filter((entry) => entry.method === "turn/start").length, 1);
-    assert.ok(
-      claimedLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-claimed-dev") <
-        claimedLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev")
-    );
-    assert.equal(
-      claimedLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev"),
-      true
-    );
+    assert.equal(claimedLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(claimedLog.filter((entry) => entry.method === "turn/start").length, 0);
+    const claimedAwaited = await fetchJson(`${unboundDaemon.origin}/api/runs/await`, {
+      method: "POST",
+      headers: {
+        "x-canvasight-token": unboundDaemon.token
+      },
+      body: JSON.stringify({
+        projectPath: unboundOpened.project.path,
+        threadId: "thread-claimed-dev",
+        timeoutMs: 20
+      })
+    });
+    assert.equal(claimedAwaited.status, "received");
+    assert.equal(claimedAwaited.markdown, "# Claimed Dev Run");
+    assert.equal(claimedAwaited.delivery.reason, "native_direct_disabled");
 
     const queuedStarted = run("start", {
       canvasightHome: queuedCanvasightHome,
