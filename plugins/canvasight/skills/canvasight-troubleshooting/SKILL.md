@@ -11,9 +11,10 @@ Use this skill for Canvasight runtime, install, and recovery problems.
 
 1. Classify the delivery path first: browser fallback, direct widget app, legacy widget iframe, bridge connected, or queued fallback.
 2. Check whether the issue is plugin install/cache, native widget host bridge, daemon state, browser URL, or project `.scatter` data.
-3. Verify the resolved plugin version with `codex plugin list` when tool availability or stale behavior is the issue.
-4. Prefer `open_canvasight` or recent-project recovery over asking the user to run `npm run dev` for normal plugin recovery.
-5. Use `npm run dev` / `npm run dev:stop` only for local development preview, not normal plugin usage.
-6. Run the narrowest relevant validation before claiming a fix.
+3. When `open_canvasight` is missing from the active tool list, call `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` before using browser fallback or declaring tools unavailable.
+4. Verify the resolved plugin version with `codex plugin list` when tool availability or stale behavior is the issue.
+5. Prefer `open_canvasight` or recent-project recovery over asking the user to run `npm run dev` for normal plugin recovery.
+6. Use `npm run dev` / `npm run dev:stop` only for local development preview, not normal plugin usage.
+7. Run the narrowest relevant validation before claiming a fix.
 
 For detailed symptoms and fixes, read `references/troubleshooting.md`.

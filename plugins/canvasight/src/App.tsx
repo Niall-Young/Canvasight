@@ -156,6 +156,7 @@ function CanvasightDiagnosticsPanel({ diagnostics, lastRun, onClose }: Diagnosti
         <DiagnosticsRow label={t("diagnostics.currentUrl")} value={diagnostics.href} />
         <DiagnosticsRow label={t("diagnostics.inIframe")} value={boolValue(diagnostics.inIframe)} />
         <DiagnosticsRow label={t("diagnostics.canvasightHost")} value={diagnostics.canvasightHost || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.nativeWidget")} value={boolValue(diagnostics.canvasightHost === "widget")} />
         <DiagnosticsRow label={t("diagnostics.windowOpenAI")} value={boolValue(diagnostics.hasWindowOpenAI)} />
         <DiagnosticsRow label={t("diagnostics.canvasightMcp")} value={boolValue(diagnostics.hasCanvasightMcp)} />
         <DiagnosticsRow label={t("diagnostics.canSendFollowUp")} value={boolValue(diagnostics.canSendFollowUpMessage)} />
@@ -1715,7 +1716,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setSelectedRunMode(mode);
         setRunStatus(t("status.sentAssistant"), "positive");
       } catch (error) {
-        setRunStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"), "negative");
+        const message = error instanceof Error ? error.message : t("status.sendAssistantFailed");
+        setRunStatus(message.includes("reason=browser_fallback_no_bridge") ? t("status.browserFallbackNoBridge") : message, "negative");
       }
     },
     [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]

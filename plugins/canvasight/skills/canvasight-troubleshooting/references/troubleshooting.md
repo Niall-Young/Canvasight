@@ -2,6 +2,8 @@
 
 ## Missing Or Stale Plugin Tools
 
+If `open_canvasight` is missing from the active tool list, call `tool_search` with `canvasight open_canvasight render_canvasight_canvas_widget` before deciding Canvasight tools are unavailable. Canvasight tools may be lazy-loaded. If `tool_search` exposes a native widget tool, use it. If it still does not, report `native_canvasight_tool_unavailable` and ask the user to reload or open a new thread instead of opening localhost as normal recovery.
+
 If `codex plugin list` shows an old Canvasight version, reinstall the repo-local plugin and open a new Codex thread or reload the session. Existing threads may not hot-refresh newly installed MCP tools.
 
 ```bash
@@ -14,7 +16,7 @@ codex plugin list
 
 Connection refused usually means the URL points at an old thread-local dev server or stale daemon port.
 
-Use `open_canvasight_browser_fallback` to get a fresh full `browserUrl` when browser fallback is explicitly needed. For normal use, call `open_canvasight` or `open_canvasight_recent_project` to render the native widget.
+Use `open_canvasight_browser_fallback` to get a fresh full `browserUrl` only when browser fallback is explicitly needed. For normal use, call `open_canvasight` or `open_canvasight_recent_project` to render the native widget; use `tool_search` first if those tools are not visible.
 
 ## Native Widget Does Not Render
 
@@ -40,6 +42,7 @@ Interpretation:
 - `bridgeTransport=mcp_ui_message`: the standard MCP Apps `ui/message` bridge is ready.
 - `bridgeTransport=openai_compat_followup`: the Codex/OpenAI compatibility `window.openai.sendFollowUpMessage` bridge is ready.
 - `canSendFollowUpMessage() === true`: frontend can ask a native widget host bridge to send a follow-up.
+- `bridgeReason=browser_fallback_no_bridge`: the current page is browser fallback/dev, not a native widget. Stop debugging bridge transports from that page and reopen through `open_canvasight` after `tool_search`.
 - `delivery.status === "sent"` and `delivery.via === "widget_bridge"`: host bridge `sendMessage` accepted the Run.
 - `delivery.reason === "browser_fallback_requires_await"`: payload is queued; use `await_canvasight_run`.
 
@@ -55,7 +58,7 @@ The native widget sends Run output to the thread that owns the widget, so it doe
 
 Canvasight Run should arrive as a normal follow-up turn when the canvas was opened with `open_canvasight` native widget output. The widget uses the Codex host bridge, not a thread id, virtual click, clipboard paste, or localhost browser trick. If clicking Run only changes the UI and no Codex turn appears, check these in order:
 
-1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
+1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL. If `open_canvasight` was not visible, call `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` and then open the native widget.
 2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
 3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasightAppBundleSource`, `__CANVASIGHT_WIDGET_DATA__`, `mcpApp.sendMessage`, `window.openai.sendFollowUpMessage`, and `canvasight:send-follow-up`. Also inspect the native open tool result: public `structuredContent` should not contain the daemon URL, while `_meta.widgetData.url` should. Diagnostics should include `bridgeTransport` and a specific `bridgeReason`, not only a generic bridge-not-ready message.
 4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. Browser fallback cannot show sent; call `await_canvasight_run` with `sessionId` or `projectPath`.
@@ -78,7 +81,7 @@ Normal plugin use should not require `npm run dev`. That command is for local de
 
 If a `127.0.0.1:5173` page reports `Canvasight daemon did not start in time`, first run `npm run dev:status` from `plugins/canvasight`. A `stale ... serverVersion=<old> expected=<current>` status means the persistent managed Vite process was started by an older Canvasight version and is still serving old API middleware. Run `npm run dev`; since `0.1.35` it stops the stale managed process and starts a fresh dev server.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. A generic dev fallback URL should include `threadId`; Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.39`, browser/dev fallback is diagnostic-only for Run delivery: claimed Runs queue for `await_canvasight_run` and must not report app-server `turn/start` as sent. Since `0.1.40`, only explicit browser fallback returns a browser URL publicly; native open hides daemon URLs in `_meta.widgetData`. Since `0.1.41`, native widget diagnostics distinguish `mcp_ui_message`, `openai_compat_followup`, and concrete bridge failure reasons.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. Do not use generic browser control to open it for normal Canvasight recovery; use `tool_search` and `open_canvasight` instead. A generic dev fallback URL should include `threadId` only when the user explicitly asks for browser fallback/dev inspection. Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.39`, browser/dev fallback is diagnostic-only for Run delivery: claimed Runs queue for `await_canvasight_run` and must not report app-server `turn/start` as sent. Since `0.1.40`, only explicit browser fallback returns a browser URL publicly; native open hides daemon URLs in `_meta.widgetData`. Since `0.1.41`, native widget diagnostics distinguish `mcp_ui_message`, `openai_compat_followup`, and concrete bridge failure reasons. Since `0.1.42`, `browser_fallback_no_bridge` is treated as an opening-path error, not a host bridge transport failure.
 
 ## Validation Commands
 

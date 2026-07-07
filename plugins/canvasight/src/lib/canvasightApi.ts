@@ -400,9 +400,13 @@ function bridgeNotReadyError(): Error {
   const state = widgetBridgeState();
   const canvasightHost = new URLSearchParams(window.location.search).get("canvasightHost") || widgetRuntimeData().canvasightHost || "";
   const reason = state.reason || (canvasightHost === "widget" ? "openai_followup_missing" : "browser_fallback_no_bridge");
+  const headline =
+    reason === "browser_fallback_no_bridge"
+      ? "Current Canvasight page is browser fallback/dev page, not a native widget. It has no native widget host bridge; reopen Canvasight with open_canvasight after tool_search, or receive queued fallback Runs with await_canvasight_run."
+      : "Canvasight native widget host bridge is not ready.";
   return new Error(
     [
-      "Canvasight native widget host bridge is not ready.",
+      headline,
       `reason=${reason}`,
       `bridgeTransport=${state.bridgeTransport || "none"}`,
       `mcpInitialized=${Boolean(state.mcpInitialized)}`,

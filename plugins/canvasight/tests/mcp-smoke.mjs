@@ -21,6 +21,33 @@ assert.equal(packageJson.version, expectedPluginVersion);
 assert.equal(packageLockJson.version, expectedPluginVersion);
 assert.equal(packageLockJson.packages[""].version, expectedPluginVersion);
 
+function assertOpenFlowSkillContract() {
+  const openSkill = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-open", "SKILL.md"), "utf8");
+  const openWorkflow = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-open", "references", "open-workflow.md"), "utf8");
+  const runSkill = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-run", "SKILL.md"), "utf8");
+  const troubleshooting = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-troubleshooting", "references", "troubleshooting.md"), "utf8");
+  const appSource = fs.readFileSync(path.join(pluginRoot, "src", "App.tsx"), "utf8");
+  const apiSource = fs.readFileSync(path.join(pluginRoot, "src", "lib", "canvasightApi.ts"), "utf8");
+  const translationsSource = fs.readFileSync(path.join(pluginRoot, "src", "lib", "translations.ts"), "utf8");
+
+  assert.match(openSkill, /tool_search/);
+  assert.match(openSkill, /canvasight open_canvasight render_canvasight_canvas_widget/);
+  assert.match(openSkill, /native_canvasight_tool_unavailable/);
+  assert.match(openWorkflow, /tool_search/);
+  assert.match(openWorkflow, /Do not open `127\.0\.0\.1:5173` as the normal recovery path/);
+  assert.match(runSkill, /browser_fallback_no_bridge/);
+  assert.match(troubleshooting, /browser_fallback_no_bridge/);
+  assert.match(troubleshooting, /Do not use generic browser control to open it for normal Canvasight recovery/);
+  assert.match(appSource, /status\.browserFallbackNoBridge/);
+  assert.match(appSource, /diagnostics\.nativeWidget/);
+  assert.match(apiSource, /reason === "browser_fallback_no_bridge"/);
+  assert.match(translationsSource, /status\.browserFallbackNoBridge/);
+  assert.doesNotMatch(openWorkflow, /only practical fallback is the generic dev server/);
+  assert.doesNotMatch(openSkill, /must open the already running dev page with generic browser control/);
+}
+
+assertOpenFlowSkillContract();
+
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
 const canvasightHome = path.join(tempRoot, "canvasight-home");

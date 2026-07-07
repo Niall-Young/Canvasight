@@ -7,6 +7,8 @@ Canvasight Run can arrive in two ways:
 
 Default plugin Run clicks must come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before their queued payloads can target that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. Do not use app-server `turn/start`, virtual clicks, clipboard, Accessibility, or DOM automation as a Run success path.
 
+If a Run toast or diagnostics shows `browser_fallback_no_bridge`, classify it as an opening-path error: the current page is browser fallback/dev, not a native widget. Do not keep debugging host bridge transports from that page. Reopen Canvasight through `open_canvasight`; if the native tool is not visible, call `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` before declaring the thread stale.
+
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 
 Then read `structuredContent.agentTeam`.
