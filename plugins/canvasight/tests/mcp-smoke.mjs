@@ -463,12 +463,16 @@ async function main() {
     });
     assert.equal(widgetResource.contents[0].uri, "ui://widget/canvasight/canvas.html");
     assert.equal(widgetResource.contents[0].mimeType, "text/html;profile=mcp-app");
-    assert.match(widgetResource.contents[0].text, /canvasight-frame/);
-    assert.match(widgetResource.contents[0].text, /canvasightHost/);
-    assert.match(widgetResource.contents[0].text, /canvasight:send-follow-up/);
-    assert.match(widgetResource.contents[0].text, /sendMessage/);
+    const widgetHtml = widgetResource.contents[0].text;
+    assert.match(widgetHtml, /id="root"/);
+    assert.doesNotMatch(widgetHtml, /<iframe\b/i);
+    assert.match(widgetHtml, /canvasightAppBundleSource/);
+    assert.match(widgetHtml, /__CANVASIGHT_WIDGET_DATA__/);
+    assert.match(widgetHtml, /canvasightHost/);
+    assert.match(widgetHtml, /canvasight:send-follow-up/);
+    assert.match(widgetHtml, /sendMessage/);
     assert.ok(
-      widgetResource.contents[0].text.indexOf('id="canvasight-frame"') < widgetResource.contents[0].text.indexOf('id="canvasightMcpHostBridge"')
+      widgetHtml.indexOf('id="root"') < widgetHtml.indexOf('id="canvasightMcpHostBridge"')
     );
 
     const widgetOpened = await request("tools/call", {

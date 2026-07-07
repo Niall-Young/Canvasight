@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1203-integration-summary-native-widget-direct-app.md` - integrated the native widget direct-app fix, agent reviews, verification, docs, and residual risks.
+- `agent-reports/resolved/20260707-1203-development-solution-native-widget-direct-app.md` - implemented native widget direct app hosting instead of localhost iframe and documented residual host risks.
+- `agent-reports/resolved/20260707-1147-development-issue-native-widget-iframe-blocked.md` - resolved Codex native widget content being blocked by removing the actual localhost iframe from the widget resource.
 - `agent-reports/resolved/20260707-1127-integration-summary-current-thread-mcp-transport-closed.md` - diagnosed that the current screenshot is correct browser fallback and the live thread MCP transport is closed.
 - `agent-reports/resolved/20260707-1031-integration-summary-run-delivery-confirmation.md` - integrated confirmed Run delivery semantics, diagnostics, docs, skills, tests, and version 0.1.32.
 - `agent-reports/resolved/20260707-1031-development-solution-run-delivery-confirmation.md` - implemented app-server notification confirmation, explicit queued fallback, and Run status diagnostics.

@@ -106,16 +106,71 @@ interface WidgetFollowUpMessage {
   prompt: string;
 }
 
+interface CanvasightWidgetRuntimeData {
+  apiBaseUrl?: string;
+  browserUrl?: string;
+  canvasightHost?: string;
+  codexThreadId?: string | null;
+  origin?: string;
+  sessionId?: string;
+  threadId?: string | null;
+  token?: string;
+  url?: string;
+}
+
+type CanvasightWindow = Window &
+  typeof globalThis & {
+    __CANVASIGHT_WIDGET_DATA__?: CanvasightWidgetRuntimeData;
+    canvasightMcp?: {
+      sendFollowUpMessage?: (message: WidgetFollowUpMessage) => Promise<unknown>;
+    };
+    openai?: unknown;
+  };
+
+function widgetRuntimeData(): CanvasightWidgetRuntimeData {
+  return ((window as CanvasightWindow).__CANVASIGHT_WIDGET_DATA__ ?? {}) as CanvasightWidgetRuntimeData;
+}
+
+function tokenFromRuntimeUrl(): string {
+  const runtime = widgetRuntimeData();
+  const url = runtime.url || runtime.browserUrl || "";
+  if (!url) return "";
+  try {
+    return new URL(url).searchParams.get("token") || "";
+  } catch {
+    return "";
+  }
+}
+
+function apiBaseUrl(): string {
+  const runtime = widgetRuntimeData();
+  const explicitBase = runtime.apiBaseUrl || runtime.origin || "";
+  if (explicitBase) return explicitBase;
+  const url = runtime.url || runtime.browserUrl || "";
+  if (!url) return "";
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "";
+  }
+}
+
+function apiUrl(path: string): string {
+  const baseUrl = apiBaseUrl();
+  if (!baseUrl) return path;
+  return new URL(path, baseUrl).toString();
+}
+
 function sessionIdFromUrl(): string {
-  return new URLSearchParams(window.location.search).get("sessionId") || "local";
+  return new URLSearchParams(window.location.search).get("sessionId") || widgetRuntimeData().sessionId || "local";
 }
 
 function sessionTokenFromUrl(): string {
-  return new URLSearchParams(window.location.search).get("token") || "";
+  return new URLSearchParams(window.location.search).get("token") || widgetRuntimeData().token || tokenFromRuntimeUrl();
 }
 
 export function threadIdFromUrl(): string {
-  return new URLSearchParams(window.location.search).get("threadId") || "";
+  return new URLSearchParams(window.location.search).get("threadId") || widgetRuntimeData().threadId || widgetRuntimeData().codexThreadId || "";
 }
 
 const templateStorageKey = "canvasight.nodeTemplates";
@@ -252,7 +307,7 @@ function shouldUseLocalTemplateStore(error: unknown): boolean {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = sessionTokenFromUrl();
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -282,21 +337,20 @@ function createRequestId(): string {
 }
 
 function canAttemptWidgetFollowUp(): boolean {
-  return window.parent !== window && new URLSearchParams(window.location.search).get("canvasightHost") === "widget";
+  const bridgeWindow = window as CanvasightWindow;
+  return (
+    (window.parent !== window && new URLSearchParams(window.location.search).get("canvasightHost") === "widget") ||
+    widgetRuntimeData().canvasightHost === "widget" ||
+    typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function"
+  );
 }
 
 export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
   const query = new URLSearchParams(window.location.search);
-  const bridgeWindow = window as Window &
-    typeof globalThis & {
-      canvasightMcp?: {
-        sendFollowUpMessage?: unknown;
-      };
-      openai?: unknown;
-    };
+  const bridgeWindow = window as CanvasightWindow;
   return {
     canSendFollowUpMessage: canAttemptWidgetFollowUp(),
-    canvasightHost: query.get("canvasightHost"),
+    canvasightHost: query.get("canvasightHost") || widgetRuntimeData().canvasightHost || null,
     hasCanvasightMcp: Boolean(bridgeWindow.canvasightMcp),
     hasCanvasightMcpSendFollowUp: typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function",
     hasWindowOpenAI: Boolean(bridgeWindow.openai),
@@ -310,6 +364,10 @@ export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
 
 function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9000): Promise<void> {
   if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight widget bridge is not available."));
+  const directBridge = (window as CanvasightWindow).canvasightMcp?.sendFollowUpMessage;
+  if (typeof directBridge === "function") {
+    return directBridge(message).then(() => undefined);
+  }
   const requestId = createRequestId();
 
   return new Promise((resolve, reject) => {

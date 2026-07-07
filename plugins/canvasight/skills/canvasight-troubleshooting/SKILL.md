@@ -9,7 +9,7 @@ Use this skill for Canvasight runtime, install, and recovery problems.
 
 ## Checklist
 
-1. Classify the delivery path first: browser fallback, widget iframe, bridge connected, verified app-server, or queued fallback.
+1. Classify the delivery path first: browser fallback, direct widget app, legacy widget iframe, bridge connected, verified app-server, or queued fallback.
 2. Check whether the issue is plugin install/cache, native widget host bridge, daemon state, browser URL, or project `.scatter` data.
 3. Verify the resolved plugin version with `codex plugin list` when tool availability or stale behavior is the issue.
 4. Prefer `open_canvasight` or recent-project recovery over asking the user to run `npm run dev` for normal plugin recovery.

@@ -29,13 +29,14 @@ If the widget does not render:
 
 ## Diagnostics Panel
 
-Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
+Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe or direct widget app, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
 
 Interpretation:
 
-- `parent === window`: browser fallback or dev page, not a widget.
-- `parent !== window` plus `canvasightHost=widget`: widget iframe candidate.
-- `canSendFollowUpMessage() === true`: frontend can ask the widget shell to send a follow-up.
+- `canvasightHost=widget` plus `window.canvasightMcp`: native widget app candidate. It may run directly in the widget document rather than inside an iframe.
+- `parent === window` without `canvasightHost=widget`: browser fallback or dev page, not a widget.
+- `parent !== window` plus `canvasightHost=widget`: legacy widget iframe candidate.
+- `canSendFollowUpMessage() === true`: frontend can ask the widget host bridge to send a follow-up.
 - `delivery.status === "sent"` and `delivery.via === "codex_app_server"`: only valid when `codexTurn.confirmed === true`.
 - `delivery.reason === "turn_start_unverified"`: payload is queued; use `await_canvasight_run`.
 
@@ -53,7 +54,7 @@ Canvasight Run should arrive as a normal follow-up turn when the canvas was open
 
 1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
 2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
-3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasight-frame`, and `canvasight:send-follow-up`.
+3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasightAppBundleSource`, `__CANVASIGHT_WIDGET_DATA__`, and `canvasight:send-follow-up`.
 4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. If the Run still does not appear, call `await_canvasight_run` with `sessionId` or `projectPath`.
 5. If a bare dev page returns `code: "unbound_dev_session"`, it has no claimed Codex thread. Claim the project from the intended thread or reopen Canvasight through the plugin.
 

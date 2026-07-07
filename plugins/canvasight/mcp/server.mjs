@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.32";
+const SERVER_VERSION = "0.1.33";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -2016,25 +2016,35 @@ function closeSession(sessionIdValue) {
   return true;
 }
 
+function responseHeaders(headers = {}) {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type, x-canvasight-token",
+    "access-control-allow-private-network": "true",
+    ...headers
+  };
+}
+
 function sendJson(res, statusCode, payload) {
   const body = JSON.stringify(payload);
-  res.writeHead(statusCode, {
+  res.writeHead(statusCode, responseHeaders({
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body)
-  });
+  }));
   res.end(body);
 }
 
 function sendNoContent(res) {
-  res.writeHead(204);
+  res.writeHead(204, responseHeaders());
   res.end();
 }
 
 function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-8") {
-  res.writeHead(statusCode, {
+  res.writeHead(statusCode, responseHeaders({
     "content-type": contentType,
     "content-length": Buffer.byteLength(text)
-  });
+  }));
   res.end(text);
 }
 
@@ -2185,9 +2195,30 @@ function openExternalBrowser(url) {
 }
 
 let cachedMcpAppsGlobalScript = "";
+let cachedInlineCanvasightApp = null;
 
 function escapeInlineScript(source) {
   return source.replaceAll("</script", "<\\/script").replaceAll("</SCRIPT", "<\\/SCRIPT");
+}
+
+function escapeInlineStyle(source) {
+  return source.replaceAll("</style", "<\\/style").replaceAll("</STYLE", "<\\/STYLE");
+}
+
+function inlineCanvasightApp() {
+  if (cachedInlineCanvasightApp) return cachedInlineCanvasightApp;
+  const indexPath = path.join(distRoot, "index.html");
+  const indexHtml = fs.readFileSync(indexPath, "utf8");
+  const scriptMatch = indexHtml.match(/<script[^>]+src="([^"]+)"[^>]*><\/script>/);
+  const styleMatch = indexHtml.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"[^>]*>/);
+  if (!scriptMatch) throw new Error("Could not find Canvasight app bundle in dist/index.html.");
+  const scriptPath = path.join(distRoot, scriptMatch[1].replace(/^\//, ""));
+  const stylePath = styleMatch ? path.join(distRoot, styleMatch[1].replace(/^\//, "")) : "";
+  cachedInlineCanvasightApp = {
+    script: fs.readFileSync(scriptPath, "utf8"),
+    style: stylePath ? fs.readFileSync(stylePath, "utf8") : ""
+  };
+  return cachedInlineCanvasightApp;
 }
 
 function parseExportMap(body) {
@@ -2339,19 +2370,49 @@ function canvasightWidgetBridgeScript() {
   }
 
   function setFrameSource(payload) {
-    if (!payload || !frame) return;
+    if (!payload) return;
     const url = payload.browserUrl || payload.url;
     if (!url) return;
     toolOutput = payload;
-    publishHostGlobals({
-      toolOutput: payload,
-      toolResponseMetadata: payload,
-    });
     const frameUrl = new URL(url);
     frameUrl.searchParams.set("canvasightHost", "widget");
+    const widgetData = {
+      ...payload,
+      apiBaseUrl: payload.origin || frameUrl.origin,
+      canvasightHost: "widget",
+      sessionId: payload.sessionId || frameUrl.searchParams.get("sessionId") || "local",
+      token: frameUrl.searchParams.get("token") || payload.token || "",
+      url: frameUrl.toString(),
+      browserUrl: frameUrl.toString(),
+    };
+    globalThis.__CANVASIGHT_WIDGET_DATA__ = widgetData;
+    publishHostGlobals({
+      toolOutput: widgetData,
+      toolResponseMetadata: widgetData,
+      widgetData,
+    });
+    window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: widgetData }));
     const href = frameUrl.toString();
-    if (frame.src !== href) frame.src = href;
+    if (frame) {
+      if (frame.src !== href) frame.src = href;
+    } else {
+      startCanvasightApp();
+    }
     setStatus("Canvasight ready", "ok");
+  }
+
+  function startCanvasightApp() {
+    if (document.getElementById("canvasight-app-module")) return;
+    const source = document.getElementById("canvasightAppBundleSource");
+    if (!source) {
+      setStatus("Canvasight app bundle is missing.", "error");
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "canvasight-app-module";
+    script.type = "module";
+    script.textContent = source.textContent || "";
+    document.body.appendChild(script);
   }
 
   function handleToolResult(result) {
@@ -2465,14 +2526,18 @@ function canvasightWidgetBridgeScript() {
 }
 
 function canvasightWidgetHtml() {
+  const app = inlineCanvasightApp();
   const bridgeBundle = escapeInlineScript(mcpAppsGlobalScript());
   const bridgeScript = escapeInlineScript(canvasightWidgetBridgeScript());
+  const appScript = escapeInlineScript(app.script);
+  const appStyle = escapeInlineStyle(app.style);
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Canvasight</title>
+  <style id="canvasightAppStyles">${appStyle}</style>
   <style>
     html, body {
       width: 100%;
@@ -2490,7 +2555,7 @@ function canvasightWidgetHtml() {
       min-height: 0;
       background: #f7f7f7;
     }
-    #canvasight-frame {
+    #root, #canvasight-frame {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -2528,16 +2593,11 @@ function canvasightWidgetHtml() {
     }
   </style>
   <script id="canvasightMcpAppsBundle">${bridgeBundle}</script>
+  <script id="canvasightAppBundleSource" type="text/plain">${appScript}</script>
 </head>
 <body>
   <div id="canvasight-widget-root">
-    <iframe
-      id="canvasight-frame"
-      title="Canvasight"
-      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-modals"
-      allow="clipboard-read; clipboard-write"
-      referrerpolicy="no-referrer"
-    ></iframe>
+    <div id="root"></div>
     <div id="canvasight-widget-status" role="status" aria-live="polite"></div>
   </div>
   <script id="canvasightMcpHostBridge">${bridgeScript}</script>
@@ -3123,10 +3183,10 @@ async function serveStatic(req, res, url) {
       sendText(res, 404, "Not found");
       return;
     }
-    res.writeHead(200, {
+    res.writeHead(200, responseHeaders({
       "content-type": mimeFromPath(target),
       "content-length": stat.size
-    });
+    }));
     fs.createReadStream(target).pipe(res);
   } catch {
     sendText(res, 404, "Not found");
@@ -3139,10 +3199,10 @@ async function serveAsset(req, res, url) {
   if (!isScatterAssetPath(assetPath) && !isTemplateAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
   const stat = await fsp.stat(assetPath);
   if (!stat.isFile()) throw new HttpError(404, "Asset not found");
-  res.writeHead(200, {
+  res.writeHead(200, responseHeaders({
     "content-type": mimeFromPath(assetPath),
     "content-length": stat.size
-  });
+  }));
   fs.createReadStream(assetPath).pipe(res);
 }
 
