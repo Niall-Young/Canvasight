@@ -31,7 +31,6 @@ interface CanvasNodeProps extends HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
   onCopy?: () => void;
   onDelete?: () => void;
-  onRunCurrentNode?: () => void;
   onAddInput?: () => void;
   onAddLeft?: () => void;
   onAddRight?: () => void;
@@ -64,7 +63,6 @@ export function CanvasNode({
   onMenu,
   onPlanModeChange,
   onRun,
-  onRunCurrentNode,
   onUploadFiles,
   planMode = true,
   prompt,
@@ -131,15 +129,6 @@ export function CanvasNode({
             </TooltipAnchor>
             {nodeMenuOpen ? (
               <DropdownMenu className="kit-canvas-node-actions-menu" role="menu">
-                <DropdownMenuItem
-                  icon="play"
-                  label={t("task.runNodeOnly")}
-                  role="menuitem"
-                  onClick={() => {
-                    onRunCurrentNode?.();
-                    setNodeMenuOpen(false);
-                  }}
-                />
                 <DropdownMenuItem
                   icon="copy"
                   label={t("task.copy")}

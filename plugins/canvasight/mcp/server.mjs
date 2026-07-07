@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.38";
+const SERVER_VERSION = "0.1.39";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -1922,8 +1922,27 @@ async function enqueueRun(session, payload) {
     };
     completeWaiter(waiter, normalized);
   } else {
-    normalized.delivery = await dispatchRunToCodexThread(session, normalized);
-    if (normalized.delivery.status !== "sent") session.runQueue.push(normalized);
+    normalized.codexNative = {
+      status: "pending",
+      reason: "await_canvasight_run_required",
+      threadId: session.codexThreadId || null,
+      mode: normalized.codexMode
+    };
+    normalized.codexTurn = {
+      status: "skipped",
+      reason: "browser_fallback_requires_await",
+      threadId: session.codexThreadId || null,
+      mode: normalized.codexMode
+    };
+    normalized.delivery = {
+      status: "queued",
+      reason: "browser_fallback_requires_await",
+      via: "await_canvasight_run",
+      threadId: session.codexThreadId || null,
+      codexNative: normalized.codexNative,
+      codexTurn: normalized.codexTurn
+    };
+    session.runQueue.push(normalized);
   }
   return normalized;
 }
@@ -1931,23 +1950,18 @@ async function enqueueRun(session, payload) {
 async function prepareWidgetRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
   normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
-  normalized.codexNative = {
-    status: "not_applicable",
-    reason: "widget_bridge",
-    threadId: null,
-    mode: normalized.codexMode
-  };
+  normalized.codexNative = await applyWidgetCodexMode(session, normalized);
   normalized.codexTurn = {
     status: "skipped",
-    reason: "widget_bridge",
-    threadId: null,
+    reason: "widget_bridge_sendMessage",
+    threadId: normalized.codexNative.threadId || null,
     mode: normalized.codexMode
   };
   normalized.delivery = {
     status: "prepared",
-    reason: "widget_bridge",
+    reason: "widget_bridge_mode_applied",
     via: "widget_bridge",
-    threadId: null,
+    threadId: normalized.codexNative.threadId || null,
     codexNative: normalized.codexNative,
     codexTurn: normalized.codexTurn
   };
@@ -2466,7 +2480,6 @@ function canvasightWidgetBridgeScript() {
     }
     const script = document.createElement("script");
     script.id = "canvasight-app-module";
-    script.type = "module";
     script.textContent = source.textContent || "";
     document.body.appendChild(script);
   }
@@ -3014,71 +3027,11 @@ async function setCodexGoal(threadId, payload) {
   ).then((results) => results[1] || {});
 }
 
-function runImageInputs(payload) {
-  return (payload.imagePaths || [])
-    .filter((imagePath) => typeof imagePath === "string" && imagePath)
-    .map((imagePath) => ({
-      type: "localImage",
-      path: imagePath
-    }));
-}
-
-function runTurnInput(payload) {
-  return [
-    {
-      type: "text",
-      text: payload.markdown || "",
-      text_elements: []
-    },
-    ...runImageInputs(payload)
-  ];
-}
-
 function turnIdFromResult(result) {
   if (isObject(result?.turn) && typeof result.turn.id === "string") return result.turn.id;
   if (typeof result?.turnId === "string") return result.turnId;
   if (typeof result?.id === "string") return result.id;
   return null;
-}
-
-async function startCodexTurn(threadId, payload) {
-  const clientUserMessageId = `canvasight-${payload.sessionId}-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
-  const params = {
-    threadId,
-    clientUserMessageId,
-    input: runTurnInput(payload)
-  };
-  if (payload.projectPath) params.cwd = payload.projectPath;
-  if (payload.effort) params.effort = payload.effort;
-  const result = await appServerRequestSequence(
-    [
-      {
-        method: "thread/resume",
-        params: {
-          threadId
-        }
-      },
-      {
-        method: "turn/start",
-        params,
-        confirmTurnStart: true,
-        threadId,
-        clientUserMessageId
-      }
-    ],
-    { experimentalApi: true }
-  ).then((results) => results[1] || {});
-  const confirmation = result.canvasightConfirmation || null;
-  return {
-    status: "started",
-    action: "turn/start",
-    threadId,
-    mode: payload.codexMode,
-    turnId: turnIdFromResult(result),
-    clientUserMessageId,
-    confirmed: Boolean(confirmation),
-    confirmation
-  };
 }
 
 async function applyCodexNativeMode(session, payload) {
@@ -3102,9 +3055,10 @@ async function applyCodexNativeMode(session, payload) {
 
   try {
     if (payload.codexMode === "chat") {
+      await setCodexCollaborationMode(session.codexThreadId, "default");
       return {
         status: "applied",
-        action: "chat/no-settings-update",
+        action: "thread/settings/update",
         threadId: session.codexThreadId,
         mode: payload.codexMode,
         collaborationMode: "default"
@@ -3140,69 +3094,29 @@ async function applyCodexNativeMode(session, payload) {
   }
 }
 
-async function dispatchRunToCodexThread(session, payload) {
+function appliedWidgetModeStatus(mode) {
+  if (mode === "goal") return "applied_goal";
+  if (mode === "plan") return "applied_plan";
+  return "applied_chat";
+}
+
+function codexNativeModeApplied(status) {
+  return status === "applied" || status === "applied_chat" || status === "applied_plan" || status === "applied_goal";
+}
+
+async function applyWidgetCodexMode(session, payload) {
   const codexNative = await applyCodexNativeMode(session, payload);
-  payload.codexNative = codexNative;
-
   if (codexNative.status !== "applied") {
-    payload.codexTurn = {
-      status: "skipped",
-      reason: "native_mode_not_applied",
-      threadId: codexNative.threadId,
-      mode: payload.codexMode
-    };
-    return {
-      status: "queued",
-      reason: codexNative.reason || codexNative.error || "native_mode_not_applied",
-      via: "await_canvasight_run",
-      threadId: codexNative.threadId,
-      codexNative,
-      codexTurn: payload.codexTurn
-    };
+    const reason = codexNative.error || codexNative.reason || "Codex native mode was not applied";
+    throw new HttpError(502, `Canvasight Run blocked before sendMessage: ${reason}`, {
+      code: "codex_mode_not_applied",
+      codexNative
+    });
   }
-
-  try {
-    const codexTurn = await startCodexTurn(codexNative.threadId || session.codexThreadId, payload);
-    payload.codexTurn = codexTurn;
-    if (codexTurn.confirmed) {
-      return {
-        status: "sent",
-        reason: "turn_start_confirmed",
-        via: "codex_app_server",
-        threadId: codexTurn.threadId,
-        codexNative,
-        codexTurn
-      };
-    }
-    return {
-      status: "queued",
-      reason: "turn_start_unverified",
-      via: "await_canvasight_run",
-      threadId: codexTurn.threadId,
-      codexNative,
-      codexTurn
-    };
-  } catch (error) {
-    const failedMethod = typeof error?.canvasightAppServerMethod === "string" ? error.canvasightAppServerMethod : "turn/start";
-    const failedReason = failedMethod === "thread/resume" ? "thread_resume_failed" : "turn_start_failed";
-    payload.codexTurn = {
-      status: "failed",
-      action: failedMethod,
-      error: error?.message || "Codex turn/start request failed",
-      appServerArgs: typeof error?.canvasightAppServerArgs === "string" ? error.canvasightAppServerArgs : undefined,
-      stderr: typeof error?.canvasightAppServerStderr === "string" ? error.canvasightAppServerStderr : undefined,
-      threadId: codexNative.threadId || session.codexThreadId,
-      mode: payload.codexMode
-    };
-    return {
-      status: "queued",
-      reason: failedReason,
-      via: "await_canvasight_run",
-      threadId: codexNative.threadId || session.codexThreadId,
-      codexNative,
-      codexTurn: payload.codexTurn
-    };
-  }
+  return {
+    ...codexNative,
+    status: appliedWidgetModeStatus(payload.codexMode)
+  };
 }
 
 function staticTarget(urlPath) {
@@ -4024,7 +3938,7 @@ async function toolAwaitCanvasightRun(args) {
       threadId
     })
   });
-  if (run.status === "received" && run.codexNative?.status !== "applied") {
+  if (run.status === "received" && !codexNativeModeApplied(run.codexNative?.status)) {
     run.codexNative = await applyCodexNativeMode(
       {
         codexThreadId: threadId

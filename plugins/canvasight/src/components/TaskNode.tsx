@@ -391,7 +391,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             size="lg"
             aria-label={hasBody ? t("task.run") : t("task.runEmpty")}
             disabled={!hasBody}
-            onClick={() => taskNodeActions?.runNode(id, runMode)}
+            onClick={() => taskNodeActions?.runNode(id, "flow")}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={t("task.more")}>
@@ -401,9 +401,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             </RadixDropdownMenu.Trigger>
             <RadixDropdownMenu.Portal>
               <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
-                <RadixDropdownMenu.Item asChild>
-                  <ActionMenuItem icon="play" label={t("task.runNodeOnly")} onClick={() => taskNodeActions?.runNode(id, "node")} />
-                </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item asChild>
                   <ActionMenuItem icon="copy" label={t("task.copy")} onClick={() => taskNodeActions?.duplicateNode(id)} />
                 </RadixDropdownMenu.Item>

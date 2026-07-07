@@ -1,12 +1,11 @@
 # Canvasight Run Output Contract
 
-Canvasight Run can arrive in three ways:
+Canvasight Run can arrive in two ways:
 
 - Native widget delivery: the Canvasight Codex widget receives the host bridge and sends the Run as a follow-up message to the current Codex thread.
-- Verified app-server delivery: the daemon starts a Codex turn and returns `status: "sent"`, `via: "codex_app_server"`, `reason: "turn_start_confirmed"` only after a matching `turn/started`, `item/started`, or `turn/completed` notification.
 - Await fallback: browser/dev fallback pages queue the payload, then the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
 
-Default plugin Run clicks should come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before they can target that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. After claim, the daemon may attempt app-server delivery. A `turn/start` response from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown; without a confirmation notification it must stay queued as `turn_start_unverified`.
+Default plugin Run clicks must come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before their queued payloads can target that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. Do not use app-server `turn/start`, virtual clicks, clipboard, Accessibility, or DOM automation as a Run success path.
 
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 
@@ -27,13 +26,13 @@ For `chat`, continue as a normal Codex task using the returned Markdown as conte
 
 For `plan`, treat the Canvasight run as an explicit request to use Codex's native Plan mode.
 
-For native widget delivery, the follow-up turn itself is the evidence that Canvasight reached the current thread. For await fallback payloads, `structuredContent.codexNative.status` must be `applied` before editing files, running side-effectful commands, or carrying out the work in Plan mode. If it is missing, failed, disabled, or skipped, stop and report that native Plan mode was not opened instead of silently downgrading to prose-only planning.
+For native widget delivery, the follow-up turn itself is the evidence that Canvasight reached the current thread; widget preparation should have returned `applied_plan` before sending. For await fallback payloads, `structuredContent.codexNative.status` must be `applied` before editing files, running side-effectful commands, or carrying out the work in Plan mode. If it is missing, failed, disabled, or skipped, stop and report that native Plan mode was not opened instead of silently downgrading to prose-only planning.
 
 ## Goal
 
 For `goal`, treat the Canvasight run as an explicit request to use Codex's native Goal mode.
 
-For native widget delivery, the follow-up turn itself is the evidence that Canvasight reached the current thread. For await fallback payloads, `structuredContent.codexNative.status` must be `applied` before editing files, running side-effectful commands, or carrying out the work in Goal mode. If it is missing, failed, disabled, or skipped, stop and report that native Goal mode was not opened instead of silently downgrading to a normal task.
+For native widget delivery, the follow-up turn itself is the evidence that Canvasight reached the current thread; widget preparation should have returned `applied_goal` before sending. For await fallback payloads, `structuredContent.codexNative.status` must be `applied` before editing files, running side-effectful commands, or carrying out the work in Goal mode. If it is missing, failed, disabled, or skipped, stop and report that native Goal mode was not opened instead of silently downgrading to a normal task.
 
 ## Prohibited Paths
 

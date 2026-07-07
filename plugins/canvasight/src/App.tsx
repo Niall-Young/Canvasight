@@ -42,7 +42,6 @@ import {
 import {
   canvasightApi,
   getCanvasightBridgeDiagnostics,
-  isCanvasightApiErrorCode,
   isStaleDocumentError,
   isTemplateLimitError,
   isThreadOnlyFallbackUrl,
@@ -128,14 +127,6 @@ type DiagnosticsPanelProps = {
   lastRun: RunResponse | null;
   onClose: () => void;
 };
-
-function runWasSent(runResult: RunResponse): boolean {
-  return runResult.status === "sent" || runResult.delivery?.status === "sent";
-}
-
-function runSentTranslationKey(runResult: RunResponse): "status.sentAssistant" | "status.sentViaCodexAppServer" {
-  return runResult.delivery?.via === "codex_app_server" ? "status.sentViaCodexAppServer" : "status.sentAssistant";
-}
 
 function DiagnosticsRow({ label, value }: { label: string; value: string }): ReactElement {
   return (
@@ -946,37 +937,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [setStatus, showRunFeedback]
   );
 
-  const setRunStatusFromResult = useCallback(
-    (runResult: RunResponse, fallbackReason = "") => {
-      const delivery = runResult.delivery;
-      const codexTurn = runResult.codexTurn || delivery?.codexTurn;
-      const codexNative = runResult.codexNative || delivery?.codexNative;
-      if (delivery?.status === "awaited") {
-        setRunStatus(t("status.awaitedAssistant"), "positive");
-        return;
-      }
-      if (runWasSent(runResult)) {
-        setRunStatus(t(runSentTranslationKey(runResult)), "positive");
-        return;
-      }
-      if (delivery?.reason === "turn_start_unverified") {
-        setRunStatus(t("status.directUnverifiedQueued"), "negative");
-        return;
-      }
-      if (delivery?.reason === "native_direct_disabled" || codexNative?.reason === "native_direct_disabled") {
-        setRunStatus(t("status.browserFallbackQueued"), "negative");
-        return;
-      }
-      const reason = codexTurn?.error || codexNative?.error || delivery?.reason || fallbackReason;
-      if (reason) {
-        setRunStatus(t("status.browserFallbackQueuedWithReason", { reason }), "negative");
-        return;
-      }
-      setRunStatus(t("status.browserFallbackQueued"), "negative");
-    },
-    [setRunStatus, t]
-  );
-
   useEffect(
     () => () => {
       if (runFeedbackTimerRef.current) window.clearTimeout(runFeedbackTimerRef.current);
@@ -1715,17 +1675,18 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   }, [addFilesToNode, nodes, pasteCanvasClipboard, project, selectedNodeId]);
 
   const runNode = useCallback(
-    async (nodeId: string, mode: RunMode) => {
+    async (nodeId: string, _mode: RunMode = "flow") => {
       if (!project) return;
       const node = nodes.find((item) => item.id === nodeId);
       if (!node) return;
+      const mode: RunMode = "flow";
       const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
       if (result.nodes.every((item) => item.data.body.trim().length === 0)) {
         setRunStatus(t("status.cannotSendEmpty"), "negative");
         return;
       }
 
-      const threadName = mode === "flow" ? `Canvasight Flow: ${node.data.title || "Untitled"}` : `Canvasight: ${node.data.title || "Untitled"}`;
+      const threadName = `Canvasight Flow: ${node.data.title || "Untitled"}`;
       const runPayload = {
         attachments: result.attachments,
         agentTeam: result.agentTeam,
@@ -1742,63 +1703,16 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       };
       setRunStatus(t("status.sendingAssistant"), "loading");
       try {
-        if (project?.path) {
-          await claimUrlThreadForProject(project.path);
-        }
-        if (canvasightApi.canSendFollowUpMessage()) {
-          const preparedRun = await canvasightApi.prepareWidgetRun(runPayload);
-          await canvasightApi.sendFollowUpMessage({
-            prompt: result.markdown,
-            content: [{ type: "text", text: result.markdown }]
-          });
-          setLastRunResult({
-            ...preparedRun,
-            status: "sent",
-            delivery: {
-              ...(preparedRun.delivery ?? {}),
-              status: "sent",
-              reason: "widget_bridge",
-              via: "widget_bridge"
-            }
-          });
-          markNodeRun(nodeId, mode);
-          setSelectedRunMode(mode);
-          setRunStatus(t("status.sentAssistant"), "positive");
-          return;
-        }
-
-        const runResult = await canvasightApi.run(runPayload);
+        const runResult = await canvasightApi.runCanvasightNode(runPayload);
         setLastRunResult(runResult);
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
-        setRunStatusFromResult(runResult);
+        setRunStatus(t("status.sentAssistant"), "positive");
       } catch (error) {
-        if (canvasightApi.canSendFollowUpMessage()) {
-          try {
-            const runResult = await canvasightApi.run(runPayload);
-            setLastRunResult(runResult);
-            markNodeRun(nodeId, mode);
-            setSelectedRunMode(mode);
-            const reason = error instanceof Error ? error.message : "";
-            setRunStatusFromResult(runResult, reason);
-            return;
-          } catch (fallbackError) {
-            if (isCanvasightApiErrorCode(fallbackError, "unbound_dev_session")) {
-              setRunStatus(t("status.unboundDevSession"), "negative");
-              return;
-            }
-            setRunStatus(fallbackError instanceof Error ? fallbackError.message : t("status.sendAssistantFailed"), "negative");
-            return;
-          }
-        }
-        if (isCanvasightApiErrorCode(error, "unbound_dev_session")) {
-          setRunStatus(t("status.unboundDevSession"), "negative");
-          return;
-        }
         setRunStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"), "negative");
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, setRunStatusFromResult, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
   );
 
   useEffect(() => {
@@ -2061,8 +1975,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const runActiveNode = useCallback(() => {
     if (!selectedNode) return;
-    void runNode(selectedNode.id, selectedRunMode);
-  }, [runNode, selectedNode, selectedRunMode]);
+    void runNode(selectedNode.id, "flow");
+  }, [runNode, selectedNode]);
 
   const toggleTasksDrawer = useCallback(() => {
     if (!project) return;

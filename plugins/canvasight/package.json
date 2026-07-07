@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --host 127.0.0.1",
     "test:dev-server": "node tests/dev-server-smoke.mjs",
+    "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs"
   },
   "dependencies": {

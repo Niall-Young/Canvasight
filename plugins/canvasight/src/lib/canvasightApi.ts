@@ -48,7 +48,7 @@ export interface RunResponse {
     codexTurn?: RunResponse["codexTurn"];
   };
   codexNative?: {
-    status: "applied" | "disabled" | "failed" | "not_applicable" | "pending" | "skipped";
+    status: "applied" | "applied_chat" | "applied_goal" | "applied_plan" | "disabled" | "failed" | "not_applicable" | "pending" | "skipped";
     action?: string;
     collaborationMode?: string;
     error?: string;
@@ -123,6 +123,7 @@ type CanvasightWindow = Window &
   typeof globalThis & {
     __CANVASIGHT_WIDGET_DATA__?: CanvasightWidgetRuntimeData;
     canvasightMcp?: {
+      runCanvasightNode?: (payload: RunPayload) => Promise<RunResponse>;
       sendFollowUpMessage?: (message: WidgetFollowUpMessage) => Promise<unknown>;
     };
     openai?: unknown;
@@ -365,17 +366,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function createRequestId(): string {
-  return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `canvasight-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function canAttemptWidgetFollowUp(): boolean {
   const bridgeWindow = window as CanvasightWindow;
-  return (
-    (window.parent !== window && new URLSearchParams(window.location.search).get("canvasightHost") === "widget") ||
-    widgetRuntimeData().canvasightHost === "widget" ||
-    typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function"
-  );
+  return typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function";
 }
 
 export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
@@ -396,48 +389,52 @@ export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
 }
 
 function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9000): Promise<void> {
-  if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight widget bridge is not available."));
+  void timeoutMs;
+  if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight native widget host bridge is not ready."));
   const directBridge = (window as CanvasightWindow).canvasightMcp?.sendFollowUpMessage;
   if (typeof directBridge === "function") {
     return directBridge(message).then(() => undefined);
   }
-  const requestId = createRequestId();
+  return Promise.reject(new Error("Canvasight native widget host bridge is not ready."));
+}
 
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      window.removeEventListener("message", handleMessage);
-      reject(new Error("Canvasight widget bridge timed out."));
-    }, timeoutMs);
+const expectedWidgetCodexStatus: Record<CodexMode, NonNullable<RunResponse["codexNative"]>["status"]> = {
+  chat: "applied_chat",
+  goal: "applied_goal",
+  plan: "applied_plan"
+};
 
-    function finish(error?: Error): void {
-      window.clearTimeout(timer);
-      window.removeEventListener("message", handleMessage);
-      if (error) reject(error);
-      else resolve();
-    }
+function assertPreparedWidgetRun(payload: RunPayload, preparedRun: RunResponse): void {
+  const expectedStatus = expectedWidgetCodexStatus[payload.codexMode];
+  const actualStatus = preparedRun.codexNative?.status || preparedRun.delivery?.codexNative?.status;
+  if (actualStatus !== expectedStatus) {
+    const reason = preparedRun.codexNative?.error || preparedRun.delivery?.codexNative?.error || preparedRun.codexNative?.reason || preparedRun.delivery?.codexNative?.reason || actualStatus || "unknown";
+    throw new Error(`Canvasight Run blocked before sendMessage: expected ${expectedStatus}, got ${reason}.`);
+  }
+}
 
-    function handleMessage(event: MessageEvent): void {
-      const data = event.data as { error?: string; ok?: boolean; requestId?: string; source?: string; type?: string } | null;
-      if (!data || data.source !== "canvasight-widget" || data.type !== "canvasight:send-follow-up-result") return;
-      if (data.requestId !== requestId) return;
-      if (data.ok) {
-        finish();
-        return;
-      }
-      finish(new Error(data.error || "Canvasight widget bridge rejected the Run."));
-    }
-
-    window.addEventListener("message", handleMessage);
-    window.parent.postMessage(
-      {
-        source: "canvasight-web",
-        type: "canvasight:send-follow-up",
-        requestId,
-        ...message
-      },
-      "*"
-    );
+async function runCanvasightNodeThroughWidget(payload: RunPayload): Promise<RunResponse> {
+  const directRun = (window as CanvasightWindow).canvasightMcp?.runCanvasightNode;
+  if (typeof directRun === "function") return directRun(payload);
+  if (!canAttemptWidgetFollowUp()) throw new Error("Canvasight native widget host bridge is not ready.");
+  const preparedRun = await canvasightApi.prepareWidgetRun(payload);
+  assertPreparedWidgetRun(payload, preparedRun);
+  await sendWidgetFollowUpMessage({
+    prompt: payload.markdown,
+    content: [{ type: "text", text: payload.markdown }]
   });
+  return {
+    ...preparedRun,
+    status: "sent",
+    delivery: {
+      ...(preparedRun.delivery ?? {}),
+      status: "sent",
+      reason: "widget_bridge_sendMessage",
+      via: "widget_bridge",
+      codexNative: preparedRun.codexNative,
+      codexTurn: preparedRun.codexTurn
+    }
+  };
 }
 
 async function fileInputToPayload(input: AttachmentInput): Promise<{
@@ -532,6 +529,10 @@ export const canvasightApi = {
         deliveryMode: "widget_bridge_prepare"
       })
     });
+  },
+
+  runCanvasightNode(payload: RunPayload): Promise<RunResponse> {
+    return runCanvasightNodeThroughWidget(payload);
   },
 
   canSendFollowUpMessage(): boolean {

@@ -83,7 +83,7 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
       flow: false,
       id: `node-${node.id}`,
       meta: hasPrompt ? t("drawer.canSend") : t("drawer.notEdited"),
-      mode: "node",
+      mode: "flow",
       node,
       nodeCount: 1
     });
@@ -300,9 +300,7 @@ export function RightDrawer({
               <p className="empty-copy">{t("drawer.noTasks")}</p>
             ) : (
               taskEntries.map((entry) => {
-                const isActive =
-                  entry.node.id === selectedNodeId &&
-                  (entry.mode === currentRunMode || (!entry.flow && !flowStartNodeIds.has(entry.node.id)));
+                const isActive = entry.node.id === selectedNodeId && (entry.mode === currentRunMode || !flowStartNodeIds.has(entry.node.id));
 
                 return (
                   <TaskItem

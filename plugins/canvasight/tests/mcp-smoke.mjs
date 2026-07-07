@@ -468,7 +468,10 @@ async function main() {
     const widgetHtml = widgetResource.contents[0].text;
     assert.match(widgetHtml, /id="root"/);
     assert.doesNotMatch(widgetHtml, /<iframe\b/i);
+    assert.doesNotMatch(widgetHtml, /<script\b[^>]*\btype=["']module/i);
+    assert.doesNotMatch(widgetHtml, /script\.type\s*=\s*["']module["']/);
     assert.match(widgetHtml, /canvasightAppBundleSource/);
+    assert.match(widgetHtml, /window\.canvasightMcp/);
     assert.match(widgetHtml, /__CANVASIGHT_WIDGET_DATA__/);
     assert.match(widgetHtml, /canvasightHost/);
     assert.match(widgetHtml, /canvasight:send-follow-up/);
@@ -1400,8 +1403,11 @@ async function main() {
     assert.equal(widgetPrepared.status, "prepared");
     assert.equal(widgetPrepared.delivery.status, "prepared");
     assert.equal(widgetPrepared.delivery.via, "widget_bridge");
-    assert.equal(widgetPrepared.codexNative.status, "not_applicable");
-    assert.equal(widgetPrepared.codexNative.reason, "widget_bridge");
+    assert.equal(widgetPrepared.codexNative.status, "applied_goal");
+    assert.equal(widgetPrepared.codexNative.action, "thread/goal/set");
+    assert.equal(widgetPrepared.codexNative.threadId, "thread-smoke");
+    assert.equal(widgetPrepared.codexTurn.status, "skipped");
+    assert.equal(widgetPrepared.codexTurn.reason, "widget_bridge_sendMessage");
     assert.equal(widgetPrepared.agentTeam.agentsMd.status, "created");
     const widgetPreparedDrain = await request("tools/call", {
       name: "await_canvasight_run",
@@ -1411,6 +1417,77 @@ async function main() {
       }
     });
     assert.equal(widgetPreparedDrain.structuredContent.status, "timeout");
+
+    const chatPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Chat Prepared",
+        markdown: "# Widget Chat Prepared",
+        codexMode: "chat",
+        planMode: false,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(chatPrepared.status, "prepared");
+    assert.equal(chatPrepared.codexNative.status, "applied_chat");
+    assert.equal(chatPrepared.codexNative.action, "thread/settings/update");
+    assert.equal(chatPrepared.codexNative.collaborationMode, "default");
+
+    const planPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Plan Prepared",
+        markdown: "# Widget Plan Prepared",
+        codexMode: "plan",
+        planMode: true,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(planPrepared.status, "prepared");
+    assert.equal(planPrepared.codexNative.status, "applied_plan");
+    assert.equal(planPrepared.codexNative.action, "thread/settings/update");
+    assert.equal(planPrepared.codexNative.collaborationMode, "plan");
+    const widgetModeLog = await readNativeLog();
+    assert.equal(
+      widgetModeLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "default" &&
+          entry.params.collaborationMode.settings.model === "gpt-5.5"
+      ),
+      true
+    );
+    assert.equal(
+      widgetModeLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "plan" &&
+          entry.params.collaborationMode.settings.reasoning_effort === "medium"
+      ),
+      true
+    );
+
+    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
+    await assert.rejects(
+      () =>
+        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+          method: "POST",
+          body: JSON.stringify({
+            ...runPayload,
+            threadName: "Widget Plan Prepare Failure",
+            markdown: "# Widget Plan Prepare Failure",
+            codexMode: "plan",
+            planMode: true,
+            deliveryMode: "widget_bridge_prepare"
+          })
+        }),
+      /codex_mode_not_applied|Canvasight Run blocked/
+    );
+    await fsp.writeFile(resumeFailPath, "", "utf8");
 
     const waitForRun = request("tools/call", {
       name: "await_canvasight_run",
@@ -1476,7 +1553,7 @@ async function main() {
     const directRunPayload = {
       ...runPayload,
       threadName: "Scatter Direct Chat",
-      markdown: "# Direct Chat\n\nThis should start a Codex turn without await_canvasight_run.",
+      markdown: "# Direct Chat\n\nBrowser fallback should queue for await_canvasight_run.",
       codexMode: "chat",
       planMode: false,
       agentTeam: {
@@ -1489,46 +1566,17 @@ async function main() {
       method: "POST",
       body: JSON.stringify(directRunPayload)
     });
-    assert.equal(directRun.status, "sent");
-    assert.equal(directRun.delivery.status, "sent");
-    assert.equal(directRun.delivery.reason, "turn_start_confirmed");
-    assert.equal(directRun.delivery.via, "codex_app_server");
-    assert.equal(directRun.codexNative.status, "applied");
-    assert.equal(directRun.codexNative.action, "chat/no-settings-update");
-    assert.equal(directRun.codexTurn.status, "started");
-    assert.equal(directRun.codexTurn.action, "turn/start");
-    assert.equal(directRun.codexTurn.threadId, "thread-smoke");
-    assert.equal(directRun.codexTurn.confirmed, true);
-    assert.equal(directRun.codexTurn.confirmation.method, "turn/started");
+    assert.equal(directRun.status, "queued");
+    assert.equal(directRun.delivery.status, "queued");
+    assert.equal(directRun.delivery.reason, "browser_fallback_requires_await");
+    assert.equal(directRun.delivery.via, "await_canvasight_run");
+    assert.equal(directRun.codexNative.status, "pending");
+    assert.equal(directRun.codexTurn.status, "skipped");
+    assert.equal(directRun.codexTurn.reason, "browser_fallback_requires_await");
     const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
-    assert.equal(directRunLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(directRunLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke").length, 1);
-    assert.equal(
-      directRunLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "default" &&
-          Object.keys(entry.params.collaborationMode.settings).length === 0
-      ),
-      false
-    );
-    assert.equal(directRunLog.filter((entry) => entry.method === "turn/start").length, 1);
-    assert.ok(
-      directRunLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke") <
-        directRunLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke")
-    );
-    assert.equal(
-      directRunLog.some(
-        (entry) =>
-          entry.method === "turn/start" &&
-          entry.params.threadId === "thread-smoke" &&
-          entry.params.cwd === projectPath &&
-          entry.params.input[0]?.type === "text" &&
-          entry.params.input[0]?.text === directRunPayload.markdown
-      ),
-      true
-    );
+    assert.equal(directRunLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(directRunLog.some((entry) => entry.method === "thread/settings/update"), false);
+    assert.equal(directRunLog.some((entry) => entry.method === "turn/start"), false);
     const directRunDrained = await request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -1536,12 +1584,29 @@ async function main() {
         timeoutMs: 20
       }
     });
-    assert.equal(directRunDrained.structuredContent.status, "timeout");
+    assert.equal(directRunDrained.structuredContent.status, "received");
+    assert.equal(directRunDrained.structuredContent.markdown, directRunPayload.markdown);
+    assert.equal(directRunDrained.structuredContent.delivery.reason, "browser_fallback_requires_await");
+    assert.equal(directRunDrained.structuredContent.codexNative.status, "applied");
+    assert.equal(directRunDrained.structuredContent.codexNative.action, "thread/settings/update");
+    assert.equal(directRunDrained.structuredContent.codexNative.collaborationMode, "default");
+    const directRunAwaitLog = (await readNativeLog()).slice(directRunLogOffset);
+    assert.equal(directRunAwaitLog.some((entry) => entry.method === "turn/start"), false);
+    assert.equal(
+      directRunAwaitLog.some(
+        (entry) =>
+          entry.method === "thread/settings/update" &&
+          entry.params.threadId === "thread-smoke" &&
+          entry.params.collaborationMode.mode === "default" &&
+          entry.params.collaborationMode.settings.model === "gpt-5.5"
+      ),
+      true
+    );
 
     const unconfirmedPayload = {
       ...directRunPayload,
       threadName: "Scatter Direct Chat No Confirm",
-      markdown: "# Direct Chat No Confirm\n\n[no-confirm] This accepted turn/start response must stay queued."
+      markdown: "# Direct Chat No Confirm\n\n[no-confirm] Browser fallback still only queues."
     };
     const unconfirmedRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
@@ -1549,10 +1614,9 @@ async function main() {
     });
     assert.equal(unconfirmedRun.status, "queued");
     assert.equal(unconfirmedRun.delivery.status, "queued");
-    assert.equal(unconfirmedRun.delivery.reason, "turn_start_unverified");
+    assert.equal(unconfirmedRun.delivery.reason, "browser_fallback_requires_await");
     assert.equal(unconfirmedRun.delivery.via, "await_canvasight_run");
-    assert.equal(unconfirmedRun.codexTurn.status, "started");
-    assert.equal(unconfirmedRun.codexTurn.confirmed, false);
+    assert.equal(unconfirmedRun.codexTurn.status, "skipped");
     const unconfirmedDrained = await request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -1562,7 +1626,7 @@ async function main() {
     });
     assert.equal(unconfirmedDrained.structuredContent.status, "received");
     assert.equal(unconfirmedDrained.structuredContent.markdown, unconfirmedPayload.markdown);
-    assert.equal(unconfirmedDrained.structuredContent.delivery.reason, "turn_start_unverified");
+    assert.equal(unconfirmedDrained.structuredContent.delivery.reason, "browser_fallback_requires_await");
 
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     const resumeFailureRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
@@ -1570,16 +1634,13 @@ async function main() {
       body: JSON.stringify({
         ...directRunPayload,
         threadName: "Scatter Direct Chat Resume Failure",
-        markdown: "# Direct Chat Resume Failure\n\nThis should queue with a specific thread_resume_failed reason."
+        markdown: "# Direct Chat Resume Failure\n\nAwait should report a native mode failure."
       })
     });
-    await fsp.writeFile(resumeFailPath, "", "utf8");
     assert.equal(resumeFailureRun.status, "queued");
     assert.equal(resumeFailureRun.delivery.status, "queued");
-    assert.equal(resumeFailureRun.delivery.reason, "thread_resume_failed");
-    assert.equal(resumeFailureRun.codexTurn.status, "failed");
-    assert.equal(resumeFailureRun.codexTurn.action, "thread/resume");
-    assert.match(resumeFailureRun.codexTurn.error, /fake thread\/resume failure/);
+    assert.equal(resumeFailureRun.delivery.reason, "browser_fallback_requires_await");
+    assert.equal(resumeFailureRun.codexNative.status, "pending");
     const resumeFailureDrained = await request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -1587,9 +1648,11 @@ async function main() {
         timeoutMs: 20
       }
     });
+    await fsp.writeFile(resumeFailPath, "", "utf8");
     assert.equal(resumeFailureDrained.structuredContent.status, "received");
-    assert.equal(resumeFailureDrained.structuredContent.delivery.reason, "thread_resume_failed");
-    assert.equal(resumeFailureDrained.structuredContent.codexTurn.action, "thread/resume");
+    assert.equal(resumeFailureDrained.structuredContent.delivery.reason, "browser_fallback_requires_await");
+    assert.equal(resumeFailureDrained.structuredContent.codexNative.status, "failed");
+    assert.match(resumeFailureDrained.structuredContent.codexNative.error, /fake thread\/resume failure/);
 
     const waitForLegacyRun = request("tools/call", {
       name: "await_canvasight_run",
@@ -1804,33 +1867,16 @@ async function main() {
       });
       assert.equal(crossSent.status, "queued");
       assert.equal(crossSent.delivery.status, "queued");
-      assert.equal(crossSent.delivery.reason, "turn_start_unverified");
+      assert.equal(crossSent.delivery.reason, "browser_fallback_requires_await");
       assert.equal(crossSent.delivery.via, "await_canvasight_run");
       assert.equal(crossSent.delivery.threadId, "thread-smoke-b");
       assert.equal(crossSent.codexNative.threadId, "thread-smoke-b");
+      assert.equal(crossSent.codexNative.status, "pending");
       assert.equal(crossSent.codexTurn.threadId, "thread-smoke-b");
       const crossLog = (await readNativeLog()).slice(crossLogOffset);
-      assert.equal(crossLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b").length, 2);
-      assert.equal(
-        crossLog.some(
-          (entry) =>
-            entry.method === "thread/settings/update" &&
-            entry.params.threadId === "thread-smoke-b" &&
-            entry.params.collaborationMode.mode === "plan" &&
-            entry.params.collaborationMode.settings.model === "gpt-5.5" &&
-            entry.params.collaborationMode.settings.reasoning_effort === "medium"
-        ),
-        true
-      );
-      assert.equal(crossLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b"), true);
-      assert.ok(
-        crossLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b") <
-          crossLog.findIndex((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-smoke-b")
-      );
-      assert.ok(
-        crossLog.findLastIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-b") <
-          crossLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-b")
-      );
+      assert.equal(crossLog.some((entry) => entry.method === "thread/resume"), false);
+      assert.equal(crossLog.some((entry) => entry.method === "thread/settings/update"), false);
+      assert.equal(crossLog.some((entry) => entry.method === "turn/start"), false);
 
       const drained = await mcpB.request("tools/call", {
         name: "await_canvasight_run",
@@ -1841,7 +1887,9 @@ async function main() {
       });
       assert.equal(drained.structuredContent.status, "received");
       assert.equal(drained.structuredContent.markdown, crossPayload.markdown);
-      assert.equal(drained.structuredContent.delivery.reason, "turn_start_unverified");
+      assert.equal(drained.structuredContent.delivery.reason, "browser_fallback_requires_await");
+      assert.equal(drained.structuredContent.codexNative.status, "disabled");
+      assert.equal(drained.structuredContent.codexNative.reason, "native_direct_disabled");
     } finally {
       mcpB.stop();
     }
@@ -1915,39 +1963,16 @@ async function main() {
       });
       assert.equal(claimedRun.status, "queued");
       assert.equal(claimedRun.delivery.status, "queued");
-      assert.equal(claimedRun.delivery.reason, "turn_start_unverified");
+      assert.equal(claimedRun.delivery.reason, "browser_fallback_requires_await");
       assert.equal(claimedRun.delivery.via, "await_canvasight_run");
       assert.equal(claimedRun.codexNative.threadId, "thread-smoke-c");
-      assert.equal(claimedRun.codexNative.action, "chat/no-settings-update");
+      assert.equal(claimedRun.codexNative.status, "pending");
       assert.equal(claimedRun.codexTurn.threadId, "thread-smoke-c");
       const claimNativeLog = (await readNativeLog()).slice(claimLogOffset);
       assert.equal(claimNativeLog.some((entry) => entry.method === "thread/goal/set"), false);
-      assert.equal(claimNativeLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-c").length, 1);
-      assert.equal(
-        claimNativeLog.some(
-          (entry) =>
-            entry.method === "thread/settings/update" &&
-            entry.params.threadId === "thread-smoke-c" &&
-            entry.params.collaborationMode.mode === "default" &&
-            Object.keys(entry.params.collaborationMode.settings).length === 0
-        ),
-        false
-      );
-      assert.equal(claimNativeLog.filter((entry) => entry.method === "turn/start").length, 1);
-      assert.ok(
-        claimNativeLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke-c") <
-          claimNativeLog.findIndex((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke-c")
-      );
-      assert.equal(
-        claimNativeLog.some(
-          (entry) =>
-            entry.method === "turn/start" &&
-            entry.params.threadId === "thread-smoke-c" &&
-            entry.params.cwd === persistentProjectPath &&
-            entry.params.input[0]?.text === claimedPayload.markdown
-        ),
-        true
-      );
+      assert.equal(claimNativeLog.some((entry) => entry.method === "thread/resume"), false);
+      assert.equal(claimNativeLog.some((entry) => entry.method === "thread/settings/update"), false);
+      assert.equal(claimNativeLog.filter((entry) => entry.method === "turn/start").length, 0);
       assert.equal(claimNativeLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-smoke"), false);
       const oldWaiterResult = await oldWaiter;
       assert.equal(oldWaiterResult.structuredContent.status, "timeout");
@@ -1960,7 +1985,10 @@ async function main() {
       });
       assert.equal(claimedDrained.structuredContent.status, "received");
       assert.equal(claimedDrained.structuredContent.markdown, claimedPayload.markdown);
-      assert.equal(claimedDrained.structuredContent.delivery.reason, "turn_start_unverified");
+      assert.equal(claimedDrained.structuredContent.delivery.reason, "browser_fallback_requires_await");
+      assert.equal(claimedDrained.structuredContent.codexNative.status, "applied");
+      assert.equal(claimedDrained.structuredContent.codexNative.action, "thread/settings/update");
+      assert.equal(claimedDrained.structuredContent.codexNative.collaborationMode, "default");
     } finally {
       mcpOldWaiter.stop();
       mcpC.stop();

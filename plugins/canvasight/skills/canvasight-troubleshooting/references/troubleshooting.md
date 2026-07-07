@@ -26,7 +26,7 @@ If the widget does not render:
 2. Open a new Codex thread or reload the session so the new MCP tool descriptor and widget resource metadata are loaded.
 3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, `open_canvasight`, and `render_canvasight_canvas_widget` all pass.
 4. If the app renders but shows `Failed to fetch`, confirm the widget CSP contains the current daemon exact origin, such as `http://127.0.0.1:53208`, not only wildcard localhost entries.
-5. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread, attempt app-server delivery, and keep unconfirmed payloads available through `await_canvasight_run`.
+5. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread and keep payloads available through `await_canvasight_run`.
 
 ## Diagnostics Panel
 
@@ -38,8 +38,8 @@ Interpretation:
 - `parent === window` without `canvasightHost=widget`: browser fallback or dev page, not a widget.
 - `parent !== window` plus `canvasightHost=widget`: legacy widget iframe candidate.
 - `canSendFollowUpMessage() === true`: frontend can ask the widget host bridge to send a follow-up.
-- `delivery.status === "sent"` and `delivery.via === "codex_app_server"`: only valid when `codexTurn.confirmed === true`.
-- `delivery.reason === "turn_start_unverified"`: payload is queued; use `await_canvasight_run`.
+- `delivery.status === "sent"` and `delivery.via === "widget_bridge"`: host bridge `sendMessage` accepted the Run.
+- `delivery.reason === "browser_fallback_requires_await"`: payload is queued; use `await_canvasight_run`.
 
 ## Opens In System Browser
 
@@ -56,7 +56,7 @@ Canvasight Run should arrive as a normal follow-up turn when the canvas was open
 1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
 2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
 3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasightAppBundleSource`, `__CANVASIGHT_WIDGET_DATA__`, and `canvasight:send-follow-up`.
-4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. If the Run still does not appear, call `await_canvasight_run` with `sessionId` or `projectPath`.
+4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. Browser fallback cannot show sent; call `await_canvasight_run` with `sessionId` or `projectPath`.
 5. If a bare dev page returns `code: "unbound_dev_session"`, it has no claimed Codex thread. Claim the project from the intended thread or reopen Canvasight through the plugin.
 
 Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automation to push text into Codex. If the current thread lacks the widget tool or its MCP transport is closed, the correct recovery is plugin reload/new thread with current tools, not browser UI automation.
@@ -76,7 +76,7 @@ Normal plugin use should not require `npm run dev`. That command is for local de
 
 If a `127.0.0.1:5173` page reports `Canvasight daemon did not start in time`, first run `npm run dev:status` from `plugins/canvasight`. A `stale ... serverVersion=<old> expected=<current>` status means the persistent managed Vite process was started by an older Canvasight version and is still serving old API middleware. Run `npm run dev`; since `0.1.35` it stops the stale managed process and starts a fresh dev server.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. A generic dev fallback URL should include `threadId`; Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.38`, dev fallback starts daemon native delivery by default and rejects stale daemons with the wrong native setting; accepted app-server requests stay queued unless a matching `turn/started`, `item/started`, or `turn/completed` notification confirms delivery.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. A generic dev fallback URL should include `threadId`; Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.39`, browser/dev fallback is diagnostic-only for Run delivery: claimed Runs queue for `await_canvasight_run` and must not report app-server `turn/start` as sent.
 
 ## Validation Commands
 
@@ -87,6 +87,7 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 cd /Users/niallyoung/Desktop/Canvasight/plugins/canvasight
 npm run typecheck
 npm run build
+npm run test:markdown
 npm run dev:status
 npm run test:dev-server
 npm run test:mcp

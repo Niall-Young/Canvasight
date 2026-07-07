@@ -14,6 +14,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1951-integration-summary-node-run-bridge-only.md` - integrated bridge-only node Run contract, native mode preflight, fallback queue-only behavior, tests, docs, and version 0.1.39.
 - `agent-reports/resolved/20260707-1805-integration-summary.md` - integrated default native-enabled dev daemon, Run pre-claim fallback, diagnostic fetch errors, version 0.1.38, validation, and plugin reinstall.
 - `agent-reports/resolved/20260707-1805-development-solution-run-failed-to-fetch.md` - fixed browser fallback Run `Failed to fetch` / native-disabled daemon reuse.
 - `agent-reports/resolved/20260707-1745-product-issue-run-failed-to-fetch.md` - resolved Canvasight Run click showing generic `Failed to fetch`.

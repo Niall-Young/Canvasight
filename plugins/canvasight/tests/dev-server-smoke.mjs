@@ -327,16 +327,16 @@ async function main() {
     });
     assert.equal(reboundRun.status, "queued");
     assert.equal(reboundRun.delivery.status, "queued");
-    assert.equal(reboundRun.delivery.reason, "turn_start_unverified");
+    assert.equal(reboundRun.delivery.reason, "browser_fallback_requires_await");
     assert.equal(reboundRun.delivery.via, "await_canvasight_run");
-    assert.equal(reboundRun.codexNative.status, "applied");
-    assert.equal(reboundRun.codexNative.action, "chat/no-settings-update");
-    assert.equal(reboundRun.codexTurn.status, "started");
+    assert.equal(reboundRun.codexNative.status, "pending");
+    assert.equal(reboundRun.codexTurn.status, "skipped");
     assert.equal(reboundRun.codexTurn.threadId, "thread-dev-claimed");
     const reboundLog = (await readNativeLog()).slice(reboundLogOffset);
     assert.equal(reboundLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(reboundLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-claimed").length, 1);
-    assert.equal(reboundLog.filter((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed").length, 1);
+    assert.equal(reboundLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(reboundLog.some((entry) => entry.method === "thread/settings/update"), false);
+    assert.equal(reboundLog.filter((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-claimed").length, 0);
     assert.equal(reboundLog.some((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-dev-smoke"), false);
     const reboundDaemon = await readDaemonState(canvasightHome);
     const reboundAwaited = await fetchJson(`${reboundDaemon.origin}/api/runs/await`, {
@@ -352,7 +352,7 @@ async function main() {
     });
     assert.equal(reboundAwaited.status, "received");
     assert.equal(reboundAwaited.markdown, "# Claimed Dev Server Run\\n\\nThis should be delivered to the claimed thread.");
-    assert.equal(reboundAwaited.delivery.reason, "turn_start_unverified");
+    assert.equal(reboundAwaited.delivery.reason, "browser_fallback_requires_await");
 
     const status = run("status");
     assert.equal(status.status, 0, status.stderr || status.stdout);
@@ -440,16 +440,16 @@ async function main() {
     });
     assert.equal(claimedRun.status, "queued");
     assert.equal(claimedRun.delivery.status, "queued");
-    assert.equal(claimedRun.delivery.reason, "turn_start_unverified");
+    assert.equal(claimedRun.delivery.reason, "browser_fallback_requires_await");
     assert.equal(claimedRun.delivery.via, "await_canvasight_run");
-    assert.equal(claimedRun.codexNative.status, "applied");
-    assert.equal(claimedRun.codexNative.action, "chat/no-settings-update");
-    assert.equal(claimedRun.codexTurn.status, "started");
+    assert.equal(claimedRun.codexNative.status, "pending");
+    assert.equal(claimedRun.codexTurn.status, "skipped");
     assert.equal(claimedRun.codexTurn.threadId, "thread-claimed-dev");
     const claimedLog = (await readNativeLog()).slice(claimedLogOffset);
     assert.equal(claimedLog.some((entry) => entry.method === "thread/goal/set"), false);
-    assert.equal(claimedLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-claimed-dev").length, 1);
-    assert.equal(claimedLog.filter((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev").length, 1);
+    assert.equal(claimedLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(claimedLog.some((entry) => entry.method === "thread/settings/update"), false);
+    assert.equal(claimedLog.filter((entry) => entry.method === "turn/start" && entry.params.threadId === "thread-claimed-dev").length, 0);
     const claimedAwaited = await fetchJson(`${unboundDaemon.origin}/api/runs/await`, {
       method: "POST",
       headers: {
@@ -463,7 +463,7 @@ async function main() {
     });
     assert.equal(claimedAwaited.status, "received");
     assert.equal(claimedAwaited.markdown, "# Claimed Dev Run");
-    assert.equal(claimedAwaited.delivery.reason, "turn_start_unverified");
+    assert.equal(claimedAwaited.delivery.reason, "browser_fallback_requires_await");
 
     const queuedStarted = run("start", {
       canvasightHome: queuedCanvasightHome,
@@ -501,10 +501,10 @@ async function main() {
     });
     assert.equal(queuedRun.status, "queued");
     assert.equal(queuedRun.delivery.status, "queued");
-    assert.equal(queuedRun.delivery.reason, "native_direct_disabled");
+    assert.equal(queuedRun.delivery.reason, "browser_fallback_requires_await");
     assert.equal(queuedRun.delivery.via, "await_canvasight_run");
-    assert.equal(queuedRun.codexNative.status, "disabled");
-    assert.equal(queuedRun.codexNative.reason, "native_direct_disabled");
+    assert.equal(queuedRun.codexNative.status, "pending");
+    assert.equal(queuedRun.codexNative.reason, "await_canvasight_run_required");
     assert.equal(queuedRun.codexTurn.status, "skipped");
     const queuedNativeLog = (await readNativeLog()).slice(queuedLogOffset);
     assert.equal(queuedNativeLog.some((entry) => entry.method === "thread/resume"), false);
