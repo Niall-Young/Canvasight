@@ -6,7 +6,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Open
 
-None.
+- `agent-reports/open/20260707-1127-development-issue-current-thread-mcp-transport-closed.md` - 当前 Codex thread 的 Canvasight MCP transport 已关闭，旧 browser fallback 页面只能排队，需 reload/new thread 后重新验证 widget direct-send。
 
 ## Assigned
 
@@ -14,6 +14,7 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1127-integration-summary-current-thread-mcp-transport-closed.md` - diagnosed that the current screenshot is correct browser fallback and the live thread MCP transport is closed.
 - `agent-reports/resolved/20260707-1031-integration-summary-run-delivery-confirmation.md` - integrated confirmed Run delivery semantics, diagnostics, docs, skills, tests, and version 0.1.32.
 - `agent-reports/resolved/20260707-1031-development-solution-run-delivery-confirmation.md` - implemented app-server notification confirmation, explicit queued fallback, and Run status diagnostics.
 - `agent-reports/resolved/20260706-2213-development-issue-run-widget-bridge-not-attached.md` - resolved Canvasight Run direct-send ambiguity by requiring widget bridge or app-server confirmation before reporting sent.
