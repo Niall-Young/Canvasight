@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.40";
+const SERVER_VERSION = "0.1.41";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -2357,6 +2357,24 @@ function canvasightWidgetBridgeScript() {
   let mcpApp = null;
   let toolOutput = null;
   let statusTimer = null;
+  const bridgeState = {
+    bridgeTransport: "none",
+    mcpInitialized: false,
+    hostCapabilitiesMessage: false,
+    openaiFollowUpAvailable: false,
+    lastBridgeError: null,
+    reason: "mcp_initialize_timeout",
+  };
+
+  function bridgeStateSnapshot() {
+    return { ...bridgeState };
+  }
+
+  function updateBridgeState(patch = {}) {
+    Object.assign(bridgeState, patch);
+    globalThis.__CANVASIGHT_BRIDGE_STATE__ = bridgeStateSnapshot();
+    window.dispatchEvent(new CustomEvent("canvasight:bridge-state", { detail: bridgeStateSnapshot() }));
+  }
 
   function setStatus(message, tone = "muted") {
     if (!status) return;
@@ -2379,6 +2397,7 @@ function canvasightWidgetBridgeScript() {
     window.dispatchEvent(new CustomEvent("openai:set_globals", {
       detail: { globals: window.openai },
     }));
+    refreshOpenAiBridge();
   }
 
   function withTimeout(promise, ms, label) {
@@ -2394,9 +2413,98 @@ function canvasightWidgetBridgeScript() {
     return new Error(String(error || "Canvasight host bridge is unavailable."));
   }
 
-  async function waitForReady() {
-    if (mcpApp?.ready) await withTimeout(mcpApp.ready, 4000, "Canvasight host bridge did not become ready.");
-    if (globalThis.__CANVASIGHT_MCP_HOST_ERROR__) throw toBridgeError(globalThis.__CANVASIGHT_MCP_HOST_ERROR__);
+  function hostCapabilities() {
+    try {
+      return mcpApp?.getHostCapabilities?.() || null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function refreshMcpBridgeState() {
+    const capabilities = hostCapabilities();
+    const hostCapabilitiesMessage = Boolean(capabilities?.message);
+    if (bridgeState.mcpInitialized && hostCapabilitiesMessage) {
+      updateBridgeState({
+        bridgeTransport: "mcp_ui_message",
+        hostCapabilitiesMessage,
+        reason: "native_bridge_ready",
+        lastBridgeError: null,
+      });
+      return;
+    }
+    updateBridgeState({
+      hostCapabilitiesMessage,
+      reason: bridgeState.mcpInitialized ? "host_message_capability_missing" : bridgeState.reason,
+    });
+  }
+
+  function openAiFollowUpFunction() {
+    if (typeof window.openai?.sendFollowUpMessage === "function") {
+      return window.openai.sendFollowUpMessage.bind(window.openai);
+    }
+    if (typeof window.openai?.sendFollowupMessage === "function") {
+      return window.openai.sendFollowupMessage.bind(window.openai);
+    }
+    return null;
+  }
+
+  function refreshOpenAiBridge() {
+    const openaiFollowUpAvailable = Boolean(openAiFollowUpFunction());
+    if (openaiFollowUpAvailable && bridgeState.bridgeTransport !== "mcp_ui_message") {
+      updateBridgeState({
+        bridgeTransport: "openai_compat_followup",
+        openaiFollowUpAvailable,
+        reason: "native_bridge_ready",
+        lastBridgeError: null,
+      });
+      return true;
+    }
+    updateBridgeState({ openaiFollowUpAvailable });
+    return openaiFollowUpAvailable;
+  }
+
+  function isNativeBridgeReady() {
+    refreshMcpBridgeState();
+    refreshOpenAiBridge();
+    return bridgeState.bridgeTransport === "mcp_ui_message" || bridgeState.bridgeTransport === "openai_compat_followup";
+  }
+
+  function bridgeUnavailableError(reason) {
+    const finalReason =
+      reason ||
+      bridgeState.reason ||
+      (bridgeState.mcpInitialized ? "host_message_capability_missing" : "mcp_initialize_timeout");
+    const detail = [
+      "Canvasight native widget host bridge is not ready.",
+      \`reason=\${finalReason}\`,
+      \`bridgeTransport=\${bridgeState.bridgeTransport}\`,
+      \`mcpInitialized=\${bridgeState.mcpInitialized}\`,
+      \`hostCapabilitiesMessage=\${bridgeState.hostCapabilitiesMessage}\`,
+      \`openaiFollowUpAvailable=\${bridgeState.openaiFollowUpAvailable}\`,
+      bridgeState.lastBridgeError ? \`lastBridgeError=\${bridgeState.lastBridgeError}\` : "",
+    ].filter(Boolean).join(" ");
+    return new Error(detail);
+  }
+
+  async function waitForMcpReady() {
+    if (bridgeState.mcpInitialized) return true;
+    if (!mcpApp?.ready) return false;
+    try {
+      await withTimeout(mcpApp.ready, 4000, "mcp_initialize_timeout");
+      refreshMcpBridgeState();
+      return bridgeState.mcpInitialized;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
+      updateBridgeState({
+        bridgeTransport: "none",
+        mcpInitialized: false,
+        lastBridgeError: message,
+        reason: "mcp_initialize_timeout",
+      });
+      return false;
+    }
   }
 
   function currentSize() {
@@ -2496,20 +2604,88 @@ function canvasightWidgetBridgeScript() {
     sendCurrentSize();
   }
 
+  function promptFromMessage(message, content) {
+    if (typeof message?.prompt === "string" && message.prompt.trim()) return message.prompt;
+    return content
+      .map((item) => (item && typeof item.text === "string" ? item.text : ""))
+      .filter(Boolean)
+      .join("\\n\\n");
+  }
+
+  async function sendWithOpenAiFollowUp(prompt) {
+    const sendFollowUp = openAiFollowUpFunction();
+    if (!sendFollowUp) {
+      updateBridgeState({
+        bridgeTransport: "none",
+        openaiFollowUpAvailable: false,
+        reason: bridgeState.mcpInitialized ? "host_message_capability_missing" : "openai_followup_missing",
+      });
+      throw bridgeUnavailableError(bridgeState.reason);
+    }
+    updateBridgeState({
+      bridgeTransport: "openai_compat_followup",
+      openaiFollowUpAvailable: true,
+      reason: "native_bridge_ready",
+      lastBridgeError: null,
+    });
+    return withTimeout(
+      Promise.resolve(sendFollowUp({ prompt, scrollToBottom: true })),
+      8000,
+      "Host did not accept the Canvasight Run through window.openai.sendFollowUpMessage."
+    );
+  }
+
+  async function sendWithMcpUiMessage(content) {
+    if (!mcpApp || typeof mcpApp.sendMessage !== "function") throw bridgeUnavailableError("mcp_initialize_timeout");
+    await waitForMcpReady();
+    refreshMcpBridgeState();
+    if (!bridgeState.mcpInitialized) throw bridgeUnavailableError("mcp_initialize_timeout");
+    if (!bridgeState.hostCapabilitiesMessage) throw bridgeUnavailableError("host_message_capability_missing");
+    updateBridgeState({
+      bridgeTransport: "mcp_ui_message",
+      reason: "native_bridge_ready",
+      lastBridgeError: null,
+    });
+    return withTimeout(mcpApp.sendMessage({ role: "user", content }), 8000, "Host did not accept the Canvasight Run.");
+  }
+
   async function sendFollowUpMessage(message) {
     const prompt = typeof message?.prompt === "string" ? message.prompt : "";
     const content = Array.isArray(message?.content) ? message.content : [{ type: "text", text: prompt }];
-    if (!prompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
-    if (!mcpApp || typeof mcpApp.sendMessage !== "function") throw new Error("Host bridge is unavailable.");
-    await waitForReady();
-    const result = await withTimeout(mcpApp.sendMessage({ role: "user", content }), 8000, "Host did not accept the Canvasight Run.");
-    if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
-    return result || {};
+    const resolvedPrompt = promptFromMessage(message, content);
+    if (!resolvedPrompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
+    refreshMcpBridgeState();
+    if (bridgeState.mcpInitialized && bridgeState.hostCapabilitiesMessage) {
+      const result = await sendWithMcpUiMessage(content);
+      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+      return result || {};
+    }
+    if (refreshOpenAiBridge()) {
+      const result = await sendWithOpenAiFollowUp(resolvedPrompt);
+      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+      return result || {};
+    }
+    await waitForMcpReady();
+    refreshMcpBridgeState();
+    if (bridgeState.mcpInitialized && bridgeState.hostCapabilitiesMessage) {
+      const result = await sendWithMcpUiMessage(content);
+      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+      return result || {};
+    }
+    if (refreshOpenAiBridge()) {
+      const result = await sendWithOpenAiFollowUp(resolvedPrompt);
+      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+      return result || {};
+    }
+    const reason = bridgeState.mcpInitialized ? "host_message_capability_missing" : "openai_followup_missing";
+    updateBridgeState({ reason });
+    throw bridgeUnavailableError(reason);
   }
 
   async function callServerTool(request, options) {
     if (!mcpApp || typeof mcpApp.callServerTool !== "function") throw new Error("Host tool bridge is unavailable.");
-    await waitForReady();
+    await waitForMcpReady();
+    if (!bridgeState.mcpInitialized) throw bridgeUnavailableError("mcp_initialize_timeout");
     return withTimeout(mcpApp.callServerTool(request, options), options?.timeoutMs || 30000, "Canvasight server tool call timed out.");
   }
 
@@ -2517,6 +2693,8 @@ function canvasightWidgetBridgeScript() {
     const api = window.canvasightMcp || {};
     api.sendFollowUpMessage = sendFollowUpMessage;
     api.callServerTool = callServerTool;
+    api.canSendFollowUpMessage = isNativeBridgeReady;
+    api.getBridgeState = bridgeStateSnapshot;
     api.getHostCapabilities = () => {
       try {
         return mcpApp?.getHostCapabilities?.() || null;
@@ -2526,6 +2704,7 @@ function canvasightWidgetBridgeScript() {
     };
     api.toolOutput = () => toolOutput;
     window.canvasightMcp = api;
+    updateBridgeState({});
   }
 
   window.addEventListener("message", async (event) => {
@@ -2574,6 +2753,11 @@ function canvasightWidgetBridgeScript() {
     mcpApp.ready = mcpApp.connect()
       .then(() => {
         installCanvasightApi();
+        updateBridgeState({
+          mcpInitialized: true,
+          lastBridgeError: null,
+        });
+        refreshMcpBridgeState();
         publishHostGlobals({
           hostCapabilities: mcpApp.getHostCapabilities && mcpApp.getHostCapabilities(),
           hostInfo: mcpApp.getHostVersion && mcpApp.getHostVersion(),
@@ -2583,13 +2767,27 @@ function canvasightWidgetBridgeScript() {
         sendCurrentSize();
       })
       .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
         globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
-        setStatus(error instanceof Error ? error.message : String(error), "error");
+        updateBridgeState({
+          bridgeTransport: refreshOpenAiBridge() ? "openai_compat_followup" : "none",
+          mcpInitialized: false,
+          lastBridgeError: message,
+          reason: refreshOpenAiBridge() ? "native_bridge_ready" : "mcp_initialize_timeout",
+        });
+        if (!bridgeState.openaiFollowUpAvailable) setStatus(message, "error");
       });
     setStatus("Opening Canvasight...", "muted");
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
-    setStatus(error instanceof Error ? error.message : String(error), "error");
+    updateBridgeState({
+      bridgeTransport: refreshOpenAiBridge() ? "openai_compat_followup" : "none",
+      mcpInitialized: false,
+      lastBridgeError: message,
+      reason: refreshOpenAiBridge() ? "native_bridge_ready" : "mcp_initialize_timeout",
+    });
+    if (!bridgeState.openaiFollowUpAvailable) setStatus(message, "error");
   }
 })();`;
 }

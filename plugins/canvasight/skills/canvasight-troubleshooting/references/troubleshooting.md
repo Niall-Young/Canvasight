@@ -30,14 +30,16 @@ If the widget does not render:
 
 ## Diagnostics Panel
 
-Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe or direct widget app, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
+Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe or direct widget app, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `bridgeTransport`, `bridgeReason`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
 
 Interpretation:
 
 - `canvasightHost=widget` plus `window.canvasightMcp`: native widget app candidate. It may run directly in the widget document rather than inside an iframe.
 - `parent === window` without `canvasightHost=widget`: browser fallback or dev page, not a widget.
 - `parent !== window` plus `canvasightHost=widget`: legacy widget iframe candidate.
-- `canSendFollowUpMessage() === true`: frontend can ask the widget host bridge to send a follow-up.
+- `bridgeTransport=mcp_ui_message`: the standard MCP Apps `ui/message` bridge is ready.
+- `bridgeTransport=openai_compat_followup`: the Codex/OpenAI compatibility `window.openai.sendFollowUpMessage` bridge is ready.
+- `canSendFollowUpMessage() === true`: frontend can ask a native widget host bridge to send a follow-up.
 - `delivery.status === "sent"` and `delivery.via === "widget_bridge"`: host bridge `sendMessage` accepted the Run.
 - `delivery.reason === "browser_fallback_requires_await"`: payload is queued; use `await_canvasight_run`.
 
@@ -55,7 +57,7 @@ Canvasight Run should arrive as a normal follow-up turn when the canvas was open
 
 1. Confirm the canvas was opened through `open_canvasight` native widget output, not a bare `http://127.0.0.1:5173/` dev page or browser fallback URL.
 2. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active. Open a new thread or reload after reinstalling.
-3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasightAppBundleSource`, `__CANVASIGHT_WIDGET_DATA__`, and `canvasight:send-follow-up`. Also inspect the native open tool result: public `structuredContent` should not contain the daemon URL, while `_meta.widgetData.url` should.
+3. If the UI shows a widget bridge error, inspect `resources/read` and the widget HTML for `canvasightMcpHostBridge`, `canvasightAppBundleSource`, `__CANVASIGHT_WIDGET_DATA__`, `mcpApp.sendMessage`, `window.openai.sendFollowUpMessage`, and `canvasight:send-follow-up`. Also inspect the native open tool result: public `structuredContent` should not contain the daemon URL, while `_meta.widgetData.url` should. Diagnostics should include `bridgeTransport` and a specific `bridgeReason`, not only a generic bridge-not-ready message.
 4. If using a browser fallback page, call `claim_canvasight_thread` from the intended current thread before clicking Run. Browser fallback cannot show sent; call `await_canvasight_run` with `sessionId` or `projectPath`.
 5. If a bare dev page returns `code: "unbound_dev_session"`, it has no claimed Codex thread. Claim the project from the intended thread or reopen Canvasight through the plugin.
 
@@ -76,7 +78,7 @@ Normal plugin use should not require `npm run dev`. That command is for local de
 
 If a `127.0.0.1:5173` page reports `Canvasight daemon did not start in time`, first run `npm run dev:status` from `plugins/canvasight`. A `stale ... serverVersion=<old> expected=<current>` status means the persistent managed Vite process was started by an older Canvasight version and is still serving old API middleware. Run `npm run dev`; since `0.1.35` it stops the stale managed process and starts a fresh dev server.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. A generic dev fallback URL should include `threadId`; Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.39`, browser/dev fallback is diagnostic-only for Run delivery: claimed Runs queue for `await_canvasight_run` and must not report app-server `turn/start` as sent. Since `0.1.40`, only explicit browser fallback returns a browser URL publicly; native open hides daemon URLs in `_meta.widgetData`.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. A generic dev fallback URL should include `threadId`; Canvasight resolves that Codex thread's project `cwd` and opens/creates `.scatter` there. URL-encoded `projectPath` is an explicit override, not a user-facing requirement. If the page cannot resolve the thread project, it should show a compact recovery error rather than a manual project path gate. Run payloads target the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Since `0.1.39`, browser/dev fallback is diagnostic-only for Run delivery: claimed Runs queue for `await_canvasight_run` and must not report app-server `turn/start` as sent. Since `0.1.40`, only explicit browser fallback returns a browser URL publicly; native open hides daemon URLs in `_meta.widgetData`. Since `0.1.41`, native widget diagnostics distinguish `mcp_ui_message`, `openai_compat_followup`, and concrete bridge failure reasons.
 
 ## Validation Commands
 

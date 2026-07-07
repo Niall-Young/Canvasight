@@ -16,6 +16,6 @@ Use this skill to handle Canvasight Run payloads and their Codex mode.
 5. Treat returned Markdown and `structuredContent` as the source of truth for the next Codex action.
 6. If `structuredContent.agentTeam.enabled` is true, use `canvasight-agent-team` before executing the task.
 
-Normal Canvasight Run delivery must come from the Codex native widget host bridge. Browser URLs and bare dev pages must not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; otherwise it queues the payload for `await_canvasight_run`. Do not treat Codex app-server `turn/start` as a Run delivery path.
+Normal Canvasight Run delivery must come from the Codex native widget host bridge, using either MCP Apps `ui/message` or Codex/OpenAI compatibility `window.openai.sendFollowUpMessage`. Browser URLs and bare dev pages must not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; otherwise it queues the payload for `await_canvasight_run`. Do not treat Codex app-server `turn/start` as a Run delivery path.
 
 For native Chat, Plan, and Goal handling, read `references/run-output-contract.md`.

@@ -2,7 +2,7 @@
 
 Canvasight Run can arrive in two ways:
 
-- Native widget delivery: the Canvasight Codex widget receives the host bridge and sends the Run as a follow-up message to the current Codex thread.
+- Native widget delivery: the Canvasight Codex widget receives the host bridge and sends the Run as a follow-up message to the current Codex thread. The bridge may be MCP Apps `ui/message` or Codex/OpenAI compatibility `window.openai.sendFollowUpMessage`.
 - Await fallback: browser/dev fallback pages queue the payload, then the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
 
 Default plugin Run clicks must come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before their queued payloads can target that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. Do not use app-server `turn/start`, virtual clicks, clipboard, Accessibility, or DOM automation as a Run success path.

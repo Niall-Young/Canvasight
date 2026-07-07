@@ -159,6 +159,11 @@ function CanvasightDiagnosticsPanel({ diagnostics, lastRun, onClose }: Diagnosti
         <DiagnosticsRow label={t("diagnostics.windowOpenAI")} value={boolValue(diagnostics.hasWindowOpenAI)} />
         <DiagnosticsRow label={t("diagnostics.canvasightMcp")} value={boolValue(diagnostics.hasCanvasightMcp)} />
         <DiagnosticsRow label={t("diagnostics.canSendFollowUp")} value={boolValue(diagnostics.canSendFollowUpMessage)} />
+        <DiagnosticsRow label={t("diagnostics.bridgeTransport")} value={diagnostics.bridgeTransport || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.bridgeReason")} value={diagnostics.bridgeReason || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.mcpInitialized")} value={boolValue(diagnostics.mcpInitialized)} />
+        <DiagnosticsRow label={t("diagnostics.hostMessage")} value={boolValue(diagnostics.hostCapabilitiesMessage)} />
+        <DiagnosticsRow label={t("diagnostics.openaiFollowUp")} value={boolValue(diagnostics.openaiFollowUpAvailable)} />
         <DiagnosticsRow label={t("diagnostics.session")} value={diagnostics.sessionId || t("diagnostics.none")} />
         <DiagnosticsRow label={t("diagnostics.thread")} value={diagnostics.threadId || t("diagnostics.none")} />
         <div className="canvas-diagnostics-divider" />
@@ -170,7 +175,7 @@ function CanvasightDiagnosticsPanel({ diagnostics, lastRun, onClose }: Diagnosti
         <DiagnosticsRow label={t("diagnostics.codexTurn")} value={codexTurn?.status || t("diagnostics.none")} />
         <DiagnosticsRow label={t("diagnostics.confirmed")} value={codexTurn?.confirmed === undefined ? t("diagnostics.none") : boolValue(Boolean(codexTurn.confirmed))} />
         <DiagnosticsRow label={t("diagnostics.turnId")} value={codexTurn?.turnId || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.error")} value={codexTurn?.error || codexNative?.error || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.error")} value={codexTurn?.error || codexNative?.error || diagnostics.lastBridgeError || t("diagnostics.none")} />
       </div>
     </section>
   );
@@ -845,6 +850,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [runFeedback, setRunFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [lastRunResult, setLastRunResult] = useState<RunResponse | null>(null);
+  const [bridgeDiagnosticRevision, setBridgeDiagnosticRevision] = useState(0);
   const hydratedRef = useRef(false);
   const documentRevisionRef = useRef<number | null>(null);
   const skipNextSaveRef = useRef(false);
@@ -872,7 +878,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
-  const bridgeDiagnostics = useMemo(() => getCanvasightBridgeDiagnostics(), [diagnosticsOpen, lastRunResult, runFeedback]);
+  const bridgeDiagnostics = useMemo(() => getCanvasightBridgeDiagnostics(), [bridgeDiagnosticRevision, diagnosticsOpen, lastRunResult, runFeedback]);
   const canDeletePage = pages.length > 1;
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
@@ -1731,6 +1737,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
   }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
+
+  useEffect(() => {
+    const handleBridgeState = () => setBridgeDiagnosticRevision((revision) => revision + 1);
+    window.addEventListener("canvasight:bridge-state", handleBridgeState);
+    return () => window.removeEventListener("canvasight:bridge-state", handleBridgeState);
+  }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {

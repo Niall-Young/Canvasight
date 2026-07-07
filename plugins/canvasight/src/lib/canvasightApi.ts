@@ -79,10 +79,16 @@ export interface RunResponse {
 }
 
 export interface CanvasightBridgeDiagnostics {
+  bridgeReason: string | null;
+  bridgeTransport: "mcp_ui_message" | "openai_compat_followup" | "none" | null;
   canSendFollowUpMessage: boolean;
   canvasightHost: string | null;
   hasCanvasightMcp: boolean;
   hasCanvasightMcpSendFollowUp: boolean;
+  hostCapabilitiesMessage: boolean;
+  lastBridgeError: string | null;
+  mcpInitialized: boolean;
+  openaiFollowUpAvailable: boolean;
   hasWindowOpenAI: boolean;
   href: string;
   inIframe: boolean;
@@ -106,6 +112,15 @@ interface WidgetFollowUpMessage {
   prompt: string;
 }
 
+interface CanvasightBridgeState {
+  bridgeTransport?: "mcp_ui_message" | "openai_compat_followup" | "none";
+  hostCapabilitiesMessage?: boolean;
+  lastBridgeError?: string | null;
+  mcpInitialized?: boolean;
+  openaiFollowUpAvailable?: boolean;
+  reason?: string | null;
+}
+
 interface CanvasightWidgetRuntimeData {
   apiBaseUrl?: string;
   browserUrl?: string;
@@ -123,6 +138,8 @@ type CanvasightWindow = Window &
   typeof globalThis & {
     __CANVASIGHT_WIDGET_DATA__?: CanvasightWidgetRuntimeData;
     canvasightMcp?: {
+      canSendFollowUpMessage?: () => boolean;
+      getBridgeState?: () => CanvasightBridgeState;
       runCanvasightNode?: (payload: RunPayload) => Promise<RunResponse>;
       sendFollowUpMessage?: (message: WidgetFollowUpMessage) => Promise<unknown>;
     };
@@ -368,17 +385,51 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 function canAttemptWidgetFollowUp(): boolean {
   const bridgeWindow = window as CanvasightWindow;
+  const bridgeCanSend = bridgeWindow.canvasightMcp?.canSendFollowUpMessage;
+  if (typeof bridgeCanSend === "function") return bridgeCanSend();
   return typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function";
+}
+
+function widgetBridgeState(): CanvasightBridgeState {
+  const bridgeWindow = window as CanvasightWindow;
+  const state = bridgeWindow.canvasightMcp?.getBridgeState?.();
+  return state && typeof state === "object" ? state : {};
+}
+
+function bridgeNotReadyError(): Error {
+  const state = widgetBridgeState();
+  const canvasightHost = new URLSearchParams(window.location.search).get("canvasightHost") || widgetRuntimeData().canvasightHost || "";
+  const reason = state.reason || (canvasightHost === "widget" ? "openai_followup_missing" : "browser_fallback_no_bridge");
+  return new Error(
+    [
+      "Canvasight native widget host bridge is not ready.",
+      `reason=${reason}`,
+      `bridgeTransport=${state.bridgeTransport || "none"}`,
+      `mcpInitialized=${Boolean(state.mcpInitialized)}`,
+      `hostCapabilitiesMessage=${Boolean(state.hostCapabilitiesMessage)}`,
+      `openaiFollowUpAvailable=${Boolean(state.openaiFollowUpAvailable)}`,
+      state.lastBridgeError ? `lastBridgeError=${state.lastBridgeError}` : ""
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
 }
 
 export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
   const query = new URLSearchParams(window.location.search);
   const bridgeWindow = window as CanvasightWindow;
+  const bridgeState = widgetBridgeState();
   return {
+    bridgeReason: bridgeState.reason || null,
+    bridgeTransport: bridgeState.bridgeTransport || null,
     canSendFollowUpMessage: canAttemptWidgetFollowUp(),
     canvasightHost: query.get("canvasightHost") || widgetRuntimeData().canvasightHost || null,
     hasCanvasightMcp: Boolean(bridgeWindow.canvasightMcp),
     hasCanvasightMcpSendFollowUp: typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function",
+    hostCapabilitiesMessage: Boolean(bridgeState.hostCapabilitiesMessage),
+    lastBridgeError: bridgeState.lastBridgeError || null,
+    mcpInitialized: Boolean(bridgeState.mcpInitialized),
+    openaiFollowUpAvailable: Boolean(bridgeState.openaiFollowUpAvailable),
     hasWindowOpenAI: Boolean(bridgeWindow.openai),
     href: window.location.href,
     inIframe: window.parent !== window,
@@ -390,12 +441,12 @@ export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
 
 function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9000): Promise<void> {
   void timeoutMs;
-  if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight native widget host bridge is not ready."));
+  if (!canAttemptWidgetFollowUp()) return Promise.reject(bridgeNotReadyError());
   const directBridge = (window as CanvasightWindow).canvasightMcp?.sendFollowUpMessage;
   if (typeof directBridge === "function") {
     return directBridge(message).then(() => undefined);
   }
-  return Promise.reject(new Error("Canvasight native widget host bridge is not ready."));
+  return Promise.reject(bridgeNotReadyError());
 }
 
 const expectedWidgetCodexStatus: Record<CodexMode, NonNullable<RunResponse["codexNative"]>["status"]> = {
@@ -416,7 +467,7 @@ function assertPreparedWidgetRun(payload: RunPayload, preparedRun: RunResponse):
 async function runCanvasightNodeThroughWidget(payload: RunPayload): Promise<RunResponse> {
   const directRun = (window as CanvasightWindow).canvasightMcp?.runCanvasightNode;
   if (typeof directRun === "function") return directRun(payload);
-  if (!canAttemptWidgetFollowUp()) throw new Error("Canvasight native widget host bridge is not ready.");
+  if (!canAttemptWidgetFollowUp()) throw bridgeNotReadyError();
   const preparedRun = await canvasightApi.prepareWidgetRun(payload);
   assertPreparedWidgetRun(payload, preparedRun);
   await sendWidgetFollowUpMessage({

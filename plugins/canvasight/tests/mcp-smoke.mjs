@@ -5,6 +5,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -298,6 +299,195 @@ function widgetDataFor(result) {
   return result._meta.widgetData;
 }
 
+function extractWidgetBridgeScript(widgetHtml) {
+  const match = widgetHtml.match(/<script id="canvasightMcpHostBridge">([\s\S]*?)<\/script>/);
+  assert.ok(match, "widget host bridge script is missing");
+  return match[1].replaceAll("<\\/script", "</script");
+}
+
+async function runWidgetBridgeHarness(scriptSource, options = {}) {
+  const records = {
+    mcpMessages: [],
+    openaiMessages: [],
+    sizeChanges: [],
+    displayModeRequests: []
+  };
+  const statusEl = { dataset: {}, textContent: "" };
+  const listeners = new Map();
+  const document = {
+    body: {
+      offsetHeight: 600,
+      scrollHeight: 600,
+      appendChild(node) {
+        records.appendedScript = node;
+      }
+    },
+    documentElement: {
+      clientWidth: 800,
+      offsetHeight: 600,
+      scrollHeight: 600,
+      style: {}
+    },
+    createElement(tagName) {
+      return { id: "", tagName, textContent: "" };
+    },
+    getElementById(id) {
+      if (id === "canvasight-frame") return null;
+      if (id === "canvasight-widget-status") return statusEl;
+      if (id === "canvasightAppBundleSource") return { textContent: "" };
+      if (id === "canvasight-app-module") return null;
+      return null;
+    }
+  };
+  const window = {
+    document,
+    innerWidth: 800,
+    openai: options.openaiFollowUp
+      ? {
+          sendFollowUpMessage(payload) {
+            records.openaiMessages.push(payload);
+            return Promise.resolve({ ok: true });
+          }
+        }
+      : {},
+    addEventListener(type, listener) {
+      const existing = listeners.get(type) || [];
+      existing.push(listener);
+      listeners.set(type, existing);
+    },
+    dispatchEvent(event) {
+      const existing = listeners.get(event.type) || [];
+      for (const listener of existing) listener(event);
+    }
+  };
+  window.window = window;
+  window.parent = window;
+
+  class FakeApp {
+    constructor() {
+      this.listeners = new Map();
+    }
+    addEventListener(type, listener) {
+      const existing = this.listeners.get(type) || [];
+      existing.push(listener);
+      this.listeners.set(type, existing);
+    }
+    connect() {
+      if (options.connectReject) return Promise.reject(new Error(options.connectReject));
+      return Promise.resolve();
+    }
+    getHostCapabilities() {
+      return options.hostCapabilities || { message: {} };
+    }
+    getHostVersion() {
+      return { name: "fake-host", version: "1.0.0" };
+    }
+    getHostContext() {
+      return {};
+    }
+    requestDisplayMode(request) {
+      records.displayModeRequests.push(request);
+      return Promise.resolve({});
+    }
+    sendSizeChanged(size) {
+      records.sizeChanges.push(size);
+    }
+    sendMessage(message) {
+      records.mcpMessages.push(message);
+      return Promise.resolve({ ok: true });
+    }
+    callServerTool(request) {
+      records.serverToolCalls = [...(records.serverToolCalls || []), request];
+      return Promise.resolve({});
+    }
+  }
+
+  const context = {
+    __CANVASIGHT_MCP_APPS__: {
+      App: FakeApp,
+      applyDocumentTheme() {},
+      applyHostFonts() {},
+      applyHostStyleVariables() {}
+    },
+    clearTimeout,
+    console,
+    CustomEvent: class CustomEvent {
+      constructor(type, init = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    document,
+    Error,
+    Promise,
+    setTimeout,
+    URL,
+    window
+  };
+  context.globalThis = context;
+  vm.runInNewContext(scriptSource, context);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return {
+    api: window.canvasightMcp,
+    records,
+    state: () => window.canvasightMcp.getBridgeState(),
+    statusEl
+  };
+}
+
+async function assertWidgetBridgeAdapters(widgetHtml) {
+  const bridgeScript = extractWidgetBridgeScript(widgetHtml);
+  const mcpHarness = await runWidgetBridgeHarness(bridgeScript);
+  assert.equal(mcpHarness.api.canSendFollowUpMessage(), true);
+  assert.equal(mcpHarness.state().bridgeTransport, "mcp_ui_message");
+  await mcpHarness.api.sendFollowUpMessage({
+    prompt: "MCP bridge prompt",
+    content: [{ type: "text", text: "MCP bridge prompt" }]
+  });
+  assert.equal(mcpHarness.records.mcpMessages.length, 1);
+  assert.equal(mcpHarness.records.mcpMessages[0].role, "user");
+  assert.deepEqual(mcpHarness.records.mcpMessages[0].content, [{ type: "text", text: "MCP bridge prompt" }]);
+  assert.equal(mcpHarness.records.openaiMessages.length, 0);
+
+  const openaiHarness = await runWidgetBridgeHarness(bridgeScript, {
+    connectReject: "ui initialize failed",
+    openaiFollowUp: true
+  });
+  assert.equal(openaiHarness.api.canSendFollowUpMessage(), true);
+  assert.equal(openaiHarness.state().bridgeTransport, "openai_compat_followup");
+  await openaiHarness.api.sendFollowUpMessage({
+    prompt: "OpenAI bridge prompt",
+    content: [{ type: "text", text: "OpenAI bridge prompt" }]
+  });
+  assert.equal(openaiHarness.records.mcpMessages.length, 0);
+  assert.equal(openaiHarness.records.openaiMessages[0].prompt, "OpenAI bridge prompt");
+  assert.equal(openaiHarness.records.openaiMessages[0].scrollToBottom, true);
+
+  const missingMessageCapabilityHarness = await runWidgetBridgeHarness(bridgeScript, {
+    hostCapabilities: {}
+  });
+  assert.equal(missingMessageCapabilityHarness.api.canSendFollowUpMessage(), false);
+  await assert.rejects(
+    missingMessageCapabilityHarness.api.sendFollowUpMessage({
+      prompt: "No message capability",
+      content: [{ type: "text", text: "No message capability" }]
+    }),
+    /reason=host_message_capability_missing/
+  );
+
+  const unavailableHarness = await runWidgetBridgeHarness(bridgeScript, {
+    connectReject: "ui initialize failed"
+  });
+  assert.equal(unavailableHarness.api.canSendFollowUpMessage(), false);
+  await assert.rejects(
+    unavailableHarness.api.sendFollowUpMessage({
+      prompt: "Unavailable bridge",
+      content: [{ type: "text", text: "Unavailable bridge" }]
+    }),
+    /reason=openai_followup_missing/
+  );
+}
+
 function assertUniqueNodePositions(nodes, label) {
   const seen = new Set();
   for (const node of nodes) {
@@ -504,6 +694,10 @@ async function main() {
     assert.match(widgetHtml, /canvasight:send-follow-up/);
     assert.match(widgetHtml, /sendFollowUpMessage/);
     assert.match(widgetHtml, /mcpApp\.sendMessage/);
+    assert.match(widgetHtml, /window\.openai\?\.sendFollowUpMessage/);
+    assert.match(widgetHtml, /getBridgeState/);
+    assert.match(widgetHtml, /bridgeTransport/);
+    await assertWidgetBridgeAdapters(widgetHtml);
     assert.ok(
       widgetHtml.indexOf('id="root"') < widgetHtml.indexOf('id="canvasightMcpHostBridge"')
     );
