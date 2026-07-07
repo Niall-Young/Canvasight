@@ -298,6 +298,19 @@ async function readNativeLog() {
   }
 }
 
+async function readMcpLifecycleLog() {
+  try {
+    const raw = await fsp.readFile(path.join(canvasightHome, "mcp-lifecycle.log"), "utf8");
+    return raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -621,6 +634,128 @@ function createMcpClient(label, envOverrides = {}) {
       clientChild.stdin.end();
       clientChild.kill("SIGTERM");
     },
+    endStdinAndWait() {
+      clientStopping = true;
+      clientChild.stdin.end();
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          clientChild.kill("SIGTERM");
+          reject(new Error(`MCP ${label} did not exit after stdin end. stderr=${clientStderrBuffer}`));
+        }, 2000);
+        clientChild.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          if (code === 0) {
+            resolve({ code, signal });
+          } else {
+            reject(new Error(`MCP ${label} exited with code=${code} signal=${signal} stderr=${clientStderrBuffer}`));
+          }
+        });
+      });
+    },
+    stderr() {
+      return clientStderrBuffer;
+    }
+  };
+}
+
+function createContentLengthMcpClient(label, envOverrides = {}) {
+  let clientNextId = 1;
+  let clientStdoutBuffer = Buffer.alloc(0);
+  let clientStderrBuffer = "";
+  let clientStopping = false;
+  const clientPending = new Map();
+  const clientChild = spawn(process.execPath, [serverPath], {
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
+      CANVASIGHT_HOME: canvasightHome,
+      CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_CODEX_NATIVE: "1",
+      CANVASIGHT_NATIVE_LOG: nativeLogPath,
+      CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
+      CANVASIGHT_OPEN_BROWSER: "0",
+      CODEX_THREAD_ID: `thread-${label}`,
+      ...envOverrides
+    },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  function rejectClientPending(error) {
+    for (const { reject } of clientPending.values()) reject(error);
+    clientPending.clear();
+  }
+
+  function parseClientStdout() {
+    while (clientStdoutBuffer.length) {
+      const headerEnd = clientStdoutBuffer.indexOf("\r\n\r\n");
+      if (headerEnd < 0) return;
+      const header = clientStdoutBuffer.subarray(0, headerEnd).toString("ascii");
+      const match = header.match(/content-length:\s*(\d+)/i);
+      assert.ok(match, `missing content-length header in ${header}`);
+      const length = Number(match[1]);
+      const start = headerEnd + 4;
+      const end = start + length;
+      if (clientStdoutBuffer.length < end) return;
+      const message = JSON.parse(clientStdoutBuffer.subarray(start, end).toString("utf8"));
+      clientStdoutBuffer = clientStdoutBuffer.subarray(end);
+      const handler = clientPending.get(message.id);
+      if (!handler) continue;
+      clientPending.delete(message.id);
+      if (message.error) {
+        handler.reject(new Error(message.error.message));
+      } else {
+        handler.resolve(message.result);
+      }
+    }
+  }
+
+  clientChild.stdout.on("data", (chunk) => {
+    clientStdoutBuffer = Buffer.concat([clientStdoutBuffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+    parseClientStdout();
+  });
+
+  clientChild.stderr.setEncoding("utf8");
+  clientChild.stderr.on("data", (chunk) => {
+    clientStderrBuffer += chunk;
+  });
+
+  clientChild.on("exit", (code, signal) => {
+    if (!clientStopping && clientPending.size) {
+      rejectClientPending(new Error(`MCP ${label} exited early: code=${code} signal=${signal} stderr=${clientStderrBuffer}`));
+    }
+  });
+
+  return {
+    child: clientChild,
+    request(method, params) {
+      const id = clientNextId;
+      clientNextId += 1;
+      const promise = new Promise((resolve, reject) => {
+        clientPending.set(id, { resolve, reject });
+      });
+      const body = JSON.stringify({ jsonrpc: "2.0", id, method, params });
+      clientChild.stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+      return promise;
+    },
+    async endStdinAndWait() {
+      clientStopping = true;
+      clientChild.stdin.end();
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          clientChild.kill("SIGTERM");
+          reject(new Error(`MCP ${label} did not exit after stdin end. stderr=${clientStderrBuffer}`));
+        }, 2000);
+        clientChild.once("exit", (code, signal) => {
+          clearTimeout(timer);
+          if (code === 0) {
+            resolve({ code, signal });
+          } else {
+            reject(new Error(`MCP ${label} exited with code=${code} signal=${signal} stderr=${clientStderrBuffer}`));
+          }
+        });
+      });
+    },
     stderr() {
       return clientStderrBuffer;
     }
@@ -713,6 +848,70 @@ async function main() {
       "task-plan",
       "general"
     ]);
+
+    const lifecycleClient = createMcpClient("lifecycle", {
+      CODEX_THREAD_ID: "thread-lifecycle"
+    });
+    try {
+      const lifecycleInitialized = await lifecycleClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-lifecycle-smoke",
+          version: "0.0.0"
+        }
+      });
+      assert.equal(lifecycleInitialized.serverInfo.version, expectedPluginVersion);
+      await assert.rejects(
+        lifecycleClient.request("tools/call", {
+          name: "missing_canvasight_tool",
+          arguments: {}
+        }),
+        /Unknown tool: missing_canvasight_tool/
+      );
+      const lifecycleRecent = await lifecycleClient.request("tools/call", {
+        name: "list_canvasight_recent_projects",
+        arguments: { limit: 2 }
+      });
+      assert.equal(lifecycleRecent.structuredContent.status, "listed");
+      await lifecycleClient.endStdinAndWait();
+    } finally {
+      if (!lifecycleClient.child.killed) lifecycleClient.child.kill("SIGTERM");
+    }
+
+    const contentLengthClient = createContentLengthMcpClient("content-length", {
+      CODEX_THREAD_ID: "thread-content-length"
+    });
+    try {
+      const contentLengthInitialized = await contentLengthClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-content-length-smoke",
+          version: "0.0.0"
+        }
+      });
+      assert.equal(contentLengthInitialized.serverInfo.version, expectedPluginVersion);
+      const contentLengthListed = await contentLengthClient.request("tools/list", {});
+      assert.equal(contentLengthListed.tools.some((tool) => tool.name === "open_canvasight"), true);
+      const contentLengthRecent = await contentLengthClient.request("tools/call", {
+        name: "list_canvasight_recent_projects",
+        arguments: { limit: 2 }
+      });
+      assert.equal(contentLengthRecent.structuredContent.status, "listed");
+      await contentLengthClient.endStdinAndWait();
+    } finally {
+      if (!contentLengthClient.child.killed) contentLengthClient.child.kill("SIGTERM");
+    }
+
+    const lifecycleLog = await readMcpLifecycleLog();
+    assert.equal(lifecycleLog.some((entry) => entry.event === "stdio_start"), true);
+    assert.equal(lifecycleLog.some((entry) => entry.event === "stdin_end"), true);
+    assert.equal(lifecycleLog.some((entry) => entry.event === "stdio_exit"), true);
+    assert.equal(
+      lifecycleLog.some((entry) => entry.event === "request" && entry.method === "tools/call" && entry.toolName === "list_canvasight_recent_projects"),
+      true
+    );
 
     const resources = await request("resources/list", {});
     assert.equal(resources.resources.length, 1);
@@ -1746,7 +1945,7 @@ async function main() {
         timeoutMs: 5000
       }
     });
-    await sleep(20);
+    await sleep(150);
 
     const queued = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",

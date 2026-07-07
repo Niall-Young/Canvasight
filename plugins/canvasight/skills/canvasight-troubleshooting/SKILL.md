@@ -12,7 +12,7 @@ Use this skill for Canvasight runtime, install, and recovery problems.
 1. Classify the delivery path first: browser fallback, direct widget app, legacy widget iframe, bridge connected, or queued fallback.
 2. Check whether the issue is plugin install/cache, native widget host bridge, daemon state, browser URL, or project `.scatter` data.
 3. When `open_canvasight` is missing from the active tool list, call `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` before using browser fallback or declaring tools unavailable.
-4. When a visible Canvasight MCP tool fails with `Transport closed`, report `canvasight_mcp_transport_closed`; treat it as stale/dead current-thread MCP transport, not a daemon, install, or browser fallback success-path problem.
+4. When a visible Canvasight MCP tool fails with `Transport closed`, report `canvasight_mcp_transport_closed`; treat it as stale/dead current-thread MCP transport, not a daemon, install, or browser fallback success-path problem. On 0.1.44 or newer, inspect `mcp-lifecycle.log` in the Canvasight state directory before guessing.
 5. Verify the resolved plugin version with `codex plugin list` when tool availability or stale behavior is the issue.
 6. Prefer `open_canvasight` or recent-project recovery over asking the user to run `npm run dev` for normal plugin recovery.
 7. Use `npm run dev` / `npm run dev:stop` only for local development preview, not normal plugin usage.

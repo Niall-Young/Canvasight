@@ -14,6 +14,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-2152-integration-summary-mcp-stdio-transport-lifecycle.md` - integrated Canvasight 0.1.44 MCP stdio lifecycle logging, JSON-RPC error hardening, stale daemon cleanup, tests, docs, reinstall, and recorded current-thread hot-swap limitation.
+- `agent-reports/resolved/20260707-2152-development-solution-mcp-stdio-transport-lifecycle.md` - fixed MCP stdio lifecycle opacity and stale daemon cleanup while preserving native widget-only Run success.
+- `agent-reports/resolved/20260707-2152-development-issue-mcp-stdio-transport-lifecycle.md` - resolved visible Canvasight tool `Transport closed` lacking plugin-side lifecycle diagnostics.
 - `agent-reports/resolved/20260707-2119-integration-summary-transport-closed-skill-contract.md` - documented visible Canvasight MCP `Transport closed` as `canvasight_mcp_transport_closed`, updated skills/docs/tests, bumped version 0.1.43, and kept recovery to reload/new thread instead of browser fallback.
 - `agent-reports/resolved/20260707-2119-skill-solution-transport-closed-contract.md` - resolved the skill contract gap for current-thread Canvasight MCP transport closed failures.
 - `agent-reports/resolved/20260707-1127-development-issue-current-thread-mcp-transport-closed.md` - closed after writing the `Transport closed` recovery contract into Canvasight skills; live transport recovery remains reload/new thread.

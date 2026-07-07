@@ -23,6 +23,10 @@ function devServerStatePath() {
   return path.join(canvasightHome(), "dev-server.json");
 }
 
+function daemonStatePath() {
+  return path.join(canvasightHome(), "daemon.json");
+}
+
 function devPort() {
   const parsed = Number(process.env.CANVASIGHT_DEV_PORT || process.env.PORT || 5173);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 5173;
@@ -43,6 +47,42 @@ function processIsAlive(pid) {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function canvasightDaemonPidsForPluginRoot() {
+  if (process.platform === "win32") return [];
+  try {
+    const output = await new Promise((resolve) => {
+      const ps = spawn("ps", ["-axo", "pid=,command="], {
+        stdio: ["ignore", "pipe", "ignore"]
+      });
+      let text = "";
+      ps.stdout.setEncoding("utf8");
+      ps.stdout.on("data", (chunk) => {
+        text += chunk;
+      });
+      ps.on("error", () => resolve(""));
+      ps.on("exit", () => resolve(text));
+    });
+    return String(output)
+      .split("\n")
+      .map((line) => {
+        const match = line.trim().match(/^(\d+)\s+(.+)$/);
+        if (!match) return null;
+        return {
+          pid: Number(match[1]),
+          command: match[2]
+        };
+      })
+      .filter((entry) => {
+        if (!entry?.command.includes("mcp/server.mjs") || !entry.command.includes("--daemon")) return false;
+        if (!entry.command.includes("/canvasight-local/canvasight/")) return false;
+        return !entry.command.includes(`/canvasight-local/canvasight/${SERVER_VERSION}/`);
+      })
+      .map((entry) => entry.pid);
+  } catch {
+    return [];
   }
 }
 
@@ -70,6 +110,18 @@ async function readState() {
   }
 }
 
+async function readDaemonState() {
+  try {
+    const raw = await fsp.readFile(daemonStatePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
 async function writeState(state) {
   await fsp.mkdir(canvasightHome(), { recursive: true });
   await fsp.writeFile(devServerStatePath(), `${JSON.stringify(state, null, 2)}\n`, "utf8");
@@ -77,6 +129,10 @@ async function writeState(state) {
 
 async function removeState() {
   await fsp.rm(devServerStatePath(), { force: true });
+}
+
+async function removeDaemonState() {
+  await fsp.rm(daemonStatePath(), { force: true });
 }
 
 async function fetchText(url, timeoutMs = 1200) {
@@ -148,11 +204,62 @@ async function stopManagedServer(state, origin) {
   }
 }
 
+function daemonStateIsStale(state) {
+  return state?.pluginRoot === pluginRoot && state?.serverVersion && state.serverVersion !== SERVER_VERSION;
+}
+
+async function stopStaleDaemon(state) {
+  if (!daemonStateIsStale(state)) return false;
+  const pid = Number(state.pid);
+  if (processIsAlive(pid)) {
+    process.kill(pid, "SIGTERM");
+    const deadline = Date.now() + 1200;
+    while (Date.now() < deadline && processIsAlive(pid)) {
+      await sleep(80);
+    }
+  }
+  await removeDaemonState();
+  return true;
+}
+
+async function stopOrphanDaemons(keepPid = 0) {
+  const pids = await canvasightDaemonPidsForPluginRoot();
+  const stopped = [];
+  for (const pid of pids) {
+    if (pid === keepPid) continue;
+    if (!processIsAlive(pid)) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+      stopped.push(pid);
+    } catch {
+      // Ignore processes that exit between ps and kill.
+    }
+  }
+  if (stopped.length) {
+    const deadline = Date.now() + 1200;
+    while (Date.now() < deadline && stopped.some(processIsAlive)) {
+      await sleep(80);
+    }
+  }
+  return stopped;
+}
+
 async function start() {
   const port = devPort();
   const origin = originForPort(port);
   const state = await readState();
+  const daemonState = await readDaemonState();
   const healthy = await canvasightDevServerIsHealthy(origin);
+
+  if (await stopStaleDaemon(daemonState)) {
+    process.stdout.write(
+      `Stopping stale Canvasight daemon: ${daemonState.serverVersion || "unknown"} -> ${SERVER_VERSION}\n`
+    );
+  }
+  const stoppedOrphans = await stopOrphanDaemons(daemonStateIsStale(daemonState) ? 0 : Number(daemonState?.pid || 0));
+  if (stoppedOrphans.length) {
+    process.stdout.write(`Stopping orphan Canvasight daemon processes: ${stoppedOrphans.join(", ")}\n`);
+  }
 
   if (stateMatchesCurrentServer(state, origin) && healthy) {
     process.stdout.write(`Canvasight dev server is already running: ${origin}\n`);
@@ -250,13 +357,16 @@ async function stop() {
 
 async function status() {
   const state = await readState();
+  const daemonState = await readDaemonState();
   const origin = state?.origin || originForPort(devPort());
   const healthy = await canvasightDevServerIsHealthy(origin);
-  const stale = healthy && stateIsStale(state, origin);
+  const stale = healthy && (stateIsStale(state, origin) || daemonStateIsStale(daemonState));
   process.stdout.write(
     `${healthy ? (stale ? "stale" : "running") : "stopped"} ${origin}${state?.pid ? ` pid=${state.pid}` : ""}${
       state?.serverVersion ? ` serverVersion=${state.serverVersion}` : ""
-    }${stale ? ` expected=${SERVER_VERSION}` : ""}${state?.managed === false ? " unmanaged" : ""}\n`
+    }${daemonStateIsStale(daemonState) ? ` daemonServerVersion=${daemonState.serverVersion}` : ""}${
+      stale ? ` expected=${SERVER_VERSION}` : ""
+    }${state?.managed === false ? " unmanaged" : ""}\n`
   );
 }
 

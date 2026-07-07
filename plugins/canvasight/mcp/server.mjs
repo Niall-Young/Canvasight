@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.43";
+const SERVER_VERSION = "0.1.44";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -121,6 +121,9 @@ let inputBuffer = Buffer.alloc(0);
 let useContentLengthTransport = false;
 let daemonAuthToken = process.env.CANVASIGHT_DAEMON_TOKEN || "";
 let daemonStartedAt = nowIso();
+let mcpInFlight = 0;
+let mcpStdinEnded = false;
+let mcpExitTimer = null;
 
 class HttpError extends Error {
   constructor(statusCode, message, code = "") {
@@ -178,6 +181,35 @@ function isObject(value) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function serializeError(error) {
+  return {
+    name: error?.name || "Error",
+    message: error?.message || String(error || "Unknown error"),
+    stack: typeof error?.stack === "string" ? error.stack : ""
+  };
+}
+
+function appendMcpLifecycle(event, data = {}) {
+  if (isDaemonMode || isStopDaemonMode) return;
+  try {
+    fs.mkdirSync(canvasightHome(), { recursive: true });
+    fs.appendFileSync(
+      canvasightMcpLifecycleLogPath(),
+      `${JSON.stringify({
+        ts: nowIso(),
+        pid: process.pid,
+        version: SERVER_VERSION,
+        pluginRoot,
+        event,
+        ...data
+      })}\n`,
+      "utf8"
+    );
+  } catch {
+    // Lifecycle logging is diagnostic only; it must never break JSON-RPC.
+  }
 }
 
 function toNumber(value, fallback) {
@@ -325,6 +357,10 @@ function canvasightStatePath() {
 
 function canvasightDaemonStatePath() {
   return path.join(canvasightHome(), "daemon.json");
+}
+
+function canvasightMcpLifecycleLogPath() {
+  return path.join(canvasightHome(), "mcp-lifecycle.log");
 }
 
 function canvasightTemplatesPath() {
@@ -773,8 +809,115 @@ async function healthyDaemonState(state) {
   }
 }
 
+function processIsAlive(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function canvasightDaemonPidsForPluginRoot() {
+  if (process.platform === "win32") return [];
+  try {
+    const output = await new Promise((resolve) => {
+      const ps = spawn("ps", ["-axo", "pid=,command="], {
+        stdio: ["ignore", "pipe", "ignore"]
+      });
+      let text = "";
+      ps.stdout.setEncoding("utf8");
+      ps.stdout.on("data", (chunk) => {
+        text += chunk;
+      });
+      ps.on("error", () => resolve(""));
+      ps.on("exit", () => resolve(text));
+    });
+    return String(output)
+      .split("\n")
+      .map((line) => {
+        const match = line.trim().match(/^(\d+)\s+(.+)$/);
+        if (!match) return null;
+        return {
+          pid: Number(match[1]),
+          command: match[2]
+        };
+      })
+      .filter((entry) => {
+        if (!entry || entry.pid === process.pid) return false;
+        if (!entry.command.includes("mcp/server.mjs") || !entry.command.includes("--daemon")) return false;
+        if (!entry.command.includes("/canvasight-local/canvasight/")) return false;
+        return !entry.command.includes(`/canvasight-local/canvasight/${SERVER_VERSION}/`);
+      })
+      .map((entry) => entry.pid);
+  } catch {
+    return [];
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForProcessExit(pid, timeoutMs = 1200) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!processIsAlive(pid)) return true;
+    await sleep(80);
+  }
+  return !processIsAlive(pid);
+}
+
+async function stopDaemonStateProcess(state, reason = "stale") {
+  if (!state || state.pluginRoot !== pluginRoot) return false;
+  const pid = Number(state.pid);
+  const shouldStop =
+    Number.isFinite(pid) &&
+    pid > 0 &&
+    state.serverVersion &&
+    state.serverVersion !== SERVER_VERSION &&
+    processIsAlive(pid);
+
+  if (!shouldStop) {
+    await removeDaemonState();
+    return false;
+  }
+
+  appendMcpLifecycle("daemon_stop_stale", {
+    reason,
+    stalePid: pid,
+    staleVersion: state.serverVersion,
+    expectedVersion: SERVER_VERSION
+  });
+
+  try {
+    process.kill(pid, "SIGTERM");
+    await waitForProcessExit(pid);
+  } catch {
+    // If the stale process exits between checks, removing state is still correct.
+  }
+  await removeDaemonState();
+  return true;
+}
+
+async function stopOrphanDaemonProcesses(keepPid = 0, reason = "orphan") {
+  const pids = await canvasightDaemonPidsForPluginRoot();
+  const stopped = [];
+  for (const pid of pids) {
+    if (pid === keepPid) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+      stopped.push(pid);
+    } catch {
+      // Ignore processes that disappear between ps and kill.
+    }
+  }
+  if (stopped.length) {
+    appendMcpLifecycle("daemon_stop_orphans", { reason, pids: stopped });
+    await Promise.all(stopped.map((pid) => waitForProcessExit(pid, 1200)));
+  }
+  return stopped;
 }
 
 async function waitForReachableUrl(url, label = "Canvasight URL") {
@@ -810,8 +953,19 @@ async function waitForDaemon(token) {
 }
 
 async function ensureDaemonServer() {
-  const existing = await healthyDaemonState(await readDaemonState());
-  if (existing) return existing;
+  const state = await readDaemonState();
+  const existing = await healthyDaemonState(state);
+  if (existing) {
+    await stopOrphanDaemonProcesses(Number(existing.pid), "healthy_state_found");
+    return existing;
+  }
+  const hasCurrentVersionState = state?.pluginRoot === pluginRoot && state.serverVersion === SERVER_VERSION;
+  if (state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
+    await stopDaemonStateProcess(state, "version_mismatch_before_spawn");
+  }
+  if (!hasCurrentVersionState) {
+    await stopOrphanDaemonProcesses(0, "before_spawn");
+  }
 
   const token = crypto.randomBytes(24).toString("base64url");
   const child = spawn(process.execPath, [__filename, "--daemon"], {
@@ -832,6 +986,7 @@ async function stopDaemonFromState() {
   if (!state) return false;
   const healthy = await healthyDaemonState(state);
   if (!healthy?.pid) {
+    if (await stopDaemonStateProcess(state, "stop_daemon_unhealthy_state")) return true;
     await removeDaemonState();
     return false;
   }
@@ -4587,7 +4742,12 @@ function encodeJsonRpc(message) {
 }
 
 function writeMessage(message) {
-  process.stdout.write(encodeJsonRpc(message));
+  try {
+    process.stdout.write(encodeJsonRpc(message));
+  } catch (error) {
+    appendMcpLifecycle("stdout_write_error", { error: serializeError(error) });
+    throw error;
+  }
 }
 
 function writeResult(id, result) {
@@ -4618,6 +4778,11 @@ async function handleJsonRpc(message) {
   if (!isObject(message)) return;
   const { id, method, params } = message;
   const hasId = Object.prototype.hasOwnProperty.call(message, "id");
+  appendMcpLifecycle("request", {
+    id: hasId ? id : null,
+    method: typeof method === "string" ? method : "",
+    toolName: method === "tools/call" ? params?.name || "" : ""
+  });
 
   try {
     if (method === "initialize") {
@@ -4676,8 +4841,47 @@ async function handleJsonRpc(message) {
 
     if (hasId) writeError(id, -32601, `Method not found: ${method}`);
   } catch (error) {
+    appendMcpLifecycle("request_error", {
+      id: hasId ? id : null,
+      method: typeof method === "string" ? method : "",
+      toolName: method === "tools/call" ? params?.name || "" : "",
+      error: serializeError(error)
+    });
     if (hasId) writeError(id, -32000, error?.message || "Tool call failed");
+  } finally {
+    appendMcpLifecycle("request_complete", {
+      id: hasId ? id : null,
+      method: typeof method === "string" ? method : "",
+      toolName: method === "tools/call" ? params?.name || "" : ""
+    });
   }
+}
+
+function maybeExitMcpStdio() {
+  if (!mcpStdinEnded || mcpInFlight > 0 || isDaemonMode || isStopDaemonMode) return;
+  if (mcpExitTimer) return;
+  appendMcpLifecycle("stdio_exit_scheduled", { inFlight: mcpInFlight });
+  mcpExitTimer = setTimeout(() => {
+    appendMcpLifecycle("stdio_exit", { code: 0 });
+    process.exit(0);
+  }, 25);
+}
+
+function dispatchJsonRpc(message) {
+  mcpInFlight += 1;
+  Promise.resolve(handleJsonRpc(message))
+    .catch((error) => {
+      appendMcpLifecycle("dispatch_error", { error: serializeError(error) });
+      try {
+        writeError(isObject(message) && Object.prototype.hasOwnProperty.call(message, "id") ? message.id : null, -32000, error?.message || "Tool call failed");
+      } catch {
+        // The stdout failure is already logged in writeMessage.
+      }
+    })
+    .finally(() => {
+      mcpInFlight = Math.max(0, mcpInFlight - 1);
+      maybeExitMcpStdio();
+    });
 }
 
 function consumeContentLengthMessage() {
@@ -4695,7 +4899,7 @@ function consumeContentLengthMessage() {
   if (inputBuffer.length < end) return false;
   const body = inputBuffer.subarray(start, end).toString("utf8");
   inputBuffer = inputBuffer.subarray(end);
-  void handleJsonRpc(JSON.parse(body));
+  dispatchJsonRpc(JSON.parse(body));
   return true;
 }
 
@@ -4716,7 +4920,7 @@ function drainInputBuffer() {
     const line = inputBuffer.subarray(0, newline).toString("utf8").trim();
     inputBuffer = inputBuffer.subarray(newline + 1);
     if (!line) continue;
-    void handleJsonRpc(JSON.parse(line));
+    dispatchJsonRpc(JSON.parse(line));
   }
 }
 
@@ -4727,33 +4931,84 @@ async function runDaemon() {
 }
 
 function runMcpStdio() {
+  appendMcpLifecycle("stdio_start", {
+    argv: process.argv.slice(2),
+    cwd: process.cwd(),
+    canvasightHome: canvasightHome()
+  });
+
   process.stdin.on("data", (chunk) => {
     inputBuffer = Buffer.concat([inputBuffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
     try {
       drainInputBuffer();
     } catch (error) {
+      appendMcpLifecycle("parse_error", { error: serializeError(error) });
       writeError(null, -32700, error?.message || "Parse error");
       inputBuffer = Buffer.alloc(0);
     }
   });
 
   process.stdin.on("end", () => {
-    // The persistent Canvasight daemon deliberately outlives this thread-local MCP shim.
+    mcpStdinEnded = true;
+    appendMcpLifecycle("stdin_end", { inFlight: mcpInFlight });
+    maybeExitMcpStdio();
   });
+
+  process.stdin.on("error", (error) => {
+    appendMcpLifecycle("stdin_error", { error: serializeError(error), inFlight: mcpInFlight });
+    mcpStdinEnded = true;
+    maybeExitMcpStdio();
+  });
+
+  process.stdin.resume();
 }
 
 async function handleProcessShutdown() {
+  appendMcpLifecycle("process_shutdown", {
+    isDaemonMode,
+    isStopDaemonMode,
+    inFlight: mcpInFlight
+  });
   if (isDaemonMode) {
     await shutdownDaemon();
   }
 }
 
 process.on("SIGTERM", () => {
+  appendMcpLifecycle("signal", { signal: "SIGTERM", inFlight: mcpInFlight });
   void handleProcessShutdown().finally(() => process.exit(0));
 });
 
 process.on("SIGINT", () => {
+  appendMcpLifecycle("signal", { signal: "SIGINT", inFlight: mcpInFlight });
   void handleProcessShutdown().finally(() => process.exit(0));
+});
+
+process.on("uncaughtException", (error) => {
+  appendMcpLifecycle("uncaught_exception", { error: serializeError(error), inFlight: mcpInFlight });
+  if (isDaemonMode || isStopDaemonMode) {
+    process.stderr.write(`${error?.message || "Canvasight process failed"}\n`);
+    process.exit(1);
+    return;
+  }
+  try {
+    writeError(null, -32000, error?.message || "Canvasight MCP stdio failed");
+  } catch {
+    // The stdout failure is already logged in writeMessage.
+  }
+});
+
+process.on("unhandledRejection", (reason) => {
+  appendMcpLifecycle("unhandled_rejection", { error: serializeError(reason), inFlight: mcpInFlight });
+});
+
+process.on("exit", (code) => {
+  appendMcpLifecycle("process_exit", {
+    code,
+    isDaemonMode,
+    isStopDaemonMode,
+    inFlight: mcpInFlight
+  });
 });
 
 if (isStopDaemonMode) {

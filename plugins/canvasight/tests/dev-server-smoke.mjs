@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import net from "node:net";
@@ -178,6 +178,10 @@ function processIsAlive(pid) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchText(url) {
   try {
     const response = await fetch(url);
@@ -291,7 +295,7 @@ async function main() {
         threadName: "Dev Server Run"
       })
     });
-    assert.equal(unclaimedRun.status, 409);
+    assert.equal(unclaimedRun.status, 409, unclaimedRun.text);
     assert.equal(unclaimedRun.json.code, "unbound_dev_session");
     const nativeLog = (await readNativeLog()).slice(unclaimedLogOffset);
     assert.equal(nativeLog.some((entry) => entry.method === "thread/goal/set"), false);
@@ -357,6 +361,39 @@ async function main() {
     const status = run("status");
     assert.equal(status.status, 0, status.stderr || status.stdout);
     assert.match(status.stdout, /running/);
+
+    const staleDaemonChild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
+      cwd: pluginRoot,
+      stdio: "ignore"
+    });
+    const staleDaemonExit = new Promise((resolve) => staleDaemonChild.once("exit", resolve));
+    await fsp.writeFile(
+      path.join(canvasightHome, "daemon.json"),
+      `${JSON.stringify(
+        {
+          version: 1,
+          serverVersion: "0.0.0",
+          pid: staleDaemonChild.pid,
+          origin: "http://127.0.0.1:9",
+          port: 9,
+          token: "stale-token",
+          pluginRoot,
+          startedAt: new Date().toISOString()
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const staleDaemonStatus = run("status");
+    assert.equal(staleDaemonStatus.status, 0, staleDaemonStatus.stderr || staleDaemonStatus.stdout);
+    assert.match(staleDaemonStatus.stdout, /stale/);
+    assert.match(staleDaemonStatus.stdout, /daemonServerVersion=0\.0\.0/);
+    const staleDaemonCleaned = run("start");
+    assert.equal(staleDaemonCleaned.status, 0, staleDaemonCleaned.stderr || staleDaemonCleaned.stdout);
+    assert.match(staleDaemonCleaned.stdout, /Stopping stale Canvasight daemon/);
+    await Promise.race([staleDaemonExit, sleep(1000)]);
+    assert.equal(processIsAlive(staleDaemonChild.pid), false);
 
     await fsp.writeFile(
       path.join(canvasightHome, "dev-server.json"),
