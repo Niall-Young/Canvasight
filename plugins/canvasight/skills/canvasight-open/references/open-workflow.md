@@ -12,7 +12,7 @@ Use `open_canvasight_browser_fallback` when widget rendering is unavailable or a
 
 In fallback cases, open the full returned `browserUrl` / `url` in Codex's in-app Browser/sidebar. Do not navigate only to the origin because the session id and token are part of the usable URL. Canvasight does not launch the system browser by default; set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` only for local development debugging.
 
-If the current thread does not expose Canvasight MCP tools and the only practical fallback is the generic dev server at `http://127.0.0.1:5173/`, read the current shell `CODEX_THREAD_ID` first and include it as `?threadId=<current-thread-id>` when opening the page. The dev server no longer falls back to the process that originally launched it, because that can send Run output to an archived or unrelated thread.
+If the current thread does not expose Canvasight MCP tools and the only practical fallback is the generic dev server at `http://127.0.0.1:5173/`, read the current shell `CODEX_THREAD_ID` and the current workspace/project path first. Open `http://127.0.0.1:5173/?threadId=<current-thread-id>&projectPath=<absolute-project-path>` with the project path URL-encoded. The dev server no longer falls back to the process that originally launched it, and a thread-only fallback URL will otherwise open the default Canvasight repo project instead of the user's current project.
 
 The returned `canvasRouting` marks the project as active Canvasight context. For later medium or complex requests that benefit from decomposition, prefer `write_canvasight_graph` with `append-page` before direct execution. Do not route small direct commands, simple questions, or Canvasight Run payloads back into graph writing.
 

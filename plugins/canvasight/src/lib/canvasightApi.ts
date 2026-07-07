@@ -112,6 +112,7 @@ interface CanvasightWidgetRuntimeData {
   canvasightHost?: string;
   codexThreadId?: string | null;
   origin?: string;
+  projectPath?: string | null;
   sessionId?: string;
   threadId?: string | null;
   token?: string;
@@ -171,6 +172,18 @@ function sessionTokenFromUrl(): string {
 
 export function threadIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("threadId") || widgetRuntimeData().threadId || widgetRuntimeData().codexThreadId || "";
+}
+
+export function projectPathFromUrl(): string {
+  return (new URLSearchParams(window.location.search).get("projectPath") || widgetRuntimeData().projectPath || "").trim();
+}
+
+export function isThreadOnlyFallbackUrl(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  const runtime = widgetRuntimeData();
+  const threadId = params.get("threadId") || runtime.threadId || runtime.codexThreadId || "";
+  if (!threadId.trim()) return false;
+  return !projectPathFromUrl() && !(params.get("sessionId") || runtime.sessionId);
 }
 
 const templateStorageKey = "canvasight.nodeTemplates";

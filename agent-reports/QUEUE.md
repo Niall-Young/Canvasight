@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1513-integration-summary.md` - integrated browser fallback project-path binding, thread-only URL guard, docs, skills, version 0.1.36, and validation.
+- `agent-reports/resolved/20260707-1513-development-solution-browser-fallback-project-drift.md` - fixed generic browser fallback opening the default Canvasight repo when projectPath was missing.
+- `agent-reports/resolved/20260707-1501-development-issue-browser-fallback-project-drift.md` - resolved thread-only fallback project drift to default Canvasight repo.
 - `agent-reports/resolved/20260707-1452-integration-summary-dev-daemon-start-timeout.md` - integrated stale dev server detection, auto-restart, daemon single-flight, docs, version 0.1.35, and validation.
 - `agent-reports/resolved/20260707-1452-development-solution-dev-daemon-start-timeout.md` - fixed `Canvasight daemon did not start in time` caused by stale Vite dev server middleware.
 - `agent-reports/resolved/20260707-1442-development-issue-dev-daemon-start-timeout.md` - resolved browser fallback Run timeout from stale `0.1.30` dev server reuse.

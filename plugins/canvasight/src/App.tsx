@@ -45,6 +45,8 @@ import {
   isCanvasightApiErrorCode,
   isStaleDocumentError,
   isTemplateLimitError,
+  isThreadOnlyFallbackUrl,
+  projectPathFromUrl,
   threadIdFromUrl,
   type CanvasightBridgeDiagnostics,
   type RunResponse
@@ -1107,28 +1109,34 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       showInFolder: (targetPath: string) => canvasightApi.showInFolder(targetPath)
     };
 
+    const threadOnlyFallbackStatus = "Project path is required for thread-bound Canvasight fallback.";
+
     canvasightApi
       .getSession()
       .then((session) => {
-        const projectPath = session.projectPath || defaultProjectPathFromBrowser();
+        const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
+        const urlProjectPath = projectPathFromUrl();
+        const projectPath = urlProjectPath || (isThreadOnlyFallback ? "" : session.projectPath || defaultProjectPathFromBrowser());
         if (projectPath) {
           setProjectPathInput(projectPath);
           return openProjectPath(projectPath);
         }
         setLoadingProject(false);
         hydratedRef.current = true;
-        setStatus("No default project path is configured.");
+        setStatus(isThreadOnlyFallback ? threadOnlyFallbackStatus : "No default project path is configured.");
         return undefined;
       })
       .catch((error) => {
-        const projectPath = defaultProjectPathFromBrowser();
+        const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
+        const urlProjectPath = projectPathFromUrl();
+        const projectPath = urlProjectPath || (isThreadOnlyFallback ? "" : defaultProjectPathFromBrowser());
         if (projectPath) {
           setProjectPathInput(projectPath);
           return openProjectPath(projectPath);
         }
         setLoadingProject(false);
         hydratedRef.current = true;
-        setStatus(error instanceof Error ? error.message : t("app.genericError"));
+        setStatus(isThreadOnlyFallback ? threadOnlyFallbackStatus : error instanceof Error ? error.message : t("app.genericError"));
         return undefined;
       });
   }, [openProjectPath, setStatus, t]);
