@@ -276,6 +276,28 @@ async function fetchJson(url, init) {
   return text ? JSON.parse(text) : null;
 }
 
+function assertNativeWidgetPublicResult(result) {
+  assert.equal(result.structuredContent.status, "opened");
+  assert.equal(result.structuredContent.openTarget, "codex_native_widget");
+  for (const key of ["url", "browserUrl", "origin", "apiBaseUrl", "token"]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(result.structuredContent, key), false, `native widget structuredContent leaked ${key}`);
+  }
+  assert.doesNotMatch(JSON.stringify(result.structuredContent), /127\.0\.0\.1:\d+/);
+  assert.doesNotMatch(result.content[0].text, /127\.0\.0\.1:\d+/);
+  assert.equal(result._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+  assert.equal(result._meta["ui/resourceUri"], "ui://widget/canvasight/canvas.html");
+  assert.equal(result._meta["openai/widgetAccessible"], true);
+  assert.equal(result._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
+  assert.equal(result._meta.ui.visibility.includes("app"), true);
+  assert.equal(result._meta.widgetData.canvasightHost, "widget");
+  assert.match(result._meta.widgetData.url, /^http:\/\/127\.0\.0\.1:\d+\//);
+}
+
+function widgetDataFor(result) {
+  assertNativeWidgetPublicResult(result);
+  return result._meta.widgetData;
+}
+
 function assertUniqueNodePositions(nodes, label) {
   const seen = new Set();
   for (const node of nodes) {
@@ -427,6 +449,8 @@ async function main() {
     assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(renderTool._meta["openai/widgetAccessible"], true);
     assert.equal(renderTool.outputSchema.properties.openTarget.type, "string");
+    assert.equal(renderTool.outputSchema.properties.url, undefined);
+    assert.equal(renderTool.outputSchema.properties.browserUrl, undefined);
     const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
     assert.match(openTool.description, /default native Codex widget/);
     assert.match(openTool.description, /send follow-up messages to the current thread/);
@@ -434,10 +458,13 @@ async function main() {
     assert.equal(openTool._meta["openai/widgetAccessible"], true);
     assert.equal(openTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
     assert.equal(openTool.outputSchema.properties.openTarget.type, "string");
+    assert.equal(openTool.outputSchema.properties.url, undefined);
+    assert.equal(openTool.outputSchema.properties.browserUrl, undefined);
     const browserFallbackTool = listed.tools.find((tool) => tool.name === "open_canvasight_browser_fallback");
     assert.match(browserFallbackTool.description, /browser fallback URL/);
     assert.match(browserFallbackTool.description, /queue Run payloads/);
     assert.equal(browserFallbackTool.outputSchema.properties.openTarget.type, "string");
+    assert.equal(browserFallbackTool.outputSchema.properties.url.type, "string");
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
     assert.match(recentOpenTool.description, /default native Codex widget/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
@@ -475,7 +502,8 @@ async function main() {
     assert.match(widgetHtml, /__CANVASIGHT_WIDGET_DATA__/);
     assert.match(widgetHtml, /canvasightHost/);
     assert.match(widgetHtml, /canvasight:send-follow-up/);
-    assert.match(widgetHtml, /sendMessage/);
+    assert.match(widgetHtml, /sendFollowUpMessage/);
+    assert.match(widgetHtml, /mcpApp\.sendMessage/);
     assert.ok(
       widgetHtml.indexOf('id="root"') < widgetHtml.indexOf('id="canvasightMcpHostBridge"')
     );
@@ -486,24 +514,19 @@ async function main() {
         language: "zh"
       }
     });
-    assert.equal(widgetOpened.structuredContent.status, "opened");
-    assert.equal(widgetOpened.structuredContent.openTarget, "codex_native_widget");
+    const widgetOpenedData = widgetDataFor(widgetOpened);
     assert.equal(widgetOpened.structuredContent.activeCanvasContext, true);
-    assert.equal(widgetOpened.structuredContent.browserUrl, widgetOpened.structuredContent.url);
-    assert.equal(widgetOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
-    assert.equal(widgetOpened._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
-    assert.equal(widgetOpened._meta.widgetData.url, widgetOpened.structuredContent.url);
-    assert.equal(widgetOpened._meta.widgetData.apiBaseUrl, widgetOpened.structuredContent.origin);
-    assert.equal(widgetOpened._meta.widgetData.canvasightHost, "widget");
-    assert.equal(widgetOpened._meta.widgetData.token, new URL(widgetOpened.structuredContent.url).searchParams.get("token"));
-    assert.ok(widgetOpened._meta["openai/widgetCSP"].connect_domains.includes(widgetOpened.structuredContent.origin));
-    assert.ok(widgetOpened._meta.ui.csp.connectDomains.includes(widgetOpened.structuredContent.origin));
+    assert.equal(widgetOpenedData.browserUrl, widgetOpenedData.url);
+    assert.equal(widgetOpenedData.apiBaseUrl, widgetOpenedData.origin);
+    assert.equal(widgetOpenedData.token, new URL(widgetOpenedData.url).searchParams.get("token"));
+    assert.ok(widgetOpened._meta["openai/widgetCSP"].connect_domains.includes(widgetOpenedData.origin));
+    assert.ok(widgetOpened._meta.ui.csp.connectDomains.includes(widgetOpenedData.origin));
     const widgetResourceAfterOpen = await request("resources/read", {
       uri: "ui://widget/canvasight/canvas.html"
     });
-    assert.ok(widgetResourceAfterOpen.contents[0]._meta["openai/widgetCSP"].connect_domains.includes(widgetOpened.structuredContent.origin));
-    daemonToken = new URL(widgetOpened.structuredContent.url).searchParams.get("token") || daemonToken;
-    const preflightResponse = await fetch(`${widgetOpened.structuredContent.origin}/api/health`, {
+    assert.ok(widgetResourceAfterOpen.contents[0]._meta["openai/widgetCSP"].connect_domains.includes(widgetOpenedData.origin));
+    daemonToken = new URL(widgetOpenedData.url).searchParams.get("token") || daemonToken;
+    const preflightResponse = await fetch(`${widgetOpenedData.origin}/api/health`, {
       method: "OPTIONS",
       headers: {
         origin: "null",
@@ -514,10 +537,10 @@ async function main() {
     });
     assert.equal(preflightResponse.status, 204);
     assert.equal(preflightResponse.headers.get("access-control-allow-private-network"), "true");
-    const widgetPageResponse = await fetch(widgetOpened.structuredContent.browserUrl);
+    const widgetPageResponse = await fetch(widgetOpenedData.browserUrl);
     assert.equal(widgetPageResponse.ok, true);
     assert.match(await widgetPageResponse.text(), /id="root"/);
-    const widgetSession = await fetchJson(`${widgetOpened.structuredContent.origin}/api/sessions/${widgetOpened.structuredContent.sessionId}`);
+    const widgetSession = await fetchJson(`${widgetOpenedData.origin}/api/sessions/${widgetOpened.structuredContent.sessionId}`);
     assert.equal(widgetSession.codexThreadId, "thread-smoke");
     await request("tools/call", {
       name: "close_canvasight",
@@ -532,9 +555,7 @@ async function main() {
         language: "zh"
       }
     });
-    assert.equal(defaultOpened.structuredContent.status, "opened");
-    assert.equal(defaultOpened.structuredContent.openTarget, "codex_native_widget");
-    assert.equal(defaultOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assertNativeWidgetPublicResult(defaultOpened);
     await request("tools/call", {
       name: "close_canvasight",
       arguments: {
@@ -564,11 +585,9 @@ async function main() {
         language: "zh"
       }
     });
-    assert.equal(autoOpened.structuredContent.status, "opened");
-    daemonToken = new URL(autoOpened.structuredContent.url).searchParams.get("token") || daemonToken;
-    assert.equal(autoOpened.structuredContent.browserUrl, autoOpened.structuredContent.url);
-    assert.equal(autoOpened.structuredContent.openTarget, "codex_native_widget");
-    assert.equal(autoOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    const autoOpenedData = widgetDataFor(autoOpened);
+    daemonToken = new URL(autoOpenedData.url).searchParams.get("token") || daemonToken;
+    assert.equal(autoOpenedData.browserUrl, autoOpenedData.url);
     assert.match(autoOpened.content[0].text, /native widget opened/);
     assert.equal(autoOpened.structuredContent.activeCanvasContext, true);
     assert.equal(autoOpened.structuredContent.activeCanvasRouting.status, "active");
@@ -582,12 +601,12 @@ async function main() {
     assert.match(autoOpened.structuredContent.canvasRouting.instruction, /write_canvasight_graph/);
     assert.equal(autoOpened.structuredContent.projectPath, defaultProjectPath);
     assert.equal(await fsp.stat(path.join(defaultProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
-    const autoPageResponse = await fetch(autoOpened.structuredContent.browserUrl);
+    const autoPageResponse = await fetch(autoOpenedData.browserUrl);
     assert.equal(autoPageResponse.ok, true);
     assert.match(await autoPageResponse.text(), /id="root"/);
-    const autoHealth = await fetchJson(`${autoOpened.structuredContent.origin}/api/health`);
+    const autoHealth = await fetchJson(`${autoOpenedData.origin}/api/health`);
     assert.equal(autoHealth.serverVersion, expectedPluginVersion);
-    const autoSession = await fetchJson(`${autoOpened.structuredContent.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
+    const autoSession = await fetchJson(`${autoOpenedData.origin}/api/sessions/${autoOpened.structuredContent.sessionId}`);
     assert.equal(autoSession.codexThreadId, "thread-smoke");
     assert.equal(autoSession.documentRevision, 0);
     assert.equal(autoSession.language, "zh");
@@ -616,11 +635,9 @@ async function main() {
         language: "en"
       }
     });
-    assert.equal(opened.structuredContent.status, "opened");
-    daemonToken = new URL(opened.structuredContent.url).searchParams.get("token") || daemonToken;
-    assert.equal(opened.structuredContent.browserUrl, opened.structuredContent.url);
-    assert.equal(opened.structuredContent.openTarget, "codex_native_widget");
-    assert.equal(opened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    const openedData = widgetDataFor(opened);
+    daemonToken = new URL(openedData.url).searchParams.get("token") || daemonToken;
+    assert.equal(openedData.browserUrl, openedData.url);
     assert.equal(opened.structuredContent.activeCanvasContext, true);
     assert.equal(opened.structuredContent.canvasRouting.preferredTool, "write_canvasight_graph");
     assert.equal(opened.structuredContent.activeCanvasRouting.preferredMode, "append-page");
@@ -643,9 +660,7 @@ async function main() {
         language: "zh"
       }
     });
-    assert.equal(recentOpened.structuredContent.status, "opened");
-    assert.equal(recentOpened.structuredContent.openTarget, "codex_native_widget");
-    assert.equal(recentOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assertNativeWidgetPublicResult(recentOpened);
     assert.equal(recentOpened.structuredContent.projectPath, projectPath);
     assert.equal(recentOpened.structuredContent.language, "zh");
     await request("tools/call", {
@@ -656,7 +671,7 @@ async function main() {
     });
 
     const sessionId = opened.structuredContent.sessionId;
-    const origin = opened.structuredContent.origin;
+    const origin = openedData.origin;
     const session = await fetchJson(`${origin}/api/sessions/${sessionId}`);
     assert.equal(session.codexThreadId, "thread-smoke");
     assert.equal(session.documentRevision, 0);
@@ -1804,9 +1819,9 @@ async function main() {
         language: "en"
       }
     });
-    assert.equal(persistentOpened.structuredContent.status, "opened");
-    daemonToken = new URL(persistentOpened.structuredContent.url).searchParams.get("token") || daemonToken;
-    const persistentOrigin = persistentOpened.structuredContent.origin;
+    const persistentOpenedData = widgetDataFor(persistentOpened);
+    daemonToken = new URL(persistentOpenedData.url).searchParams.get("token") || daemonToken;
+    const persistentOrigin = persistentOpenedData.origin;
     const persistentSessionId = persistentOpened.structuredContent.sessionId;
     assert.equal(await fetchJson(`${persistentOrigin}/api/health`).then((health) => health.status), "ok");
 

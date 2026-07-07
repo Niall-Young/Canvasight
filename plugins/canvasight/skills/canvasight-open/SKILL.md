@@ -9,7 +9,7 @@ Use this skill to open or recover Canvasight through MCP.
 
 ## Workflow
 
-1. Prefer `open_canvasight` for normal use. It opens Canvasight as a Codex native widget by default, and Run can send a follow-up message to the current thread only when the actual widget host bridge is present.
+1. Prefer `open_canvasight` for normal use. It opens Canvasight as a Codex native widget by default, and Run can send a follow-up message to the current thread only when the actual widget host bridge is present. Native open public output should not include localhost URLs; daemon URL, origin, and token belong only in `_meta.widgetData`.
 2. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering. If neither `open_canvasight` nor the widget alias exposes `openai/outputTemplate`, report that the thread is using stale plugin tools and should be reloaded or replaced before promising direct Run delivery.
 3. Use `open_canvasight_browser_fallback` only when widget rendering is unavailable or the user explicitly needs the in-app browser/dev page. This fallback must claim the current thread before Run so the daemon can scope the queued payload for `await_canvasight_run`; it must not report app-server delivery as sent.
 4. If Canvasight MCP tools are unavailable and you must open the already running dev page with generic browser control, read the current shell `CODEX_THREAD_ID` and open `http://127.0.0.1:5173/?threadId=<current-thread-id>`. Canvasight will try to resolve that thread's Codex project `cwd` and create/open `.scatter` there. If the current workspace path is already known, include `projectPath=<absolute-project-path>` as an explicit override. Never ask the user to type a local project path.

@@ -2,7 +2,7 @@
 
 ## Open A Session
 
-Call `open_canvasight` to open Canvasight for the current Codex project. When `projectPath` is omitted, Canvasight resolves the current thread through Codex app-server `thread/resume` and uses that thread's `cwd` as the project path, creating `.scatter` there if needed. Pass `projectPath` only as an explicit override when the workspace path is already known. The tool starts or reuses Canvasight's project-level local daemon and renders a Codex native widget that directly hosts the built Canvasight web app and talks to the daemon for project APIs. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering.
+Call `open_canvasight` to open Canvasight for the current Codex project. When `projectPath` is omitted, Canvasight resolves the current thread through Codex app-server `thread/resume` and uses that thread's `cwd` as the project path, creating `.scatter` there if needed. Pass `projectPath` only as an explicit override when the workspace path is already known. The tool starts or reuses Canvasight's project-level local daemon and renders a Codex native widget that directly hosts the built Canvasight web app and talks to the daemon for project APIs. Native open public output must not include the daemon URL; use `_meta.widgetData` only inside the widget shell. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering.
 
 The native widget is the normal path because it can receive the Codex host bridge. Clicking Run inside the widget sends a follow-up message to the current Codex thread without needing a thread id, virtual clicks, clipboard paste, or Accessibility automation.
 

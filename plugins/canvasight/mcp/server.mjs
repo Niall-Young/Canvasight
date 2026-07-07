@@ -8,10 +8,10 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
+import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.39";
+const SERVER_VERSION = "0.1.40";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -3656,15 +3656,32 @@ function widgetToolMeta(widgetData) {
     ...widgetMeta,
     ui: {
       ...(widgetMeta.ui || {}),
-      resourceUri: CANVASIGHT_WIDGET_URI
+      resourceUri: CANVASIGHT_WIDGET_URI,
+      visibility: ["model", "app"]
     },
     "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
-    "ui/resourceUri": CANVASIGHT_WIDGET_URI,
+    "openai/widgetAccessible": true,
+    [RESOURCE_URI_META_KEY]: CANVASIGHT_WIDGET_URI,
     widgetData
   };
 }
 
-const openCanvasightOutputSchema = {
+const openCanvasightWidgetOutputSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    sessionId: { type: "string" },
+    rendering: { type: "string" },
+    widget: { type: "string" },
+    canvasightHost: { type: "string" },
+    openTarget: { type: "string" },
+    projectPath: { type: ["string", "null"] },
+    codexThreadId: { type: ["string", "null"] }
+  },
+  additionalProperties: true
+};
+
+const openCanvasightBrowserFallbackOutputSchema = {
   type: "object",
   properties: {
     status: { type: "string" },
@@ -3672,6 +3689,7 @@ const openCanvasightOutputSchema = {
     url: { type: "string" },
     browserUrl: { type: "string" },
     openTarget: { type: "string" },
+    origin: { type: "string" },
     projectPath: { type: ["string", "null"] },
     codexThreadId: { type: ["string", "null"] }
   },
@@ -3707,6 +3725,24 @@ const looseObjectOutputSchema = {
   additionalProperties: true
 };
 
+function publicWidgetOpenResult(widgetData) {
+  return {
+    status: widgetData.status,
+    rendering: widgetData.rendering,
+    widget: widgetData.widget,
+    sessionId: widgetData.sessionId,
+    canvasightHost: widgetData.canvasightHost,
+    projectPath: widgetData.projectPath,
+    codexThreadId: widgetData.codexThreadId,
+    project: widgetData.project,
+    language: widgetData.language,
+    activeCanvasContext: widgetData.activeCanvasContext,
+    canvasRouting: widgetData.canvasRouting,
+    activeCanvasRouting: widgetData.activeCanvasRouting,
+    openTarget: "codex_native_widget"
+  };
+}
+
 async function toolRenderCanvasightCanvasWidget(args) {
   const { daemon, opened, session, url } = await createBrowserSession(args);
   const canvasRouting = canvasRoutingContext();
@@ -3730,10 +3766,7 @@ async function toolRenderCanvasightCanvasWidget(args) {
     activeCanvasRouting: canvasRouting
   };
   return toolResult(
-    {
-      ...widgetData,
-      openTarget: "codex_native_widget"
-    },
+    publicWidgetOpenResult(widgetData),
     [
       `Canvasight native widget opened for project: ${session.projectPath}`,
       canvasRouting.userFacingInstruction
@@ -4002,7 +4035,7 @@ const tools = [
       },
       additionalProperties: false
     },
-    outputSchema: openCanvasightOutputSchema,
+    outputSchema: openCanvasightWidgetOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
@@ -4038,7 +4071,7 @@ const tools = [
       },
       additionalProperties: false
     },
-    outputSchema: openCanvasightOutputSchema,
+    outputSchema: openCanvasightWidgetOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
@@ -4074,7 +4107,7 @@ const tools = [
       },
       additionalProperties: false
     },
-    outputSchema: openCanvasightOutputSchema
+    outputSchema: openCanvasightBrowserFallbackOutputSchema
   },
   {
     name: "list_canvasight_recent_projects",
@@ -4121,7 +4154,7 @@ const tools = [
       },
       additionalProperties: false
     },
-    outputSchema: openCanvasightOutputSchema,
+    outputSchema: openCanvasightWidgetOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
