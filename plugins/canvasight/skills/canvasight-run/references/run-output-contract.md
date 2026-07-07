@@ -6,7 +6,7 @@ Canvasight Run can arrive in three ways:
 - Verified app-server delivery: the daemon starts a Codex turn and returns `status: "sent"`, `via: "codex_app_server"`, `reason: "turn_start_confirmed"` only after a matching `turn/started`, `item/started`, or `turn/completed` notification.
 - Await fallback: browser/dev fallback pages queue the payload, then the current thread calls `await_canvasight_run` and receives Markdown plus `structuredContent`.
 
-Default plugin Run clicks should come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before they can be queued for that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. A `turn/start` response from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown; without a confirmation notification it must stay queued as `turn_start_unverified`.
+Default plugin Run clicks should come from native widget delivery. Browser URL and bare dev Run clicks require an explicit current-thread claim before they can target that thread; without that claim they must report `unbound_dev_session` instead of sending to a launch-thread fallback. After claim, the daemon may attempt app-server delivery. A `turn/start` response from an isolated app-server process is not sufficient evidence that the live Codex Desktop thread received the Markdown; without a confirmation notification it must stay queued as `turn_start_unverified`.
 
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 

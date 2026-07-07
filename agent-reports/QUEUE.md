@@ -14,6 +14,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1805-integration-summary.md` - integrated default native-enabled dev daemon, Run pre-claim fallback, diagnostic fetch errors, version 0.1.38, validation, and plugin reinstall.
+- `agent-reports/resolved/20260707-1805-development-solution-run-failed-to-fetch.md` - fixed browser fallback Run `Failed to fetch` / native-disabled daemon reuse.
+- `agent-reports/resolved/20260707-1745-product-issue-run-failed-to-fetch.md` - resolved Canvasight Run click showing generic `Failed to fetch`.
 - `agent-reports/resolved/20260707-1712-integration-summary.md` - integrated current-thread project cwd auto-open, removed manual project path gate, docs, version 0.1.37, validation, and reinstall.
 - `agent-reports/resolved/20260707-1712-development-solution-manual-project-path-gate.md` - fixed Canvasight opening by resolving the current Codex thread cwd instead of asking for a manual project path.
 - `agent-reports/resolved/20260707-1642-product-issue-manual-project-path-gate.md` - resolved manual project path gate during Canvasight open.

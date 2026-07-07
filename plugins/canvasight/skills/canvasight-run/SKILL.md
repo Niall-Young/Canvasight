@@ -10,12 +10,12 @@ Use this skill to handle Canvasight Run payloads and their Codex mode.
 ## Workflow
 
 1. If the Run arrived as a normal Codex follow-up turn from the Canvasight native widget host bridge, use that Markdown directly.
-2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so the daemon scopes the Run to the current thread queue. A bare `5173` page without an explicit claim must be treated as unbound, not as a sent Run.
+2. If the user opened Canvasight through a browser/dev fallback, call `claim_canvasight_thread` before clicking Run in an old tab so the daemon scopes the Run to the current thread and can attempt app-server delivery. A bare `5173` page without an explicit claim must be treated as unbound, not as a sent Run.
 3. If the user already clicked Run but no Codex turn appeared, call `await_canvasight_run`. If the current thread's Canvasight MCP transport is missing or closed, state that the fallback queue cannot be consumed from this stale thread and require a reload/new thread with current Canvasight tools.
 4. Prefer `sessionId` when available; use `projectPath` to attach to the next queued Run from any active session in that project.
 5. Treat returned Markdown and `structuredContent` as the source of truth for the next Codex action.
 6. If `structuredContent.agentTeam.enabled` is true, use `canvasight-agent-team` before executing the task.
 
-Normal Canvasight Run delivery should come from the Codex native widget host bridge. Browser URLs and bare dev pages should not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; otherwise queue the payload for `await_canvasight_run` with the returned reason. A Codex app-server path may return `sent` only when a matching `turn/started`, `item/started`, or `turn/completed` notification confirms the target thread/turn; accepted `turn/start` alone remains `queued` with `turn_start_unverified`.
+Normal Canvasight Run delivery should come from the Codex native widget host bridge. Browser URLs and bare dev pages should not silently pretend success: if no claim exists, the UI must report `unbound_dev_session`; otherwise it may ask the daemon to start the Codex turn and then queue the payload for `await_canvasight_run` when confirmation is missing. A Codex app-server path may return `sent` only when a matching `turn/started`, `item/started`, or `turn/completed` notification confirms the target thread/turn; accepted `turn/start` alone remains `queued` with `turn_start_unverified`.
 
 For native Chat, Plan, and Goal handling, read `references/run-output-contract.md`.

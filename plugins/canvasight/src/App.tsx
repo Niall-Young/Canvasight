@@ -1742,6 +1742,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       };
       setRunStatus(t("status.sendingAssistant"), "loading");
       try {
+        if (project?.path) {
+          await claimUrlThreadForProject(project.path);
+        }
         if (canvasightApi.canSendFollowUpMessage()) {
           const preparedRun = await canvasightApi.prepareWidgetRun(runPayload);
           await canvasightApi.sendFollowUpMessage({

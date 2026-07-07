@@ -224,6 +224,20 @@ export function isTemplateLimitError(error: unknown): error is TemplateLimitErro
   return error instanceof TemplateLimitError || (error instanceof CanvasightApiError && error.status === 409 && error.code === "template_limit_reached");
 }
 
+function networkErrorPayload(path: string, targetUrl: string, error: unknown): Record<string, unknown> {
+  const runtime = widgetRuntimeData();
+  return {
+    code: "network_error",
+    path,
+    url: targetUrl,
+    apiBaseUrl: apiBaseUrl() || null,
+    sessionId: sessionIdFromUrl(),
+    tokenPresent: Boolean(sessionTokenFromUrl()),
+    canvasightHost: runtime.canvasightHost || null,
+    message: error instanceof Error ? error.message : String(error)
+  };
+}
+
 function createTemplateId(): string {
   return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -320,14 +334,20 @@ function shouldUseLocalTemplateStore(error: unknown): boolean {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = sessionTokenFromUrl();
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(token ? { "x-canvasight-token": token } : {}),
-      ...(init?.headers ?? {})
-    }
-  });
+  const targetUrl = apiUrl(path);
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      ...init,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { "x-canvasight-token": token } : {}),
+        ...(init?.headers ?? {})
+      }
+    });
+  } catch (error) {
+    throw new CanvasightApiError(`Canvasight API request failed: ${targetUrl}`, 0, networkErrorPayload(path, targetUrl, error));
+  }
   if (!response.ok) {
     const detail = await response.text();
     let payload: unknown = null;

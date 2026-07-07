@@ -17,6 +17,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.js
 const serverVersion = typeof packageJson.version === "string" ? packageJson.version : "";
 const defaultCanvasightHome = path.join(os.homedir(), ".canvasight");
 type DaemonState = {
+  codexNativeEnabled?: boolean;
   origin: string;
   pid: number | null;
   pluginRoot: string;
@@ -65,6 +66,7 @@ function normalizeDaemonState(value: unknown): DaemonState | null {
     origin: state.origin,
     port: Number.isFinite(Number(state.port)) ? Number(state.port) : null,
     token: typeof state.token === "string" ? state.token : "",
+    codexNativeEnabled: state.codexNativeEnabled === true,
     pluginRoot: typeof state.pluginRoot === "string" ? state.pluginRoot : "",
     serverVersion: typeof state.serverVersion === "string" ? state.serverVersion : "",
     startedAt: typeof state.startedAt === "string" ? state.startedAt : ""
@@ -101,6 +103,11 @@ async function daemonJson<T = unknown>(state: DaemonState, route: string, init: 
   return (text ? JSON.parse(text) : null) as T;
 }
 
+function expectedCodexNativeEnabled(): boolean {
+  const value = String(process.env.CANVASIGHT_CODEX_NATIVE ?? "1").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "on" || value === "yes";
+}
+
 async function healthyDaemonState(state: DaemonState | null): Promise<DaemonState | null> {
   if (!state) return null;
   try {
@@ -109,8 +116,10 @@ async function healthyDaemonState(state: DaemonState | null): Promise<DaemonStat
       "/api/health"
     );
     if (health.status !== "ok" || health.pluginRoot !== pluginRoot || health.serverVersion !== serverVersion) return null;
+    if (Boolean(health.codexNativeEnabled) !== expectedCodexNativeEnabled()) return null;
     return {
       ...state,
+      codexNativeEnabled: Boolean(health.codexNativeEnabled),
       origin: health.origin || state.origin,
       port: Number.isFinite(Number(health.port)) ? Number(health.port) : state.port,
       pid: Number.isFinite(Number(health.pid)) ? Number(health.pid) : state.pid
@@ -153,6 +162,7 @@ async function ensureDaemonServer(): Promise<DaemonState> {
       stdio: "ignore",
       env: {
         ...process.env,
+        CANVASIGHT_CODEX_NATIVE: process.env.CANVASIGHT_CODEX_NATIVE ?? "1",
         CANVASIGHT_DAEMON_TOKEN: token
       }
     });

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.37";
+const SERVER_VERSION = "0.1.38";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -3399,6 +3399,7 @@ async function handleHttp(req, res) {
         status: "ok",
         name: SERVER_NAME,
         serverVersion: SERVER_VERSION,
+        codexNativeEnabled: nativeCodexEnabled(),
         pluginRoot,
         pid: process.pid,
         origin: httpState?.origin || null,
