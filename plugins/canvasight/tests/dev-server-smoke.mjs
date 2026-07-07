@@ -13,6 +13,8 @@ const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(pluginRoot, "scripts", "dev-server.mjs");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
+const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8"));
+const pluginVersion = packageJson.version;
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-dev-server-"));
 const canvasightHome = path.join(tempRoot, "home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
@@ -335,6 +337,26 @@ async function main() {
     const status = run("status");
     assert.equal(status.status, 0, status.stderr || status.stdout);
     assert.match(status.stdout, /running/);
+
+    await fsp.writeFile(
+      path.join(canvasightHome, "dev-server.json"),
+      `${JSON.stringify({ ...state, serverVersion: "0.0.0" }, null, 2)}\n`,
+      "utf8"
+    );
+    const staleStatus = run("status");
+    assert.equal(staleStatus.status, 0, staleStatus.stderr || staleStatus.stdout);
+    assert.match(staleStatus.stdout, /stale/);
+    assert.match(staleStatus.stdout, /serverVersion=0\.0\.0/);
+    assert.match(staleStatus.stdout, new RegExp(`expected=${pluginVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    const restartedStale = run("start");
+    assert.equal(restartedStale.status, 0, restartedStale.stderr || restartedStale.stdout);
+    assert.match(restartedStale.stdout, /Restarting stale Canvasight dev server/);
+    const refreshedState = JSON.parse(await fsp.readFile(path.join(canvasightHome, "dev-server.json"), "utf8"));
+    assert.equal(refreshedState.serverVersion, pluginVersion);
+    assert.equal(refreshedState.managed, true);
+    const restartedPage = await fetchText(origin);
+    assert.equal(restartedPage.ok, true);
+    assert.equal(restartedPage.text.includes("<title>Canvasight</title>"), true);
 
     const stopped = run("stop");
     assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);

@@ -91,7 +91,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.34` 或更高版本。如果显示低于 `0.1.34`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.35` 或更高版本。如果显示低于 `0.1.35`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -155,7 +155,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。裸 `5173` 页面只使用 daemon 里最新的 `claim_canvasight_thread` 项目绑定，或显式 URL `threadId` claim；不会再退回启动 dev server 时的 `CODEX_THREAD_ID`。没有绑定时 Run 返回 `unbound_dev_session`，避免错发到旧线程。有绑定时 Run 默认进入队列等待 `await_canvasight_run`；只有 app-server 收到匹配确认事件时才会显示为 sent。需要手动停止时运行 `npm run dev:stop`。
+`npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。`0.1.35` 起，如果记录的 managed dev server `serverVersion` 低于当前 package 版本，`npm run dev` 会自动停止旧 Vite 进程并重启，避免旧 API 中间件继续处理 Run。`npm run dev:status` 会显示 `running`、`stopped` 或 `stale`。裸 `5173` 页面只使用 daemon 里最新的 `claim_canvasight_thread` 项目绑定，或显式 URL `threadId` claim；不会再退回启动 dev server 时的 `CODEX_THREAD_ID`。没有绑定时 Run 返回 `unbound_dev_session`，避免错发到旧线程。有绑定时 Run 默认进入队列等待 `await_canvasight_run`；只有 app-server 收到匹配确认事件时才会显示为 sent。需要手动停止时运行 `npm run dev:stop`。
 
 `npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止插件 daemon。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
 
@@ -197,7 +197,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **最近项目怎么恢复？**
 
-优先在新线程里调用 `open_canvasight_recent_project` 或 `open_canvasight` 打开最近项目的 native widget。如果旧浏览器 fallback 还开着，在新线程里先调用 `claim_canvasight_thread`；如果需要重新打开浏览器 URL，再调用 `open_canvasight_browser_fallback`。
+优先在新线程里调用 `open_canvasight_recent_project` 或 `open_canvasight` 打开最近项目的 native widget。如果旧浏览器 fallback 还开着，在新线程里先调用 `claim_canvasight_thread`；如果需要重新打开浏览器 URL，再调用 `open_canvasight_browser_fallback`。如果 `npm run dev:status` 显示 `stale ... expected=...`，运行 `npm run dev` 会自动重启旧 managed dev server。
 
 **归档启动 Canvasight 的 thread 后，画布还会活着吗？**
 
@@ -213,7 +213,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **Run 没有出现在当前 thread 怎么办？**
 
-先确认 Canvasight 是通过 `open_canvasight` native widget 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight_browser_fallback` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.34` 或更高。左下角诊断按钮会显示当前是否为 direct widget / fallback、`canvasightHost`、bridge 可用性，以及最近一次 Run 的 `status/via/reason/error`。
+先确认 Canvasight 是通过 `open_canvasight` native widget 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight_browser_fallback` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；若提示 `Canvasight daemon did not start in time`，先看 `npm run dev:status` 是否为 stale，然后运行 `npm run dev` 让 managed dev server 自动重启。重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.35` 或更高。左下角诊断按钮会显示当前是否为 direct widget / fallback、`canvasightHost`、bridge 可用性，以及最近一次 Run 的 `status/via/reason/error`。
 
 **`close_canvasight` 会停止项目级 daemon 吗？**
 
@@ -324,7 +324,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.34` or newer. If it shows a version below `0.1.34`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.35` or newer. If it shows a version below `0.1.35`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -388,7 +388,7 @@ npm run test:dev-server
 npm run test:mcp
 ```
 
-`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. A bare `5173` page uses only the daemon's latest `claim_canvasight_thread` binding for the project or an explicit URL `threadId` claim; it no longer falls back to the dev server process `CODEX_THREAD_ID`. Without a binding it returns `unbound_dev_session`, preventing Runs from being sent to an old thread. With a binding, it queues for `await_canvasight_run` unless app-server delivery is confirmed by a matching notification event. Use `npm run dev:stop` when you explicitly need to stop it.
+`npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. Since `0.1.35`, if the recorded managed dev server `serverVersion` is older than the current package version, `npm run dev` stops that stale Vite process and starts a fresh one so old API middleware does not keep handling Runs. `npm run dev:status` reports `running`, `stopped`, or `stale`. A bare `5173` page uses only the daemon's latest `claim_canvasight_thread` binding for the project or an explicit URL `threadId` claim; it no longer falls back to the dev server process `CODEX_THREAD_ID`. Without a binding it returns `unbound_dev_session`, preventing Runs from being sent to an old thread. With a binding, it queues for `await_canvasight_run` unless app-server delivery is confirmed by a matching notification event. Use `npm run dev:stop` when you explicitly need to stop it.
 
 `npm run daemon` and `npm run daemon:stop` are only for manual plugin-daemon development or troubleshooting. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
 
@@ -446,7 +446,7 @@ Call `claim_canvasight_thread` with `projectPath` or `sessionId` from the curren
 
 **What if Run does not appear in the current thread?**
 
-First confirm Canvasight was opened with `open_canvasight` native widget output; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight_browser_fallback` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.34` or newer. The diagnostics button in the lower-left toolbar shows whether the current page is the direct widget or a fallback page, the `canvasightHost` value, bridge availability, and the latest Run `status/via/reason/error`.
+First confirm Canvasight was opened with `open_canvasight` native widget output; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight_browser_fallback` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If the UI reports `Canvasight daemon did not start in time`, check whether `npm run dev:status` says `stale`, then run `npm run dev` to restart the managed dev server. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.35` or newer. The diagnostics button in the lower-left toolbar shows whether the current page is the direct widget or a fallback page, the `canvasightHost` value, bridge availability, and the latest Run `status/via/reason/error`.
 
 **Does `close_canvasight` stop the project-level daemon?**
 

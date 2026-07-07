@@ -74,6 +74,8 @@ Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automa
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.
 
+If a `127.0.0.1:5173` page reports `Canvasight daemon did not start in time`, first run `npm run dev:status` from `plugins/canvasight`. A `stale ... serverVersion=<old> expected=<current>` status means the persistent managed Vite process was started by an older Canvasight version and is still serving old API middleware. Run `npm run dev`; since `0.1.35` it stops the stale managed process and starts a fresh dev server.
+
 The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It queues Run payloads against the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Native app-server `turn/start` may be enabled only for diagnostics; accepted requests stay queued unless a matching `turn/started`, `item/started`, or `turn/completed` notification confirms delivery.
 
 ## Validation Commands
@@ -85,5 +87,7 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 cd /Users/niallyoung/Desktop/Canvasight/plugins/canvasight
 npm run typecheck
 npm run build
+npm run dev:status
+npm run test:dev-server
 npm run test:mcp
 ```

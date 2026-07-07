@@ -36,6 +36,7 @@ type DevSession = {
 const devSessions = new Map<string, DevSession>();
 const projectDocumentRevisions = new Map<string, number>();
 const projectWriteLocks = new Map<string, Promise<unknown>>();
+let daemonStartPromise: Promise<DaemonState> | null = null;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -140,18 +141,30 @@ async function ensureDaemonServer(): Promise<DaemonState> {
   const existing = await healthyDaemonState(await readDaemonState());
   if (existing) return existing;
 
-  const token = crypto.randomBytes(24).toString("base64url");
-  const child = spawn(process.execPath, [serverPath, "--daemon"], {
-    cwd: pluginRoot,
-    detached: true,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      CANVASIGHT_DAEMON_TOKEN: token
-    }
-  });
-  child.unref();
-  return waitForDaemon(token);
+  if (daemonStartPromise) return daemonStartPromise;
+  const promise = (async () => {
+    const rechecked = await healthyDaemonState(await readDaemonState());
+    if (rechecked) return rechecked;
+
+    const token = crypto.randomBytes(24).toString("base64url");
+    const child = spawn(process.execPath, [serverPath, "--daemon"], {
+      cwd: pluginRoot,
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        CANVASIGHT_DAEMON_TOKEN: token
+      }
+    });
+    child.unref();
+    return waitForDaemon(token);
+  })();
+  daemonStartPromise = promise;
+  try {
+    return await promise;
+  } finally {
+    if (daemonStartPromise === promise) daemonStartPromise = null;
+  }
 }
 
 function projectRevisionKey(projectPath: string): string {

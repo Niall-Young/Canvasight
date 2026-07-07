@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1452-integration-summary-dev-daemon-start-timeout.md` - integrated stale dev server detection, auto-restart, daemon single-flight, docs, version 0.1.35, and validation.
+- `agent-reports/resolved/20260707-1452-development-solution-dev-daemon-start-timeout.md` - fixed `Canvasight daemon did not start in time` caused by stale Vite dev server middleware.
+- `agent-reports/resolved/20260707-1442-development-issue-dev-daemon-start-timeout.md` - resolved browser fallback Run timeout from stale `0.1.30` dev server reuse.
 - `agent-reports/resolved/20260707-1340-integration-summary-widget-daemon-csp-origin.md` - integrated exact daemon origin CSP fix, docs, version 0.1.34, and validation.
 - `agent-reports/resolved/20260707-1340-development-solution-widget-daemon-csp-origin.md` - injected current daemon exact origin into widget CSP metadata and tightened smoke coverage.
 - `agent-reports/resolved/20260707-1340-development-issue-widget-daemon-fetch-failed.md` - resolved native widget direct app `Failed to fetch` risk caused by missing exact daemon origin in widget CSP.

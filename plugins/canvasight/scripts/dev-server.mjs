@@ -46,6 +46,18 @@ function processIsAlive(pid) {
   }
 }
 
+function stateMatchesCurrentServer(state, origin) {
+  return state?.pluginRoot === pluginRoot && state?.origin === origin && state?.serverVersion === SERVER_VERSION;
+}
+
+function stateIsForThisServer(state, origin) {
+  return state?.pluginRoot === pluginRoot && state?.origin === origin;
+}
+
+function stateIsStale(state, origin) {
+  return stateIsForThisServer(state, origin) && state?.serverVersion !== SERVER_VERSION;
+}
+
 async function readState() {
   try {
     const raw = await fsp.readFile(devServerStatePath(), "utf8");
@@ -129,14 +141,43 @@ function startDetachedVite(port) {
   return child;
 }
 
+async function stopManagedServer(state, origin) {
+  if (state?.managed && processIsAlive(Number(state.pid))) {
+    process.kill(Number(state.pid), "SIGTERM");
+    await waitForStopped(origin);
+  }
+}
+
 async function start() {
   const port = devPort();
   const origin = originForPort(port);
   const state = await readState();
+  const healthy = await canvasightDevServerIsHealthy(origin);
 
-  if (state?.pluginRoot === pluginRoot && state?.origin === origin && (await canvasightDevServerIsHealthy(origin))) {
+  if (stateMatchesCurrentServer(state, origin) && healthy) {
     process.stdout.write(`Canvasight dev server is already running: ${origin}\n`);
     return;
+  }
+
+  if (stateIsStale(state, origin)) {
+    if (state?.managed) {
+      process.stdout.write(
+        `Restarting stale Canvasight dev server: ${origin} (${state.serverVersion || "unknown"} -> ${SERVER_VERSION})\n`
+      );
+      await stopManagedServer(state, origin);
+      await removeState();
+      if (await canvasightDevServerIsHealthy(origin)) {
+        throw new Error(
+          `Canvasight dev server at ${origin} is stale (${state.serverVersion || "unknown"}), but it could not be stopped. Run npm run dev:stop and retry.`
+        );
+      }
+    } else if (healthy) {
+      throw new Error(
+        `Canvasight dev server at ${origin} is stale (${state.serverVersion || "unknown"}), but it is unmanaged. Stop it manually and retry.`
+      );
+    } else {
+      await removeState();
+    }
   }
 
   if (await canvasightDevServerIsHealthy(origin)) {
@@ -211,8 +252,11 @@ async function status() {
   const state = await readState();
   const origin = state?.origin || originForPort(devPort());
   const healthy = await canvasightDevServerIsHealthy(origin);
+  const stale = healthy && stateIsStale(state, origin);
   process.stdout.write(
-    `${healthy ? "running" : "stopped"} ${origin}${state?.pid ? ` pid=${state.pid}` : ""}${state?.managed === false ? " unmanaged" : ""}\n`
+    `${healthy ? (stale ? "stale" : "running") : "stopped"} ${origin}${state?.pid ? ` pid=${state.pid}` : ""}${
+      state?.serverVersion ? ` serverVersion=${state.serverVersion}` : ""
+    }${stale ? ` expected=${SERVER_VERSION}` : ""}${state?.managed === false ? " unmanaged" : ""}\n`
   );
 }
 
