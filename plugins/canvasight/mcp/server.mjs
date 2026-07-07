@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.33";
+const SERVER_VERSION = "0.1.34";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -677,6 +677,16 @@ function normalizeDaemonState(value) {
 async function readDaemonState() {
   try {
     const raw = await fsp.readFile(canvasightDaemonStatePath(), "utf8");
+    return normalizeDaemonState(JSON.parse(raw));
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+function readDaemonStateSync() {
+  try {
+    const raw = fs.readFileSync(canvasightDaemonStatePath(), "utf8");
     return normalizeDaemonState(JSON.parse(raw));
   } catch (error) {
     if (error?.code === "ENOENT" || error instanceof SyntaxError) return null;
@@ -2257,22 +2267,37 @@ function mcpAppsGlobalScript() {
   return cachedMcpAppsGlobalScript;
 }
 
-function canvasightWidgetResourceMeta() {
+function canvasightWidgetConnectDomains(extraOrigins = []) {
+  const domains = new Set();
+  for (const origin of extraOrigins) {
+    if (typeof origin === "string" && origin.startsWith("http://127.0.0.1:")) domains.add(origin);
+    if (typeof origin === "string" && origin.startsWith("http://localhost:")) domains.add(origin);
+  }
+  if (httpState?.origin) domains.add(httpState.origin);
+  const daemonState = readDaemonStateSync();
+  if (daemonState?.origin) domains.add(daemonState.origin);
+  domains.add("http://127.0.0.1:*");
+  domains.add("http://localhost:*");
+  return Array.from(domains);
+}
+
+function canvasightWidgetResourceMeta(extraOrigins = []) {
+  const connectDomains = canvasightWidgetConnectDomains(extraOrigins);
   return {
     ui: {
       prefersBorder: false,
       csp: {
-        connectDomains: ["http://127.0.0.1:*", "http://localhost:*"],
-        frameDomains: ["http://127.0.0.1:*", "http://localhost:*"],
-        resourceDomains: ["http://127.0.0.1:*", "http://localhost:*", "data:", "blob:"]
+        connectDomains,
+        frameDomains: connectDomains,
+        resourceDomains: [...connectDomains, "data:", "blob:"]
       }
     },
     "openai/widgetDescription": "Canvasight native Codex widget shell for the project canvas.",
     "openai/widgetPrefersBorder": false,
     "openai/widgetCSP": {
-      connect_domains: ["http://127.0.0.1:*", "http://localhost:*"],
-      frame_domains: ["http://127.0.0.1:*", "http://localhost:*"],
-      resource_domains: ["http://127.0.0.1:*", "http://localhost:*", "data:", "blob:"]
+      connect_domains: connectDomains,
+      frame_domains: connectDomains,
+      resource_domains: [...connectDomains, "data:", "blob:"]
     }
   };
 }
@@ -3660,8 +3685,11 @@ async function createBrowserSession(args) {
 }
 
 function widgetToolMeta(widgetData) {
+  const widgetMeta = canvasightWidgetResourceMeta([widgetData?.origin]);
   return {
+    ...widgetMeta,
     ui: {
+      ...(widgetMeta.ui || {}),
       resourceUri: CANVASIGHT_WIDGET_URI
     },
     "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
@@ -3721,6 +3749,9 @@ async function toolRenderCanvasightCanvasWidget(args) {
     rendering: "native-widget",
     widget: "canvasight-canvas-widget",
     sessionId: session.sessionId,
+    apiBaseUrl: daemon.origin,
+    canvasightHost: "widget",
+    token: daemon.token || "",
     url,
     browserUrl: url,
     origin: daemon.origin,

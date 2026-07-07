@@ -488,7 +488,27 @@ async function main() {
     assert.equal(widgetOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(widgetOpened._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
     assert.equal(widgetOpened._meta.widgetData.url, widgetOpened.structuredContent.url);
+    assert.equal(widgetOpened._meta.widgetData.apiBaseUrl, widgetOpened.structuredContent.origin);
+    assert.equal(widgetOpened._meta.widgetData.canvasightHost, "widget");
+    assert.equal(widgetOpened._meta.widgetData.token, new URL(widgetOpened.structuredContent.url).searchParams.get("token"));
+    assert.ok(widgetOpened._meta["openai/widgetCSP"].connect_domains.includes(widgetOpened.structuredContent.origin));
+    assert.ok(widgetOpened._meta.ui.csp.connectDomains.includes(widgetOpened.structuredContent.origin));
+    const widgetResourceAfterOpen = await request("resources/read", {
+      uri: "ui://widget/canvasight/canvas.html"
+    });
+    assert.ok(widgetResourceAfterOpen.contents[0]._meta["openai/widgetCSP"].connect_domains.includes(widgetOpened.structuredContent.origin));
     daemonToken = new URL(widgetOpened.structuredContent.url).searchParams.get("token") || daemonToken;
+    const preflightResponse = await fetch(`${widgetOpened.structuredContent.origin}/api/health`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "null",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "content-type,x-canvasight-token",
+        "access-control-request-private-network": "true"
+      }
+    });
+    assert.equal(preflightResponse.status, 204);
+    assert.equal(preflightResponse.headers.get("access-control-allow-private-network"), "true");
     const widgetPageResponse = await fetch(widgetOpened.structuredContent.browserUrl);
     assert.equal(widgetPageResponse.ok, true);
     assert.match(await widgetPageResponse.text(), /id="root"/);

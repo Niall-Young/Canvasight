@@ -91,7 +91,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.33` 或更高版本。如果显示低于 `0.1.33`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.34` 或更高版本。如果显示低于 `0.1.34`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -205,7 +205,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **native widget 或内置浏览器打不开 Canvasight 怎么办？**
 
-正常入口是 `open_canvasight`。如果 widget 没渲染，先确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。`0.1.33` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost；如果旧版本显示“内容被屏蔽”，请升级并重开线程。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请打开完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight_browser_fallback` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
+正常入口是 `open_canvasight`。如果 widget 没渲染，先确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。`0.1.34` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost，并会把当前 daemon 的精确 origin 写进 widget CSP；如果旧版本显示“内容被屏蔽”或 `Failed to fetch`，请升级并重开线程。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请打开完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight_browser_fallback` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
 
 **当前 thread 怎么接收旧浏览器 fallback 里的 Run？**
 
@@ -213,7 +213,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **Run 没有出现在当前 thread 怎么办？**
 
-先确认 Canvasight 是通过 `open_canvasight` native widget 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight_browser_fallback` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.33` 或更高。左下角诊断按钮会显示当前是否为 direct widget / fallback、`canvasightHost`、bridge 可用性，以及最近一次 Run 的 `status/via/reason/error`。
+先确认 Canvasight 是通过 `open_canvasight` native widget 打开的；native widget 成功时 Run 会作为当前 thread 的 follow-up message 出现。如果你打开的是 `open_canvasight_browser_fallback` 返回的浏览器 URL 或 `npm run dev` 裸页面，它不会天然拥有 Codex host bridge；`claim_canvasight_thread` 后会把 Run 放入当前线程可领取队列。没有 claim 的裸 `5173` 页面会提示未绑定，而不是把 Run 发到启动 dev server 的旧线程。若 UI 提示 queued，用 `await_canvasight_run` 接收一次排查；重装后仍无效时，新开 Codex thread 或 reload，确认 `codex plugin list` 显示 `0.1.34` 或更高。左下角诊断按钮会显示当前是否为 direct widget / fallback、`canvasightHost`、bridge 可用性，以及最近一次 Run 的 `status/via/reason/error`。
 
 **`close_canvasight` 会停止项目级 daemon 吗？**
 
@@ -324,7 +324,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.33` or newer. If it shows a version below `0.1.33`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.34` or newer. If it shows a version below `0.1.34`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -438,7 +438,7 @@ Yes. The local canvas service is hosted by the project-level daemon, not the thr
 
 **What if the native widget or in-app browser cannot open Canvasight?**
 
-The normal entrypoint is `open_canvasight`. If the widget does not render, first confirm the plugin version was updated and open a new Codex thread or reload the session; older threads may still use stale tool or resource metadata. Since `0.1.33`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost; if an older widget shows "content blocked", upgrade and reopen the thread. If you use `open_canvasight_browser_fallback`, it verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url`, not only the `origin`. If it still cannot load, call `open_canvasight_browser_fallback` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
+The normal entrypoint is `open_canvasight`. If the widget does not render, first confirm the plugin version was updated and open a new Codex thread or reload the session; older threads may still use stale tool or resource metadata. Since `0.1.34`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost, and it includes the current daemon's exact origin in the widget CSP; if an older widget shows "content blocked" or `Failed to fetch`, upgrade and reopen the thread. If you use `open_canvasight_browser_fallback`, it verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url`, not only the `origin`. If it still cannot load, call `open_canvasight_browser_fallback` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
 
 **How does the current thread receive a Run from an old browser fallback tab?**
 
@@ -446,7 +446,7 @@ Call `claim_canvasight_thread` with `projectPath` or `sessionId` from the curren
 
 **What if Run does not appear in the current thread?**
 
-First confirm Canvasight was opened with `open_canvasight` native widget output; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight_browser_fallback` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.33` or newer. The diagnostics button in the lower-left toolbar shows whether the current page is the direct widget or a fallback page, the `canvasightHost` value, bridge availability, and the latest Run `status/via/reason/error`.
+First confirm Canvasight was opened with `open_canvasight` native widget output; successful native widget Runs appear as follow-up messages in the current thread. If you opened a browser URL from `open_canvasight_browser_fallback` or a bare `npm run dev` page, that page does not automatically have the Codex host bridge; after `claim_canvasight_thread`, it queues Runs for `await_canvasight_run`. An unclaimed bare `5173` page now reports that it is unbound instead of sending to the dev server's old launch thread. If reinstalling did not change behavior, open a new Codex thread or reload, and confirm `codex plugin list` shows `0.1.34` or newer. The diagnostics button in the lower-left toolbar shows whether the current page is the direct widget or a fallback page, the `canvasightHost` value, bridge availability, and the latest Run `status/via/reason/error`.
 
 **Does `close_canvasight` stop the project-level daemon?**
 

@@ -14,6 +14,9 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1340-integration-summary-widget-daemon-csp-origin.md` - integrated exact daemon origin CSP fix, docs, version 0.1.34, and validation.
+- `agent-reports/resolved/20260707-1340-development-solution-widget-daemon-csp-origin.md` - injected current daemon exact origin into widget CSP metadata and tightened smoke coverage.
+- `agent-reports/resolved/20260707-1340-development-issue-widget-daemon-fetch-failed.md` - resolved native widget direct app `Failed to fetch` risk caused by missing exact daemon origin in widget CSP.
 - `agent-reports/resolved/20260707-1203-integration-summary-native-widget-direct-app.md` - integrated the native widget direct-app fix, agent reviews, verification, docs, and residual risks.
 - `agent-reports/resolved/20260707-1203-development-solution-native-widget-direct-app.md` - implemented native widget direct app hosting instead of localhost iframe and documented residual host risks.
 - `agent-reports/resolved/20260707-1147-development-issue-native-widget-iframe-blocked.md` - resolved Codex native widget content being blocked by removing the actual localhost iframe from the widget resource.

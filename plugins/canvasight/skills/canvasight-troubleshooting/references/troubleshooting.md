@@ -25,7 +25,8 @@ If the widget does not render:
 1. Confirm `codex plugin list` shows the current Canvasight version and reinstall `canvasight@canvasight-local` if an old cache is active.
 2. Open a new Codex thread or reload the session so the new MCP tool descriptor and widget resource metadata are loaded.
 3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, `open_canvasight`, and `render_canvasight_canvas_widget` all pass.
-4. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
+4. If the app renders but shows `Failed to fetch`, confirm the widget CSP contains the current daemon exact origin, such as `http://127.0.0.1:53208`, not only wildcard localhost entries.
+5. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
 
 ## Diagnostics Panel
 
