@@ -1,11 +1,12 @@
 ---
-status: open
+status: resolved
 report_type: issue
 owner: development-agent
 created_by: main-thread
 priority: critical
 created_at: 2026-07-07 11:27
-updated_at: 2026-07-07 11:27
+updated_at: 2026-07-07 21:19
+solution_report: agent-reports/resolved/20260707-2119-skill-solution-transport-closed-contract.md
 related_files:
   - plugins/canvasight/mcp/server.mjs
   - plugins/canvasight/src/App.tsx
@@ -93,24 +94,34 @@ development-agent
 
 ## 当前状态
 
-open
+resolved
 
 ## 处理结果
 
-未解决。本报告记录当前现场诊断，下一步需要在 reloaded/new thread 里复测 live MCP transport 和 native widget 渲染。
+已处理本报告中“是否需要 Canvasight skill 在遇到 `Transport closed` 时主动提示 reload/new thread”的部分。`canvasight-open`、`canvasight-run`、`canvasight-troubleshooting` 现在明确把可见工具返回 `Transport closed` 分类为 `canvasight_mcp_transport_closed`，要求停止当前线程的正常 open / Run recovery 流程并 reload/new thread，不能把 browser fallback 当作 native Run 修复路径。
+
+真实 live MCP transport 是否能由 Codex Desktop 当前线程恢复不由插件运行时代码控制，本轮不伪装为已修复；恢复路径仍是 reload 或新线程后重新调用 `open_canvasight`。
 
 ## 修改文件
 
-- 无运行代码修改。
+- `plugins/canvasight/skills/canvasight-open/SKILL.md`
+- `plugins/canvasight/skills/canvasight-open/references/open-workflow.md`
+- `plugins/canvasight/skills/canvasight-run/SKILL.md`
+- `plugins/canvasight/skills/canvasight-run/references/run-output-contract.md`
+- `plugins/canvasight/skills/canvasight-troubleshooting/SKILL.md`
+- `plugins/canvasight/skills/canvasight-troubleshooting/references/troubleshooting.md`
+- `plugins/canvasight/tests/mcp-smoke.mjs`
+- `README.md`
+- `AGENTS.md`
 
 ## 验证方式
 
+- `skill-creator` quick validation for changed Canvasight skills
+- `npm run test:mcp`
 - `codex plugin list`
 - `npm run dev:status`
-- 手动 JSON-RPC 调用缓存 MCP server
-- 当前 live thread MCP tool 调用
 
 ## 后续风险
 
-- 如果当前 thread 不 reload，继续点击旧 browser fallback 页面只会重复 queued 文案。
-- 如果 fresh thread 中 `open_canvasight` 成功但仍无 widget host bridge，需要继续调查 Codex Desktop widget 渲染能力。
+- 如果当前 thread 不 reload，继续调用当前线程里的 Canvasight MCP tools 仍可能返回 `Transport closed`。
+- 如果 fresh thread 中 `open_canvasight` 成功但仍无 widget host bridge，需要继续调查 Codex Desktop widget 渲染能力；不能回退到 browser fallback 作为成功路径。

@@ -9,6 +9,8 @@ Default plugin Run clicks must come from native widget delivery. Browser URL and
 
 If a Run toast or diagnostics shows `browser_fallback_no_bridge`, classify it as an opening-path error: the current page is browser fallback/dev, not a native widget. Do not keep debugging host bridge transports from that page. Reopen Canvasight through `open_canvasight`; if the native tool is not visible, call `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` before declaring the thread stale.
 
+If `open_canvasight`, `open_canvasight_recent_project`, or `await_canvasight_run` is visible but fails with `Transport closed`, classify it as `canvasight_mcp_transport_closed`. The live Codex thread's Canvasight MCP transport is closed, so the same thread cannot open the native widget or consume queued fallback Runs. Report reload/new thread as the recovery. Do not switch to browser fallback, app-server `turn/start`, virtual clicks, clipboard, Accessibility, or DOM automation as a substitute sent path.
+
 For await fallback, after `await_canvasight_run`, read `structuredContent.codexMode` first. If it is missing, treat `structuredContent.planMode === true` as `codexMode: "plan"`; otherwise default to `codexMode: "chat"`.
 
 Then read `structuredContent.agentTeam`.

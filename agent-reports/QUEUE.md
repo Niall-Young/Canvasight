@@ -6,7 +6,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Open
 
-- `agent-reports/open/20260707-1127-development-issue-current-thread-mcp-transport-closed.md` - 当前 Codex thread 的 Canvasight MCP transport 已关闭，旧 browser fallback 页面只能排队，需 reload/new thread 后重新验证 widget direct-send。
+- None.
 
 ## Assigned
 
@@ -14,6 +14,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-2119-integration-summary-transport-closed-skill-contract.md` - documented visible Canvasight MCP `Transport closed` as `canvasight_mcp_transport_closed`, updated skills/docs/tests, bumped version 0.1.43, and kept recovery to reload/new thread instead of browser fallback.
+- `agent-reports/resolved/20260707-2119-skill-solution-transport-closed-contract.md` - resolved the skill contract gap for current-thread Canvasight MCP transport closed failures.
+- `agent-reports/resolved/20260707-1127-development-issue-current-thread-mcp-transport-closed.md` - closed after writing the `Transport closed` recovery contract into Canvasight skills; live transport recovery remains reload/new thread.
 - `agent-reports/resolved/20260707-2102-integration-summary-open-tool-discovery.md` - integrated lazy-loaded native tool discovery, blocked generic localhost normal-open fallback, clarified browser_fallback_no_bridge diagnostics, docs, tests, version 0.1.42, reinstall, and dev-server refresh.
 - `agent-reports/resolved/20260707-2044-integration-summary-openai-compat-bridge.md` - integrated native widget bridge adapter for MCP `ui/message` and OpenAI compatibility `sendFollowUpMessage`, diagnostics, tests, docs, version 0.1.41, validation, reinstall, and dev-server refresh.
 - `agent-reports/resolved/20260707-2020-integration-summary-native-widget-bridge.md` - integrated native widget bridge open-result contract, hid localhost data from public output, kept browser fallback diagnostic-only, bumped 0.1.40, validated and reinstalled.
