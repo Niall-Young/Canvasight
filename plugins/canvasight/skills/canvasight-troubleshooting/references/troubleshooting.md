@@ -27,6 +27,18 @@ If the widget does not render:
 3. Run `npm run test:mcp` from `plugins/canvasight` to confirm `resources/list`, `resources/read`, `open_canvasight`, and `render_canvasight_canvas_widget` all pass.
 4. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread queue, then `await_canvasight_run` receives them.
 
+## Diagnostics Panel
+
+Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
+
+Interpretation:
+
+- `parent === window`: browser fallback or dev page, not a widget.
+- `parent !== window` plus `canvasightHost=widget`: widget iframe candidate.
+- `canSendFollowUpMessage() === true`: frontend can ask the widget shell to send a follow-up.
+- `delivery.status === "sent"` and `delivery.via === "codex_app_server"`: only valid when `codexTurn.confirmed === true`.
+- `delivery.reason === "turn_start_unverified"`: payload is queued; use `await_canvasight_run`.
+
 ## Opens In System Browser
 
 `open_canvasight_browser_fallback` should target Codex's in-app browser sidebar and should not launch the system default browser unless `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` is explicitly set for development debugging. Normal `open_canvasight` should render the native widget. If an old plugin cache still opens Safari or Chrome directly, reinstall `canvasight@canvasight-local` and start a new Codex thread.
@@ -60,7 +72,7 @@ Do not use virtual clicks, clipboard paste, Accessibility scripts, or DOM automa
 
 Normal plugin use should not require `npm run dev`. That command is for local development preview. The plugin MCP server starts or reuses the daemon for normal usage.
 
-The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It queues Run payloads against the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Native app-server `turn/start` may be enabled only for diagnostics, and accepted requests still stay queued because they are not proof of live thread visibility.
+The bare `http://127.0.0.1:5173/` dev URL is not a native widget and does not have the host bridge. It queues Run payloads against the daemon session resolved from the latest `claim_canvasight_thread` project binding; if no claim exists, Run returns `unbound_dev_session` so the payload is not mistaken for a successful Codex send. It must not fall back to the Vite process `CODEX_THREAD_ID`. Native app-server `turn/start` may be enabled only for diagnostics; accepted requests stay queued unless a matching `turn/started`, `item/started`, or `turn/completed` notification confirms delivery.
 
 ## Validation Commands
 

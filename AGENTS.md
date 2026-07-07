@@ -4,7 +4,7 @@
 
 Canvasight is an early-stage repo-local Codex plugin. The active product lives under `plugins/canvasight` as a Vite, React, TypeScript, XYFlow, Zustand, and Radix UI application. Preserve room for the final stack, but do not treat the repository as an empty baseline anymore.
 
-The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Normal plugin use renders Canvasight inside a Codex native widget through `open_canvasight`; running a node or flow sends Markdown to the current Codex thread through the widget host bridge. Browser URLs and bare dev pages are fallback/development surfaces that queue Run payloads for `await_canvasight_run`; native app-server `turn/start` is an explicit diagnostic path and is not proof that the live Codex Desktop thread visibly received a message.
+The plugin opens a canvas workspace for arranging task nodes, attachments, and prompt flows. The web app is served by a project-level local daemon that outlives thread-local MCP shim processes. Normal plugin use renders Canvasight inside a Codex native widget through `open_canvasight`; running a node or flow sends Markdown to the current Codex thread through the widget host bridge. Browser URLs and bare dev pages are fallback/development surfaces that queue Run payloads for `await_canvasight_run`; native app-server `turn/start` accepted is not proof that the live Codex Desktop thread visibly received a message unless a matching `turn/started`, `item/started`, or `turn/completed` notification confirms delivery.
 
 Use `design.md` as the product and UI design baseline when adding user-facing screens.
 

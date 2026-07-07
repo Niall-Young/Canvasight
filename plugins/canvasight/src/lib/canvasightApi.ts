@@ -59,13 +59,36 @@ export interface RunResponse {
   codexTurn?: {
     status: "failed" | "skipped" | "started";
     action?: string;
+    appServerArgs?: string;
+    clientUserMessageId?: string;
+    confirmation?: {
+      clientUserMessageId?: string | null;
+      method?: string;
+      threadId?: string | null;
+      turnId?: string | null;
+    } | null;
+    confirmed?: boolean;
     error?: string;
     mode?: CodexMode;
     reason?: string;
+    stderr?: string;
     threadId?: string | null;
     turnId?: string | null;
   };
   agentTeam?: AgentTeamRunConfig;
+}
+
+export interface CanvasightBridgeDiagnostics {
+  canSendFollowUpMessage: boolean;
+  canvasightHost: string | null;
+  hasCanvasightMcp: boolean;
+  hasCanvasightMcpSendFollowUp: boolean;
+  hasWindowOpenAI: boolean;
+  href: string;
+  inIframe: boolean;
+  sessionId: string;
+  threadId: string;
+  tokenPresent: boolean;
 }
 
 export interface ThreadClaimResponse {
@@ -262,6 +285,29 @@ function canAttemptWidgetFollowUp(): boolean {
   return window.parent !== window && new URLSearchParams(window.location.search).get("canvasightHost") === "widget";
 }
 
+export function getCanvasightBridgeDiagnostics(): CanvasightBridgeDiagnostics {
+  const query = new URLSearchParams(window.location.search);
+  const bridgeWindow = window as Window &
+    typeof globalThis & {
+      canvasightMcp?: {
+        sendFollowUpMessage?: unknown;
+      };
+      openai?: unknown;
+    };
+  return {
+    canSendFollowUpMessage: canAttemptWidgetFollowUp(),
+    canvasightHost: query.get("canvasightHost"),
+    hasCanvasightMcp: Boolean(bridgeWindow.canvasightMcp),
+    hasCanvasightMcpSendFollowUp: typeof bridgeWindow.canvasightMcp?.sendFollowUpMessage === "function",
+    hasWindowOpenAI: Boolean(bridgeWindow.openai),
+    href: window.location.href,
+    inIframe: window.parent !== window,
+    sessionId: sessionIdFromUrl(),
+    threadId: threadIdFromUrl(),
+    tokenPresent: Boolean(sessionTokenFromUrl())
+  };
+}
+
 function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9000): Promise<void> {
   if (!canAttemptWidgetFollowUp()) return Promise.reject(new Error("Canvasight widget bridge is not available."));
   const requestId = createRequestId();
@@ -392,6 +438,10 @@ export const canvasightApi = {
 
   canSendFollowUpMessage(): boolean {
     return canAttemptWidgetFollowUp();
+  },
+
+  diagnostics(): CanvasightBridgeDiagnostics {
+    return getCanvasightBridgeDiagnostics();
   },
 
   sendFollowUpMessage(message: WidgetFollowUpMessage): Promise<void> {

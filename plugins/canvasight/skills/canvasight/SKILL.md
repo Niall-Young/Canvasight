@@ -17,7 +17,7 @@ Use this skill as the narrow index for Canvasight-specific work that does not cl
 
 ## Shared Boundaries
 
-- Canvasight output must return through the MCP native widget host bridge or MCP daemon fallback, not UI automation.
+- Canvasight output must return through the verified MCP native widget host bridge, verified Codex app-server delivery, or MCP daemon fallback, not UI automation.
 - Do not use macOS Accessibility automation, virtual clicks, clipboard paste, DOM clicks, or `codex://threads/new`.
 - Page write behavior is controlled by `mode`; task structure is controlled by `graphType`.
 - Normal plugin use should not ask the user to run `npm run dev`.

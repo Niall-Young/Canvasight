@@ -39,7 +39,16 @@ import {
   type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
-import { canvasightApi, isCanvasightApiErrorCode, isStaleDocumentError, isTemplateLimitError, threadIdFromUrl } from "./lib/canvasightApi";
+import {
+  canvasightApi,
+  getCanvasightBridgeDiagnostics,
+  isCanvasightApiErrorCode,
+  isStaleDocumentError,
+  isTemplateLimitError,
+  threadIdFromUrl,
+  type CanvasightBridgeDiagnostics,
+  type RunResponse
+} from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
@@ -111,6 +120,68 @@ type CanvasightWorkspaceProps = {
   agentTeamEnabled: boolean;
   onOpenSettings: () => void;
 };
+
+type DiagnosticsPanelProps = {
+  diagnostics: CanvasightBridgeDiagnostics;
+  lastRun: RunResponse | null;
+  onClose: () => void;
+};
+
+function runWasSent(runResult: RunResponse): boolean {
+  return runResult.status === "sent" || runResult.delivery?.status === "sent";
+}
+
+function runSentTranslationKey(runResult: RunResponse): "status.sentAssistant" | "status.sentViaCodexAppServer" {
+  return runResult.delivery?.via === "codex_app_server" ? "status.sentViaCodexAppServer" : "status.sentAssistant";
+}
+
+function DiagnosticsRow({ label, value }: { label: string; value: string }): ReactElement {
+  return (
+    <div className="canvas-diagnostics-row">
+      <span>{label}</span>
+      <code>{value}</code>
+    </div>
+  );
+}
+
+function CanvasightDiagnosticsPanel({ diagnostics, lastRun, onClose }: DiagnosticsPanelProps): ReactElement {
+  const { t } = useI18n();
+  const boolValue = (value: boolean) => t(value ? "diagnostics.yes" : "diagnostics.no");
+  const delivery = lastRun?.delivery;
+  const codexTurn = lastRun?.codexTurn || delivery?.codexTurn;
+  const codexNative = lastRun?.codexNative || delivery?.codexNative;
+
+  return (
+    <section className="canvas-diagnostics-panel" aria-label={t("diagnostics.title")}>
+      <header className="canvas-diagnostics-header">
+        <span>{t("diagnostics.title")}</span>
+        <button className="canvas-diagnostics-close" type="button" aria-label={t("diagnostics.close")} onClick={onClose}>
+          <Icon name="x" size={16} />
+        </button>
+      </header>
+      <div className="canvas-diagnostics-body">
+        <DiagnosticsRow label={t("diagnostics.currentUrl")} value={diagnostics.href} />
+        <DiagnosticsRow label={t("diagnostics.inIframe")} value={boolValue(diagnostics.inIframe)} />
+        <DiagnosticsRow label={t("diagnostics.canvasightHost")} value={diagnostics.canvasightHost || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.windowOpenAI")} value={boolValue(diagnostics.hasWindowOpenAI)} />
+        <DiagnosticsRow label={t("diagnostics.canvasightMcp")} value={boolValue(diagnostics.hasCanvasightMcp)} />
+        <DiagnosticsRow label={t("diagnostics.canSendFollowUp")} value={boolValue(diagnostics.canSendFollowUpMessage)} />
+        <DiagnosticsRow label={t("diagnostics.session")} value={diagnostics.sessionId || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.thread")} value={diagnostics.threadId || t("diagnostics.none")} />
+        <div className="canvas-diagnostics-divider" />
+        <DiagnosticsRow label={t("diagnostics.lastRun")} value={lastRun?.status || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.delivery")} value={delivery?.status || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.via")} value={delivery?.via || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.reason")} value={delivery?.reason || codexTurn?.reason || codexNative?.reason || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.codexNative")} value={codexNative?.status || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.codexTurn")} value={codexTurn?.status || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.confirmed")} value={codexTurn?.confirmed === undefined ? t("diagnostics.none") : boolValue(Boolean(codexTurn.confirmed))} />
+        <DiagnosticsRow label={t("diagnostics.turnId")} value={codexTurn?.turnId || t("diagnostics.none")} />
+        <DiagnosticsRow label={t("diagnostics.error")} value={codexTurn?.error || codexNative?.error || t("diagnostics.none")} />
+      </div>
+    </section>
+  );
+}
 
 function connectionLineStartX(x: number, position: Position): number {
   const offset = nodeConnectButtonSize / 2;
@@ -780,6 +851,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
   const [runFeedback, setRunFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [lastRunResult, setLastRunResult] = useState<RunResponse | null>(null);
   const hydratedRef = useRef(false);
   const documentRevisionRef = useRef<number | null>(null);
   const skipNextSaveRef = useRef(false);
@@ -807,6 +880,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
+  const bridgeDiagnostics = useMemo(() => getCanvasightBridgeDiagnostics(), [diagnosticsOpen, lastRunResult, runFeedback]);
   const canDeletePage = pages.length > 1;
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
@@ -869,6 +943,37 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       showRunFeedback(message, tone);
     },
     [setStatus, showRunFeedback]
+  );
+
+  const setRunStatusFromResult = useCallback(
+    (runResult: RunResponse, fallbackReason = "") => {
+      const delivery = runResult.delivery;
+      const codexTurn = runResult.codexTurn || delivery?.codexTurn;
+      const codexNative = runResult.codexNative || delivery?.codexNative;
+      if (delivery?.status === "awaited") {
+        setRunStatus(t("status.awaitedAssistant"), "positive");
+        return;
+      }
+      if (runWasSent(runResult)) {
+        setRunStatus(t(runSentTranslationKey(runResult)), "positive");
+        return;
+      }
+      if (delivery?.reason === "turn_start_unverified") {
+        setRunStatus(t("status.directUnverifiedQueued"), "negative");
+        return;
+      }
+      if (delivery?.reason === "native_direct_disabled" || codexNative?.reason === "native_direct_disabled") {
+        setRunStatus(t("status.browserFallbackQueued"), "negative");
+        return;
+      }
+      const reason = codexTurn?.error || codexNative?.error || delivery?.reason || fallbackReason;
+      if (reason) {
+        setRunStatus(t("status.browserFallbackQueuedWithReason", { reason }), "negative");
+        return;
+      }
+      setRunStatus(t("status.browserFallbackQueued"), "negative");
+    },
+    [setRunStatus, t]
   );
 
   useEffect(
@@ -1608,10 +1713,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       setRunStatus(t("status.sendingAssistant"), "loading");
       try {
         if (canvasightApi.canSendFollowUpMessage()) {
-          await canvasightApi.prepareWidgetRun(runPayload);
+          const preparedRun = await canvasightApi.prepareWidgetRun(runPayload);
           await canvasightApi.sendFollowUpMessage({
             prompt: result.markdown,
             content: [{ type: "text", text: result.markdown }]
+          });
+          setLastRunResult({
+            ...preparedRun,
+            status: "sent",
+            delivery: {
+              ...(preparedRun.delivery ?? {}),
+              status: "sent",
+              reason: "widget_bridge",
+              via: "widget_bridge"
+            }
           });
           markNodeRun(nodeId, mode);
           setSelectedRunMode(mode);
@@ -1620,47 +1735,19 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         }
 
         const runResult = await canvasightApi.run(runPayload);
+        setLastRunResult(runResult);
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
-        if (runResult.delivery?.status === "awaited") {
-          setRunStatus(t("status.awaitedAssistant"), "positive");
-        } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-          setRunStatus(t("status.browserFallbackQueued"), "negative");
-        } else if (
-          runResult.delivery?.reason === "native_direct_disabled" ||
-          runResult.codexNative?.reason === "native_direct_disabled" ||
-          runResult.delivery?.codexNative?.reason === "native_direct_disabled" ||
-          runResult.delivery?.reason === "turn_start_unverified"
-        ) {
-          setRunStatus(t("status.browserFallbackQueued"), "negative");
-        } else if (runResult.codexTurn?.error || runResult.delivery?.codexTurn?.error || runResult.codexNative?.error || runResult.delivery?.codexNative?.error) {
-          const reason =
-            runResult.codexTurn?.error ||
-            runResult.delivery?.codexTurn?.error ||
-            runResult.codexNative?.error ||
-            runResult.delivery?.codexNative?.error ||
-            runResult.delivery?.reason ||
-            "";
-          setRunStatus(t("status.browserFallbackQueuedWithReason", { reason }), "negative");
-        } else {
-          setRunStatus(t("status.browserFallbackQueued"), "negative");
-        }
+        setRunStatusFromResult(runResult);
       } catch (error) {
         if (canvasightApi.canSendFollowUpMessage()) {
           try {
             const runResult = await canvasightApi.run(runPayload);
+            setLastRunResult(runResult);
             markNodeRun(nodeId, mode);
             setSelectedRunMode(mode);
             const reason = error instanceof Error ? error.message : "";
-            if (runResult.delivery?.status === "awaited") {
-              setRunStatus(t("status.awaitedAssistant"), "positive");
-            } else if (runResult.status === "sent" || runResult.delivery?.status === "sent") {
-              setRunStatus(t("status.browserFallbackQueued"), "negative");
-            } else if (reason) {
-              setRunStatus(t("status.queuedAssistantWithReason", { reason }), "negative");
-            } else {
-              setRunStatus(t("status.queuedAssistant"), "negative");
-            }
+            setRunStatusFromResult(runResult, reason);
             return;
           } catch (fallbackError) {
             if (isCanvasightApiErrorCode(fallbackError, "unbound_dev_session")) {
@@ -1678,7 +1765,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setRunStatus(error instanceof Error ? error.message : t("status.sendAssistantFailed"), "negative");
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, setRunStatusFromResult, t]
   );
 
   useEffect(() => {
@@ -2303,7 +2390,19 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 <TooltipAnchor label={t("sidebar.settings")} side="right">
                   <IconButton className="canvas-tool-button" filled={false} icon="settings-cog" size="lg" aria-label={t("sidebar.settings")} onClick={onOpenSettings} />
                 </TooltipAnchor>
+                <TooltipAnchor label={t("diagnostics.open")} side="right">
+                  <IconButton
+                    className={`canvas-tool-button ${diagnosticsOpen ? "is-selected" : ""}`}
+                    filled={false}
+                    icon="terminal-lg"
+                    size="lg"
+                    aria-label={t("diagnostics.open")}
+                    aria-pressed={diagnosticsOpen}
+                    onClick={() => setDiagnosticsOpen((open) => !open)}
+                  />
+                </TooltipAnchor>
               </div>
+              {diagnosticsOpen ? <CanvasightDiagnosticsPanel diagnostics={bridgeDiagnostics} lastRun={lastRunResult} onClose={() => setDiagnosticsOpen(false)} /> : null}
               <div className="canvas-toolbar" aria-label={t("canvas.tools")}>
                 <TooltipAnchor label={t("canvas.addNode")} shortcut={shortcuts.addNode}>
                   <IconButton className="canvas-toolbar-button" filled={false} icon="plus-lg" size="lg" aria-label={t("canvas.addNode")} onClick={addNode} />

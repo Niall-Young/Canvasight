@@ -4,9 +4,11 @@
 
 Call `open_canvasight` with `projectPath` when the workspace path is known. The tool starts or reuses Canvasight's project-level local daemon and renders a Codex native widget backed by the existing Canvasight web app. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering.
 
-The native widget is the normal path because it receives the Codex host bridge. Clicking Run inside the widget sends a follow-up message to the current Codex thread without needing a thread id, virtual clicks, clipboard paste, or Accessibility automation.
+The native widget is the normal path because it can receive the Codex host bridge. Clicking Run inside the widget sends a follow-up message to the current Codex thread without needing a thread id, virtual clicks, clipboard paste, or Accessibility automation.
 
-Use `open_canvasight_browser_fallback` when widget rendering is unavailable or a browser URL fallback is explicitly needed. A browser fallback page does not have the widget host bridge; after `claim_canvasight_thread` the project daemon scopes future Run payloads to the current thread queue for `await_canvasight_run`. If `open_canvasight` lacks widget metadata in the current thread after a plugin update, tell the user that the thread has stale MCP tools and must be reloaded or replaced before widget-bridge delivery can work.
+`openai/outputTemplate` and widget metadata are necessary but not sufficient proof that Codex Desktop actually rendered the widget. Use Canvasight Diagnostics to classify the live page: `window.parent !== window`, `canvasightHost=widget`, bridge availability, and recent Run `status/via/reason`. A `threadId` scopes browser fallback queues; it is not direct-send permission.
+
+Use `open_canvasight_browser_fallback` when widget rendering is unavailable or a browser URL fallback is explicitly needed. A browser fallback page does not have the widget host bridge; after `claim_canvasight_thread` the project daemon scopes future Run payloads to the current thread queue for `await_canvasight_run`. If app-server delivery is enabled, treat it as sent only after a matching confirmation notification; accepted `turn/start` alone remains queued. If `open_canvasight` lacks widget metadata in the current thread after a plugin update, tell the user that the thread has stale MCP tools and must be reloaded or replaced before widget-bridge delivery can work.
 
 In fallback cases, open the full returned `browserUrl` / `url` in Codex's in-app Browser/sidebar. Do not navigate only to the origin because the session id and token are part of the usable URL. Canvasight does not launch the system browser by default; set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` only for local development debugging.
 

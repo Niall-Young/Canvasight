@@ -14,6 +14,10 @@ None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1031-integration-summary-run-delivery-confirmation.md` - integrated confirmed Run delivery semantics, diagnostics, docs, skills, tests, and version 0.1.32.
+- `agent-reports/resolved/20260707-1031-development-solution-run-delivery-confirmation.md` - implemented app-server notification confirmation, explicit queued fallback, and Run status diagnostics.
+- `agent-reports/resolved/20260706-2213-development-issue-run-widget-bridge-not-attached.md` - resolved Canvasight Run direct-send ambiguity by requiring widget bridge or app-server confirmation before reporting sent.
+- `agent-reports/resolved/20260706-2213-integration-summary-run-widget-diagnosis-report.md` - delivered a Markdown diagnosis report for the unresolved Canvasight Run widget bridge delivery failure without changing runtime code.
 - `agent-reports/resolved/20260706-2202-development-solution-open-defaults-widget.md` - changed default `open_canvasight` path to native widget and split browser fallback into an explicit tool.
 - `agent-reports/resolved/20260706-2202-integration-summary-open-defaults-widget.md` - integrated default native widget opening, explicit browser fallback, docs, tests, version 0.1.31, validation, and plugin reinstall.
 - `agent-reports/resolved/20260706-2150-development-issue-open-defaults-browser-not-widget.md` - resolved default Canvasight open path using browser fallback and causing Run queue instead of widget direct delivery.

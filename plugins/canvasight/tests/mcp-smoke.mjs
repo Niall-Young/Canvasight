@@ -62,6 +62,15 @@ function shouldFailResume(threadId) {
   }
 }
 
+function turnStartText(message) {
+  const input = Array.isArray(message.params?.input) ? message.params.input : [];
+  return input.find((item) => item?.type === "text")?.text || "";
+}
+
+function shouldConfirmTurnStart(message) {
+  return !turnStartText(message).includes("[no-confirm]");
+}
+
 function handle(message) {
   if (message.method === "initialize") {
     write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
@@ -116,7 +125,18 @@ function handle(message) {
     return;
   }
   if (message.method === "turn/start") {
-    write({ id: message.id, result: { turn: { id: "turn-smoke", threadId: message.params.threadId, status: "running" } } });
+    const turnId = "turn-smoke-" + message.id;
+    write({ id: message.id, result: { turn: { id: turnId, threadId: message.params.threadId, status: "running" } } });
+    if (shouldConfirmTurnStart(message)) {
+      write({
+        method: "turn/started",
+        params: {
+          threadId: message.params.threadId,
+          turnId,
+          clientUserMessageId: message.params.clientUserMessageId
+        }
+      });
+    }
     return;
   }
   write({ id: message.id, error: { code: -32601, message: "Method not found" } });
@@ -404,14 +424,18 @@ async function main() {
     assert.match(renderTool.description, /send follow-up messages to the current thread/);
     assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(renderTool._meta["openai/widgetAccessible"], true);
+    assert.equal(renderTool.outputSchema.properties.openTarget.type, "string");
     const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
     assert.match(openTool.description, /default native Codex widget/);
     assert.match(openTool.description, /send follow-up messages to the current thread/);
     assert.equal(openTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(openTool._meta["openai/widgetAccessible"], true);
+    assert.equal(openTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
+    assert.equal(openTool.outputSchema.properties.openTarget.type, "string");
     const browserFallbackTool = listed.tools.find((tool) => tool.name === "open_canvasight_browser_fallback");
     assert.match(browserFallbackTool.description, /browser fallback URL/);
     assert.match(browserFallbackTool.description, /queue Run payloads/);
+    assert.equal(browserFallbackTool.outputSchema.properties.openTarget.type, "string");
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
     assert.match(recentOpenTool.description, /default native Codex widget/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
@@ -458,6 +482,7 @@ async function main() {
     assert.equal(widgetOpened.structuredContent.activeCanvasContext, true);
     assert.equal(widgetOpened.structuredContent.browserUrl, widgetOpened.structuredContent.url);
     assert.equal(widgetOpened._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.equal(widgetOpened._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
     assert.equal(widgetOpened._meta.widgetData.url, widgetOpened.structuredContent.url);
     daemonToken = new URL(widgetOpened.structuredContent.url).searchParams.get("token") || daemonToken;
     const widgetPageResponse = await fetch(widgetOpened.structuredContent.browserUrl);
@@ -1438,15 +1463,17 @@ async function main() {
       method: "POST",
       body: JSON.stringify(directRunPayload)
     });
-    assert.equal(directRun.status, "queued");
-    assert.equal(directRun.delivery.status, "queued");
-    assert.equal(directRun.delivery.reason, "turn_start_unverified");
-    assert.equal(directRun.delivery.via, "await_canvasight_run");
+    assert.equal(directRun.status, "sent");
+    assert.equal(directRun.delivery.status, "sent");
+    assert.equal(directRun.delivery.reason, "turn_start_confirmed");
+    assert.equal(directRun.delivery.via, "codex_app_server");
     assert.equal(directRun.codexNative.status, "applied");
     assert.equal(directRun.codexNative.action, "chat/no-settings-update");
     assert.equal(directRun.codexTurn.status, "started");
     assert.equal(directRun.codexTurn.action, "turn/start");
     assert.equal(directRun.codexTurn.threadId, "thread-smoke");
+    assert.equal(directRun.codexTurn.confirmed, true);
+    assert.equal(directRun.codexTurn.confirmation.method, "turn/started");
     const directRunLog = (await readNativeLog()).slice(directRunLogOffset);
     assert.equal(directRunLog.some((entry) => entry.method === "thread/goal/set"), false);
     assert.equal(directRunLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke").length, 1);
@@ -1483,9 +1510,33 @@ async function main() {
         timeoutMs: 20
       }
     });
-    assert.equal(directRunDrained.structuredContent.status, "received");
-    assert.equal(directRunDrained.structuredContent.markdown, directRunPayload.markdown);
-    assert.equal(directRunDrained.structuredContent.delivery.reason, "turn_start_unverified");
+    assert.equal(directRunDrained.structuredContent.status, "timeout");
+
+    const unconfirmedPayload = {
+      ...directRunPayload,
+      threadName: "Scatter Direct Chat No Confirm",
+      markdown: "# Direct Chat No Confirm\n\n[no-confirm] This accepted turn/start response must stay queued."
+    };
+    const unconfirmedRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify(unconfirmedPayload)
+    });
+    assert.equal(unconfirmedRun.status, "queued");
+    assert.equal(unconfirmedRun.delivery.status, "queued");
+    assert.equal(unconfirmedRun.delivery.reason, "turn_start_unverified");
+    assert.equal(unconfirmedRun.delivery.via, "await_canvasight_run");
+    assert.equal(unconfirmedRun.codexTurn.status, "started");
+    assert.equal(unconfirmedRun.codexTurn.confirmed, false);
+    const unconfirmedDrained = await request("tools/call", {
+      name: "await_canvasight_run",
+      arguments: {
+        sessionId,
+        timeoutMs: 20
+      }
+    });
+    assert.equal(unconfirmedDrained.structuredContent.status, "received");
+    assert.equal(unconfirmedDrained.structuredContent.markdown, unconfirmedPayload.markdown);
+    assert.equal(unconfirmedDrained.structuredContent.delivery.reason, "turn_start_unverified");
 
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     const resumeFailureRun = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
@@ -1711,7 +1762,7 @@ async function main() {
         sessionId: persistentSessionId,
         threadName: "Persistent Flow",
         projectPath: persistentProjectPath,
-        markdown: "# Persistent Flow\n\nRun from the old browser session.",
+        markdown: "# Persistent Flow\n\n[no-confirm] Run from the old browser session.",
         imagePaths: [],
         codexMode: "plan",
         effort: "medium",
@@ -1823,7 +1874,7 @@ async function main() {
         sessionId: persistentSessionId,
         threadName: "Claimed Current Thread",
         projectPath: persistentProjectPath,
-        markdown: "# Claimed Current Thread\n\nRun should go to thread-smoke-c.",
+        markdown: "# Claimed Current Thread\n\n[no-confirm] Run should go to thread-smoke-c.",
         imagePaths: [],
         codexMode: "chat",
         effort: "high",

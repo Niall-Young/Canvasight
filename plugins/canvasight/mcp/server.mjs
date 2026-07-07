@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.31";
+const SERVER_VERSION = "0.1.32";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -33,6 +33,7 @@ const GRAPH_GRID_COLUMNS = 3;
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+const CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = new Set(["turn/started", "item/started", "turn/completed"]);
 const AGENT_TEAM_ROLE_IDS = new Set([
   "product-agent",
   "design-agent",
@@ -232,9 +233,19 @@ function nativeCodexTimeoutMs() {
   return Math.max(1000, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_TIMEOUT_MS), 30000), 120000));
 }
 
+function nativeCodexConfirmationTimeoutMs() {
+  return Math.max(250, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_CONFIRMATION_TIMEOUT_MS), 1500), 10000));
+}
+
 function codexAppBin() {
   if (process.env.CANVASIGHT_CODEX_BIN) return process.env.CANVASIGHT_CODEX_BIN;
   return fs.existsSync(DEFAULT_CODEX_APP_BIN) ? DEFAULT_CODEX_APP_BIN : "codex";
+}
+
+function codexAppServerArgs() {
+  const rawArgs = String(process.env.CANVASIGHT_CODEX_APP_SERVER_ARGS || "").trim();
+  if (rawArgs) return rawArgs.split(/\s+/).filter(Boolean);
+  return ["app-server", "--listen", "stdio://"];
 }
 
 function normalizeProjectPath(projectPath) {
@@ -2534,13 +2545,64 @@ function canvasightWidgetHtml() {
 </html>`;
 }
 
+function messageField(value, keys) {
+  if (!isObject(value)) return null;
+  for (const key of keys) {
+    if (typeof value[key] === "string" && value[key]) return value[key];
+  }
+  return null;
+}
+
+function turnConfirmationFromNotification(message, expected = {}) {
+  if (!isObject(message) || Object.prototype.hasOwnProperty.call(message, "id")) return null;
+  if (typeof message.method !== "string" || !CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS.has(message.method)) return null;
+  const params = isObject(message.params) ? message.params : {};
+  const turn = isObject(params.turn) ? params.turn : null;
+  const item = isObject(params.item) ? params.item : null;
+  const threadId =
+    messageField(params, ["threadId", "thread_id"]) ||
+    messageField(turn, ["threadId", "thread_id"]) ||
+    messageField(item, ["threadId", "thread_id"]) ||
+    null;
+  const turnId =
+    messageField(params, ["turnId", "turn_id"]) ||
+    messageField(turn, ["id", "turnId", "turn_id"]) ||
+    messageField(item, ["turnId", "turn_id"]) ||
+    null;
+  const clientUserMessageId =
+    messageField(params, ["clientUserMessageId", "client_user_message_id"]) ||
+    messageField(turn, ["clientUserMessageId", "client_user_message_id"]) ||
+    messageField(item, ["clientUserMessageId", "client_user_message_id"]) ||
+    null;
+  const expectedThreadId = expected.threadId || null;
+  const expectedTurnId = expected.turnId || null;
+  const expectedClientUserMessageId = expected.clientUserMessageId || null;
+  const threadMatches = expectedThreadId && threadId === expectedThreadId;
+  const turnMatches = expectedTurnId && turnId === expectedTurnId;
+  const messageMatches = expectedClientUserMessageId && clientUserMessageId === expectedClientUserMessageId;
+
+  if (expectedThreadId && threadId && threadId !== expectedThreadId) return null;
+  if (expectedTurnId && turnId && turnId !== expectedTurnId) return null;
+  if (expectedClientUserMessageId && clientUserMessageId && clientUserMessageId !== expectedClientUserMessageId) return null;
+  if ((expectedThreadId || expectedTurnId || expectedClientUserMessageId) && !threadMatches && !turnMatches && !messageMatches) return null;
+
+  return {
+    method: message.method,
+    threadId: threadId || expectedThreadId || null,
+    turnId: turnId || expectedTurnId || null,
+    clientUserMessageId: clientUserMessageId || expectedClientUserMessageId || null
+  };
+}
+
 function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
   const bin = codexAppBin();
+  const args = codexAppServerArgs();
   const timeoutMs = nativeCodexTimeoutMs();
+  const confirmationTimeoutMs = nativeCodexConfirmationTimeoutMs();
   const requestFactories = Array.isArray(requests) ? requests : [];
 
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, ["app-server", "--stdio"], {
+    const child = spawn(bin, args, {
       stdio: ["pipe", "pipe", "pipe"]
     });
     let stdout = "";
@@ -2548,7 +2610,9 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
     let settled = false;
     let initialized = false;
     let currentRequest = null;
+    let confirmationTimer = null;
     const results = [];
+    const turnConfirmations = [];
 
     let timer = null;
     let timeoutLabel = "initialize";
@@ -2563,13 +2627,29 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
       }, timeoutMs);
     }
 
+    function clearConfirmationTimer() {
+      if (confirmationTimer) {
+        clearTimeout(confirmationTimer);
+        confirmationTimer = null;
+      }
+    }
+
+    function decorateError(error) {
+      if (!error || typeof error !== "object") return error;
+      error.canvasightAppServerArgs = args.join(" ");
+      if (stderr) error.canvasightAppServerStderr = stderr.slice(-4000);
+      if (!error.canvasightAppServerMethod) error.canvasightAppServerMethod = timeoutLabel;
+      return error;
+    }
+
     function finish(error, value) {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      clearConfirmationTimer();
       child.kill("SIGTERM");
       if (error) {
-        reject(error);
+        reject(decorateError(error));
       } else {
         resolve(value);
       }
@@ -2598,7 +2678,17 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
       }
       currentRequest = {
         id: results.length + 2,
-        method: spec.method
+        method: spec.method,
+        confirmTurnStart: Boolean(spec.confirmTurnStart),
+        threadId: typeof spec.threadId === "string" && spec.threadId ? spec.threadId : isObject(spec.params) ? spec.params.threadId : null,
+        clientUserMessageId:
+          typeof spec.clientUserMessageId === "string" && spec.clientUserMessageId
+            ? spec.clientUserMessageId
+            : isObject(spec.params)
+              ? spec.params.clientUserMessageId
+              : null,
+        pendingResult: null,
+        pendingTurnId: null
       };
       resetTimer(spec.method);
       send({
@@ -2609,8 +2699,67 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
       });
     }
 
+    function matchingConfirmation(request, turnId = null) {
+      return (
+        turnConfirmations.find((confirmation) => {
+          if (request.threadId && confirmation.threadId && confirmation.threadId !== request.threadId) return false;
+          if (turnId && confirmation.turnId && confirmation.turnId !== turnId) return false;
+          if (request.clientUserMessageId && confirmation.clientUserMessageId && confirmation.clientUserMessageId !== request.clientUserMessageId) return false;
+          return Boolean(
+            (request.threadId && confirmation.threadId === request.threadId) ||
+              (turnId && confirmation.turnId === turnId) ||
+              (request.clientUserMessageId && confirmation.clientUserMessageId === request.clientUserMessageId)
+          );
+        }) || null
+      );
+    }
+
+    function completeCurrentRequest(result, confirmation = null) {
+      const finalResult = confirmation ? { ...result, canvasightConfirmation: confirmation } : result;
+      results.push(finalResult);
+      currentRequest = null;
+      nextRequest();
+    }
+
+    function waitForTurnConfirmation(result) {
+      const request = currentRequest;
+      if (!request) return;
+      request.pendingResult = result;
+      request.pendingTurnId = turnIdFromResult(result);
+      const confirmation = matchingConfirmation(request, request.pendingTurnId);
+      if (confirmation) {
+        completeCurrentRequest(result, confirmation);
+        return;
+      }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      clearConfirmationTimer();
+      confirmationTimer = setTimeout(() => {
+        completeCurrentRequest(result, null);
+      }, confirmationTimeoutMs);
+    }
+
     function handleMessage(message) {
-      if (!isObject(message) || !Object.prototype.hasOwnProperty.call(message, "id")) return;
+      if (!isObject(message)) return;
+      if (!Object.prototype.hasOwnProperty.call(message, "id")) {
+        const confirmation = turnConfirmationFromNotification(message, {
+          threadId: currentRequest?.threadId || null,
+          turnId: currentRequest?.pendingTurnId || null,
+          clientUserMessageId: currentRequest?.clientUserMessageId || null
+        });
+        if (!confirmation) return;
+        turnConfirmations.push(confirmation);
+        if (currentRequest?.pendingResult) {
+          const matched = matchingConfirmation(currentRequest, currentRequest.pendingTurnId);
+          if (matched) {
+            clearConfirmationTimer();
+            completeCurrentRequest(currentRequest.pendingResult, matched);
+          }
+        }
+        return;
+      }
       if (message.id === 1) {
         if (message.error) {
           finish(new Error(message.error.message || "Codex app-server initialize failed"));
@@ -2626,9 +2775,12 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
           error.canvasightAppServerMethod = currentRequest.method;
           finish(error);
         } else {
-          results.push(message.result || {});
-          currentRequest = null;
-          nextRequest();
+          const result = message.result || {};
+          if (currentRequest.confirmTurnStart) {
+            waitForTurnConfirmation(result);
+          } else {
+            completeCurrentRequest(result);
+          }
         }
       }
     }
@@ -2774,9 +2926,10 @@ function turnIdFromResult(result) {
 }
 
 async function startCodexTurn(threadId, payload) {
+  const clientUserMessageId = `canvasight-${payload.sessionId}-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
   const params = {
     threadId,
-    clientUserMessageId: `canvasight-${payload.sessionId}-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`,
+    clientUserMessageId,
     input: runTurnInput(payload)
   };
   if (payload.projectPath) params.cwd = payload.projectPath;
@@ -2791,17 +2944,24 @@ async function startCodexTurn(threadId, payload) {
       },
       {
         method: "turn/start",
-        params
+        params,
+        confirmTurnStart: true,
+        threadId,
+        clientUserMessageId
       }
     ],
     { experimentalApi: true }
   ).then((results) => results[1] || {});
+  const confirmation = result.canvasightConfirmation || null;
   return {
     status: "started",
     action: "turn/start",
     threadId,
     mode: payload.codexMode,
-    turnId: turnIdFromResult(result)
+    turnId: turnIdFromResult(result),
+    clientUserMessageId,
+    confirmed: Boolean(confirmation),
+    confirmation
   };
 }
 
@@ -2888,6 +3048,16 @@ async function dispatchRunToCodexThread(session, payload) {
   try {
     const codexTurn = await startCodexTurn(codexNative.threadId || session.codexThreadId, payload);
     payload.codexTurn = codexTurn;
+    if (codexTurn.confirmed) {
+      return {
+        status: "sent",
+        reason: "turn_start_confirmed",
+        via: "codex_app_server",
+        threadId: codexTurn.threadId,
+        codexNative,
+        codexTurn
+      };
+    }
     return {
       status: "queued",
       reason: "turn_start_unverified",
@@ -2903,6 +3073,8 @@ async function dispatchRunToCodexThread(session, payload) {
       status: "failed",
       action: failedMethod,
       error: error?.message || "Codex turn/start request failed",
+      appServerArgs: typeof error?.canvasightAppServerArgs === "string" ? error.canvasightAppServerArgs : undefined,
+      stderr: typeof error?.canvasightAppServerStderr === "string" ? error.canvasightAppServerStderr : undefined,
       threadId: codexNative.threadId || session.codexThreadId,
       mode: payload.codexMode
     };
@@ -3429,11 +3601,57 @@ async function createBrowserSession(args) {
 
 function widgetToolMeta(widgetData) {
   return {
+    ui: {
+      resourceUri: CANVASIGHT_WIDGET_URI
+    },
     "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
     "ui/resourceUri": CANVASIGHT_WIDGET_URI,
     widgetData
   };
 }
+
+const openCanvasightOutputSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    sessionId: { type: "string" },
+    url: { type: "string" },
+    browserUrl: { type: "string" },
+    openTarget: { type: "string" },
+    projectPath: { type: ["string", "null"] },
+    codexThreadId: { type: ["string", "null"] }
+  },
+  additionalProperties: true
+};
+
+const canvasightRunOutputSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    sessionId: { type: "string" },
+    threadName: { type: "string" },
+    projectPath: { type: ["string", "null"] },
+    markdown: { type: "string" },
+    delivery: {
+      type: "object",
+      additionalProperties: true
+    },
+    codexNative: {
+      type: "object",
+      additionalProperties: true
+    },
+    codexTurn: {
+      type: "object",
+      additionalProperties: true
+    }
+  },
+  additionalProperties: true
+};
+
+const looseObjectOutputSchema = {
+  type: "object",
+  additionalProperties: true
+};
 
 async function toolRenderCanvasightCanvasWidget(args) {
   const { daemon, opened, session, url } = await createBrowserSession(args);
@@ -3726,6 +3944,7 @@ const tools = [
       },
       additionalProperties: false
     },
+    outputSchema: openCanvasightOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
@@ -3761,6 +3980,7 @@ const tools = [
       },
       additionalProperties: false
     },
+    outputSchema: openCanvasightOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
@@ -3795,7 +4015,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: openCanvasightOutputSchema
   },
   {
     name: "list_canvasight_recent_projects",
@@ -3811,7 +4032,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: looseObjectOutputSchema
   },
   {
     name: "open_canvasight_recent_project",
@@ -3841,6 +4063,7 @@ const tools = [
       },
       additionalProperties: false
     },
+    outputSchema: openCanvasightOutputSchema,
     _meta: {
       ui: {
         resourceUri: CANVASIGHT_WIDGET_URI,
@@ -3879,7 +4102,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: looseObjectOutputSchema
   },
   {
     name: "list_canvasight_node_templates",
@@ -3899,7 +4123,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: looseObjectOutputSchema
   },
   {
     name: "get_canvasight_node_template",
@@ -3914,7 +4139,8 @@ const tools = [
       },
       required: ["templateId"],
       additionalProperties: false
-    }
+    },
+    outputSchema: looseObjectOutputSchema
   },
   {
     name: "write_canvasight_graph",
@@ -4002,7 +4228,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: looseObjectOutputSchema
   },
   {
     name: "await_canvasight_run",
@@ -4028,7 +4255,8 @@ const tools = [
         }
       },
       additionalProperties: false
-    }
+    },
+    outputSchema: canvasightRunOutputSchema
   },
   {
     name: "close_canvasight",

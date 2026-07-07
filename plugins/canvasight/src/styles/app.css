@@ -1780,6 +1780,89 @@ button.achievement-card.is-unlocked:focus-visible {
   border-radius: var(--radius-lg);
 }
 
+.canvas-diagnostics-panel {
+  position: absolute;
+  z-index: 9;
+  bottom: 12px;
+  left: 64px;
+  display: flex;
+  width: min(420px, calc(100% - 88px));
+  max-height: min(520px, calc(100% - 48px));
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--color-text);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-hover);
+}
+
+.canvas-diagnostics-header {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
+  font-size: var(--text-14);
+  font-weight: 600;
+}
+
+.canvas-diagnostics-close {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-icon);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.canvas-diagnostics-close:hover,
+.canvas-diagnostics-close:focus-visible {
+  outline: none;
+  background: var(--color-interaction);
+}
+
+.canvas-diagnostics-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.canvas-diagnostics-row {
+  display: grid;
+  grid-template-columns: minmax(92px, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.canvas-diagnostics-row > span {
+  color: var(--color-text-subtle);
+}
+
+.canvas-diagnostics-row > code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace);
+}
+
+.canvas-diagnostics-divider {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--color-border-divider);
+}
+
 .canvas-toolbar {
   bottom: 12px;
   left: 50%;
@@ -1938,6 +2021,9 @@ button.achievement-card.is-unlocked:focus-visible {
 .canvas-toolbar .canvas-toolbar-button.is-selected,
 .canvas-toolbar .canvas-toolbar-button.is-selected:hover,
 .canvas-toolbar .canvas-toolbar-button.is-selected:focus-visible,
+.canvas-actions .canvas-tool-button.is-selected,
+.canvas-actions .canvas-tool-button.is-selected:hover,
+.canvas-actions .canvas-tool-button.is-selected:focus-visible,
 .canvas-run-toolbar .canvas-toolbar-button.is-selected,
 .canvas-run-toolbar .canvas-toolbar-button.is-selected:hover,
 .canvas-run-toolbar .canvas-toolbar-button.is-selected:focus-visible {
