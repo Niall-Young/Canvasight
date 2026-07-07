@@ -34,6 +34,7 @@ fs.writeFileSync(
 import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
+const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
 
@@ -72,7 +73,7 @@ function handle(message) {
         model: "gpt-5.5",
         modelProvider: "openai",
         serviceTier: null,
-        cwd: process.cwd(),
+        cwd: fakeThreadCwd,
         instructionSources: [],
         approvalPolicy: "never",
         approvalsReviewer: "user",
@@ -143,7 +144,8 @@ function run(action, options = {}) {
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
     CANVASIGHT_HOME: options.canvasightHome || canvasightHome,
     CANVASIGHT_DEV_PORT: String(options.port || port),
-    CANVASIGHT_NATIVE_LOG: nativeLogPath
+    CANVASIGHT_NATIVE_LOG: nativeLogPath,
+    CANVASIGHT_FAKE_THREAD_CWD: options.fakeThreadCwd || path.join(tempRoot, "thread-project")
   };
   if (options.codexNative !== undefined) env.CANVASIGHT_CODEX_NATIVE = options.codexNative;
   delete env.CODEX_THREAD_ID;
@@ -250,11 +252,28 @@ async function main() {
     assert.equal(page.ok, true);
     assert.equal(page.text.includes("<title>Canvasight</title>"), true);
 
+    const threadProjectPath = path.join(tempRoot, "thread-project");
+    const resolveLogOffset = (await readNativeLog()).length;
+    const resolvedThreadProject = await fetchJson(`${origin}/api/sessions/local/resolve-thread-project`, {
+      method: "POST",
+      body: JSON.stringify({
+        threadId: "thread-dev-smoke"
+      })
+    });
+    assert.equal(resolvedThreadProject.project.path, threadProjectPath);
+    assert.equal(resolvedThreadProject.session.projectPath, threadProjectPath);
+    assert.equal(await fsp.stat(path.join(threadProjectPath, ".scatter", "scatter.json")).then((stat) => stat.isFile()), true);
+    const resolvedSession = await fetchJson(`${origin}/api/sessions/local`);
+    assert.equal(resolvedSession.projectPath, threadProjectPath);
+    const resolveLog = (await readNativeLog()).slice(resolveLogOffset);
+    assert.equal(resolveLog.filter((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-dev-smoke").length, 1);
+
     const projectPath = path.join(tempRoot, "dev-project");
     const opened = await fetchJson(`${origin}/api/sessions/local/open-project`, {
       method: "POST",
       body: JSON.stringify({ projectPath })
     });
+    const unclaimedLogOffset = (await readNativeLog()).length;
     const unclaimedRun = await fetchJsonResult(`${origin}/api/sessions/local/run`, {
       method: "POST",
       body: JSON.stringify({
@@ -274,7 +293,7 @@ async function main() {
     });
     assert.equal(unclaimedRun.status, 409);
     assert.equal(unclaimedRun.json.code, "unbound_dev_session");
-    const nativeLog = await readNativeLog();
+    const nativeLog = (await readNativeLog()).slice(unclaimedLogOffset);
     assert.equal(nativeLog.some((entry) => entry.method === "thread/goal/set"), false);
     assert.equal(nativeLog.some((entry) => entry.method === "thread/resume"), false);
     assert.equal(nativeLog.some((entry) => entry.method === "turn/start"), false);

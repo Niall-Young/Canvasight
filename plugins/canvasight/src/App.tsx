@@ -833,7 +833,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     redo,
     undo
   } = useScatterStore();
-  const [projectPathInput, setProjectPathInput] = useState("");
   const [loadingProject, setLoadingProject] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionPreview, setConnectionPreview] = useState<ConnectionHoverTarget | null>(null);
@@ -1067,6 +1066,19 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [language, setStatus, t]
   );
 
+  const applyOpenedProject = useCallback(
+    async (projectPath: string, result: Awaited<ReturnType<typeof canvasightApi.openProject>>, status?: string): Promise<void> => {
+      const document = normalizeDocument(projectPath, result.document);
+      documentRevisionRef.current = result.documentRevision;
+      skipNextSaveRef.current = true;
+      setProjectDocument(result.project, document);
+      hydratedRef.current = true;
+      setStatus(status ?? t("app.openedProject", { name: result.project.name }));
+      await claimUrlThreadForProject(result.project.path);
+    },
+    [claimUrlThreadForProject, setProjectDocument, setStatus, t]
+  );
+
   const openProjectPath = useCallback(
     async (projectPath: string, options: { silent?: boolean; status?: string } = {}) => {
       const trimmedPath = projectPath.trim();
@@ -1077,14 +1089,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }
       try {
         const result = await canvasightApi.openProject(trimmedPath);
-        const document = normalizeDocument(trimmedPath, result.document);
-        documentRevisionRef.current = result.documentRevision;
-        skipNextSaveRef.current = true;
-        setProjectDocument(result.project, document);
-        setProjectPathInput(result.project.path);
-        hydratedRef.current = true;
-        setStatus(options.status ?? t("app.openedProject", { name: result.project.name }));
-        await claimUrlThreadForProject(result.project.path);
+        await applyOpenedProject(trimmedPath, result, options.status);
       } catch (error) {
         const fallbackProject = {
           name: projectNameFromPath(trimmedPath),
@@ -1094,14 +1099,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         documentRevisionRef.current = null;
         skipNextSaveRef.current = true;
         setProjectDocument(fallbackProject, emptyDocument(trimmedPath));
-        setProjectPathInput(trimmedPath);
         hydratedRef.current = true;
         setStatus(error instanceof Error ? error.message : t("app.genericError"));
       } finally {
         if (!options.silent) setLoadingProject(false);
       }
     },
-    [claimUrlThreadForProject, setProjectDocument, setStatus, t]
+    [applyOpenedProject, setProjectDocument, setStatus, t]
   );
 
   useEffect(() => {
@@ -1109,37 +1113,55 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       showInFolder: (targetPath: string) => canvasightApi.showInFolder(targetPath)
     };
 
-    const threadOnlyFallbackStatus = "Project path is required for thread-bound Canvasight fallback.";
+    const threadOnlyFallbackStatus = "Unable to resolve the current Codex project. Reopen Canvasight from a project thread.";
+    const resolveAndOpenThreadProject = () => {
+      const threadId = threadIdFromUrl();
+      return canvasightApi
+        .resolveThreadProject(threadId, language)
+        .then((result) => applyOpenedProject(result.project.path, result))
+        .catch((error) => {
+          setLoadingProject(false);
+          hydratedRef.current = true;
+          setStatus(error instanceof Error ? error.message : threadOnlyFallbackStatus);
+          return undefined;
+        });
+    };
 
     canvasightApi
       .getSession()
       .then((session) => {
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
-        const projectPath = urlProjectPath || (isThreadOnlyFallback ? "" : session.projectPath || defaultProjectPathFromBrowser());
+        const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
+        const projectPath = urlProjectPath || (isThreadOnlyFallback || isBareLocalFallback ? "" : session.projectPath || defaultProjectPathFromBrowser());
         if (projectPath) {
-          setProjectPathInput(projectPath);
           return openProjectPath(projectPath);
+        }
+        if (isThreadOnlyFallback) {
+          return resolveAndOpenThreadProject();
         }
         setLoadingProject(false);
         hydratedRef.current = true;
-        setStatus(isThreadOnlyFallback ? threadOnlyFallbackStatus : "No default project path is configured.");
+        setStatus("Open Canvasight from a Codex project to create a workspace.");
         return undefined;
       })
       .catch((error) => {
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
-        const projectPath = urlProjectPath || (isThreadOnlyFallback ? "" : defaultProjectPathFromBrowser());
+        const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
+        const projectPath = urlProjectPath || (isThreadOnlyFallback || isBareLocalFallback ? "" : defaultProjectPathFromBrowser());
         if (projectPath) {
-          setProjectPathInput(projectPath);
           return openProjectPath(projectPath);
+        }
+        if (isThreadOnlyFallback) {
+          return resolveAndOpenThreadProject();
         }
         setLoadingProject(false);
         hydratedRef.current = true;
         setStatus(isThreadOnlyFallback ? threadOnlyFallbackStatus : error instanceof Error ? error.message : t("app.genericError"));
         return undefined;
       });
-  }, [openProjectPath, setStatus, t]);
+  }, [applyOpenedProject, language, openProjectPath, setStatus, t]);
 
   useEffect(() => {
     let mounted = true;
@@ -2171,14 +2193,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     };
   }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo]);
 
-  const handleProjectSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      void openProjectPath(projectPathInput);
-    },
-    [openProjectPath, projectPathInput]
-  );
-
   return (
     <div
       className="canvasight-app app-shell is-sidebar-collapsed"
@@ -2473,21 +2487,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             </>
           ) : (
             <div className="empty-workspace canvasight-empty">
-              <p>{loadingProject ? "Loading Canvasight..." : "Enter a local project path to open a Canvasight workspace."}</p>
-              {!loadingProject ? (
-                <form className="canvasight-empty-form" onSubmit={handleProjectSubmit}>
-                  <input
-                    className="canvasight-empty-input"
-                    value={projectPathInput}
-                    placeholder="/absolute/project/path"
-                    aria-label="Project path"
-                    onChange={(event) => setProjectPathInput(event.currentTarget.value)}
-                  />
-                  <button className="canvasight-empty-open" type="submit">
-                    Open
-                  </button>
-                </form>
-              ) : null}
+              <p>{loadingProject ? "Loading Canvasight..." : status || "Open Canvasight from a Codex project to create a workspace."}</p>
             </div>
           )}
         </section>

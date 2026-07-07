@@ -1,6 +1,6 @@
 {
   "name": "canvasight",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "A local canvas workspace that turns connected task nodes and attachments into structured Codex prompts.",
   "author": {
     "name": "Niall Young"
@@ -27,7 +27,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Open Canvasight for this workspace."
+      "Open Canvasight for the current Codex project workspace."
     ],
     "brandColor": "#0862FD",
     "composerIcon": "./assets/icon.png",

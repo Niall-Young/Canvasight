@@ -10,10 +10,13 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-None.
+- None.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260707-1712-integration-summary.md` - integrated current-thread project cwd auto-open, removed manual project path gate, docs, version 0.1.37, validation, and reinstall.
+- `agent-reports/resolved/20260707-1712-development-solution-manual-project-path-gate.md` - fixed Canvasight opening by resolving the current Codex thread cwd instead of asking for a manual project path.
+- `agent-reports/resolved/20260707-1642-product-issue-manual-project-path-gate.md` - resolved manual project path gate during Canvasight open.
 - `agent-reports/resolved/20260707-1513-integration-summary.md` - integrated browser fallback project-path binding, thread-only URL guard, docs, skills, version 0.1.36, and validation.
 - `agent-reports/resolved/20260707-1513-development-solution-browser-fallback-project-drift.md` - fixed generic browser fallback opening the default Canvasight repo when projectPath was missing.
 - `agent-reports/resolved/20260707-1501-development-issue-browser-fallback-project-drift.md` - resolved thread-only fallback project drift to default Canvasight repo.

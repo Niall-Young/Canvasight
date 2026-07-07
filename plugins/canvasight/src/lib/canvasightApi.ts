@@ -462,6 +462,13 @@ export const canvasightApi = {
     });
   },
 
+  resolveThreadProject(threadId: string, language?: LanguagePreference): Promise<OpenProjectResult> {
+    return requestJson<OpenProjectResult>(`/api/sessions/${this.sessionId}/resolve-thread-project`, {
+      method: "POST",
+      body: JSON.stringify({ language, threadId })
+    });
+  },
+
   claimThread(projectPath: string, threadId: string, language?: LanguagePreference): Promise<ThreadClaimResponse> {
     const path = this.sessionId === "local" ? "/api/sessions/local/claim" : "/api/sessions/claim";
     return requestJson<ThreadClaimResponse>(path, {

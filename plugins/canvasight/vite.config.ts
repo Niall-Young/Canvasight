@@ -463,8 +463,40 @@ function canvasightDevApiPlugin() {
             return;
           }
           const body = await readJsonBody(req);
+          if (action === "resolve-thread-project") {
+            const threadId = typeof body.threadId === "string" ? body.threadId.trim() : "";
+            if (!threadId) {
+              const error = unboundDevSessionError();
+              error.message = "Cannot resolve Canvasight project without a Codex thread id.";
+              error.code = "missing_thread_id";
+              error.statusCode = 400;
+              throw error;
+            }
+            const daemon = await ensureDaemonServer();
+            const opened = await daemonJson<{
+              document: Record<string, unknown>;
+              documentRevision: number;
+              project: { name: string; path: string; updatedAt: string };
+              session: { projectPath: string; sessionId: string };
+            }>(daemon, "/api/sessions", {
+              method: "POST",
+              body: JSON.stringify({
+                language: body.language || session.language,
+                projectPath: typeof body.projectPath === "string" && body.projectPath ? body.projectPath : null,
+                threadId
+              })
+            });
+            session.daemonSessionId = opened.session.sessionId;
+            session.projectPath = opened.session.projectPath || opened.project.path;
+            sendJson(res, 200, opened);
+            return;
+          }
+          const previousProjectPath = session.projectPath;
           const projectPath = normalizedProjectPath(body.projectPath, session.projectPath);
           session.projectPath = projectPath;
+          if (path.resolve(previousProjectPath) !== path.resolve(projectPath)) {
+            session.daemonSessionId = undefined;
+          }
           if (action === "open-project") {
             const document = await readScatterDocument(projectPath);
             sendJson(res, 200, {

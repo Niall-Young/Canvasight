@@ -4321,47 +4321,6 @@ body {
   white-space: nowrap;
 }
 
-.canvasight-empty-form {
-  display: flex;
-  width: min(520px, calc(100vw - 48px));
-  max-width: 100%;
-  align-items: center;
-  gap: 8px;
-}
-
-.canvasight-empty-input {
-  width: 100%;
-  height: 30px;
-  min-width: 0;
-  padding: 4px 10px;
-  color: var(--color-text);
-  border: var(--border-weight-sm) solid var(--color-border-divider);
-  border-radius: var(--radius-sm);
-  background: var(--color-background-input);
-  font: inherit;
-}
-
-.canvasight-empty-input:focus-visible {
-  outline: var(--border-weight-lg) solid var(--color-border-focus);
-  outline-offset: 1px;
-}
-
-.canvasight-empty-open {
-  height: 30px;
-  flex: 0 0 auto;
-  padding: 0 12px;
-  color: var(--color-inverted);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  font: inherit;
-}
-
-.canvasight-empty-open:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
 .canvasight-app .topbar-status {
   min-width: 120px;
   max-width: 360px;

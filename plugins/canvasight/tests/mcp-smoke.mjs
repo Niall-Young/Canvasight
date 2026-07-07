@@ -34,6 +34,7 @@ import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
+const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
 
@@ -94,7 +95,7 @@ function handle(message) {
         model: "gpt-5.5",
         modelProvider: "openai",
         serviceTier: null,
-        cwd: process.cwd(),
+        cwd: fakeThreadCwd,
         instructionSources: [],
         approvalPolicy: "never",
         approvalsReviewer: "user",
@@ -174,6 +175,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
+    CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
     CODEX_THREAD_ID: "thread-smoke"

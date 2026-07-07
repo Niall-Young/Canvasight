@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.36";
+const SERVER_VERSION = "0.1.37";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
@@ -281,6 +281,33 @@ function defaultProjectPath() {
   }
 
   return path.join(os.homedir(), "Canvasight");
+}
+
+function isPluginInternalPath(candidate) {
+  if (!candidate) return false;
+  const resolved = path.resolve(candidate);
+  return resolved === pluginRoot || resolved.startsWith(`${pluginRoot}${path.sep}`);
+}
+
+async function codexThreadProjectPath(threadId) {
+  const resolvedThreadId = optionalThreadId(threadId);
+  if (!resolvedThreadId) return null;
+  try {
+    const result = await appServerRequest("thread/resume", { threadId: resolvedThreadId });
+    const cwd = optionalProjectPath(result?.cwd);
+    if (!cwd || isPluginInternalPath(cwd)) return null;
+    return cwd;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveSessionProjectPath(projectPath, threadId) {
+  const explicitProjectPath = optionalProjectPath(projectPath);
+  if (explicitProjectPath) return explicitProjectPath;
+  const threadProjectPath = await codexThreadProjectPath(threadId);
+  if (threadProjectPath) return threadProjectPath;
+  return defaultProjectPath();
 }
 
 function projectNameFromPath(projectPath) {
@@ -1546,14 +1573,15 @@ function sessionId() {
   return `session-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-function createSession({ projectPath, language, threadId }) {
+async function createSession({ projectPath, language, threadId }) {
   const id = sessionId();
-  const resolvedProjectPath = optionalProjectPath(projectPath) || defaultProjectPath();
+  const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const resolvedProjectPath = await resolveSessionProjectPath(projectPath, resolvedThreadId);
   const session = {
     id,
     projectPath: resolvedProjectPath,
     language: normalizeLanguage(language),
-    codexThreadId: optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID),
+    codexThreadId: resolvedThreadId,
     documentRevision: projectDocumentRevision(resolvedProjectPath),
     createdAt: nowIso(),
     runQueue: [],
@@ -1637,18 +1665,21 @@ function resolvedThreadClaim(projectPath) {
   };
 }
 
-function claimThreadForProject({ projectPath, sessionId, language, threadId }) {
+async function claimThreadForProject({ projectPath, sessionId, language, threadId }) {
   const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   if (!resolvedThreadId) {
     throw new HttpError(400, "Cannot claim Canvasight without a current Codex thread id.", "missing_thread_id");
   }
 
   let targetSession = sessionId ? getSession(sessionId) : null;
-  const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || defaultProjectPath();
+  const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || (await resolveSessionProjectPath(null, resolvedThreadId));
+  if (targetSession && path.resolve(targetSession.projectPath) !== path.resolve(resolvedProjectPath)) {
+    targetSession = null;
+  }
   const projectSessions = sessionsForProject(resolvedProjectPath);
   if (!targetSession) targetSession = newestSessionForProject(resolvedProjectPath);
   if (!targetSession) {
-    targetSession = createSession({
+    targetSession = await createSession({
       projectPath: resolvedProjectPath,
       language,
       threadId: resolvedThreadId
@@ -3259,6 +3290,25 @@ async function handleSessionApi(req, res, url) {
     return true;
   }
 
+  if (action === "resolve-thread-project") {
+    assertMethod(req, "POST");
+    const body = await readJsonBody(req);
+    const threadId = optionalThreadId(body?.threadId) || session.codexThreadId || optionalThreadId(process.env.CODEX_THREAD_ID);
+    const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId);
+    session.projectPath = projectPath;
+    if (threadId) rememberThreadClaim(session, threadId);
+    const openedProject = await openProject(projectPath);
+    const documentRevision = projectDocumentRevision(projectPath);
+    session.documentRevision = documentRevision;
+    await rememberProjectBestEffort(projectPath, openedProject.project);
+    sendJson(res, 200, {
+      ...openedProject,
+      documentRevision,
+      session: sessionInfo(session)
+    });
+    return true;
+  }
+
   if (action === "document") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
@@ -3408,7 +3458,8 @@ async function handleHttp(req, res) {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
-      const projectPath = normalizeProjectPath(body.projectPath || defaultProjectPath());
+      const threadId = optionalThreadId(body?.threadId) || optionalThreadId(body?.args?.threadId);
+      const projectPath = await resolveSessionProjectPath(body.projectPath || body?.args?.projectPath, threadId);
       const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, body.args || body);
       sendJson(res, 200, {
         document,
@@ -3423,7 +3474,7 @@ async function handleHttp(req, res) {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
-      const claimed = claimThreadForProject({
+      const claimed = await claimThreadForProject({
         projectPath: body?.projectPath,
         sessionId: typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : "",
         language: body?.language,
@@ -3462,7 +3513,7 @@ async function handleHttp(req, res) {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
-      const session = createSession({
+      const session = await createSession({
         projectPath: typeof body?.projectPath === "string" && body.projectPath ? body.projectPath : null,
         language: body?.language,
         threadId: body?.threadId
@@ -3841,11 +3892,11 @@ async function toolOpenCanvasightRecentProject(args) {
 }
 
 async function toolClaimCanvasightThread(args) {
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   let projectPath = optionalProjectPath(args?.projectPath);
   if (!projectPath && typeof args?.sessionId !== "string") {
-    projectPath = (await recentProjects(1))[0]?.path || defaultProjectPath();
+    projectPath = await resolveSessionProjectPath(null, threadId);
   }
-  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const daemon = await ensureDaemonServer();
   const claimed = await daemonJson(daemon, "/api/sessions/claim", {
     method: "POST",
@@ -3908,7 +3959,8 @@ async function toolGetCanvasightNodeTemplate(args) {
 }
 
 async function toolWriteCanvasightGraph(args) {
-  const projectPath = normalizeProjectPath(args?.projectPath || defaultProjectPath());
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId);
   const daemon = await ensureDaemonServer();
   const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await daemonJson(daemon, "/api/graphs/write", {
     method: "POST",
@@ -3957,11 +4009,11 @@ async function toolWriteCanvasightGraph(args) {
 async function toolAwaitCanvasightRun(args) {
   const sessionIdValue = typeof args?.sessionId === "string" && args.sessionId ? args.sessionId : "";
   let projectPathValue = optionalProjectPath(args?.projectPath);
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   if (!sessionIdValue && !projectPathValue) {
-    projectPathValue = (await recentProjects(1))[0]?.path || defaultProjectPath();
+    projectPathValue = await resolveSessionProjectPath(null, threadId);
   }
   const daemon = await ensureDaemonServer();
-  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const run = await daemonJson(daemon, "/api/runs/await", {
     method: "POST",
     body: JSON.stringify({
