@@ -71,7 +71,7 @@ These modes should be represented as a segmented control or similarly compact op
 
 Run is a submit action, not a Markdown preview action. A successful node Run should report sent only after the native widget host bridge accepts the message. Browser/dev fallback surfaces may report queued output for `await_canvasight_run`, but they must never display a native sent state. Markdown preview remains a separate review command and is not proof that a Run reached Codex.
 
-Normal plugin Run delivery happens through the Codex native widget host bridge. Native open binds the active Codex task before rendering, hosts the Canvasight app directly, and uses the project daemon only for APIs. Local daemon URLs and tokens remain widget-only metadata and must not appear as the user-facing open result. Diagnostics should stay compact and distinguish the active transport, session, failure stage, and queued or sent delivery without exposing full Run Markdown.
+Normal plugin Run delivery happens through the Codex native widget host bridge. Native open binds the active Codex task before rendering and hosts the Canvasight app directly. Native widget JSON APIs travel through an app-only MCP proxy to the project daemon so startup and editing do not depend on sandboxed localhost fetches; browser/dev surfaces may still call the daemon directly. Local daemon URLs and tokens must not appear as the user-facing open result. Diagnostics should stay compact and distinguish the active transport, session, failure stage, and queued or sent delivery without exposing full Run Markdown.
 
 ## Native Widget Startup
 
@@ -80,7 +80,7 @@ The React application shell owns startup feedback and must render on the widget 
 Use four explicit startup stages:
 
 - Starting: the widget resource is active and the React shell is mounting. Show `Starting Canvasight...` briefly in the real app shell.
-- Connecting: the shell is mounted and is waiting for valid widget session metadata plus the initial session/API health check. Keep the workspace structure visible while controls that require a session remain unavailable.
+- Connecting: the bridge has valid widget session metadata and is waiting for the app-only MCP API proxy plus the initial session health check. This label is not proof that the daemon connection or ready acknowledgement succeeded. Keep the workspace structure visible while controls that require a session remain unavailable.
 - Ready: React is mounted, session metadata is valid, the initial session/API health check has succeeded, and the widget runtime has emitted a positive ready acknowledgement. Only this stage may clear startup feedback and present the canvas as opened.
 - Failed: bootstrap, metadata, bridge, session, or initial API setup failed. Replace loading feedback with a visible error that names the failed stage and offers a concrete recovery action.
 

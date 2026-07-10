@@ -140,6 +140,7 @@ type CanvasightWindow = Window &
     __CANVASIGHT_WIDGET_BOOTSTRAP_TIMEOUT_MS__?: number;
     __CANVASIGHT_WIDGET_SHELL__?: boolean;
     canvasightMcp?: {
+      callServerTool?: (request: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
       canSendFollowUpMessage?: () => boolean;
       getBridgeState?: () => CanvasightBridgeState;
       runCanvasightNode?: (payload: RunPayload) => Promise<RunResponse>;
@@ -403,6 +404,43 @@ function shouldUseLocalTemplateStore(error: unknown): boolean {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   await waitForCanvasightRuntimeData();
+  const bridgeWindow = window as CanvasightWindow;
+  const callServerTool = bridgeWindow.canvasightMcp?.callServerTool;
+  if (isNativeWidgetShell() && typeof callServerTool === "function") {
+    const method = (init?.method || "GET").toUpperCase();
+    let body: unknown = null;
+    if (typeof init?.body === "string" && init.body) {
+      try {
+        body = JSON.parse(init.body);
+      } catch {
+        throw new CanvasightApiError("Canvasight widget API body must be JSON.", 400, { code: "invalid_widget_api_body", path });
+      }
+    }
+    const result = (await callServerTool({
+      name: "canvasight_widget_api",
+      arguments: { path, method, body }
+    })) as {
+      isError?: boolean;
+      structuredContent?: {
+        code?: string | null;
+        data?: unknown;
+        error?: string | null;
+        ok?: boolean;
+        status?: number;
+      };
+    };
+    const envelope = result?.structuredContent;
+    if (result?.isError || !envelope || envelope.ok !== true) {
+      const status = typeof envelope?.status === "number" ? envelope.status : 502;
+      const payload = {
+        code: envelope?.code || "widget_api_proxy_failed",
+        error: envelope?.error || "Canvasight widget API proxy failed.",
+        path
+      };
+      throw new CanvasightApiError(payload.error, status, payload);
+    }
+    return envelope.data as T;
+  }
   const token = sessionTokenFromUrl();
   const targetUrl = apiUrl(path);
   let response: Response;

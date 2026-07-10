@@ -19,7 +19,7 @@ Use `stage` and `error` to choose the next check:
 - `stage=thread`: the ready wait targeted a different Codex task. Reopen with the active task's exact `CODEX_THREAD_ID`.
 - `stage=widget-ready` with `status=timeout`: the runtime never acknowledged readiness. Inspect the visible widget error and bootstrap logs; do not keep waiting or claim success.
 - bootstrap, resource, or React-mount stage: diagnose widget script execution and mounting before daemon APIs or Run delivery.
-- session/API stage: React may be present, but the widget could not initialize its daemon session. Check the returned error, current CSP origin, session token delivery inside widget metadata, and daemon lifecycle.
+- session/API stage: React may be present, but the widget could not initialize its daemon session through the app-only MCP API proxy. Check the returned error, MCP Apps connection, proxy tool result, and daemon lifecycle. Direct localhost fetch is not the native JSON API path.
 - host-bridge or Run stage: readiness and Run delivery are separate. First confirm ready, then inspect the bridge Promise result and diagnostics.
 
 If `status=ready` is ever returned without `reactMounted=true`, treat it as an invalid acknowledgement and keep the opening failed/unverified.
@@ -38,19 +38,20 @@ If a visible tool returns `Transport closed`, report `canvasight_mcp_transport_c
 
 The normal open result should reference `ui://widget/canvasight/canvas.html`; public output must not expose daemon URLs or tokens. Session connection data belongs only in widget metadata.
 
-When the widget stays on `Opening Canvasight...`:
+When the widget stays on `Opening Canvasight...`, `Starting Canvasight...`, or `Connecting Canvasight session...`:
 
 1. Obtain the ready timeout/failure result instead of relying on the loading UI.
-2. Confirm the exact installed plugin version and, after any version change, that the Codex host was reloaded/restarted before the task was created and tagged.
-3. Inspect the actual widget-visible error and host/bootstrap diagnostics.
-4. Confirm React readiness is reported only after the initial session API health check.
-5. Confirm startup failures enter a visible failed state instead of remaining in an indefinite loader.
+2. Treat `Connecting` as proof only that session metadata reached the bridge. It does not prove the initial API proxy or ready acknowledgement succeeded, and a default `reactMounted:false` timeout is not standalone proof that React never ran.
+3. Confirm the exact installed plugin version and, after any version change, that the Codex host was reloaded/restarted before the task was created and tagged.
+4. Inspect the actual widget-visible error and host/bootstrap diagnostics.
+5. Confirm React readiness is reported only after the initial session API health check.
+6. Confirm startup failures enter a visible failed state instead of remaining in an indefinite loader.
 
 Do not use a synthetic metadata shape or bundle `load` event as proof that React mounted. A test must observe the explicit ready acknowledgement to prove the tested runtime reached the contract; real native-host acceptance is still required for delivery.
 
 ## Daemon And Initial API
 
-If the ready error points to the session API, inspect daemon state, lifecycle logs, exact widget CSP origin, and session/token delivery. Multiple daemon processes, stale state ownership, a missing executable, or a blocked origin are daemon/bootstrap evidence, not widget-ready success.
+If the ready error points to the session API, inspect the `canvasight_widget_api` app-only tool result, MCP Apps connection, daemon state, and lifecycle logs. The widget resource CSP still needs the daemon's exact origin for attachment assets, but native JSON API startup must not depend on direct localhost fetches. Multiple daemon processes, stale state ownership, a missing executable, or a blocked proxy are daemon/bootstrap evidence, not widget-ready success.
 
 Normal plugin usage starts or reuses the daemon. `npm run dev` and `npm run dev:stop` are development commands, not user recovery steps.
 

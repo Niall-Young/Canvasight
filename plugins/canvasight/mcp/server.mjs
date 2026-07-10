@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.2.0+codex.20260710062412";
+const SERVER_VERSION = "0.2.0+codex.20260710064916";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -3872,11 +3872,12 @@ function listCanvasightResources() {
   };
 }
 
-function readCanvasightResource(uri) {
+async function readCanvasightResource(uri) {
   if (uri !== CANVASIGHT_WIDGET_URI) {
     throw new HttpError(404, `Unknown Canvasight resource: ${uri}`, "resource_not_found");
   }
-  const meta = canvasightWidgetResourceMeta();
+  const daemon = await ensureDaemonServer();
+  const meta = canvasightWidgetResourceMeta([daemon.origin]);
   return {
     contents: [
       {
@@ -4297,6 +4298,60 @@ async function toolAwaitCanvasightWidgetReady(args) {
   return toolResult(result, text);
 }
 
+function widgetApiRoute(pathValue) {
+  if (typeof pathValue !== "string" || !pathValue.startsWith("/api/")) {
+    throw new Error("Canvasight widget API path must start with /api/.");
+  }
+  const parsed = new URL(pathValue, "http://canvasight.local");
+  if (parsed.origin !== "http://canvasight.local" || parsed.search || parsed.hash || parsed.pathname.includes("..")) {
+    throw new Error("Canvasight widget API path is invalid.");
+  }
+  const allowed =
+    /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) ||
+    /^\/api\/templates(?:\/|$)/.test(parsed.pathname) ||
+    parsed.pathname === "/api/reveal";
+  if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
+  return parsed.pathname;
+}
+
+async function toolCanvasightWidgetApi(args) {
+  const route = widgetApiRoute(args?.path);
+  const method = typeof args?.method === "string" ? args.method.toUpperCase() : "GET";
+  if (!new Set(["GET", "POST", "DELETE"]).has(method)) {
+    throw new Error(`Canvasight widget API method is not allowed: ${method}`);
+  }
+  const daemon = await ensureDaemonServer();
+  const response = await fetch(new URL(route, daemon.origin), {
+    method,
+    headers: daemonHeaders(daemon, args?.body === null || args?.body === undefined ? {} : { "content-type": "application/json" }),
+    ...(args?.body === null || args?.body === undefined ? {} : { body: JSON.stringify(args.body) })
+  });
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = text || null;
+  }
+  const error =
+    response.ok
+      ? null
+      : payload && typeof payload === "object" && typeof payload.error === "string"
+        ? payload.error
+        : text || `Canvasight daemon request failed: ${response.status}`;
+  const code = payload && typeof payload === "object" && typeof payload.code === "string" ? payload.code : null;
+  return toolResult(
+    {
+      ok: response.ok,
+      status: response.status,
+      data: response.ok ? payload : null,
+      error,
+      code
+    },
+    response.ok ? "Canvasight widget API request completed." : error
+  );
+}
+
 async function toolCloseCanvasight(args) {
   if (typeof args?.sessionId !== "string" || !args.sessionId) {
     throw new Error("sessionId is required");
@@ -4640,6 +4695,24 @@ const tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "canvasight_widget_api",
+    description: "Internal app-only proxy for Canvasight native widget session APIs. The widget uses this instead of fetching localhost directly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        method: { type: "string", enum: ["GET", "POST", "DELETE"] },
+        body: {}
+      },
+      required: ["path", "method"],
+      additionalProperties: false
+    },
+    outputSchema: looseObjectOutputSchema,
+    _meta: {
+      ui: { visibility: ["app"] }
+    }
+  },
+  {
     name: "await_canvasight_widget_ready",
     description:
       "Wait for the real Canvasight native widget client to mount React, reach its daemon session API, and acknowledge ready. Call this after open_canvasight; only status=ready confirms that the canvas is visibly initialized.",
@@ -4719,6 +4792,7 @@ async function callTool(name, args) {
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
+  if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});
@@ -4816,7 +4890,7 @@ async function handleJsonRpc(message) {
     }
 
     if (method === "resources/read") {
-      if (hasId) writeResult(id, readCanvasightResource(params?.uri));
+      if (hasId) writeResult(id, await readCanvasightResource(params?.uri));
       return;
     }
 

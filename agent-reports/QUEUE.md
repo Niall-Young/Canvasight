@@ -10,10 +10,12 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `agent-reports/assigned/20260710-1359-development-issue-native-widget-bootstrap-architecture-reset.md` - critical architecture reset implemented and installed as 0.2.0; real-host acceptance is blocked until Codex Desktop reloads its app-level plugin registry, then a newly tagged task verifies ready, controls, and Run.
+- `agent-reports/assigned/20260710-1359-development-issue-native-widget-bootstrap-architecture-reset.md` - 0.2.0 real host reached Connecting but timed out before API ready; 0.2.0+codex.20260710064916 now routes native JSON APIs through an app-only MCP proxy and awaits exact CSP origin, pending another real-host ready/control/Run acceptance.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1450-integration-summary-native-widget-api-proxy.md` - integrated the app-only native widget API proxy, exact-origin resource gate, real session/ready tests, docs, and exact-version reinstall; real-host acceptance remains assigned.
+- `agent-reports/resolved/20260710-1450-development-solution-native-widget-api-proxy.md` - replaced sandboxed native localhost JSON fetches with a strict MCP app proxy after the real host reached Connecting but timed out before ready.
 - `agent-reports/resolved/20260710-1433-integration-summary-native-widget-bootstrap-architecture-reset.md` - integrated the 0.2.0 bootstrap reset, ready acknowledgement, regression gates, docs/skills, exact-version reinstall, and recorded the Codex host-reload acceptance blocker.
 - `agent-reports/resolved/20260710-1426-test-solution-native-widget-bootstrap-regression-gates.md` - replaced FakeApp/load-event false positives with real ext-apps postMessage, dynamic runtime, timeout, and widget-ready regression gates; native Codex host acceptance remains pending.
 - `agent-reports/resolved/20260710-1420-development-solution-native-widget-bootstrap-architecture-reset.md` - replaced the server-string bridge with a typed MCP Apps bootstrap, dynamic widget runtime, and daemon-backed ready acknowledgement; real Codex acceptance remains assigned.

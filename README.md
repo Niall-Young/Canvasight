@@ -38,8 +38,8 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
 
 - React 应在 widget 资源加载时立即挂载，启动状态不会等待隐藏元数据后才创建应用。
 - 会话数据优先通过标准 MCP Apps `tool-result` 事件进入应用；OpenAI 兼容桥从 `openai:set_globals` 的 `event.detail.globals` 读取更新。
-- widget 取得会话数据后连接 daemon，并在初始 API 检查成功后上报 ready。
-- 启动失败或超时必须显示具体错误，不能永久停在 “Opening” 或 “Starting”。
+- widget 取得会话数据后，通过 app-only MCP API 代理访问 daemon；原生 widget 不再直接 fetch localhost。初始 API 检查成功后才上报 ready。
+- 启动失败或超时必须显示具体错误，不能永久停在 “Opening”、“Starting” 或 “Connecting”。
 - native Run 只有在 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
 - daemon URL 和 token 只存在于 widget 内部元数据，不出现在 native open 的公开结果中。
 
@@ -163,12 +163,12 @@ synthetic VM、DOM mock、metadata shape、postMessage、MCP smoke、build、plu
 
 ### 常见问题
 
-**一直显示 Opening / Starting 怎么办？**
+**一直显示 Opening / Starting / Connecting 怎么办？**
 
 先查看 `await_canvasight_widget_ready`：
 
 - `ready`：原生启动已确认。
-- `timeout`：widget 没有在等待时间内完成 ready 回执；按未验证处理，查看可见启动错误、插件版本和 MCP lifecycle 日志。
+- `timeout`：widget 没有在等待时间内完成 ready 回执；按未验证处理，查看可见启动错误、插件版本和 MCP lifecycle 日志。看到 `Connecting` 只证明 bridge 收到了 session metadata，不证明初始 API 或 ready 回执成功；daemon 尚未收到 telemetry 时，`reactMounted:false` 也不能单独证明 React 没运行。
 - `failed`：根据 `stage` 和 `error` 定位 metadata、session、thread、React 或 API 阶段。
 
 不要用 browser fallback、daemon health 或再次看到 tool success 来覆盖这个结论。
@@ -229,8 +229,8 @@ Completion of `open_canvasight` only means that the native widget session was pr
 
 - React mounts as soon as the widget resource loads; application creation does not wait on hidden session metadata.
 - Session data primarily arrives through the standard MCP Apps `tool-result` event. The OpenAI compatibility path consumes `event.detail.globals` from `openai:set_globals`.
-- After receiving session data, the widget connects to the daemon and reports ready only after its initial API check succeeds.
-- Startup failures and timeouts must show a concrete error instead of remaining on “Opening” or “Starting” forever.
+- After receiving session data, the widget reaches the daemon through an app-only MCP API proxy; the native widget no longer fetches localhost directly. It reports ready only after the initial API check succeeds.
+- Startup failures and timeouts must show a concrete error instead of remaining on “Opening”, “Starting”, or “Connecting” forever.
 - A native Run is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
 - Daemon URLs and tokens remain in widget-only metadata and are not exposed in public native-open output.
 
@@ -354,12 +354,12 @@ Synthetic VM, DOM mocks, metadata-shape checks, postMessage tests, MCP smoke, bu
 
 ### FAQ
 
-**Canvasight stays on Opening or Starting. What should I do?**
+**Canvasight stays on Opening, Starting, or Connecting. What should I do?**
 
 Check `await_canvasight_widget_ready` first:
 
 - `ready`: native startup is confirmed.
-- `timeout`: the widget did not acknowledge ready in time. Treat it as unverified and inspect the visible startup error, resolved plugin version, and MCP lifecycle log.
+- `timeout`: the widget did not acknowledge ready in time. Treat it as unverified and inspect the visible startup error, resolved plugin version, and MCP lifecycle log. `Connecting` proves only that the bridge received session metadata, not that the initial API or ready acknowledgement succeeded. Before the daemon receives telemetry, `reactMounted:false` does not by itself prove React never ran.
 - `failed`: use `stage` and `error` to identify the metadata, session, task, React, or API failure.
 
 Do not override this result with a browser fallback, daemon health, or another successful open-tool response.

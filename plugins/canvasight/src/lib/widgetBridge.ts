@@ -294,7 +294,8 @@ export function startCanvasightWidgetBridge(): void {
   updateBridgeState({});
 
   window.addEventListener("openai:set_globals", (event) => {
-    const globals = (event as CustomEvent<{ globals?: unknown }>).detail?.globals;
+    const detail = (event as CustomEvent<{ globals?: unknown } & OpenAiGlobals>).detail;
+    const globals = detail?.globals ?? detail;
     consumeOpenAiGlobals(globals);
   });
   consumeOpenAiGlobals(window.openai);
