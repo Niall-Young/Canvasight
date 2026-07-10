@@ -17,6 +17,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1910-integration-summary-chat-run-thread-store-degradation.md` - integrated Chat-only degraded preflight recovery, README guidance, regression coverage, version 0.3.1 reinstall, and recorded the required real-host acceptance.
+- `agent-reports/resolved/20260710-1908-development-solution-chat-run-thread-store-degradation.md` - Chat alone now accepts an explicit degraded thread-store preflight after limited retries and sends only when the verified native host bridge Promise resolves; Plan/Goal remain blocked.
+- `agent-reports/resolved/20260710-1905-customer-support-solution-thread-store-run-docs.md` - added bilingual README recovery guidance for the user-visible `failed to read thread` / malformed rollout-metadata Run block, including Chat bridge delivery and Plan/Goal restrictions.
 - `agent-reports/resolved/20260710-1537-integration-summary-native-open-attempt-refactor.md` - integrated OpenAttempt, fullscreen instance identity, monotonic startup/failure UI, strict Run gating, docs/skills, tests, and version 0.3.0 reinstall; native-host acceptance remains assigned.
 - `agent-reports/resolved/20260710-1537-development-solution-native-open-attempt-refactor.md` - replaced session-level ready with attempt/session/thread/fullscreen-instance evidence and recorded the required host-restart verification boundary.
 - `agent-reports/resolved/20260710-1534-test-solution-open-attempt-regression-gates.md` - added monotonic event, renderer identity, fullscreen isolation, and full production-widget fake-host gates; native-host acceptance remains pending.

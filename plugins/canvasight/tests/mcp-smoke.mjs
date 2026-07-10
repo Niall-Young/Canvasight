@@ -2740,6 +2740,50 @@ async function main() {
     assert.equal(transientResumeLog.filter((entry) => entry.method === "thread/resume").length, 3);
     assert.equal(transientResumeLog.filter((entry) => entry.method === "thread/settings/update").length, 1);
 
+    const degradedChatLogOffset = (await readNativeLog()).length;
+    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 4 }), "utf8");
+    const degradedChatPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Chat Prepared With Thread Store Degradation",
+        markdown: "# Widget Chat Prepared With Thread Store Degradation",
+        codexMode: "chat",
+        planMode: false,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(degradedChatPrepared.status, "prepared");
+    assert.equal(degradedChatPrepared.codexNative.status, "preflight_degraded_chat");
+    assert.equal(degradedChatPrepared.codexNative.reason, "thread_store_preflight_unavailable");
+    assert.match(degradedChatPrepared.codexNative.error, /rollout does not start with session metadata/);
+    const degradedChatLog = (await readNativeLog()).slice(degradedChatLogOffset);
+    assert.equal(degradedChatLog.filter((entry) => entry.method === "thread/resume").length, 4);
+    assert.equal(degradedChatLog.some((entry) => entry.method === "thread/settings/update"), false);
+
+    const blockedPlanLogOffset = (await readNativeLog()).length;
+    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 4 }), "utf8");
+    await assert.rejects(
+      () =>
+        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+          method: "POST",
+          headers: openedIdentityHeaders,
+          body: JSON.stringify({
+            ...runPayload,
+            threadName: "Widget Plan Does Not Degrade Thread Store Failure",
+            markdown: "# Widget Plan Does Not Degrade Thread Store Failure",
+            codexMode: "plan",
+            planMode: true,
+            deliveryMode: "widget_bridge_prepare"
+          })
+        }),
+      /codex_mode_not_applied|Canvasight Run blocked/
+    );
+    const blockedPlanLog = (await readNativeLog()).slice(blockedPlanLogOffset);
+    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/resume").length, 4);
+    assert.equal(blockedPlanLog.some((entry) => entry.method === "thread/settings/update"), false);
+
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     await assert.rejects(
       () =>

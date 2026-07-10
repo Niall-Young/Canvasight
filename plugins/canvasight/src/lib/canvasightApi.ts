@@ -54,7 +54,7 @@ export interface RunResponse {
     codexTurn?: RunResponse["codexTurn"];
   };
   codexNative?: {
-    status: "applied" | "applied_chat" | "applied_goal" | "applied_plan" | "disabled" | "failed" | "not_applicable" | "pending" | "skipped";
+    status: "applied" | "applied_chat" | "applied_goal" | "applied_plan" | "disabled" | "failed" | "not_applicable" | "pending" | "preflight_degraded_chat" | "skipped";
     action?: string;
     collaborationMode?: string;
     error?: string;
@@ -618,6 +618,7 @@ const expectedWidgetCodexStatus: Record<CodexMode, NonNullable<RunResponse["code
 function assertPreparedWidgetRun(payload: RunPayload, preparedRun: RunResponse): void {
   const expectedStatus = expectedWidgetCodexStatus[payload.codexMode];
   const actualStatus = preparedRun.codexNative?.status || preparedRun.delivery?.codexNative?.status;
+  if (payload.codexMode === "chat" && actualStatus === "preflight_degraded_chat") return;
   if (actualStatus !== expectedStatus) {
     const reason = preparedRun.codexNative?.error || preparedRun.delivery?.codexNative?.error || preparedRun.codexNative?.reason || preparedRun.delivery?.codexNative?.reason || actualStatus || "unknown";
     throw new Error(`Canvasight Run blocked before sendMessage: expected ${expectedStatus}, got ${reason}.`);

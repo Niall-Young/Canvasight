@@ -192,6 +192,10 @@ browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_threa
 
 先确认这是通过 `open_canvasight` 打开的 native widget，并且 ready 已确认。native Run 以 host bridge Promise 为成功标准；fallback Run 则检查 claim 和 `await_canvasight_run`。Chat / Plan / Goal 的预检失败也会在发送前阻断 Run。
 
+**Run 显示 `failed to read thread` 或 `rollout does not start with session metadata` 怎么办？**
+
+这表示 Codex 在 Canvasight 调用 `sendMessage` 前无法读取当前任务的本地 session/rollout metadata，不是节点内容错误。Canvasight 会先重试这类可恢复的 thread-store 预检错误：对 Chat，如果预检仍无法恢复，Run 可以继续交给同一已验证原生 widget 的 host bridge；只有 `sendMessage` Promise 成功后才算已发送。Plan 和 Goal 不能跳过预检：保留节点内容，重载或重启 Codex 后新建任务、重新打开 Canvasight 再试。若持续复现，请保留脱敏诊断。browser fallback 和 dev 页面不能修复原生任务存储。
+
 **新任务需要运行 `npm run dev` 吗？**
 
 不需要。正常插件入口会自动启动或复用项目级 daemon。dev 命令只用于开发和诊断。
@@ -385,6 +389,10 @@ Browser/dev pages do not have the native widget host bridge. After `claim_canvas
 **Why did Run not appear in the current task?**
 
 Confirm that the canvas came from `open_canvasight` and that widget ready was verified. Native Run success follows the host-bridge Promise. Fallback Runs require a current claim and `await_canvasight_run`. A failed Chat / Plan / Goal preflight also blocks sending.
+
+**What if Run shows `failed to read thread` or `rollout does not start with session metadata`?**
+
+Codex could not read the current task's local session/rollout metadata before Canvasight calls `sendMessage`; this is not a node-content error. Canvasight first retries this recoverable thread-store preflight error. For Chat, if preflight still cannot recover, the Run may proceed to the same verified native widget's host bridge, and it is sent only when the `sendMessage` Promise resolves. Plan and Goal cannot bypass preflight: keep the node content, reload or restart Codex, create a new task, reopen Canvasight, and retry. If it persists, retain redacted diagnostics. Browser fallback and dev pages cannot repair native task storage.
 
 **Do I need `npm run dev` in a new task?**
 

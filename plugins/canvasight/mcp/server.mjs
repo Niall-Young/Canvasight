@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.0+codex.20260710073625";
+const SERVER_VERSION = "0.3.1+codex.20260710190600";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -3500,6 +3500,16 @@ function codexNativeModeApplied(status) {
 async function applyWidgetCodexMode(session, payload) {
   const codexNative = await applyCodexNativeMode(session, payload);
   if (codexNative.status !== "applied") {
+    if (payload.codexMode === "chat" && isRetryableThreadResumeError({
+      canvasightAppServerMethod: "thread/resume",
+      message: codexNative.error
+    })) {
+      return {
+        ...codexNative,
+        status: "preflight_degraded_chat",
+        reason: "thread_store_preflight_unavailable"
+      };
+    }
     const reason = codexNative.error || codexNative.reason || "Codex native mode was not applied";
     throw new HttpError(502, `Canvasight Run blocked before sendMessage: ${reason}`, {
       code: "codex_mode_not_applied",
