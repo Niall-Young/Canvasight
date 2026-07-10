@@ -14,6 +14,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1035-integration-summary-daemon-node-executable-fallback.md` - integrated the 0.1.50 daemon Node executable fallback, ENOENT regression smoke, validation, and current-task reload risk.
 - `agent-reports/resolved/20260710-1033-development-solution-daemon-node-executable-fallback.md` - added Node executable fallback and lifecycle diagnostics for daemon start failures, with a 0.1.50 ENOENT regression smoke.
 - `agent-reports/resolved/20260710-1033-development-issue-daemon-node-executable-fallback.md` - resolved stale Homebrew Node executable paths causing daemon start timeout.
 - `agent-reports/resolved/20260710-1013-integration-summary-native-widget-module-bootstrap.md` - fixed native widget app bootstrap as an ES module, documented the current sidebar fallback, and installed Canvasight 0.1.49.
