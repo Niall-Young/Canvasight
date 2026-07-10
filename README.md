@@ -198,9 +198,9 @@ browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_threa
 
 **Run 显示 `failed to read thread` 或 `rollout does not start with session metadata` 怎么办？**
 
-这表示 Codex 在 Canvasight 调用 `sendMessage` 前无法读取当前任务的本地 session/rollout metadata，不是节点内容错误。对于 Plan 和 Goal，Canvasight 会优先通过正在运行的 Codex Desktop 连接，对 **当前 widget 绑定的 task** 执行预检；Desktop 连接不可用时才安全地回退到现有 stdio 通道。两条通道都必须先恢复这个精确 task，再开启 Plan 或设置 Goal；预检成功前不会发送节点内容，也绝不会改用旧任务、最近任务或普通 Chat。
+这表示 Codex 无法读取该任务的本地 session/rollout metadata，不是节点内容错误。Plan 会直接对 **当前 widget 绑定的 task** 请求开启 Plan 模式，并使用设置中保存的“Codex 当前模型”（默认 `gpt-5.6-terra`）；Goal 会直接为同一个 task 设置目标。只有 Codex 明确报告 task 尚未加载时，Canvasight 才会在同一连接里恢复该 task 后重试。`failed to read thread` 不会触发恢复旧任务、最近任务或普通 Chat，也不会发送节点内容。
 
-全程不模拟鼠标/键盘、不复制粘贴、不新开 task，也不修改 Codex session 文件。若两条通道都无法读取当前 task，Canvasight 会保留节点内容，并显示所用通道与失败阶段的脱敏诊断；重载或重启 Codex 后重新打开 Canvasight 再试。browser fallback 和 dev 页面不能修复原生任务存储。
+全程不模拟鼠标/键盘、不复制粘贴、不新开 task，也不修改 Codex session 文件。若直接模式设置仍失败，Canvasight 会保留节点内容并显示脱敏诊断；重载或重启 Codex 后重新打开 Canvasight 再试。browser fallback 和 dev 页面不能修复原生任务存储。
 
 **新任务需要运行 `npm run dev` 吗？**
 
@@ -402,9 +402,9 @@ Confirm that the canvas came from `open_canvasight` and that widget ready was ve
 
 **What if Run shows `failed to read thread` or `rollout does not start with session metadata`?**
 
-Codex could not read the current task's local session/rollout metadata before Canvasight calls `sendMessage`; this is not a node-content error. For Plan and Goal, Canvasight first uses the running Codex Desktop connection to preflight the **exact task bound to the widget**. Only when that connection is unavailable does it safely fall back to the existing stdio transport. Both paths must resume that exact task before enabling Plan or setting Goal; until preflight succeeds, Canvasight does not send node content and never substitutes an old task, recent task, or ordinary Chat.
+Codex could not read that task's local session/rollout metadata; this is not a node-content error. Plan directly requests Plan mode on the **exact task bound to the widget**, using the saved Current Codex model setting (default `gpt-5.6-terra`); Goal directly sets the objective on that same task. Canvasight resumes and retries only when Codex explicitly reports that the task is not loaded. A `failed to read thread` error never makes Canvasight resume or substitute an old task, recent task, or ordinary Chat, and it does not send node content.
 
-This flow never simulates mouse or keyboard input, copies/pastes content, creates a task, or edits Codex session files. If neither transport can read the current task, Canvasight retains the node content and shows redacted diagnostics with the transport and failure stage; reload or restart Codex, then reopen Canvasight and retry. Browser fallback and dev pages cannot repair native task storage.
+This flow never simulates mouse or keyboard input, copies/pastes content, creates a task, or edits Codex session files. If direct mode setting still fails, Canvasight retains the node content and shows redacted diagnostics; reload or restart Codex, then reopen Canvasight and retry. Browser fallback and dev pages cannot repair native task storage.
 
 **Do I need `npm run dev` in a new task?**
 

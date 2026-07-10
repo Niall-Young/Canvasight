@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.3+codex.20260710195800";
+const SERVER_VERSION = "0.3.4+codex.20260710204500";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -320,41 +320,10 @@ function codexAppServerArgs() {
   return ["app-server", "--listen", "stdio://"];
 }
 
-function codexAppServerProxyArgs() {
-  const rawArgs = String(process.env.CANVASIGHT_CODEX_APP_SERVER_PROXY_ARGS || "").trim();
-  if (rawArgs) return rawArgs.split(/\s+/).filter(Boolean);
-  return ["app-server", "proxy", "--sock", codexAppServerControlSocketPath()];
-}
-
-function codexAppServerTransportPreference() {
-  const value = String(process.env.CANVASIGHT_CODEX_APP_SERVER_TRANSPORT || "auto").trim().toLowerCase();
-  if (value === "desktop_proxy" || value === "proxy") return "desktop_proxy";
-  if (value === "stdio" || value === "stdio_fallback") return "stdio";
-  return "auto";
-}
-
-function codexAppServerControlSocketPath() {
-  const configured = String(
-    process.env.CANVASIGHT_CODEX_APP_SERVER_PROXY_SOCKET || process.env.CANVASIGHT_CODEX_APP_SERVER_CONTROL_SOCKET || ""
-  ).trim();
-  if (configured) return path.resolve(configured);
-  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  return path.join(codexHome, "app-server-control", "app-server-control.sock");
-}
-
-function canUseCodexDesktopProxy() {
-  return fs.existsSync(codexAppServerControlSocketPath());
-}
-
 function codexAppServerTransports() {
-  const preference = codexAppServerTransportPreference();
-  if (preference === "stdio") return [{ kind: "stdio_fallback", args: codexAppServerArgs() }];
-  if (preference === "desktop_proxy" || canUseCodexDesktopProxy()) {
-    return [
-      { kind: "desktop_proxy", args: codexAppServerProxyArgs() },
-      { kind: "stdio_fallback", args: codexAppServerArgs() }
-    ];
-  }
+  // Native mode changes are sent directly to Codex's supported app-server API.
+  // Do not probe or proxy a Desktop control socket: it is not a public, stable
+  // integration surface and a failed probe used to hide the real request path.
   return [{ kind: "stdio_fallback", args: codexAppServerArgs() }];
 }
 
@@ -3152,25 +3121,13 @@ function turnConfirmationFromNotification(message, expected = {}) {
 
 async function appServerRequestSequence(requests, options = {}) {
   const transports = codexAppServerTransports();
-  let proxyUnavailableError = null;
-
-  for (const transport of transports) {
-    try {
-      const results = await appServerRequestSequenceViaTransport(requests, options, transport);
-      Object.defineProperty(results, "canvasightAppServerTransport", {
-        value: transport.kind,
-        enumerable: false
-      });
-      return results;
-    } catch (error) {
-      if (transport.kind !== "desktop_proxy" || error?.canvasightAppServerPhase !== "initialize") {
-        throw error;
-      }
-      proxyUnavailableError = error;
-    }
-  }
-
-  throw proxyUnavailableError || new Error("Codex app-server transport was unavailable");
+  const transport = transports[0];
+  const results = await appServerRequestSequenceViaTransport(requests, options, transport);
+  Object.defineProperty(results, "canvasightAppServerTransport", {
+    value: transport.kind,
+    enumerable: false
+  });
+  return results;
 }
 
 function appServerRequestSequenceViaTransport(requests, { experimentalApi = false } = {}, transport) {
@@ -3425,11 +3382,22 @@ function codexCollaborationMode(mode, model) {
   };
 }
 
+const DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
+
+function codexModelFromPayload(payload) {
+  return typeof payload?.codexModel === "string" && payload.codexModel.trim() ? payload.codexModel.trim() : DEFAULT_CODEX_MODEL;
+}
+
 function goalObjectiveFromRun(payload) {
   const heading = payload.threadName || "Canvasight Goal";
   const projectLine = payload.projectPath ? `Project path: ${payload.projectPath}` : "";
   const markdown = typeof payload.markdown === "string" ? payload.markdown.trim() : "";
   return [heading, projectLine, markdown].filter(Boolean).join("\n\n").slice(0, 12000);
+}
+
+function isTaskNotLoadedError(error) {
+  const message = String(error?.message || "");
+  return /thread (?:is )?not loaded|thread_not_loaded|unknown thread|thread not found/i.test(message);
 }
 
 function isRetryableThreadResumeError(error) {
@@ -3452,61 +3420,74 @@ async function retryThreadResumeSequence(operation, attempts = 4) {
   throw lastError;
 }
 
-async function setCodexCollaborationMode(threadId, mode) {
+async function setCodexChatMode(threadId) {
   return retryThreadResumeSequence(() =>
     appServerRequestSequence(
       [
-        {
-          method: "thread/resume",
-          params: {
-            threadId
-          }
-        },
+        { method: "thread/resume", params: { threadId } },
         ([resumeResult]) => {
           const model = typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : "";
           if (!model) throw new Error("Codex thread/resume did not return a model for settings update");
           return {
             method: "thread/settings/update",
-            params: {
-              threadId,
-              collaborationMode: codexCollaborationMode(mode, model)
-            }
+            params: { threadId, collaborationMode: codexCollaborationMode("default", model) }
           };
         }
       ],
       { experimentalApi: true }
     ).then((results) => ({
       result: results[1] || {},
-      transport: results.canvasightAppServerTransport || "stdio_fallback"
+      transport: results.canvasightAppServerTransport || "stdio_fallback",
+      model: typeof results[0]?.model === "string" ? results[0].model : ""
     }))
   );
 }
 
-async function setCodexGoal(threadId, payload) {
-  return retryThreadResumeSequence(() =>
-    appServerRequestSequence(
+async function setCodexCollaborationMode(threadId, mode, payload) {
+  const model = codexModelFromPayload(payload);
+  const directRequest = {
+    method: "thread/settings/update",
+    params: { threadId, collaborationMode: codexCollaborationMode(mode, model) }
+  };
+  try {
+    const results = await appServerRequestSequence([directRequest], { experimentalApi: true });
+    return { result: results[0] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "direct", model };
+  } catch (error) {
+    if (!isTaskNotLoadedError(error)) throw error;
+    const results = await appServerRequestSequence(
       [
-        {
-          method: "thread/resume",
-          params: {
-            threadId
-          }
-        },
-        {
-          method: "thread/goal/set",
+        { method: "thread/resume", params: { threadId } },
+        ([resumeResult]) => ({
+          method: "thread/settings/update",
           params: {
             threadId,
-            objective: goalObjectiveFromRun(payload),
-            status: "active"
+            collaborationMode: codexCollaborationMode(
+              mode,
+              typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : model
+            )
           }
-        }
+        })
       ],
+      { experimentalApi: true }
+    );
+    const resumedModel = typeof results[0]?.model === "string" && results[0].model ? results[0].model : model;
+    return { result: results[1] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "resume_retry", model: resumedModel };
+  }
+}
+
+async function setCodexGoal(threadId, payload) {
+  const directRequest = { method: "thread/goal/set", params: { threadId, objective: goalObjectiveFromRun(payload), status: "active" } };
+  try {
+    const results = await appServerRequestSequence([directRequest], { experimentalApi: false });
+    return { result: results[0] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "direct" };
+  } catch (error) {
+    if (!isTaskNotLoadedError(error)) throw error;
+    const results = await appServerRequestSequence(
+      [{ method: "thread/resume", params: { threadId } }, directRequest],
       { experimentalApi: false }
-    ).then((results) => ({
-      result: results[1] || {},
-      transport: results.canvasightAppServerTransport || "stdio_fallback"
-    }))
-  );
+    );
+    return { result: results[1] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "resume_retry" };
+  }
 }
 
 function turnIdFromResult(result) {
@@ -3537,14 +3518,15 @@ async function applyCodexNativeMode(session, payload) {
 
   try {
     if (payload.codexMode === "chat") {
-      const nativeResult = await setCodexCollaborationMode(session.codexThreadId, "default");
+      const nativeResult = await setCodexChatMode(session.codexThreadId);
       return {
         status: "applied",
         action: "thread/settings/update",
         threadId: session.codexThreadId,
         mode: payload.codexMode,
         collaborationMode: "default",
-        transport: nativeResult.transport
+        transport: nativeResult.transport,
+        codexModel: nativeResult.model
       };
     }
 
@@ -3555,19 +3537,22 @@ async function applyCodexNativeMode(session, payload) {
         action: "thread/goal/set",
         threadId: session.codexThreadId,
         mode: payload.codexMode,
-        transport: nativeResult.transport
+        transport: nativeResult.transport,
+        path: nativeResult.path
       };
     }
 
     const collaborationMode = payload.codexMode === "plan" ? "plan" : "default";
-    const nativeResult = await setCodexCollaborationMode(session.codexThreadId, collaborationMode);
+    const nativeResult = await setCodexCollaborationMode(session.codexThreadId, collaborationMode, payload);
     return {
       status: "applied",
       action: "thread/settings/update",
       threadId: session.codexThreadId,
       mode: payload.codexMode,
       collaborationMode,
-      transport: nativeResult.transport
+      transport: nativeResult.transport,
+      path: nativeResult.path,
+      codexModel: nativeResult.model
     };
   } catch (error) {
     return {

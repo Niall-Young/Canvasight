@@ -133,6 +133,8 @@ type CanvasClipboardPayload = {
 };
 type CanvasightWorkspaceProps = {
   agentTeamEnabled: boolean;
+  codexModel: string;
+  onCodexModelDetected: (model: string) => void;
   onOpenSettings: () => void;
 };
 
@@ -456,6 +458,7 @@ function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): A
   return {
     ...webDefaultAppSettings,
     ...(value ?? {}),
+    codexModel: typeof value?.codexModel === "string" && value.codexModel.trim() ? value.codexModel.trim() : webDefaultAppSettings.codexModel,
     agentTeamEnabled: value?.agentTeamEnabled ?? webDefaultAppSettings.agentTeamEnabled,
     translucentBackground: false
   };
@@ -465,6 +468,7 @@ function settingsEqual(left: AppSettings | null | undefined, right: AppSettings)
   return Boolean(
     left &&
       left.themePreference === right.themePreference &&
+      left.codexModel === right.codexModel &&
       left.language === right.language &&
       left.translucentBackground === right.translucentBackground &&
       left.assistantProvider === right.assistantProvider &&
@@ -814,7 +818,7 @@ function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | nul
   }
 }
 
-function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
+function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetected, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
   const { language, t } = useI18n();
   const {
     appendAttachments,
@@ -1781,6 +1785,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         attachments: result.attachments,
         agentTeam: result.agentTeam,
         codexMode: result.codexMode,
+        codexModel,
         effort: node.data.effort || "xhigh",
         imagePaths: result.imagePaths,
         markdown: result.markdown,
@@ -1795,6 +1800,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       try {
         const runResult = await canvasightApi.runCanvasightNode(runPayload);
         setLastRunResult(runResult);
+        if (runResult.codexNative?.path === "resume_retry" && runResult.codexNative.codexModel) {
+          onCodexModelDetected(runResult.codexNative.codexModel);
+        }
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
         setRunStatus(t("status.sentAssistant"), "positive");
@@ -1810,7 +1818,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setRunStatus(actionableMessage, "negative");
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
+    [agentTeamEnabled, codexModel, edges, language, markNodeRun, nodes, onCodexModelDetected, project, setRunStatus, t]
   );
 
   useEffect(() => {
@@ -2687,6 +2695,17 @@ export default function App(): ReactElement {
     saveStoredAppSettings(next);
   }, []);
 
+  const syncCodexModel = useCallback((model: string) => {
+    const normalized = model.trim();
+    if (!normalized) return;
+    setSavedSettings((current) => {
+      if (current.codexModel === normalized) return current;
+      const next = normalizeAppSettings({ ...current, codexModel: normalized });
+      saveStoredAppSettings(next);
+      return next;
+    });
+  }, []);
+
   const handleSettingsOpenChange = useCallback((open: boolean) => {
     setSettingsOpen(open);
     if (!open) setPreviewSettings(null);
@@ -2700,12 +2719,18 @@ export default function App(): ReactElement {
     >
       <I18nProvider language={activeSettings.language}>
         <ReactFlowProvider>
-          <CanvasightWorkspace agentTeamEnabled={activeSettings.agentTeamEnabled} onOpenSettings={() => setSettingsOpen(true)} />
+          <CanvasightWorkspace
+            agentTeamEnabled={activeSettings.agentTeamEnabled}
+            codexModel={activeSettings.codexModel}
+            onCodexModelDetected={syncCodexModel}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
         </ReactFlowProvider>
         <SettingsDialog
           agentTeamEnabled={activeSettings.agentTeamEnabled}
           assistantProvider={activeSettings.assistantProvider}
           assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
+          codexModel={activeSettings.codexModel}
           language={activeSettings.language}
           open={settingsOpen}
           showTranslucentBackground={false}

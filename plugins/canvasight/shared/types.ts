@@ -32,6 +32,7 @@ export const achievementIds = [
 export type AchievementId = (typeof achievementIds)[number];
 
 export interface AppSettings {
+  codexModel: string;
   themePreference: ThemePreference;
   language: LanguagePreference;
   translucentBackground: boolean;
@@ -41,6 +42,7 @@ export interface AppSettings {
 }
 
 export const defaultAppSettings = {
+  codexModel: "gpt-5.6-terra",
   themePreference: "system",
   language: "zh",
   translucentBackground: true,

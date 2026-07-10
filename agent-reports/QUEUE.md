@@ -17,6 +17,10 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-2053-integration-summary-direct-plan-goal-mode.md` - integrated direct Plan/Goal mode setting, saved model preference, no-resume thread-store boundary, tests, docs, version 0.3.4, and the remaining real native-host acceptance gate.
+- `agent-reports/resolved/20260710-2050-test-solution-direct-plan-goal-mode.md` - covered direct Plan/Goal, the task-not-loaded-only resume retry, malformed-rollout no-resume behavior, and retained Chat degradation gates.
+- `agent-reports/resolved/20260710-2045-development-solution-direct-plan-goal-mode.md` - switched Plan/Goal to direct current-task mode updates, with resume only for an explicit task-not-loaded response; native-host acceptance remains required.
+- `agent-reports/resolved/20260710-2045-customer-support-solution-direct-plan-goal-model-setting.md` - added the persisted current Codex model setting, Run payload wiring, and bilingual docs for direct Plan/Goal mode setting without a Desktop proxy promise.
 - `agent-reports/resolved/20260710-2002-integration-summary-desktop-proxy-plan-goal.md` - integrated Desktop-first current-task Plan/Goal preflight, strict stdio fallback, regression coverage, docs, version 0.3.3, and recorded the remaining real native-host acceptance gate.
 - `agent-reports/resolved/20260710-1959-test-solution-desktop-proxy-plan-goal.md` - added proxy-success, unavailable-only stdio fallback, and stale-task/current-widget binding gates; real native-host acceptance remains required.
 - `agent-reports/resolved/20260710-1957-development-solution-desktop-proxy-plan-goal.md` - added Desktop app-server proxy preference for current-task Plan/Goal preflight, strict proxy-unavailable-only stdio fallback, and transport diagnostics; real native-host acceptance remains pending.

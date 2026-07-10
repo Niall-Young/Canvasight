@@ -32,6 +32,7 @@ export interface RunPayload {
   attachments: Attachment[];
   agentTeam: AgentTeamRunConfig;
   codexMode: CodexMode;
+  codexModel: string;
   effort: string;
   imagePaths: string[];
   markdown: string;
@@ -57,9 +58,11 @@ export interface RunResponse {
     status: "applied" | "applied_chat" | "applied_goal" | "applied_plan" | "disabled" | "failed" | "not_applicable" | "pending" | "preflight_degraded_chat" | "skipped";
     action?: string;
     collaborationMode?: string;
+    codexModel?: string;
     error?: string;
     mode?: CodexMode;
     reason?: string;
+    path?: "direct" | "resume_retry";
     threadId?: string | null;
   };
   codexTurn?: {

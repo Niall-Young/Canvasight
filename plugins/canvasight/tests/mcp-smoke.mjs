@@ -80,14 +80,9 @@ const canvasightHome = path.join(tempRoot, "canvasight-home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
-const proxyUnavailablePath = path.join(tempRoot, "desktop-proxy-unavailable");
-const proxySocketPath = path.join(tempRoot, "desktop-app-server-control.sock");
+const directModeNotLoadedPath = path.join(tempRoot, "direct-mode-not-loaded-threads.txt");
+const directModeThreadReadFailPath = path.join(tempRoot, "direct-mode-thread-read-fail-threads.txt");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
-
-// Its presence makes Canvasight select the Desktop proxy in auto mode. The
-// smoke executable below still speaks stdio, exactly as `codex app-server
-// proxy` does after it has connected to the Desktop control socket.
-fs.writeFileSync(proxySocketPath, "smoke socket marker", "utf8");
 
 fs.writeFileSync(
   fakeCodexPath,
@@ -97,15 +92,11 @@ import fs from "node:fs";
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
 const transientResumeFailCountPath = process.env.CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH;
-const proxyUnavailablePath = process.env.CANVASIGHT_FAKE_PROXY_UNAVAILABLE_PATH;
+const directModeNotLoadedPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH;
+const directModeThreadReadFailPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH;
 const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
-
-if (process.argv.includes("proxy") && proxyUnavailablePath && fs.existsSync(proxyUnavailablePath)) {
-  process.stderr.write("fake Desktop app-server control socket is unavailable\\n");
-  process.exit(12);
-}
 
 function write(message) {
   process.stdout.write(JSON.stringify(message) + "\\n");
@@ -141,6 +132,15 @@ function shouldTransientlyFailResume(threadId) {
     counts[threadId] = remaining - 1;
     fs.writeFileSync(transientResumeFailCountPath, JSON.stringify(counts));
     return true;
+  } catch {
+    return false;
+  }
+}
+
+function listedThread(path, threadId) {
+  if (!path) return false;
+  try {
+    return fs.readFileSync(path, "utf8").split(/\\s+/).filter(Boolean).includes(threadId);
   } catch {
     return false;
   }
@@ -192,7 +192,15 @@ function handle(message) {
     });
     return;
   }
-  if (["thread/goal/set", "thread/settings/update", "turn/start"].includes(message.method) && !loadedThreads.has(message.params?.threadId)) {
+  if (["thread/goal/set", "thread/settings/update"].includes(message.method) && listedThread(directModeThreadReadFailPath, message.params?.threadId)) {
+    write({ id: message.id, error: { code: -32603, message: "failed to read thread rollout: rollout does not start with session metadata" } });
+    return;
+  }
+  if (["thread/goal/set", "thread/settings/update"].includes(message.method) && listedThread(directModeNotLoadedPath, message.params?.threadId) && !loadedThreads.has(message.params?.threadId)) {
+    write({ id: message.id, error: { code: -32602, message: "thread not loaded: " + message.params?.threadId } });
+    return;
+  }
+  if (message.method === "turn/start" && !loadedThreads.has(message.params?.threadId)) {
     write({ id: message.id, error: { code: -32602, message: "thread not found: " + message.params?.threadId } });
     return;
   }
@@ -263,9 +271,8 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
     CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH: transientResumeFailCountPath,
-    CANVASIGHT_FAKE_PROXY_UNAVAILABLE_PATH: proxyUnavailablePath,
-    CANVASIGHT_CODEX_APP_SERVER_PROXY_SOCKET: proxySocketPath,
-    CANVASIGHT_CODEX_APP_SERVER_TRANSPORT: "auto",
+    CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH: directModeNotLoadedPath,
+    CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH: directModeThreadReadFailPath,
     CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
@@ -2693,6 +2700,7 @@ async function main() {
       attachments
     };
 
+    const goalDirectLogOffset = (await readNativeLog()).length;
     const widgetPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       headers: openedIdentityHeaders,
@@ -2709,7 +2717,10 @@ async function main() {
     assert.equal(widgetPrepared.codexNative.status, "applied_goal");
     assert.equal(widgetPrepared.codexNative.action, "thread/goal/set");
     assert.equal(widgetPrepared.codexNative.threadId, "thread-smoke");
-    assert.equal(widgetPrepared.codexNative.transport, "desktop_proxy");
+    assert.equal(widgetPrepared.codexNative.transport, "stdio_fallback");
+    assert.equal(widgetPrepared.codexNative.path, "direct");
+    const goalDirectLog = (await readNativeLog()).slice(goalDirectLogOffset);
+    assert.equal(goalDirectLog.some((entry) => entry.method === "thread/resume"), false);
     assert.equal(widgetPrepared.codexTurn.status, "skipped");
     assert.equal(widgetPrepared.codexTurn.reason, "widget_bridge_sendMessage");
     assert.equal(widgetPrepared.agentTeam.agentsMd.status, "created");
@@ -2739,6 +2750,7 @@ async function main() {
     assert.equal(chatPrepared.codexNative.action, "thread/settings/update");
     assert.equal(chatPrepared.codexNative.collaborationMode, "default");
 
+    const directModeLogOffset = (await readNativeLog()).length;
     const planPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       headers: openedIdentityHeaders,
@@ -2755,8 +2767,12 @@ async function main() {
     assert.equal(planPrepared.codexNative.status, "applied_plan");
     assert.equal(planPrepared.codexNative.action, "thread/settings/update");
     assert.equal(planPrepared.codexNative.collaborationMode, "plan");
-    assert.equal(planPrepared.codexNative.transport, "desktop_proxy");
+    assert.equal(planPrepared.codexNative.transport, "stdio_fallback");
+    assert.equal(planPrepared.codexNative.path, "direct");
+    assert.equal(planPrepared.codexNative.codexModel, "gpt-5.6-terra");
     const widgetModeLog = await readNativeLog();
+    const directModeLog = widgetModeLog.slice(directModeLogOffset);
+    assert.equal(directModeLog.some((entry) => entry.method === "thread/resume"), false);
     assert.equal(
       widgetModeLog.some(
         (entry) =>
@@ -2768,29 +2784,6 @@ async function main() {
       true
     );
 
-    // If the Desktop proxy cannot start, Canvasight may use its isolated
-    // app-server fallback, but it must still operate on the widget's task.
-    const proxyFallbackLogOffset = widgetModeLog.length;
-    await fsp.writeFile(proxyUnavailablePath, "unavailable", "utf8");
-    const proxyFallbackPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-      method: "POST",
-      headers: openedIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        threadName: "Widget Plan Prepared With Proxy Fallback",
-        markdown: "# Widget Plan Prepared With Proxy Fallback",
-        codexMode: "plan",
-        planMode: true,
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
-    assert.equal(proxyFallbackPrepared.status, "prepared");
-    assert.equal(proxyFallbackPrepared.codexNative.transport, "stdio_fallback");
-    assert.equal(proxyFallbackPrepared.codexNative.threadId, "thread-smoke");
-    const proxyFallbackLog = (await readNativeLog()).slice(proxyFallbackLogOffset);
-    assert.equal(proxyFallbackLog.some((entry) => entry.params?.threadId !== "thread-smoke"), false);
-    assert.equal(proxyFallbackLog.some((entry) => entry.method === "thread/settings/update"), true);
-    await fsp.rm(proxyUnavailablePath, { force: true });
     assert.equal(
       widgetModeLog.some(
         (entry) =>
@@ -2858,15 +2851,59 @@ async function main() {
       })
     });
     assert.equal(currentThreadPrepared.status, "prepared");
-    assert.equal(currentThreadPrepared.codexNative.transport, "desktop_proxy");
+    assert.equal(currentThreadPrepared.codexNative.transport, "stdio_fallback");
+    assert.equal(currentThreadPrepared.codexNative.path, "direct");
     assert.equal(currentThreadPrepared.codexNative.threadId, "thread-current-widget");
     const currentThreadLog = (await readNativeLog()).slice(currentThreadLogOffset);
     assert.equal(currentThreadLog.some((entry) => entry.params?.threadId === "thread-old-broken"), false);
-    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-current-widget"), true);
+    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-current-widget"), false);
     assert.equal(currentThreadLog.some((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-current-widget"), true);
     await fsp.writeFile(resumeFailPath, "", "utf8");
     await request("tools/call", { name: "close_canvasight", arguments: { sessionId: staleWidget.structuredContent.sessionId } });
     await request("tools/call", { name: "close_canvasight", arguments: { sessionId: currentSessionId } });
+
+    // A not-loaded task is the sole retry exception: Canvasight may resume it
+    // once, then repeat the exact direct Plan or Goal request.
+    const notLoadedPlanLogOffset = (await readNativeLog()).length;
+    await fsp.writeFile(directModeNotLoadedPath, "thread-smoke\n", "utf8");
+    const notLoadedPlan = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Plan Retries Only After Task Not Loaded",
+        markdown: "# Widget Plan Retries Only After Task Not Loaded",
+        codexMode: "plan",
+        planMode: true,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(notLoadedPlan.status, "prepared");
+    assert.equal(notLoadedPlan.codexNative.path, "resume_retry");
+    assert.equal(notLoadedPlan.codexNative.codexModel, "gpt-5.5");
+    const notLoadedPlanLog = (await readNativeLog()).slice(notLoadedPlanLogOffset);
+    assert.equal(notLoadedPlanLog.filter((entry) => entry.method === "thread/settings/update").length, 2);
+    assert.equal(notLoadedPlanLog.filter((entry) => entry.method === "thread/resume").length, 1);
+
+    const notLoadedGoalLogOffset = (await readNativeLog()).length;
+    const notLoadedGoal = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Goal Retries Only After Task Not Loaded",
+        markdown: "# Widget Goal Retries Only After Task Not Loaded",
+        codexMode: "goal",
+        planMode: false,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(notLoadedGoal.status, "prepared");
+    assert.equal(notLoadedGoal.codexNative.path, "resume_retry");
+    const notLoadedGoalLog = (await readNativeLog()).slice(notLoadedGoalLogOffset);
+    assert.equal(notLoadedGoalLog.filter((entry) => entry.method === "thread/goal/set").length, 2);
+    assert.equal(notLoadedGoalLog.filter((entry) => entry.method === "thread/resume").length, 1);
+    await fsp.writeFile(directModeNotLoadedPath, "", "utf8");
 
     const transientResumeLogOffset = (await readNativeLog()).length;
     await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 2 }), "utf8");
@@ -2911,7 +2948,7 @@ async function main() {
     assert.equal(degradedChatLog.some((entry) => entry.method === "thread/settings/update"), false);
 
     const blockedPlanLogOffset = (await readNativeLog()).length;
-    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 4 }), "utf8");
+    await fsp.writeFile(directModeThreadReadFailPath, "thread-smoke\n", "utf8");
     await assert.rejects(
       () =>
         fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
@@ -2929,11 +2966,10 @@ async function main() {
       /codex_mode_not_applied|Canvasight Run blocked/
     );
     const blockedPlanLog = (await readNativeLog()).slice(blockedPlanLogOffset);
-    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/resume").length, 4);
-    assert.equal(blockedPlanLog.some((entry) => entry.method === "thread/settings/update"), false);
+    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/resume").length, 0);
+    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/settings/update").length, 1);
 
     const blockedGoalLogOffset = (await readNativeLog()).length;
-    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 4 }), "utf8");
     await assert.rejects(
       () =>
         fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
@@ -2951,28 +2987,11 @@ async function main() {
       /codex_mode_not_applied|Canvasight Run blocked/
     );
     const blockedGoalLog = (await readNativeLog()).slice(blockedGoalLogOffset);
-    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/resume").length, 4);
-    assert.equal(blockedGoalLog.some((entry) => entry.method === "thread/goal/set"), false);
+    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/resume").length, 0);
+    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/goal/set").length, 1);
+    await fsp.writeFile(directModeThreadReadFailPath, "", "utf8");
 
-    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
-    await assert.rejects(
-      () =>
-        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-          method: "POST",
-          headers: openedIdentityHeaders,
-          body: JSON.stringify({
-            ...runPayload,
-            threadName: "Widget Plan Prepare Failure",
-            markdown: "# Widget Plan Prepare Failure",
-            codexMode: "plan",
-            planMode: true,
-            deliveryMode: "widget_bridge_prepare"
-          })
-        }),
-      /codex_mode_not_applied|Canvasight Run blocked/
-    );
-    await fsp.writeFile(resumeFailPath, "", "utf8");
-
+    const awaitedGoalLogOffset = (await readNativeLog()).length;
     const waitForRun = request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -3015,12 +3034,9 @@ async function main() {
     assert.match(createdAgentsMd, /## Canvasight Agent Team/);
 
     const goalNativeLog = await readNativeLog();
-    assert.equal(goalNativeLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke"), true);
-    assert.equal(goalNativeLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
-    assert.ok(
-      goalNativeLog.findIndex((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-smoke") <
-        goalNativeLog.findIndex((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke")
-    );
+    const awaitedGoalLog = goalNativeLog.slice(awaitedGoalLogOffset);
+    assert.equal(awaitedGoalLog.some((entry) => entry.method === "thread/resume"), false);
+    assert.equal(awaitedGoalLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
     assert.equal(goalNativeLog.some((entry) => entry.method === "turn/start"), false);
     assert.equal(
       goalNativeLog.some(
