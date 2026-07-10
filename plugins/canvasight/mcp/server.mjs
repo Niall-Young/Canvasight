@@ -11,9 +11,12 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.44";
+const SERVER_VERSION = "0.1.48";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
+const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
+const DAEMON_START_LOCK_STALE_MS = 15_000;
+const DAEMON_START_LOCK_WAIT_MS = 12_000;
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
@@ -124,6 +127,8 @@ let daemonStartedAt = nowIso();
 let mcpInFlight = 0;
 let mcpStdinEnded = false;
 let mcpExitTimer = null;
+let mcpExitCode = 0;
+let mcpStdoutClosed = false;
 
 class HttpError extends Error {
   constructor(statusCode, message, code = "") {
@@ -195,14 +200,28 @@ function appendMcpLifecycle(event, data = {}) {
   if (isDaemonMode || isStopDaemonMode) return;
   try {
     fs.mkdirSync(canvasightHome(), { recursive: true });
+    const logPath = canvasightMcpLifecycleLogPath();
+    const configuredMaxBytes = Number(process.env.CANVASIGHT_MCP_LIFECYCLE_LOG_MAX_BYTES);
+    const maxBytes = Number.isFinite(configuredMaxBytes) && configuredMaxBytes >= 1024 ? configuredMaxBytes : DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES;
+    let rotatedBytes = 0;
+    try {
+      const size = fs.statSync(logPath).size;
+      if (size >= maxBytes) {
+        rotatedBytes = size;
+        fs.truncateSync(logPath, 0);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
     fs.appendFileSync(
-      canvasightMcpLifecycleLogPath(),
+      logPath,
       `${JSON.stringify({
         ts: nowIso(),
         pid: process.pid,
         version: SERVER_VERSION,
         pluginRoot,
         event,
+        ...(rotatedBytes ? { rotatedBytes } : {}),
         ...data
       })}\n`,
       "utf8"
@@ -255,10 +274,20 @@ function optionalThreadId(threadId) {
   return threadId.trim();
 }
 
+function requiredNativeThreadId(threadId) {
+  const resolved = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  if (resolved) return resolved;
+  throw new HttpError(
+    400,
+    "Canvasight native open requires the current Codex thread id. Read CODEX_THREAD_ID in the active Codex task and pass it as threadId.",
+    { code: "current_thread_id_required" }
+  );
+}
+
 function nativeCodexEnabled() {
   const value = String(process.env.CANVASIGHT_CODEX_NATIVE || "").trim().toLowerCase();
-  if (!value) return false;
-  return value === "1" || value === "true" || value === "on" || value === "yes";
+  if (!value) return true;
+  return value !== "0" && value !== "false" && value !== "off" && value !== "no";
 }
 
 function nativeCodexTimeoutMs() {
@@ -357,6 +386,10 @@ function canvasightStatePath() {
 
 function canvasightDaemonStatePath() {
   return path.join(canvasightHome(), "daemon.json");
+}
+
+function canvasightDaemonStartLockPath() {
+  return path.join(canvasightHome(), "daemon-start.lock");
 }
 
 function canvasightMcpLifecycleLogPath() {
@@ -769,6 +802,13 @@ async function removeDaemonState() {
   await fsp.rm(canvasightDaemonStatePath(), { force: true });
 }
 
+async function removeOwnedDaemonState() {
+  const state = await readDaemonState();
+  if (state?.pid !== process.pid || state.token !== daemonAuthToken) return false;
+  await removeDaemonState();
+  return true;
+}
+
 function daemonHeaders(state, headers = {}) {
   return {
     ...(state?.token ? { "x-canvasight-token": state.token } : {}),
@@ -847,8 +887,14 @@ async function canvasightDaemonPidsForPluginRoot() {
       .filter((entry) => {
         if (!entry || entry.pid === process.pid) return false;
         if (!entry.command.includes("mcp/server.mjs") || !entry.command.includes("--daemon")) return false;
-        if (!entry.command.includes("/canvasight-local/canvasight/")) return false;
-        return !entry.command.includes(`/canvasight-local/canvasight/${SERVER_VERSION}/`);
+        const currentScript = path.join(pluginRoot, "mcp", "server.mjs");
+        const isCurrentCheckout = entry.command.includes(currentScript);
+        const isCanvasightCache = /\/\.codex\/plugins\/cache\/canvasight-local\/canvasight\/[^/]+\/mcp\/server\.mjs/.test(entry.command);
+        const isCanvasightPluginCheckout = /\/plugins\/canvasight\/mcp\/server\.mjs/.test(entry.command);
+        if (!isCurrentCheckout && !isCanvasightCache && !isCanvasightPluginCheckout) return false;
+        const homeArg = `--canvasight-home=${canvasightHome()}`;
+        if (entry.command.includes(homeArg)) return true;
+        return canvasightHome() === path.resolve(DEFAULT_CANVASIGHT_HOME) && !entry.command.includes("--canvasight-home=");
       })
       .map((entry) => entry.pid);
   } catch {
@@ -952,33 +998,104 @@ async function waitForDaemon(token) {
   throw new Error("Canvasight daemon did not start in time");
 }
 
+async function readDaemonStartLock() {
+  try {
+    const raw = await fsp.readFile(canvasightDaemonStartLockPath(), "utf8");
+    return JSON.parse(raw);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+async function acquireDaemonStartLock() {
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  const deadline = Date.now() + DAEMON_START_LOCK_WAIT_MS;
+  while (Date.now() < deadline) {
+    const token = crypto.randomBytes(12).toString("base64url");
+    try {
+      const handle = await fsp.open(canvasightDaemonStartLockPath(), "wx");
+      await handle.writeFile(
+        `${JSON.stringify({ pid: process.pid, token, serverVersion: SERVER_VERSION, pluginRoot, createdAt: nowIso() })}\n`,
+        "utf8"
+      );
+      return { handle, token, existing: null };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+
+    const existing = await healthyDaemonState(await readDaemonState());
+    if (existing) return { handle: null, token: "", existing };
+
+    const lock = await readDaemonStartLock();
+    const createdAt = Date.parse(lock?.createdAt || "");
+    const stale =
+      !lock ||
+      !processIsAlive(Number(lock.pid)) ||
+      (Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS);
+    if (stale) {
+      await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+      continue;
+    }
+    await sleep(100);
+  }
+  throw new Error("Canvasight daemon start lock timed out");
+}
+
+async function releaseDaemonStartLock(lock) {
+  if (!lock?.handle) return;
+  try {
+    await lock.handle.close();
+  } finally {
+    const current = await readDaemonStartLock();
+    if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+  }
+}
+
 async function ensureDaemonServer() {
-  const state = await readDaemonState();
-  const existing = await healthyDaemonState(state);
+  const initialState = await readDaemonState();
+  const existing = await healthyDaemonState(initialState);
   if (existing) {
     await stopOrphanDaemonProcesses(Number(existing.pid), "healthy_state_found");
     return existing;
   }
-  const hasCurrentVersionState = state?.pluginRoot === pluginRoot && state.serverVersion === SERVER_VERSION;
-  if (state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
-    await stopDaemonStateProcess(state, "version_mismatch_before_spawn");
-  }
-  if (!hasCurrentVersionState) {
-    await stopOrphanDaemonProcesses(0, "before_spawn");
+
+  const lock = await acquireDaemonStartLock();
+  if (lock.existing) {
+    await stopOrphanDaemonProcesses(Number(lock.existing.pid), "healthy_state_while_waiting");
+    return lock.existing;
   }
 
-  const token = crypto.randomBytes(24).toString("base64url");
-  const child = spawn(process.execPath, [__filename, "--daemon"], {
-    cwd: pluginRoot,
-    detached: true,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      CANVASIGHT_DAEMON_TOKEN: token
+  try {
+    const state = await readDaemonState();
+    const lockedExisting = await healthyDaemonState(state);
+    if (lockedExisting) {
+      await stopOrphanDaemonProcesses(Number(lockedExisting.pid), "healthy_state_after_lock");
+      return lockedExisting;
     }
-  });
-  child.unref();
-  return waitForDaemon(token);
+    const hasCurrentVersionState = state?.pluginRoot === pluginRoot && state.serverVersion === SERVER_VERSION;
+    if (state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
+      await stopDaemonStateProcess(state, "version_mismatch_before_spawn");
+    }
+    if (!hasCurrentVersionState) {
+      await stopOrphanDaemonProcesses(0, "before_spawn");
+    }
+
+    const token = crypto.randomBytes(24).toString("base64url");
+    const child = spawn(process.execPath, [__filename, "--daemon", `--canvasight-home=${canvasightHome()}`], {
+      cwd: pluginRoot,
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        CANVASIGHT_DAEMON_TOKEN: token
+      }
+    });
+    child.unref();
+    return await waitForDaemon(token);
+  } finally {
+    await releaseDaemonStartLock(lock);
+  }
 }
 
 async function stopDaemonFromState() {
@@ -2512,6 +2629,7 @@ function canvasightWidgetBridgeScript() {
   let mcpApp = null;
   let toolOutput = null;
   let statusTimer = null;
+  let publishingHostGlobals = false;
   const bridgeState = {
     bridgeTransport: "none",
     mcpInitialized: false,
@@ -2549,9 +2667,14 @@ function canvasightWidgetBridgeScript() {
 
   function publishHostGlobals(globals) {
     window.openai = Object.assign(window.openai || {}, globals);
-    window.dispatchEvent(new CustomEvent("openai:set_globals", {
-      detail: { globals: window.openai },
-    }));
+    publishingHostGlobals = true;
+    try {
+      window.dispatchEvent(new CustomEvent("openai:set_globals", {
+        detail: { globals: window.openai },
+      }));
+    } finally {
+      publishingHostGlobals = false;
+    }
     refreshOpenAiBridge();
   }
 
@@ -2579,7 +2702,7 @@ function canvasightWidgetBridgeScript() {
   function refreshMcpBridgeState() {
     const capabilities = hostCapabilities();
     const hostCapabilitiesMessage = Boolean(capabilities?.message);
-    if (bridgeState.mcpInitialized && hostCapabilitiesMessage) {
+    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
       updateBridgeState({
         bridgeTransport: "mcp_ui_message",
         hostCapabilitiesMessage,
@@ -2590,7 +2713,7 @@ function canvasightWidgetBridgeScript() {
     }
     updateBridgeState({
       hostCapabilitiesMessage,
-      reason: bridgeState.mcpInitialized ? "host_message_capability_missing" : bridgeState.reason,
+      reason: bridgeState.mcpInitialized ? "host_message_method_missing" : bridgeState.reason,
     });
   }
 
@@ -2702,6 +2825,25 @@ function canvasightWidgetBridgeScript() {
     return { metadata, payload };
   }
 
+  function canonicalToolResult(value) {
+    if (!value || typeof value !== "object") return null;
+    const nested = value.mcp_tool_result || value.call_tool_result || value.result;
+    if (nested && nested !== value && typeof nested === "object") return canonicalToolResult(nested);
+    return value;
+  }
+
+  function toolResultFromOpenAiGlobals() {
+    const metadata = window.openai?.toolResponseMetadata;
+    const canonical = canonicalToolResult(metadata);
+    if (canonical && (canonical._meta || canonical.structuredContent || canonical.content)) return canonical;
+    const structuredContent = window.openai?.toolOutput;
+    if (!structuredContent || typeof structuredContent !== "object") return canonical;
+    return {
+      structuredContent,
+      _meta: metadata && typeof metadata === "object" ? metadata : {},
+    };
+  }
+
   function setFrameSource(payload) {
     if (!payload) return;
     const url = payload.browserUrl || payload.url;
@@ -2759,6 +2901,15 @@ function canvasightWidgetBridgeScript() {
     sendCurrentSize();
   }
 
+  function hydrateFromOpenAiGlobals() {
+    const result = toolResultFromOpenAiGlobals();
+    if (!result) return false;
+    const { payload } = payloadFromToolResult(result);
+    if (!payload?.url && !payload?.browserUrl) return false;
+    handleToolResult(result);
+    return true;
+  }
+
   function promptFromMessage(message, content) {
     if (typeof message?.prompt === "string" && message.prompt.trim()) return message.prompt;
     return content
@@ -2795,7 +2946,6 @@ function canvasightWidgetBridgeScript() {
     await waitForMcpReady();
     refreshMcpBridgeState();
     if (!bridgeState.mcpInitialized) throw bridgeUnavailableError("mcp_initialize_timeout");
-    if (!bridgeState.hostCapabilitiesMessage) throw bridgeUnavailableError("host_message_capability_missing");
     updateBridgeState({
       bridgeTransport: "mcp_ui_message",
       reason: "native_bridge_ready",
@@ -2810,7 +2960,7 @@ function canvasightWidgetBridgeScript() {
     const resolvedPrompt = promptFromMessage(message, content);
     if (!resolvedPrompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
     refreshMcpBridgeState();
-    if (bridgeState.mcpInitialized && bridgeState.hostCapabilitiesMessage) {
+    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
       const result = await sendWithMcpUiMessage(content);
       if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
       return result || {};
@@ -2822,7 +2972,7 @@ function canvasightWidgetBridgeScript() {
     }
     await waitForMcpReady();
     refreshMcpBridgeState();
-    if (bridgeState.mcpInitialized && bridgeState.hostCapabilitiesMessage) {
+    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
       const result = await sendWithMcpUiMessage(content);
       if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
       return result || {};
@@ -2832,7 +2982,7 @@ function canvasightWidgetBridgeScript() {
       if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
       return result || {};
     }
-    const reason = bridgeState.mcpInitialized ? "host_message_capability_missing" : "openai_followup_missing";
+    const reason = bridgeState.mcpInitialized ? "host_message_method_missing" : "openai_followup_missing";
     updateBridgeState({ reason });
     throw bridgeUnavailableError(reason);
   }
@@ -2890,8 +3040,12 @@ function canvasightWidgetBridgeScript() {
   });
 
   window.addEventListener("message", (event) => {
-    const result = event.data?.params?.result;
+    const result = event.data?.params?.result || event.data?.params;
     if (event.data?.method === "ui/notifications/tool-result" && result) handleToolResult(result);
+  });
+
+  window.addEventListener("openai:set_globals", () => {
+    if (!publishingHostGlobals) hydrateFromOpenAiGlobals();
   });
 
   try {
@@ -2903,6 +3057,7 @@ function canvasightWidgetBridgeScript() {
     );
     globalThis.__CANVASIGHT_MCP_APP__ = mcpApp;
     installCanvasightApi();
+    hydrateFromOpenAiGlobals();
     mcpApp.addEventListener("hostcontextchanged", applyHostContext);
     mcpApp.addEventListener("toolresult", handleToolResult);
     mcpApp.ready = mcpApp.connect()
@@ -3333,51 +3488,75 @@ function goalObjectiveFromRun(payload) {
   return [heading, projectLine, markdown].filter(Boolean).join("\n\n").slice(0, 12000);
 }
 
+function isRetryableThreadResumeError(error) {
+  if (error?.canvasightAppServerMethod !== "thread/resume") return false;
+  const message = String(error?.message || "");
+  return /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
+}
+
+async function retryThreadResumeSequence(operation, attempts = 4) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableThreadResumeError(error) || attempt === attempts) throw error;
+      await sleep(150 * 2 ** (attempt - 1));
+    }
+  }
+  throw lastError;
+}
+
 async function setCodexCollaborationMode(threadId, mode) {
-  return appServerRequestSequence(
-    [
-      {
-        method: "thread/resume",
-        params: {
-          threadId
-        }
-      },
-      ([resumeResult]) => {
-        const model = typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : "";
-        if (!model) throw new Error("Codex thread/resume did not return a model for settings update");
-        return {
-          method: "thread/settings/update",
+  return retryThreadResumeSequence(() =>
+    appServerRequestSequence(
+      [
+        {
+          method: "thread/resume",
           params: {
-            threadId,
-            collaborationMode: codexCollaborationMode(mode, model)
+            threadId
           }
-        };
-      }
-    ],
-    { experimentalApi: true }
-  ).then((results) => results[1] || {});
+        },
+        ([resumeResult]) => {
+          const model = typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : "";
+          if (!model) throw new Error("Codex thread/resume did not return a model for settings update");
+          return {
+            method: "thread/settings/update",
+            params: {
+              threadId,
+              collaborationMode: codexCollaborationMode(mode, model)
+            }
+          };
+        }
+      ],
+      { experimentalApi: true }
+    ).then((results) => results[1] || {})
+  );
 }
 
 async function setCodexGoal(threadId, payload) {
-  return appServerRequestSequence(
-    [
-      {
-        method: "thread/resume",
-        params: {
-          threadId
+  return retryThreadResumeSequence(() =>
+    appServerRequestSequence(
+      [
+        {
+          method: "thread/resume",
+          params: {
+            threadId
+          }
+        },
+        {
+          method: "thread/goal/set",
+          params: {
+            threadId,
+            objective: goalObjectiveFromRun(payload),
+            status: "active"
+          }
         }
-      },
-      {
-        method: "thread/goal/set",
-        params: {
-          threadId,
-          objective: goalObjectiveFromRun(payload),
-          status: "active"
-        }
-      }
-    ],
-    { experimentalApi: false }
-  ).then((results) => results[1] || {});
+      ],
+      { experimentalApi: false }
+    ).then((results) => results[1] || {})
+  );
 }
 
 function turnIdFromResult(result) {
@@ -3902,7 +4081,7 @@ async function shutdownDaemon() {
     await new Promise((resolve) => httpState.server.close(resolve));
     httpState = null;
   }
-  if (isDaemonMode) await removeDaemonState();
+  if (isDaemonMode) await removeOwnedDaemonState();
 }
 
 function toolResult(structuredContent, text = "", meta) {
@@ -4097,7 +4276,11 @@ function publicWidgetOpenResult(widgetData) {
 }
 
 async function toolRenderCanvasightCanvasWidget(args) {
-  const { daemon, opened, session, url } = await createBrowserSession(args);
+  const threadId = requiredNativeThreadId(args?.threadId);
+  const { daemon, opened, session, url } = await createBrowserSession({
+    ...(args || {}),
+    threadId
+  });
   const canvasRouting = canvasRoutingContext();
   const widgetData = {
     status: "opened",
@@ -4368,7 +4551,7 @@ const tools = [
   {
     name: "render_canvasight_canvas_widget",
     description:
-      "Open Canvasight as a native Codex widget for the active project. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
+      "Open Canvasight as a native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4383,9 +4566,10 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Optional Codex thread id for fallback queue filtering. Native widget Run delivery does not require this when the host bridge is available."
+          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it so native mode preflight targets the same thread."
         }
       },
+      required: ["threadId"],
       additionalProperties: false
     },
     outputSchema: openCanvasightWidgetOutputSchema,
@@ -4404,7 +4588,7 @@ const tools = [
   {
     name: "open_canvasight",
     description:
-      "Open Canvasight as the default native Codex widget for the active project. This is the normal path: the widget has the Codex host bridge, so Run buttons can send follow-up messages to the current thread.",
+      "Open Canvasight as the default native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. This is the normal path: the widget has the Codex host bridge, so Run buttons can send follow-up messages to the current thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4419,9 +4603,10 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat, Plan, and Goal preflight."
         }
       },
+      required: ["threadId"],
       additionalProperties: false
     },
     outputSchema: openCanvasightWidgetOutputSchema,
@@ -4482,7 +4667,7 @@ const tools = [
   {
     name: "open_canvasight_recent_project",
     description:
-      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, as the default native Codex widget. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
+      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, as the default native Codex widget. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4502,9 +4687,10 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Optional Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat, Plan, and Goal preflight."
         }
       },
+      required: ["threadId"],
       additionalProperties: false
     },
     outputSchema: openCanvasightWidgetOutputSchema,
@@ -4742,11 +4928,13 @@ function encodeJsonRpc(message) {
 }
 
 function writeMessage(message) {
+  if (mcpStdoutClosed || process.stdout.destroyed || !process.stdout.writable) return false;
   try {
     process.stdout.write(encodeJsonRpc(message));
+    return true;
   } catch (error) {
-    appendMcpLifecycle("stdout_write_error", { error: serializeError(error) });
-    throw error;
+    markMcpStdoutClosed(error);
+    return false;
   }
 }
 
@@ -4862,9 +5050,17 @@ function maybeExitMcpStdio() {
   if (mcpExitTimer) return;
   appendMcpLifecycle("stdio_exit_scheduled", { inFlight: mcpInFlight });
   mcpExitTimer = setTimeout(() => {
-    appendMcpLifecycle("stdio_exit", { code: 0 });
-    process.exit(0);
+    appendMcpLifecycle("stdio_exit", { code: mcpExitCode });
+    process.exit(mcpExitCode);
   }, 25);
+}
+
+function markMcpStdoutClosed(error) {
+  if (mcpStdoutClosed) return;
+  mcpStdoutClosed = true;
+  appendMcpLifecycle("stdout_closed", { error: serializeError(error), inFlight: mcpInFlight });
+  mcpStdinEnded = true;
+  maybeExitMcpStdio();
 }
 
 function dispatchJsonRpc(message) {
@@ -4991,15 +5187,26 @@ process.on("uncaughtException", (error) => {
     process.exit(1);
     return;
   }
-  try {
-    writeError(null, -32000, error?.message || "Canvasight MCP stdio failed");
-  } catch {
-    // The stdout failure is already logged in writeMessage.
+  if (error?.code === "EPIPE") {
+    markMcpStdoutClosed(error);
+    return;
   }
+  mcpExitCode = 1;
+  mcpStdinEnded = true;
+  maybeExitMcpStdio();
 });
 
 process.on("unhandledRejection", (reason) => {
   appendMcpLifecycle("unhandled_rejection", { error: serializeError(reason), inFlight: mcpInFlight });
+  if (!isDaemonMode && !isStopDaemonMode) {
+    mcpExitCode = 1;
+    mcpStdinEnded = true;
+    maybeExitMcpStdio();
+  }
+});
+
+process.stdout.on("error", (error) => {
+  markMcpStdoutClosed(error);
 });
 
 process.on("exit", (code) => {

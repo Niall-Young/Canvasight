@@ -13,6 +13,7 @@ const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 const pluginJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"));
+const mcpJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
 const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8"));
 const packageLockJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package-lock.json"), "utf8"));
 const expectedPluginVersion = pluginJson.version;
@@ -20,8 +21,10 @@ const expectedPluginVersion = pluginJson.version;
 assert.equal(packageJson.version, expectedPluginVersion);
 assert.equal(packageLockJson.version, expectedPluginVersion);
 assert.equal(packageLockJson.packages[""].version, expectedPluginVersion);
+assert.equal(mcpJson.mcpServers.canvasight.env.CANVASIGHT_CODEX_NATIVE, "1");
 
 function assertOpenFlowSkillContract() {
+  const indexSkill = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight", "SKILL.md"), "utf8");
   const openSkill = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-open", "SKILL.md"), "utf8");
   const openWorkflow = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-open", "references", "open-workflow.md"), "utf8");
   const runSkill = fs.readFileSync(path.join(pluginRoot, "skills", "canvasight-run", "SKILL.md"), "utf8");
@@ -32,12 +35,20 @@ function assertOpenFlowSkillContract() {
   const apiSource = fs.readFileSync(path.join(pluginRoot, "src", "lib", "canvasightApi.ts"), "utf8");
   const translationsSource = fs.readFileSync(path.join(pluginRoot, "src", "lib", "translations.ts"), "utf8");
 
+  assert.match(indexSkill, /打开画布/);
+  assert.match(indexSkill, /打开 Canvasight/);
   assert.match(openSkill, /tool_search/);
+  assert.match(openSkill, /打开画布/);
+  assert.match(openSkill, /打开 Canvasight/);
   assert.match(openSkill, /canvasight open_canvasight render_canvasight_canvas_widget/);
+  assert.match(openSkill, /CODEX_THREAD_ID/);
+  assert.match(openSkill, /current_thread_id_required/);
   assert.match(openSkill, /native_canvasight_tool_unavailable/);
   assert.match(openSkill, /Transport closed/);
   assert.match(openSkill, /canvasight_mcp_transport_closed/);
   assert.match(openWorkflow, /tool_search/);
+  assert.match(openWorkflow, /CODEX_THREAD_ID/);
+  assert.match(openWorkflow, /current_thread_id_required/);
   assert.match(openWorkflow, /Do not open `127\.0\.0\.1:5173` as the normal recovery path/);
   assert.match(openWorkflow, /Transport closed/);
   assert.match(openWorkflow, /canvasight_mcp_transport_closed/);
@@ -67,6 +78,7 @@ const defaultProjectPath = path.join(tempRoot, "auto-project");
 const canvasightHome = path.join(tempRoot, "canvasight-home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
+const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
 
 fs.writeFileSync(
@@ -76,6 +88,7 @@ import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
+const transientResumeFailCountPath = process.env.CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH;
 const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
@@ -105,6 +118,20 @@ function shouldFailResume(threadId) {
   }
 }
 
+function shouldTransientlyFailResume(threadId) {
+  if (!transientResumeFailCountPath) return false;
+  try {
+    const counts = JSON.parse(fs.readFileSync(transientResumeFailCountPath, "utf8"));
+    const remaining = Number(counts[threadId] || 0);
+    if (remaining <= 0) return false;
+    counts[threadId] = remaining - 1;
+    fs.writeFileSync(transientResumeFailCountPath, JSON.stringify(counts));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function turnStartText(message) {
   const input = Array.isArray(message.params?.input) ? message.params.input : [];
   return input.find((item) => item?.type === "text")?.text || "";
@@ -125,6 +152,10 @@ function handle(message) {
     return;
   }
   if (message.method === "thread/resume") {
+    if (shouldTransientlyFailResume(message.params.threadId)) {
+      write({ id: message.id, error: { code: -32603, message: "failed to read thread rollout: rollout does not start with session metadata" } });
+      return;
+    }
     if (shouldFailResume(message.params.threadId)) {
       write({ id: message.id, error: { code: -32603, message: "fake thread/resume failure: " + message.params.threadId } });
       return;
@@ -217,6 +248,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
+    CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH: transientResumeFailCountPath,
     CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
@@ -396,14 +428,17 @@ async function runWidgetBridgeHarness(scriptSource, options = {}) {
   const window = {
     document,
     innerWidth: 800,
-    openai: options.openaiFollowUp
-      ? {
+    openai: {
+      ...(options.openaiGlobals || {}),
+      ...(options.openaiFollowUp
+        ? {
           sendFollowUpMessage(payload) {
             records.openaiMessages.push(payload);
             return Promise.resolve({ ok: true });
           }
         }
-      : {},
+        : {})
+    },
     addEventListener(type, listener) {
       const existing = listeners.get(type) || [];
       existing.push(listener);
@@ -448,6 +483,7 @@ async function runWidgetBridgeHarness(scriptSource, options = {}) {
     }
     sendMessage(message) {
       records.mcpMessages.push(message);
+      if (options.mcpSendReject) return Promise.reject(new Error(options.mcpSendReject));
       return Promise.resolve({ ok: true });
     }
     callServerTool(request) {
@@ -520,14 +556,46 @@ async function assertWidgetBridgeAdapters(widgetHtml) {
   const missingMessageCapabilityHarness = await runWidgetBridgeHarness(bridgeScript, {
     hostCapabilities: {}
   });
-  assert.equal(missingMessageCapabilityHarness.api.canSendFollowUpMessage(), false);
+  assert.equal(missingMessageCapabilityHarness.api.canSendFollowUpMessage(), true);
+  assert.equal(missingMessageCapabilityHarness.state().hostCapabilitiesMessage, false);
+  assert.equal(missingMessageCapabilityHarness.state().bridgeTransport, "mcp_ui_message");
+  await missingMessageCapabilityHarness.api.sendFollowUpMessage({
+    prompt: "No advertised message capability",
+    content: [{ type: "text", text: "No advertised message capability" }]
+  });
+  assert.equal(missingMessageCapabilityHarness.records.mcpMessages.length, 1);
+
+  const rejectedMessageHarness = await runWidgetBridgeHarness(bridgeScript, {
+    hostCapabilities: {},
+    mcpSendReject: "ui/message rejected"
+  });
   await assert.rejects(
-    missingMessageCapabilityHarness.api.sendFollowUpMessage({
-      prompt: "No message capability",
-      content: [{ type: "text", text: "No message capability" }]
+    rejectedMessageHarness.api.sendFollowUpMessage({
+      prompt: "Rejected message",
+      content: [{ type: "text", text: "Rejected message" }]
     }),
-    /reason=host_message_capability_missing/
+    /ui\/message rejected/
   );
+
+  const initialToolResultHarness = await runWidgetBridgeHarness(bridgeScript, {
+    openaiGlobals: {
+      toolResponseMetadata: {
+        mcp_tool_result: {
+          structuredContent: { status: "opened" },
+          _meta: {
+            widgetData: {
+              status: "opened",
+              canvasightHost: "widget",
+              sessionId: "session-initial-result",
+              token: "widget-token",
+              url: "http://127.0.0.1:54321/?sessionId=session-initial-result&token=widget-token"
+            }
+          }
+        }
+      }
+    }
+  });
+  assert.equal(initialToolResultHarness.records.appendedScript?.id, "canvasight-app-module");
 
   const unavailableHarness = await runWidgetBridgeHarness(bridgeScript, {
     connectReject: "ui initialize failed"
@@ -762,19 +830,140 @@ function createContentLengthMcpClient(label, envOverrides = {}) {
   };
 }
 
-function stopDaemon() {
-  return new Promise((resolve) => {
+async function stopDaemon(home = canvasightHome) {
+  let daemonPid = 0;
+  try {
+    daemonPid = Number(JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8")).pid || 0);
+  } catch {
+    daemonPid = 0;
+  }
+  await new Promise((resolve) => {
     const stopper = spawn(process.execPath, [serverPath, "--stop-daemon"], {
       cwd: pluginRoot,
       env: {
         ...process.env,
-        CANVASIGHT_HOME: canvasightHome
+        CANVASIGHT_HOME: home
       },
       stdio: "ignore"
     });
     stopper.on("exit", () => resolve());
     stopper.on("error", () => resolve());
   });
+  if (!daemonPid) return;
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(daemonPid, 0);
+      await sleep(50);
+    } catch {
+      return;
+    }
+  }
+  try {
+    process.kill(daemonPid, "SIGKILL");
+  } catch {
+    // The daemon exited between the final poll and cleanup.
+  }
+}
+
+async function assertStdoutClosureLifecycle() {
+  const home = path.join(tempRoot, "stdout-closure-home");
+  const logPath = path.join(home, "mcp-lifecycle.log");
+  await fsp.mkdir(home, { recursive: true });
+  await fsp.writeFile(logPath, "x".repeat(128 * 1024), "utf8");
+  const closingChild = spawn(process.execPath, [serverPath], {
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      CANVASIGHT_HOME: home,
+      CANVASIGHT_MCP_LIFECYCLE_LOG_MAX_BYTES: String(64 * 1024)
+    },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  closingChild.stderr.resume();
+  closingChild.stdin.on("error", () => {});
+  closingChild.stdout.destroy();
+  closingChild.stdin.write(
+    `${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "canvasight-stdout-closure-smoke", version: "0.0.0" }
+      }
+    })}\n`
+  );
+
+  const exit = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      closingChild.kill("SIGKILL");
+      reject(new Error("MCP did not exit after stdout closed"));
+    }, 2000);
+    closingChild.once("exit", (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    });
+  });
+  assert.equal(exit.code, 0);
+  const stat = await fsp.stat(logPath);
+  assert.ok(stat.size < 64 * 1024, `MCP lifecycle log was not capped: ${stat.size}`);
+  const entries = (await fsp.readFile(logPath, "utf8"))
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(entries.filter((entry) => entry.event === "stdout_closed").length, 1);
+  assert.equal(entries.some((entry) => entry.event === "stdio_exit" && entry.code === 0), true);
+}
+
+async function assertConcurrentDaemonSingleFlight() {
+  const home = path.join(tempRoot, "concurrent-daemon-home");
+  const clients = Array.from({ length: 4 }, (_, index) =>
+    createMcpClient(`concurrent-${index + 1}`, {
+      CANVASIGHT_HOME: home,
+      CODEX_THREAD_ID: `thread-concurrent-${index + 1}`
+    })
+  );
+  try {
+    await Promise.all(
+      clients.map((client, index) =>
+        client.request("initialize", {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: `canvasight-concurrent-${index + 1}`, version: "0.0.0" }
+        })
+      )
+    );
+    const opened = await Promise.all(
+      clients.map((client, index) =>
+        client.request("tools/call", {
+          name: "open_canvasight",
+          arguments: {
+            language: "zh",
+            projectPath: defaultProjectPath,
+            threadId: `thread-concurrent-${index + 1}`
+          }
+        })
+      )
+    );
+    const origins = new Set(opened.map((result) => widgetDataFor(result).origin));
+    assert.equal(origins.size, 1);
+    const state = JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8"));
+    assert.equal(state.serverVersion, expectedPluginVersion);
+    assert.equal(origins.has(state.origin), true);
+    await Promise.all(
+      opened.map((result, index) =>
+        clients[index].request("tools/call", {
+          name: "close_canvasight",
+          arguments: { sessionId: result.structuredContent.sessionId }
+        })
+      )
+    );
+  } finally {
+    clients.forEach((client) => client.stop());
+    await stopDaemon(home);
+  }
 }
 
 async function main() {
@@ -814,6 +1003,7 @@ async function main() {
     assert.match(renderTool.description, /send follow-up messages to the current thread/);
     assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(renderTool._meta["openai/widgetAccessible"], true);
+    assert.deepEqual(renderTool.inputSchema.required, ["threadId"]);
     assert.equal(renderTool.outputSchema.properties.openTarget.type, "string");
     assert.equal(renderTool.outputSchema.properties.url, undefined);
     assert.equal(renderTool.outputSchema.properties.browserUrl, undefined);
@@ -823,6 +1013,7 @@ async function main() {
     assert.equal(openTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
     assert.equal(openTool._meta["openai/widgetAccessible"], true);
     assert.equal(openTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
+    assert.deepEqual(openTool.inputSchema.required, ["threadId"]);
     assert.equal(openTool.outputSchema.properties.openTarget.type, "string");
     assert.equal(openTool.outputSchema.properties.url, undefined);
     assert.equal(openTool.outputSchema.properties.browserUrl, undefined);
@@ -835,6 +1026,7 @@ async function main() {
     assert.match(recentOpenTool.description, /default native Codex widget/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
     assert.equal(recentOpenTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.deepEqual(recentOpenTool.inputSchema.required, ["threadId"]);
     const claimTool = listed.tools.find((tool) => tool.name === "claim_canvasight_thread");
     assert.match(claimTool.description, /current Codex thread/);
     assert.match(claimTool.description, /without opening a new browser tab/);
@@ -879,6 +1071,64 @@ async function main() {
       if (!lifecycleClient.child.killed) lifecycleClient.child.kill("SIGTERM");
     }
 
+    const missingThreadClient = createMcpClient("missing-thread", {
+      CODEX_THREAD_ID: ""
+    });
+    try {
+      await missingThreadClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-missing-thread-smoke",
+          version: "0.0.0"
+        }
+      });
+      await assert.rejects(
+        missingThreadClient.request("tools/call", {
+          name: "open_canvasight",
+          arguments: { language: "zh" }
+        }),
+        /native open requires the current Codex thread id/
+      );
+    } finally {
+      missingThreadClient.stop();
+    }
+
+    const defaultNativeHome = path.join(tempRoot, "default-native-home");
+    const defaultNativeClient = createMcpClient("default-native", {
+      CANVASIGHT_CODEX_NATIVE: "",
+      CANVASIGHT_HOME: defaultNativeHome,
+      CODEX_THREAD_ID: "thread-default-native"
+    });
+    try {
+      await defaultNativeClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: {
+          name: "canvasight-default-native-smoke",
+          version: "0.0.0"
+        }
+      });
+      const defaultNativeOpened = await defaultNativeClient.request("tools/call", {
+        name: "open_canvasight",
+        arguments: {
+          language: "zh",
+          projectPath: defaultProjectPath,
+          threadId: "thread-default-native"
+        }
+      });
+      const defaultNativeData = widgetDataFor(defaultNativeOpened);
+      const defaultNativeHealth = await fetchJson(`${defaultNativeData.origin}/api/health`);
+      assert.equal(defaultNativeHealth.codexNativeEnabled, true);
+      await defaultNativeClient.request("tools/call", {
+        name: "close_canvasight",
+        arguments: { sessionId: defaultNativeOpened.structuredContent.sessionId }
+      });
+    } finally {
+      defaultNativeClient.stop();
+      await stopDaemon(defaultNativeHome);
+    }
+
     const contentLengthClient = createContentLengthMcpClient("content-length", {
       CODEX_THREAD_ID: "thread-content-length"
     });
@@ -912,6 +1162,9 @@ async function main() {
       lifecycleLog.some((entry) => entry.event === "request" && entry.method === "tools/call" && entry.toolName === "list_canvasight_recent_projects"),
       true
     );
+
+    await assertStdoutClosureLifecycle();
+    await assertConcurrentDaemonSingleFlight();
 
     const resources = await request("resources/list", {});
     assert.equal(resources.resources.length, 1);
@@ -1919,6 +2172,25 @@ async function main() {
       ),
       true
     );
+
+    const transientResumeLogOffset = widgetModeLog.length;
+    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 2 }), "utf8");
+    const retryPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Chat Prepared After Resume Retry",
+        markdown: "# Widget Chat Prepared After Resume Retry",
+        codexMode: "chat",
+        planMode: false,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(retryPrepared.status, "prepared");
+    assert.equal(retryPrepared.codexNative.status, "applied_chat");
+    const transientResumeLog = (await readNativeLog()).slice(transientResumeLogOffset);
+    assert.equal(transientResumeLog.filter((entry) => entry.method === "thread/resume").length, 3);
+    assert.equal(transientResumeLog.filter((entry) => entry.method === "thread/settings/update").length, 1);
 
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     await assert.rejects(

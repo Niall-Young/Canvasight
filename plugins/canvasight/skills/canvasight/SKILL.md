@@ -1,6 +1,6 @@
 ---
 name: canvasight
-description: "Canvasight plugin index. Use when the user explicitly mentions Canvasight or Scatter and the request spans multiple Canvasight workflows, or when a Canvasight canvas is already open/attached and a later request is ambiguous or large enough to decide whether it should route through graph writing before direct execution."
+description: "Canvasight plugin index. Use when the user explicitly mentions Canvasight or Scatter, says 打开画布 / 打开 Canvasight, and the request spans multiple Canvasight workflows, or when a Canvasight canvas is already open/attached and a later request is ambiguous or large enough to decide whether it should route through graph writing before direct execution."
 ---
 
 # Canvasight

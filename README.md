@@ -38,7 +38,8 @@ Canvasight 是一个 repo-local Codex 插件。它默认在 Codex native widget 
 
 ### 基础用法
 
-1. 在 Codex 中调用 `open_canvasight` 打开 Canvasight；它会启动或复用项目级本地 daemon，并在 Codex native widget 中渲染画布。
+1. Codex 先读取当前任务的 `CODEX_THREAD_ID`，再把它作为 `threadId` 调用 `open_canvasight`；Canvasight 会启动或复用项目级本地 daemon，并在 Codex native widget 中渲染画布。
+   直接说“打开画布”或“打开 Canvasight”时，也应优先命中这个原生打开路径，而不是 `127.0.0.1:5173` 浏览器 fallback。
 2. 在浏览器画布里创建任务节点，填写提示词，按需要添加附件。
 3. 用连接线组织节点关系，或者在左上角创建多个 Page 管理不同工作区。
 4. 选择节点的 Codex 模式：Chat、Plan 或 Goal。
@@ -91,7 +92,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.44` 或更高版本。如果显示低于 `0.1.44`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.48` 或更高版本。如果显示低于 `0.1.48`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -120,7 +121,11 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。它默认渲染 Codex native widget，Run 按钮通过 host bridge 发送 follow-up message 到当前 Codex thread，不需要 thread id，也不使用虚拟点击、辅助功能权限或剪贴板。`0.1.40` 起，native open 的公开结果不再暴露 `127.0.0.1` URL；daemon URL、token、origin 只放在 widget 内部 `_meta.widgetData`，避免 Codex 把正常入口当成网页预览。`0.1.41` 起，widget bridge 会优先使用 MCP Apps `ui/message`，如果 host 只暴露 Codex/OpenAI compatibility bridge，则使用 `window.openai.sendFollowUpMessage`；两者都属于 native widget host bridge，不是 browser fallback。`0.1.42` 起，如果当前 Codex 会话暂时没有显示 `open_canvasight`，应先通过 `tool_search` lazy-load `canvasight open_canvasight render_canvasight_canvas_widget`，不能把 `127.0.0.1:5173` 当成正常入口。`0.1.43` 起，如果 native tool 可见但调用返回 `Transport closed`，应按 `canvasight_mcp_transport_closed` 处理：当前线程的 Canvasight MCP transport 已关闭，不能把浏览器 fallback 当作正常 Run 修复路径。`0.1.44` 起，MCP stdio shim 会记录 lifecycle 日志、在 stdin 关闭时干净退出、把工具失败返回为 JSON-RPC error，并在打开 widget 前清理旧版本 daemon state；更新后仍遇到 transport closed 时，先看本机 Canvasight state 目录里的 `mcp-lifecycle.log`。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`，告诉 Codex 后续中大型需求应优先考虑 `write_canvasight_graph`，但小任务、Run payload 和明确要求直接执行的请求不强制进画布。`render_canvasight_canvas_widget` 保留为显式 widget 兼容入口。
+`open_canvasight` 会记住已打开项目并启动或复用项目级 daemon。Codex 必须把当前任务的 `CODEX_THREAD_ID` 显式传为 `threadId`：host bridge 仍会把消息发给拥有 widget 的任务，而这个 id 用于 Chat / Plan / Goal app-server 预检。Run 不使用虚拟点击、辅助功能权限或剪贴板。`0.1.40` 起，native open 的公开结果不再暴露 `127.0.0.1` URL；daemon URL、token、origin 只放在 widget 内部 `_meta.widgetData`，避免 Codex 把正常入口当成网页预览。`0.1.41` 起，widget bridge 会优先使用 MCP Apps `ui/message`，如果 host 只暴露 Codex/OpenAI compatibility bridge，则使用 `window.openai.sendFollowUpMessage`；两者都属于 native widget host bridge，不是 browser fallback。`0.1.42` 起，如果当前 Codex 会话暂时没有显示 `open_canvasight`，应先通过 `tool_search` lazy-load `canvasight open_canvasight render_canvasight_canvas_widget`，不能把 `127.0.0.1:5173` 当成正常入口。`0.1.43` 起，如果 native tool 可见但调用返回 `Transport closed`，应按 `canvasight_mcp_transport_closed` 处理。`0.1.44` 起，MCP stdio shim 会记录 lifecycle 日志并清理旧版本 daemon state。`0.1.46` 起，native open 缺少 `threadId` 会以 `current_thread_id_required` 硬失败，模式预检默认启用；预检会有限重试当前任务 rollout 的瞬态读取竞争，但其他错误或重试耗尽仍会在发送前阻断；MCP App 握手成功后不再因为 host 未声明 `hostCapabilities.message` 而提前禁用 Run，实际 `sendMessage` Promise 才决定发送成败，同时 widget 会从初始 `toolResponseMetadata` 恢复启动数据。打开后，返回结果会带上 `activeCanvasRouting` / `canvasRouting`。`render_canvasight_canvas_widget` 保留为显式 widget 兼容入口。
+
+`0.1.47` 起，多个 MCP shim 并发打开时通过跨进程锁只启动一个 daemon；host 关闭 stdout 后 shim 不再递归写 EPIPE，`mcp-lifecycle.log` 默认限制为 5 MB。
+
+`0.1.48` 起，共用默认 `~/.canvasight` 状态的源码 checkout daemon 和插件缓存 daemon 也会互相识别并清理孤儿进程，只保留 state 指向的一个实例。
 
 `open_canvasight_browser_fallback` 是浏览器 URL fallback。它默认面向 Codex 侧边栏内置浏览器，不会直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里如果旧浏览器 fallback 已经打开，先调用 `claim_canvasight_thread` claim 最近项目或指定 `projectPath`；如果需要重新进入正常 widget，调用 `open_canvasight` 或 `open_canvasight_recent_project`。浏览器 fallback 没有 widget host bridge，点击 Run 只能把 payload 放进队列，随后 `await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。
 
@@ -158,6 +163,8 @@ npm run test:mcp
 
 `npm run dev` 会启动或复用项目级持久 dev server，默认地址是 `http://127.0.0.1:5173/`。它用于本地“运行项目”和开发预览，启动命令退出或启动它的 Codex thread 被归档后，服务仍应继续存活。`0.1.35` 起，如果记录的 managed dev server `serverVersion` 低于当前 package 版本，`npm run dev` 会自动停止旧 Vite 进程并重启，避免旧 API 中间件继续处理 Run。`npm run dev:status` 会显示 `running`、`stopped` 或 `stale`。`0.1.44` 起，`dev:status` 也会把旧版本 daemon state 标为 stale，`npm run dev` 会清理该 daemon 后再复用或启动 dev server。裸 `5173` 页面只使用 daemon 里最新的 `claim_canvasight_thread` 项目绑定，或显式 URL `threadId` claim；不会再退回启动 dev server 时的 `CODEX_THREAD_ID`。没有绑定时 Run 返回 `unbound_dev_session`，避免错发到旧线程。`0.1.37` 起，通用 dev fallback 支持 `?threadId=<id>` 自动解析该 Codex thread 的项目 `cwd` 并在该项目创建/打开 `.scatter`；`projectPath` 只是已知路径时的显式覆盖，不需要用户手动输入。`0.1.39` 起，dev/browser fallback 不再把 app-server `turn/start` 当作发送成功路径；有绑定时 Run 也只进入 `await_canvasight_run` 队列，正常发送必须回到 native widget host bridge。`0.1.40` 起，只有显式 browser fallback 会公开浏览器 URL；native open 只公开 widget 结果。`0.1.41` 起，诊断会显示 `bridgeTransport` 和 `bridgeReason`，用于区分 `mcp_ui_message`、`openai_compat_followup` 和具体 bridge 失败原因。`0.1.42` 起，`browser_fallback_no_bridge` 明确表示打开路径错误：当前页不是 native widget，正常恢复应通过 `tool_search` 找到并调用 `open_canvasight`。`0.1.43` 起，`Transport closed` 明确表示当前 Codex thread 的 Canvasight MCP transport 已关闭；本地 daemon 正常运行也不能让这个 thread 继续消费 queued Run。`0.1.44` 起，stdio shim 会留下 lifecycle 日志用于判断 transport 是正常 stdin close、tool error，还是 host 侧断开。需要手动停止时运行 `npm run dev:stop`。
 
+`0.1.47` 起，daemon 启动具备跨 MCP 进程 single-flight，EPIPE 不会递归刷日志，lifecycle 日志默认最多 5 MB。
+
 `npm run daemon` 和 `npm run daemon:stop` 只用于开发或排障时手动启动/停止插件 daemon。正常 Codex 插件使用由 MCP tool 自动启动 daemon，并由 daemon 托管已构建的 `dist/`。
 
 ### 插件校验
@@ -175,6 +182,7 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 **安装后看不到 Canvasight 工具怎么办？**
 
 新开 Codex 线程或 reload 当前 Codex session。已经打开的线程通常不会热刷新新安装或更新后的 MCP tools。
+如果用户只是说“打开画布”这类自然语言，Canvasight 的技能描述也应能把请求路由到原生 `open_canvasight`；若当前线程仍没有暴露该工具，再按上面的 reload/new thread 路径恢复。
 
 **Page 和项目有什么区别？**
 
@@ -206,7 +214,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **native widget 或内置浏览器打不开 Canvasight 怎么办？**
 
-正常入口是 `open_canvasight`。如果 widget 没渲染，先确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。`0.1.34` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost，并会把当前 daemon 的精确 origin 写进 widget CSP；如果旧版本显示“内容被屏蔽”或 `Failed to fetch`，请升级并重开线程。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`。请打开完整 `browserUrl` / `url`，不要只复制 `origin`。如果仍显示无法访问，重新调用 `open_canvasight_browser_fallback` 获取新的 URL；如果 tool 本身报不可达，说明本机 daemon 没有成功启动或本机 `127.0.0.1` 访问被阻断。
+正常入口是 `open_canvasight`。先读取当前任务的 `CODEX_THREAD_ID` 并作为 `threadId` 传入；`current_thread_id_required` 表示这一步被漏掉，不是可以忽略的警告。如果 widget 没渲染，再确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。`0.1.34` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost，并会把当前 daemon 的精确 origin 写进 widget CSP。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`；它仍不是 Run 成功路径。
 
 **当前 thread 怎么接收旧浏览器 fallback 里的 Run？**
 
@@ -226,7 +234,7 @@ Canvasight 会阻止发送没有提示词正文的节点，避免把空请求提
 
 **Plan 或 Goal 没有进入 Codex 原生模式怎么办？**
 
-native widget Run 会先通过 Codex app-server 对当前 thread 应用 Chat(default)、Plan 或 Goal，再调用 `sendMessage` host bridge。检查 widget Run 返回的 `codexNative.status` 应为 `applied_chat`、`applied_plan` 或 `applied_goal`；`await_canvasight_run` fallback 返回的 `codexNative.status` 应为 `applied`。如果不是这些状态，Canvasight 会阻断发送或要求先处理错误，不会静默降级成普通 Chat。
+native widget Run 会先使用打开时显式绑定的 `threadId`，通过 Codex app-server 对当前 thread 应用 Chat(default)、Plan 或 Goal，再调用 `sendMessage` host bridge。当前任务 rollout 正在落盘造成 `thread/resume` 瞬态读取失败时会有限重试；其他错误或重试耗尽仍会阻断发送。检查 widget Run 返回的 `codexNative.status` 应为 `applied_chat`、`applied_plan` 或 `applied_goal`；如果不是这些状态，Canvasight 会阻断发送。`hostCapabilities.message=false` 只表示 host 没声明该能力，不再提前判定失败；实际 `sendMessage` Promise resolve 才显示 sent。
 
 **什么时候需要 `npm run build`？**
 
@@ -272,7 +280,7 @@ Canvasight is a repo-local Codex plugin. It opens a project-level persistent loc
 
 ### Basic Workflow
 
-1. Call `open_canvasight` from Codex; it starts or reuses the project-level local daemon and renders Canvasight inside a Codex native widget.
+1. Read the active task's `CODEX_THREAD_ID`, then pass it as `threadId` to `open_canvasight`; it starts or reuses the project-level local daemon and renders Canvasight inside a Codex native widget.
 2. Create task nodes in the canvas, write prompts, and add attachments when needed.
 3. Connect nodes into flows, or create multiple Pages from the top-left Page switcher.
 4. Choose the node's Codex mode: Chat, Plan, or Goal.
@@ -325,7 +333,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.44` or newer. If it shows a version below `0.1.44`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.48` or newer. If it shows a version below `0.1.48`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -354,7 +362,11 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 - `await_canvasight_run`
 - `close_canvasight`
 
-`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. It renders a Codex native widget by default, and the Run button sends a follow-up message to the current Codex thread through the host bridge without a thread id, virtual click, Accessibility automation, or clipboard paste. Since `0.1.40`, native open results do not publicly expose the `127.0.0.1` URL; daemon URL, token, and origin live only in widget-internal `_meta.widgetData`, so Codex does not treat the normal path as a web preview. Since `0.1.41`, the widget bridge prefers MCP Apps `ui/message` and can use `window.openai.sendFollowUpMessage` when the host exposes only the Codex/OpenAI compatibility bridge; both are native widget transports, not browser fallback. Since `0.1.42`, if the current Codex session does not initially show `open_canvasight`, Codex should lazy-load the tools with `tool_search` for `canvasight open_canvasight render_canvasight_canvas_widget` instead of treating `127.0.0.1:5173` as the normal entrypoint. Since `0.1.43`, if a visible native tool returns `Transport closed`, Codex should treat it as `canvasight_mcp_transport_closed`: the current thread's Canvasight MCP transport is closed, so browser fallback is not a normal Run fix. Since `0.1.44`, the MCP stdio shim writes lifecycle logs, exits cleanly when stdin closes, returns tool failures as JSON-RPC errors, and clears old daemon state before opening a widget; if transport still closes after upgrading, inspect `mcp-lifecycle.log` in the local Canvasight state directory. Its result includes `activeCanvasRouting` / `canvasRouting`, which tells Codex to prefer `write_canvasight_graph` for later medium or complex requests while leaving small tasks, Run payloads, and explicitly direct-execution requests on their normal path. `render_canvasight_canvas_widget` remains as an explicit widget compatibility entrypoint.
+`open_canvasight` remembers opened projects and starts or reuses the project-level daemon. Codex must pass the active task's `CODEX_THREAD_ID` as `threadId`: the host bridge still posts to the widget-owning task, while this id targets Chat / Plan / Goal app-server preflight. Run does not use virtual clicks, Accessibility automation, or clipboard paste. Since `0.1.40`, native open results hide the daemon URL in widget-only `_meta.widgetData`. Since `0.1.41`, the widget bridge supports MCP Apps `ui/message` and `window.openai.sendFollowUpMessage`. Since `0.1.42`, missing tools must be lazy-loaded with `tool_search`; since `0.1.43`, `Transport closed` is `canvasight_mcp_transport_closed`; since `0.1.44`, the stdio shim logs lifecycle events and clears old daemon state. Since `0.1.46`, native open hard-fails with `current_thread_id_required` when the task id was not supplied, native mode preflight is enabled by default, transient active-rollout read races are retried before failing, missing advisory `hostCapabilities.message` no longer disables a connected `sendMessage` bridge, and initial `toolResponseMetadata` can bootstrap the app. `render_canvasight_canvas_widget` remains an explicit compatibility entrypoint.
+
+Since `0.1.47`, concurrent MCP opens share one daemon through a cross-process start lock; closed stdout no longer causes recursive EPIPE logging, and `mcp-lifecycle.log` is capped at 5 MB by default.
+
+Since `0.1.48`, source-checkout and installed-cache daemons that share the default `~/.canvasight` state also recognize and clean up each other, leaving only the instance referenced by daemon state.
 
 `open_canvasight_browser_fallback` is the browser URL fallback. It targets Codex's in-app browser sidebar by default and does not launch the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, if an old browser fallback page is already open, call `claim_canvasight_thread` for the recent or explicit `projectPath`; call `open_canvasight` or `open_canvasight_recent_project` when you want the normal widget again. Browser fallback pages do not have the widget host bridge. Clicking Run in a claimed browser fallback only queues the payload for `await_canvasight_run`. Normal plugin use does not require running `npm run dev`.
 
@@ -391,6 +403,8 @@ npm run test:mcp
 ```
 
 `npm run dev` starts or reuses the project-level persistent dev server, served by default at `http://127.0.0.1:5173/`. It is for local “run project” usage and development preview. The service should keep running after the launch command exits or the Codex thread that launched it is archived. Since `0.1.35`, if the recorded managed dev server `serverVersion` is older than the current package version, `npm run dev` stops that stale Vite process and starts a fresh one so old API middleware does not keep handling Runs. `npm run dev:status` reports `running`, `stopped`, or `stale`. Since `0.1.44`, `dev:status` also marks old daemon state as stale, and `npm run dev` clears that daemon before reusing or starting the dev server. A bare `5173` page uses only the daemon's latest `claim_canvasight_thread` binding for the project or an explicit URL `threadId` claim; it no longer falls back to the dev server process `CODEX_THREAD_ID`. Since `0.1.37`, generic dev fallback supports `?threadId=<id>` and resolves that Codex thread's project `cwd`, creating/opening `.scatter` in that project. `projectPath` is only an explicit override when the path is already known; users should not be asked to type it. Without a binding it returns `unbound_dev_session`, preventing Runs from being sent to an old thread. Since `0.1.39`, dev/browser fallback no longer treats app-server `turn/start` as a sent path; with a binding, Run still queues for `await_canvasight_run`, and normal sending must happen through the native widget host bridge. Since `0.1.40`, only explicit browser fallback returns a browser URL; native open returns only widget state publicly. Since `0.1.41`, diagnostics show `bridgeTransport` and `bridgeReason` to distinguish `mcp_ui_message`, `openai_compat_followup`, and bridge failures. Since `0.1.42`, `browser_fallback_no_bridge` means the page was opened through the wrong surface; normal recovery is `tool_search` plus `open_canvasight`. Since `0.1.43`, `Transport closed` means the live Codex thread's Canvasight MCP transport is closed; the local daemon may still be running. Since `0.1.44`, the stdio shim leaves lifecycle logs that distinguish normal stdin close, tool errors, and host-side disconnects. Use `npm run dev:stop` when you explicitly need to stop it.
+
+Since `0.1.47`, daemon startup is single-flight across MCP shims, EPIPE cannot recursively flood the lifecycle log, and that log defaults to a 5 MB cap.
 
 `npm run daemon` and `npm run daemon:stop` are only for manual plugin-daemon development or troubleshooting. Normal Codex plugin use starts the daemon automatically through the MCP tool, and the daemon serves the built `dist/` app.
 
@@ -440,7 +454,7 @@ Yes. The local canvas service is hosted by the project-level daemon, not the thr
 
 **What if the native widget or in-app browser cannot open Canvasight?**
 
-The normal entrypoint is `open_canvasight`. If the widget does not render, first confirm the plugin version was updated and open a new Codex thread or reload the session; older threads may still use stale tool or resource metadata. Since `0.1.34`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost, and it includes the current daemon's exact origin in the widget CSP; if an older widget shows "content blocked" or `Failed to fetch`, upgrade and reopen the thread. If you use `open_canvasight_browser_fallback`, it verifies that the full session URL is reachable before returning and marks `openTarget` as `codex_in_app_browser`. Open the full `browserUrl` / `url`, not only the `origin`. If it still cannot load, call `open_canvasight_browser_fallback` again to get a fresh URL. If the tool itself reports that the URL is unreachable, the local daemon did not start successfully or local `127.0.0.1` access is blocked.
+The normal entrypoint is `open_canvasight`. Read the active task's `CODEX_THREAD_ID` and pass it as `threadId`; `current_thread_id_required` means that binding step was omitted. If the widget does not render, confirm the plugin version was updated and open a new Codex task or reload the session. Since `0.1.34`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost and includes the daemon origin in CSP. Browser fallback remains a diagnostic surface and is not a direct Run path.
 
 **How does the current thread receive a Run from an old browser fallback tab?**
 
@@ -460,7 +474,7 @@ Canvasight blocks nodes without prompt body text to avoid submitting empty reque
 
 **What if Plan or Goal does not enter native Codex mode?**
 
-Native widget Run first applies Chat(default), Plan, or Goal to the current Codex thread through Codex app-server, then calls the `sendMessage` host bridge. A widget Run should report `codexNative.status` as `applied_chat`, `applied_plan`, or `applied_goal`; `await_canvasight_run` fallback should report `applied`. If it does not, Canvasight blocks sending or asks you to handle the returned error instead of silently downgrading to normal Chat.
+Native widget Run uses the `threadId` supplied during open to apply Chat(default), Plan, or Goal through Codex app-server, then calls the `sendMessage` host bridge. A transient `thread/resume` active-rollout read race is retried; other failures or exhausted retries still block sending. A widget Run should report `codexNative.status` as `applied_chat`, `applied_plan`, or `applied_goal`. Missing `hostCapabilities.message` is advisory after the MCP App handshake; only a rejected `sendMessage` Promise blocks sent status.
 
 **When do I need `npm run build`?**
 

@@ -14,6 +14,10 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-0927-integration-summary-native-run-contract.md` - integrated current-task binding, bridge Promise readiness, resume retry, cross-path daemon single-flight, EPIPE/log cap, tests, docs, and version 0.1.48.
+- `agent-reports/resolved/20260710-0927-development-solution-native-run-contract-gaps.md` - fixed native widget Run capability false negatives and preflight/bootstrap gaps without browser fallback success.
+- `agent-reports/resolved/20260710-0908-development-issue-native-run-contract-gaps.md` - resolved the remaining native widget Run contract failures.
+- `agent-reports/resolved/20260708-1215-integration-summary-open-canvas-zh-trigger.md` - integrated Chinese “打开画布” skill trigger coverage, smoke assertions, README note, version 0.1.45 reinstall, and recorded reload/new-thread validation need.
 - `agent-reports/resolved/20260707-2152-integration-summary-mcp-stdio-transport-lifecycle.md` - integrated Canvasight 0.1.44 MCP stdio lifecycle logging, JSON-RPC error hardening, stale daemon cleanup, tests, docs, reinstall, and recorded current-thread hot-swap limitation.
 - `agent-reports/resolved/20260707-2152-development-solution-mcp-stdio-transport-lifecycle.md` - fixed MCP stdio lifecycle opacity and stale daemon cleanup while preserving native widget-only Run success.
 - `agent-reports/resolved/20260707-2152-development-issue-mcp-stdio-transport-lifecycle.md` - resolved visible Canvasight tool `Transport closed` lacking plugin-side lifecycle diagnostics.

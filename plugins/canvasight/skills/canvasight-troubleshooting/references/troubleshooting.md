@@ -32,6 +32,12 @@ If the widget does not render:
 4. If the app renders but shows `Failed to fetch`, confirm the widget CSP contains the current daemon exact origin, such as `http://127.0.0.1:53208`, not only wildcard localhost entries.
 5. Use `open_canvasight_browser_fallback` while investigating widget host support. Tell the user this fallback lacks the widget bridge; after `claim_canvasight_thread` it can scope Run payloads to the current thread and keep payloads available through `await_canvasight_run`.
 
+For native open, read the active task's `CODEX_THREAD_ID` in the shell and pass it as `threadId`. The MCP child process can be started without that environment variable, so omitting the tool argument produces `current_thread_id_required` and must not be treated as a successfully opened Run surface.
+
+If app-server `thread/resume` briefly reports that the active rollout cannot be read or does not start with session metadata, Canvasight 0.1.46 retries that sequence before applying Chat / Plan / Goal. The retry is limited to this read race. Any later settings/goal failure, unrelated resume error, or exhausted retry still blocks `sendMessage`.
+
+If native open reports `Canvasight daemon did not start in time`, check `daemon.json`, running `mcp/server.mjs --daemon` processes, and `mcp-lifecycle.log`. Multiple shims could previously race to spawn daemons while waiting on different tokens, and an EPIPE handler could recursively append errors after host stdout closed. Canvasight 0.1.47 uses a cross-process daemon start lock, only removes daemon state owned by the exiting process, treats stdout EPIPE as transport closure, and caps the lifecycle log at 5 MB by default. Canvasight 0.1.48 also recognizes source-checkout and installed-cache daemon paths that share the default state directory, so cross-path orphans are removed.
+
 ## Diagnostics Panel
 
 Use the Canvasight Diagnostics panel to classify Run delivery before guessing. It shows the current URL, whether the page is in an iframe or direct widget app, `canvasightHost`, `window.openai`, `window.canvasightMcp`, `bridgeTransport`, `bridgeReason`, `canSendFollowUpMessage()`, and the latest Run `status/via/reason/error`.
@@ -44,6 +50,7 @@ Interpretation:
 - `bridgeTransport=mcp_ui_message`: the standard MCP Apps `ui/message` bridge is ready.
 - `bridgeTransport=openai_compat_followup`: the Codex/OpenAI compatibility `window.openai.sendFollowUpMessage` bridge is ready.
 - `canSendFollowUpMessage() === true`: frontend can ask a native widget host bridge to send a follow-up.
+- `mcpInitialized=true` with `hostCapabilitiesMessage=false`: the host omitted an advisory capability declaration. Canvasight should still attempt `mcpApp.sendMessage`; only Promise rejection is a send failure.
 - `bridgeReason=browser_fallback_no_bridge`: the current page is browser fallback/dev, not a native widget. Stop debugging bridge transports from that page and reopen through `open_canvasight` after `tool_search`.
 - `canvasight_mcp_transport_closed` / MCP error `Transport closed`: the current thread can see Canvasight tool names but the live MCP transport is closed. Check `mcp-lifecycle.log`, reinstall/reload if the cache is stale, and do not treat browser fallback as native Run recovery.
 - `delivery.status === "sent"` and `delivery.via === "widget_bridge"`: host bridge `sendMessage` accepted the Run.

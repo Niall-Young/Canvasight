@@ -27,6 +27,7 @@ const unboundOrigin = `http://127.0.0.1:${unboundPort}`;
 const queuedOrigin = `http://127.0.0.1:${queuedPort}`;
 const unboundCanvasightHome = path.join(tempRoot, "home-unbound");
 const queuedCanvasightHome = path.join(tempRoot, "home-queued");
+const trackedDaemonPids = new Set();
 
 fs.writeFileSync(
   fakeCodexPath,
@@ -157,8 +158,14 @@ function run(action, options = {}) {
   });
 }
 
-function stopDaemon(home = canvasightHome) {
-  return spawnSync(process.execPath, [serverPath, "--stop-daemon"], {
+async function stopDaemon(home = canvasightHome) {
+  let daemonPid = 0;
+  try {
+    daemonPid = Number(JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8")).pid || 0);
+  } catch {
+    daemonPid = 0;
+  }
+  const result = spawnSync(process.execPath, [serverPath, "--stop-daemon"], {
     cwd: pluginRoot,
     env: {
       ...process.env,
@@ -166,6 +173,19 @@ function stopDaemon(home = canvasightHome) {
     },
     encoding: "utf8"
   });
+  if (!daemonPid) return result;
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline && processIsAlive(daemonPid)) {
+    await sleep(50);
+  }
+  if (processIsAlive(daemonPid)) {
+    try {
+      process.kill(daemonPid, "SIGKILL");
+    } catch {
+      // The daemon exited between the final poll and cleanup.
+    }
+  }
+  return result;
 }
 
 function processIsAlive(pid) {
@@ -237,7 +257,33 @@ async function readNativeLog() {
 }
 
 async function readDaemonState(home) {
-  return JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8"));
+  const state = JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8"));
+  const pid = Number(state.pid);
+  if (Number.isFinite(pid) && pid > 0) trackedDaemonPids.add(pid);
+  return state;
+}
+
+async function stopTrackedDaemons() {
+  for (const pid of trackedDaemonPids) {
+    if (!processIsAlive(pid)) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // The daemon exited between the liveness check and signal.
+    }
+  }
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline && Array.from(trackedDaemonPids).some(processIsAlive)) {
+    await sleep(50);
+  }
+  for (const pid of trackedDaemonPids) {
+    if (!processIsAlive(pid)) continue;
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // The daemon exited between the final poll and cleanup.
+    }
+  }
 }
 
 async function main() {
@@ -590,9 +636,10 @@ async function main() {
       port: queuedPort,
       threadId: "thread-queued-dev"
     });
-    stopDaemon();
-    stopDaemon(unboundCanvasightHome);
-    stopDaemon(queuedCanvasightHome);
+    await stopDaemon();
+    await stopDaemon(unboundCanvasightHome);
+    await stopDaemon(queuedCanvasightHome);
+    await stopTrackedDaemons();
     await fsp.rm(tempRoot, { recursive: true, force: true });
   }
 }

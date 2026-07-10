@@ -6,6 +6,9 @@
         "./mcp/server.mjs"
       ],
       "cwd": ".",
+      "env": {
+        "CANVASIGHT_CODEX_NATIVE": "1"
+      },
       "tool_timeout_sec": 900
     }
   }
