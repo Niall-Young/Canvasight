@@ -80,7 +80,14 @@ const canvasightHome = path.join(tempRoot, "canvasight-home");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
+const proxyUnavailablePath = path.join(tempRoot, "desktop-proxy-unavailable");
+const proxySocketPath = path.join(tempRoot, "desktop-app-server-control.sock");
 const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
+
+// Its presence makes Canvasight select the Desktop proxy in auto mode. The
+// smoke executable below still speaks stdio, exactly as `codex app-server
+// proxy` does after it has connected to the Desktop control socket.
+fs.writeFileSync(proxySocketPath, "smoke socket marker", "utf8");
 
 fs.writeFileSync(
   fakeCodexPath,
@@ -90,9 +97,15 @@ import fs from "node:fs";
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
 const transientResumeFailCountPath = process.env.CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH;
+const proxyUnavailablePath = process.env.CANVASIGHT_FAKE_PROXY_UNAVAILABLE_PATH;
 const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
+
+if (process.argv.includes("proxy") && proxyUnavailablePath && fs.existsSync(proxyUnavailablePath)) {
+  process.stderr.write("fake Desktop app-server control socket is unavailable\\n");
+  process.exit(12);
+}
 
 function write(message) {
   process.stdout.write(JSON.stringify(message) + "\\n");
@@ -250,6 +263,9 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
     CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH: transientResumeFailCountPath,
+    CANVASIGHT_FAKE_PROXY_UNAVAILABLE_PATH: proxyUnavailablePath,
+    CANVASIGHT_CODEX_APP_SERVER_PROXY_SOCKET: proxySocketPath,
+    CANVASIGHT_CODEX_APP_SERVER_TRANSPORT: "auto",
     CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
@@ -2693,6 +2709,7 @@ async function main() {
     assert.equal(widgetPrepared.codexNative.status, "applied_goal");
     assert.equal(widgetPrepared.codexNative.action, "thread/goal/set");
     assert.equal(widgetPrepared.codexNative.threadId, "thread-smoke");
+    assert.equal(widgetPrepared.codexNative.transport, "desktop_proxy");
     assert.equal(widgetPrepared.codexTurn.status, "skipped");
     assert.equal(widgetPrepared.codexTurn.reason, "widget_bridge_sendMessage");
     assert.equal(widgetPrepared.agentTeam.agentsMd.status, "created");
@@ -2738,6 +2755,7 @@ async function main() {
     assert.equal(planPrepared.codexNative.status, "applied_plan");
     assert.equal(planPrepared.codexNative.action, "thread/settings/update");
     assert.equal(planPrepared.codexNative.collaborationMode, "plan");
+    assert.equal(planPrepared.codexNative.transport, "desktop_proxy");
     const widgetModeLog = await readNativeLog();
     assert.equal(
       widgetModeLog.some(
@@ -2749,6 +2767,30 @@ async function main() {
       ),
       true
     );
+
+    // If the Desktop proxy cannot start, Canvasight may use its isolated
+    // app-server fallback, but it must still operate on the widget's task.
+    const proxyFallbackLogOffset = widgetModeLog.length;
+    await fsp.writeFile(proxyUnavailablePath, "unavailable", "utf8");
+    const proxyFallbackPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Plan Prepared With Proxy Fallback",
+        markdown: "# Widget Plan Prepared With Proxy Fallback",
+        codexMode: "plan",
+        planMode: true,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(proxyFallbackPrepared.status, "prepared");
+    assert.equal(proxyFallbackPrepared.codexNative.transport, "stdio_fallback");
+    assert.equal(proxyFallbackPrepared.codexNative.threadId, "thread-smoke");
+    const proxyFallbackLog = (await readNativeLog()).slice(proxyFallbackLogOffset);
+    assert.equal(proxyFallbackLog.some((entry) => entry.params?.threadId !== "thread-smoke"), false);
+    assert.equal(proxyFallbackLog.some((entry) => entry.method === "thread/settings/update"), true);
+    await fsp.rm(proxyUnavailablePath, { force: true });
     assert.equal(
       widgetModeLog.some(
         (entry) =>
@@ -2760,7 +2802,73 @@ async function main() {
       true
     );
 
-    const transientResumeLogOffset = widgetModeLog.length;
+    const staleProjectPath = path.join(tempRoot, "stale-thread-project");
+    const staleWidget = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: { projectPath: staleProjectPath, threadId: "thread-old-broken" }
+    });
+    assert.equal(staleWidget.structuredContent.codexThreadId, "thread-old-broken");
+    await fsp.writeFile(resumeFailPath, "thread-old-broken\n", "utf8");
+    const currentWidget = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: { projectPath: staleProjectPath, threadId: "thread-current-widget" }
+    });
+    const currentWidgetData = widgetDataFor(currentWidget);
+    const currentSessionId = currentWidget.structuredContent.sessionId;
+    const currentIdentityHeaders = {
+      "x-canvasight-open-attempt-id": currentWidgetData.openAttemptId,
+      "x-canvasight-widget-instance-id": "widget-current-thread-fullscreen",
+      "x-canvasight-startup-stage": "hydrating_project",
+      "x-canvasight-display-mode": "fullscreen",
+      "x-canvasight-thread-id": "thread-current-widget",
+      "x-canvasight-react-mounted": "true"
+    };
+    const currentReady = await fetchJson(`${currentWidgetData.origin}/api/sessions/${currentSessionId}/widget-ready`, {
+      method: "POST",
+      headers: currentIdentityHeaders,
+      body: JSON.stringify({
+        status: "ready",
+        stage: "ready",
+        openAttemptId: currentWidgetData.openAttemptId,
+        widgetInstanceId: "widget-current-thread-fullscreen",
+        displayMode: "fullscreen",
+        threadId: "thread-current-widget",
+        reactMounted: true,
+        projectHydrated: true,
+        canvasRendered: true,
+        canvasVisible: true,
+        canvasWidth: 1200,
+        canvasHeight: 800
+      })
+    });
+    assert.equal(currentReady.verified, true);
+    const currentThreadLogOffset = (await readNativeLog()).length;
+    const currentThreadPrepared = await fetchJson(`${currentWidgetData.origin}/api/sessions/${currentSessionId}/run`, {
+      method: "POST",
+      headers: currentIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        sessionId: currentSessionId,
+        projectPath: staleProjectPath,
+        threadName: "Current Widget Plan Ignores Stale Task",
+        markdown: "# Current Widget Plan Ignores Stale Task",
+        codexMode: "plan",
+        planMode: true,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    assert.equal(currentThreadPrepared.status, "prepared");
+    assert.equal(currentThreadPrepared.codexNative.transport, "desktop_proxy");
+    assert.equal(currentThreadPrepared.codexNative.threadId, "thread-current-widget");
+    const currentThreadLog = (await readNativeLog()).slice(currentThreadLogOffset);
+    assert.equal(currentThreadLog.some((entry) => entry.params?.threadId === "thread-old-broken"), false);
+    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-current-widget"), true);
+    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-current-widget"), true);
+    await fsp.writeFile(resumeFailPath, "", "utf8");
+    await request("tools/call", { name: "close_canvasight", arguments: { sessionId: staleWidget.structuredContent.sessionId } });
+    await request("tools/call", { name: "close_canvasight", arguments: { sessionId: currentSessionId } });
+
+    const transientResumeLogOffset = (await readNativeLog()).length;
     await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 2 }), "utf8");
     const retryPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",

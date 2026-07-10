@@ -17,6 +17,10 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-2002-integration-summary-desktop-proxy-plan-goal.md` - integrated Desktop-first current-task Plan/Goal preflight, strict stdio fallback, regression coverage, docs, version 0.3.3, and recorded the remaining real native-host acceptance gate.
+- `agent-reports/resolved/20260710-1959-test-solution-desktop-proxy-plan-goal.md` - added proxy-success, unavailable-only stdio fallback, and stale-task/current-widget binding gates; real native-host acceptance remains required.
+- `agent-reports/resolved/20260710-1957-development-solution-desktop-proxy-plan-goal.md` - added Desktop app-server proxy preference for current-task Plan/Goal preflight, strict proxy-unavailable-only stdio fallback, and transport diagnostics; real native-host acceptance remains pending.
+- `agent-reports/resolved/20260710-1956-customer-support-solution-desktop-plan-goal-docs.md` - documented the bilingual Desktop-first / stdio-fallback Plan and Goal contract, exact task binding, diagnostics, and no-UI-automation boundary; runtime and native-host acceptance remain with the main thread.
 - `agent-reports/resolved/20260710-1937-integration-summary-plan-goal-thread-store-recovery.md` - kept Plan/Goal mode integrity when Codex cannot read a task rollout, added actionable recovery feedback and Goal regression coverage; real native-host acceptance remains unverified.
 - `agent-reports/resolved/20260710-1937-development-solution-plan-goal-thread-store-recovery.md` - retained the required block, added localized recovery guidance with raw diagnostic retention, and covered persistent Goal preflight failure.
 - `agent-reports/resolved/20260710-1933-test-issue-plan-goal-thread-store-run-block.md` - resolved Plan/Goal thread-store preflight issue with an explicit safe recovery contract.

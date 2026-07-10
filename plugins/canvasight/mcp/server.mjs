@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.2+codex.20260710200000";
+const SERVER_VERSION = "0.3.3+codex.20260710195800";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -318,6 +318,44 @@ function codexAppServerArgs() {
   const rawArgs = String(process.env.CANVASIGHT_CODEX_APP_SERVER_ARGS || "").trim();
   if (rawArgs) return rawArgs.split(/\s+/).filter(Boolean);
   return ["app-server", "--listen", "stdio://"];
+}
+
+function codexAppServerProxyArgs() {
+  const rawArgs = String(process.env.CANVASIGHT_CODEX_APP_SERVER_PROXY_ARGS || "").trim();
+  if (rawArgs) return rawArgs.split(/\s+/).filter(Boolean);
+  return ["app-server", "proxy", "--sock", codexAppServerControlSocketPath()];
+}
+
+function codexAppServerTransportPreference() {
+  const value = String(process.env.CANVASIGHT_CODEX_APP_SERVER_TRANSPORT || "auto").trim().toLowerCase();
+  if (value === "desktop_proxy" || value === "proxy") return "desktop_proxy";
+  if (value === "stdio" || value === "stdio_fallback") return "stdio";
+  return "auto";
+}
+
+function codexAppServerControlSocketPath() {
+  const configured = String(
+    process.env.CANVASIGHT_CODEX_APP_SERVER_PROXY_SOCKET || process.env.CANVASIGHT_CODEX_APP_SERVER_CONTROL_SOCKET || ""
+  ).trim();
+  if (configured) return path.resolve(configured);
+  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+  return path.join(codexHome, "app-server-control", "app-server-control.sock");
+}
+
+function canUseCodexDesktopProxy() {
+  return fs.existsSync(codexAppServerControlSocketPath());
+}
+
+function codexAppServerTransports() {
+  const preference = codexAppServerTransportPreference();
+  if (preference === "stdio") return [{ kind: "stdio_fallback", args: codexAppServerArgs() }];
+  if (preference === "desktop_proxy" || canUseCodexDesktopProxy()) {
+    return [
+      { kind: "desktop_proxy", args: codexAppServerProxyArgs() },
+      { kind: "stdio_fallback", args: codexAppServerArgs() }
+    ];
+  }
+  return [{ kind: "stdio_fallback", args: codexAppServerArgs() }];
 }
 
 function normalizeProjectPath(projectPath) {
@@ -3112,9 +3150,32 @@ function turnConfirmationFromNotification(message, expected = {}) {
   };
 }
 
-function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
+async function appServerRequestSequence(requests, options = {}) {
+  const transports = codexAppServerTransports();
+  let proxyUnavailableError = null;
+
+  for (const transport of transports) {
+    try {
+      const results = await appServerRequestSequenceViaTransport(requests, options, transport);
+      Object.defineProperty(results, "canvasightAppServerTransport", {
+        value: transport.kind,
+        enumerable: false
+      });
+      return results;
+    } catch (error) {
+      if (transport.kind !== "desktop_proxy" || error?.canvasightAppServerPhase !== "initialize") {
+        throw error;
+      }
+      proxyUnavailableError = error;
+    }
+  }
+
+  throw proxyUnavailableError || new Error("Codex app-server transport was unavailable");
+}
+
+function appServerRequestSequenceViaTransport(requests, { experimentalApi = false } = {}, transport) {
   const bin = codexAppBin();
-  const args = codexAppServerArgs();
+  const args = transport.args;
   const timeoutMs = nativeCodexTimeoutMs();
   const confirmationTimeoutMs = nativeCodexConfirmationTimeoutMs();
   const requestFactories = Array.isArray(requests) ? requests : [];
@@ -3155,6 +3216,8 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
     function decorateError(error) {
       if (!error || typeof error !== "object") return error;
       error.canvasightAppServerArgs = args.join(" ");
+      error.canvasightAppServerTransport = transport.kind;
+      error.canvasightAppServerPhase = initialized ? "request" : "initialize";
       if (stderr) error.canvasightAppServerStderr = stderr.slice(-4000);
       if (!error.canvasightAppServerMethod) error.canvasightAppServerMethod = timeoutLabel;
       return error;
@@ -3326,9 +3389,9 @@ function appServerRequestSequence(requests, { experimentalApi = false } = {}) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
-    child.once("error", finish);
+    child.once("error", (error) => finish(error));
     child.once("exit", (code, signal) => {
-      if (!settled && initialized) finish(new Error(`Codex app-server exited early: code=${code} signal=${signal} stderr=${stderr}`));
+      if (!settled) finish(new Error(`Codex app-server exited early: code=${code} signal=${signal} stderr=${stderr}`));
     });
 
     resetTimer("initialize");
@@ -3412,7 +3475,10 @@ async function setCodexCollaborationMode(threadId, mode) {
         }
       ],
       { experimentalApi: true }
-    ).then((results) => results[1] || {})
+    ).then((results) => ({
+      result: results[1] || {},
+      transport: results.canvasightAppServerTransport || "stdio_fallback"
+    }))
   );
 }
 
@@ -3436,7 +3502,10 @@ async function setCodexGoal(threadId, payload) {
         }
       ],
       { experimentalApi: false }
-    ).then((results) => results[1] || {})
+    ).then((results) => ({
+      result: results[1] || {},
+      transport: results.canvasightAppServerTransport || "stdio_fallback"
+    }))
   );
 }
 
@@ -3468,39 +3537,44 @@ async function applyCodexNativeMode(session, payload) {
 
   try {
     if (payload.codexMode === "chat") {
-      await setCodexCollaborationMode(session.codexThreadId, "default");
+      const nativeResult = await setCodexCollaborationMode(session.codexThreadId, "default");
       return {
         status: "applied",
         action: "thread/settings/update",
         threadId: session.codexThreadId,
         mode: payload.codexMode,
-        collaborationMode: "default"
+        collaborationMode: "default",
+        transport: nativeResult.transport
       };
     }
 
     if (payload.codexMode === "goal") {
-      await setCodexGoal(session.codexThreadId, payload);
+      const nativeResult = await setCodexGoal(session.codexThreadId, payload);
       return {
         status: "applied",
         action: "thread/goal/set",
         threadId: session.codexThreadId,
-        mode: payload.codexMode
+        mode: payload.codexMode,
+        transport: nativeResult.transport
       };
     }
 
     const collaborationMode = payload.codexMode === "plan" ? "plan" : "default";
-    await setCodexCollaborationMode(session.codexThreadId, collaborationMode);
+    const nativeResult = await setCodexCollaborationMode(session.codexThreadId, collaborationMode);
     return {
       status: "applied",
       action: "thread/settings/update",
       threadId: session.codexThreadId,
       mode: payload.codexMode,
-      collaborationMode
+      collaborationMode,
+      transport: nativeResult.transport
     };
   } catch (error) {
     return {
       status: "failed",
       error: error?.message || "Codex native mode request failed",
+      transport: error?.canvasightAppServerTransport || null,
+      transportPhase: error?.canvasightAppServerPhase || null,
       threadId: session.codexThreadId,
       mode: payload.codexMode
     };
