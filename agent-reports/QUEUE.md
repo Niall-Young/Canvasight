@@ -14,6 +14,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1033-development-solution-daemon-node-executable-fallback.md` - added Node executable fallback and lifecycle diagnostics for daemon start failures, with a 0.1.50 ENOENT regression smoke.
+- `agent-reports/resolved/20260710-1033-development-issue-daemon-node-executable-fallback.md` - resolved stale Homebrew Node executable paths causing daemon start timeout.
 - `agent-reports/resolved/20260710-1013-integration-summary-native-widget-module-bootstrap.md` - fixed native widget app bootstrap as an ES module, documented the current sidebar fallback, and installed Canvasight 0.1.49.
 - `agent-reports/resolved/20260710-1013-development-solution-native-widget-module-bootstrap.md` - resolved the blank `Canvasight ready` widget shell and added module bootstrap coverage.
 - `agent-reports/assigned/20260710-1003-test-issue-native-widget-shell-only.md` - resolved high-priority native widget shell-only issue; report status is resolved and links to its solution.

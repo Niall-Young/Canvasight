@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.49";
+const SERVER_VERSION = "0.1.50";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -998,6 +998,96 @@ async function waitForDaemon(token) {
   throw new Error("Canvasight daemon did not start in time");
 }
 
+function daemonNodeExecutableCandidates() {
+  const candidates = [];
+  const seen = new Set();
+  const add = (executable, source) => {
+    if (typeof executable !== "string" || !executable.trim()) return;
+    const normalized = executable.trim();
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push({ executable: normalized, source });
+  };
+
+  // A configured executable is useful for managed runtimes and gives smoke tests a
+  // deterministic way to exercise the fallback path.
+  add(process.env.CANVASIGHT_NODE_BIN, "configured");
+  // Prefer a fresh PATH lookup. Homebrew's Cellar path in process.execPath can be
+  // removed while a long-lived MCP shim is still running.
+  add("node", "path");
+  add(process.env.npm_node_execpath, "npm_node_execpath");
+  add(process.execPath, "process_exec_path");
+  return candidates;
+}
+
+function daemonSpawnErrorDetails(error) {
+  return {
+    code: typeof error?.code === "string" ? error.code : "",
+    message: error?.message || String(error || "Unknown daemon spawn error")
+  };
+}
+
+async function spawnDaemonWithNodeFallback(token) {
+  const candidates = daemonNodeExecutableCandidates();
+  const attempts = [];
+  const daemonArgs = [__filename, "--daemon", `--canvasight-home=${canvasightHome()}`];
+
+  for (const candidate of candidates) {
+    appendMcpLifecycle("daemon_spawn_attempt", {
+      executable: candidate.executable,
+      source: candidate.source
+    });
+    const launched = await new Promise((resolve) => {
+      let child;
+      try {
+        child = spawn(candidate.executable, daemonArgs, {
+          cwd: pluginRoot,
+          detached: true,
+          stdio: "ignore",
+          env: {
+            ...process.env,
+            CANVASIGHT_DAEMON_TOKEN: token
+          }
+        });
+      } catch (error) {
+        resolve({ error });
+        return;
+      }
+
+      child.once("spawn", () => resolve({ child }));
+      child.once("error", (error) => resolve({ error }));
+    });
+
+    if (launched.child) {
+      launched.child.unref();
+      appendMcpLifecycle("daemon_spawned", {
+        executable: candidate.executable,
+        source: candidate.source,
+        daemonPid: launched.child.pid
+      });
+      return {
+        executable: candidate.executable,
+        source: candidate.source,
+        attempts
+      };
+    }
+
+    const failure = daemonSpawnErrorDetails(launched.error);
+    attempts.push({ ...candidate, ...failure });
+    appendMcpLifecycle("daemon_spawn_failure", {
+      executable: candidate.executable,
+      source: candidate.source,
+      ...failure
+    });
+  }
+
+  const summary = attempts
+    .map((attempt) => `${attempt.source}=${attempt.executable}${attempt.code ? ` (${attempt.code})` : ""}`)
+    .join(", ");
+  appendMcpLifecycle("daemon_spawn_exhausted", { attempts });
+  throw new Error(`Canvasight daemon could not launch a Node process. Tried: ${summary || "no Node executable candidates"}`);
+}
+
 async function readDaemonStartLock() {
   try {
     const raw = await fsp.readFile(canvasightDaemonStartLockPath(), "utf8");
@@ -1082,17 +1172,22 @@ async function ensureDaemonServer() {
     }
 
     const token = crypto.randomBytes(24).toString("base64url");
-    const child = spawn(process.execPath, [__filename, "--daemon", `--canvasight-home=${canvasightHome()}`], {
-      cwd: pluginRoot,
-      detached: true,
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        CANVASIGHT_DAEMON_TOKEN: token
-      }
-    });
-    child.unref();
-    return await waitForDaemon(token);
+    const launch = await spawnDaemonWithNodeFallback(token);
+    try {
+      return await waitForDaemon(token);
+    } catch (error) {
+      const state = await readDaemonState();
+      appendMcpLifecycle("daemon_start_timeout", {
+        executable: launch.executable,
+        source: launch.source,
+        daemonPid: state?.pid || null,
+        stateVersion: state?.serverVersion || "",
+        statePluginRoot: state?.pluginRoot || ""
+      });
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} (spawned with ${launch.source}: ${launch.executable}; inspect ${canvasightMcpLifecycleLogPath()} for daemon spawn diagnostics)`
+      );
+    }
   } finally {
     await releaseDaemonStartLock(lock);
   }

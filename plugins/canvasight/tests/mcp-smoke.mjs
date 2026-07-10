@@ -330,9 +330,9 @@ async function readNativeLog() {
   }
 }
 
-async function readMcpLifecycleLog() {
+async function readMcpLifecycleLog(home = canvasightHome) {
   try {
-    const raw = await fsp.readFile(path.join(canvasightHome, "mcp-lifecycle.log"), "utf8");
+    const raw = await fsp.readFile(path.join(home, "mcp-lifecycle.log"), "utf8");
     return raw
       .split("\n")
       .filter(Boolean)
@@ -1004,6 +1004,60 @@ async function assertConcurrentDaemonSingleFlight() {
   }
 }
 
+async function assertDaemonNodeExecutableFallback() {
+  const home = path.join(tempRoot, "daemon-node-fallback-home");
+  const unavailableExecutable = "/definitely/missing/canvasight-node";
+  const client = createMcpClient("daemon-node-fallback", {
+    CANVASIGHT_HOME: home,
+    CANVASIGHT_NODE_BIN: unavailableExecutable,
+    CODEX_THREAD_ID: "thread-daemon-node-fallback"
+  });
+  try {
+    await client.request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "canvasight-daemon-node-fallback-smoke", version: "0.0.0" }
+    });
+    const opened = await client.request("tools/call", {
+      name: "open_canvasight",
+      arguments: {
+        language: "zh",
+        projectPath: defaultProjectPath,
+        threadId: "thread-daemon-node-fallback"
+      }
+    });
+    const widgetData = widgetDataFor(opened);
+    const state = JSON.parse(await fsp.readFile(path.join(home, "daemon.json"), "utf8"));
+    assert.equal(state.serverVersion, expectedPluginVersion);
+    assert.equal(state.origin, widgetData.origin);
+
+    const lifecycle = await readMcpLifecycleLog(home);
+    const failedCandidateIndex = lifecycle.findIndex(
+      (entry) =>
+        entry.event === "daemon_spawn_failure" &&
+        entry.source === "configured" &&
+        entry.executable === unavailableExecutable &&
+        entry.code === "ENOENT"
+    );
+    assert.notEqual(failedCandidateIndex, -1, "missing ENOENT lifecycle record for configured daemon executable");
+    const fallbackSpawnIndex = lifecycle.findIndex(
+      (entry, index) =>
+        index > failedCandidateIndex &&
+        entry.event === "daemon_spawned" &&
+        entry.executable !== unavailableExecutable
+    );
+    assert.notEqual(fallbackSpawnIndex, -1, "missing successful fallback daemon spawn after configured executable failed");
+
+    await client.request("tools/call", {
+      name: "close_canvasight",
+      arguments: { sessionId: opened.structuredContent.sessionId }
+    });
+  } finally {
+    client.stop();
+    await stopDaemon(home);
+  }
+}
+
 async function main() {
   const killTimer = setTimeout(() => {
     child.kill("SIGTERM");
@@ -1203,6 +1257,7 @@ async function main() {
 
     await assertStdoutClosureLifecycle();
     await assertConcurrentDaemonSingleFlight();
+    await assertDaemonNodeExecutableFallback();
 
     const resources = await request("resources/list", {});
     assert.equal(resources.resources.length, 1);
