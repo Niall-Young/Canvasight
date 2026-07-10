@@ -15,7 +15,7 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
 - 创建、拖拽、复制、删除和连接任务节点。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
 - 给节点添加图片、文件和上下文附件。
-- 为节点选择 Chat、Plan 或 Goal，并把当前节点及其下游节点发送到当前 Codex 任务。
+- 节点始终通过 Chat 发送当前节点及其下游节点到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
@@ -32,7 +32,7 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
    ```
 
 4. 只有同一 attempt、session 和任务绑定到真实 fullscreen widget instance，且返回 `status: "ready"`、`verified: true`、`displayMode: "fullscreen"`、`reactMounted: true`、`projectHydrated: true`、`canvasRendered: true`、`canvasVisible: true` 和非零画布尺寸，才代表原生画布已验证。`timeout`、`failed` 或证据不完整都不是成功。
-5. 在画布里编辑节点、附件、连线和 Page；选择 Chat、Plan 或 Goal 后点击 Run。
+5. 在画布里编辑节点、附件、连线和 Page，然后点击 Run。节点会通过 Chat 将当前节点及其下游节点发送到当前 Codex 任务。
 
 `open_canvasight` 调用完成只表示原生 widget 会话已经准备好，不表示画布已经打开。工具输出、resource read、daemon 健康、构建成功或浏览器 fallback 都不能代替 `await_canvasight_widget_ready` 的真实 `ready` 回执。
 
@@ -42,7 +42,7 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
 - 每个 widget 客户端生成唯一 `widgetInstanceId`。只有与 `openAttemptId`、`sessionId`、`threadId` 同时匹配的 fullscreen instance 能满足 ready；hidden、inline 和 browser renderer 只能上报诊断。
 - widget 通过 app-only `canvasight_widget_api` 访问 daemon，并在请求中携带 attempt、instance 和当前 startup stage。原生 widget 不直接 fetch localhost。
 - 启动失败、阶段超时或 React render error 会进入持久失败面板，显示失败阶段和可读原因，并提供重新连接、在新任务中重开和复制脱敏诊断；不能永久停在 “Opening”、“Starting” 或 “Connecting”。
-- native Run 只允许由已验证的 fullscreen instance 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
+- native Run 只允许由已验证的 fullscreen instance 以 Chat 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
 - daemon URL 和 token 只存在于 widget 内部元数据，不出现在 native open 的公开结果中。
 
 浏览器 URL 和裸 dev 页面是诊断 fallback，不是原生打开路径。它们没有 native widget host bridge：claim 当前任务后，Run 只进入 `await_canvasight_run` 队列，不能显示为 native sent。
@@ -108,7 +108,7 @@ fallback 与会话：
 ### Skills 分工
 
 - `canvasight-open`：原生打开、最近项目和显式 browser fallback。
-- `canvasight-run`：native Run、fallback 队列和 Chat / Plan / Goal 处理。
+- `canvasight-run`：native Chat Run 与 fallback 队列处理。
 - `canvasight-graph-writer`：用 AI 创建或更新 Page、节点和连线。
 - `canvasight-agent-team`：处理可选的 Agent Team / agent-report 协作协议。
 - `canvasight-troubleshooting`：处理插件、MCP transport、daemon、widget 和 fallback 故障。
@@ -194,13 +194,13 @@ browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_threa
 
 **Run 为什么没有出现在当前任务？**
 
-先确认这是通过 `open_canvasight` 打开的 native widget，并且 ready 已确认。native Run 以 host bridge Promise 为成功标准；fallback Run 则检查 claim 和 `await_canvasight_run`。Chat / Plan / Goal 的预检失败也会在发送前阻断 Run。
+先确认这是通过 `open_canvasight` 打开的 native widget，并且 ready 已确认。native Chat Run 以 host bridge Promise 为成功标准；fallback Run 则检查 claim 和 `await_canvasight_run`。
 
 **Run 显示 `failed to read thread` 或 `rollout does not start with session metadata` 怎么办？**
 
-这表示 Codex 无法读取该任务的本地 session/rollout metadata，不是节点内容错误。Plan 会直接对 **当前 widget 绑定的 task** 请求开启 Plan 模式，并使用设置中保存的“Codex 当前模型”（默认 `gpt-5.6-terra`）；Goal 会直接为同一个 task 设置目标。只有 Codex 明确报告 task 尚未加载时，Canvasight 才会在同一连接里恢复该 task 后重试。`failed to read thread` 不会触发恢复旧任务、最近任务或普通 Chat，也不会发送节点内容。
+这表示 Codex 无法读取该任务的本地 session/rollout metadata，不是节点内容错误。Canvasight 会依次选择显式配置的 runtime、Codex Desktop、ChatGPT Desktop，最后才在没有可用 Desktop runtime 时使用 PATH 中的 `codex`。只有 Codex 明确报告 task 尚未加载时，Canvasight 才会在同一连接里恢复该 task 后重试。
 
-全程不模拟鼠标/键盘、不复制粘贴、不新开 task，也不修改 Codex session 文件。若直接模式设置仍失败，Canvasight 会保留节点内容并显示脱敏诊断；重载或重启 Codex 后重新打开 Canvasight 再试。browser fallback 和 dev 页面不能修复原生任务存储。
+若诊断显示 **Desktop runtime 不可用**，重载或重启当前 Desktop 应用后重新打开 Canvasight；若显示 **线程存档不兼容**，重载或重启 Desktop 后新建 task，再重新打开 Canvasight。不要改用旧 PATH CLI、旧任务或最近任务。两种失败都会保留节点内容。Canvasight 全程不模拟鼠标/键盘、不复制粘贴、不自动新开 task，也不修改 Codex session 文件。browser fallback 和 dev 页面不能修复原生任务存储。
 
 **新任务需要运行 `npm run dev` 吗？**
 
@@ -219,7 +219,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Create, drag, copy, delete, and connect task nodes.
 - Use multiple Pages as isolated canvas workspaces within one project.
 - Add images, files, and contextual attachments to nodes.
-- Choose Chat, Plan, or Goal and send the selected node plus downstream nodes to the current Codex task.
+- Nodes always use Chat to send the selected node plus downstream nodes to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
 - Reopen recent Canvasight projects from a new Codex task.
@@ -236,7 +236,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
    ```
 
 4. The native canvas is verified only when the same attempt, session, and task bind to a real fullscreen widget instance and the result has `status: "ready"`, `verified: true`, `displayMode: "fullscreen"`, `reactMounted: true`, `projectHydrated: true`, `canvasRendered: true`, `canvasVisible: true`, and non-zero canvas dimensions. `timeout`, `failed`, and incomplete evidence are not success.
-5. Edit nodes, attachments, edges, and Pages. Choose Chat, Plan, or Goal, then click Run.
+5. Edit nodes, attachments, edges, and Pages, then click Run. The node and its downstream nodes are sent through Chat to the current Codex task.
 
 Completion of `open_canvasight` only means that the native widget session was prepared. It does not prove that the canvas opened. Tool output, resource reads, daemon health, successful builds, and browser fallbacks cannot replace a real `ready` result from `await_canvasight_widget_ready`.
 
@@ -246,7 +246,7 @@ Completion of `open_canvasight` only means that the native widget session was pr
 - Every widget client creates a unique `widgetInstanceId`. Only a fullscreen instance matching the same `openAttemptId`, `sessionId`, and `threadId` can satisfy ready; hidden, inline, and browser renderers are diagnostic only.
 - The widget reaches the daemon through the app-only `canvasight_widget_api`, carrying its attempt, instance, and startup stage on every request. The native widget does not fetch localhost directly.
 - Startup failures, stage timeouts, and React render errors enter a persistent failure panel with the failed stage, a readable reason, Reconnect, Reopen in a new task, and Copy redacted diagnostics. The UI must not remain on “Opening”, “Starting”, or “Connecting” forever.
-- A native Run is allowed only from the verified fullscreen instance to its bound task and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
+- A native Run is allowed only from the verified fullscreen instance to its bound task through Chat and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
 - Daemon URLs and tokens remain in widget-only metadata and are not exposed in public native-open output.
 
 Browser URLs and bare dev pages are diagnostic fallbacks, not native-open paths. They have no native widget host bridge. After claiming the current task, their Runs only enter the `await_canvasight_run` queue and cannot be labelled as native sent.
@@ -312,7 +312,7 @@ It returns `status` (`ready`, `timeout`, or `failed`), `verified`, `openAttemptI
 ### Skill Split
 
 - `canvasight-open`: native open, recent projects, and explicit browser fallback.
-- `canvasight-run`: native Run, fallback queues, and Chat / Plan / Goal handling.
+- `canvasight-run`: native Chat Run and fallback queues.
 - `canvasight-graph-writer`: AI-created or AI-updated Pages, nodes, and edges.
 - `canvasight-agent-team`: optional Agent Team and agent-report protocol.
 - `canvasight-troubleshooting`: plugin, MCP transport, daemon, widget, and fallback failures.
@@ -398,13 +398,13 @@ Browser/dev pages do not have the native widget host bridge. After `claim_canvas
 
 **Why did Run not appear in the current task?**
 
-Confirm that the canvas came from `open_canvasight` and that widget ready was verified. Native Run success follows the host-bridge Promise. Fallback Runs require a current claim and `await_canvasight_run`. A failed Chat / Plan / Goal preflight also blocks sending.
+Confirm that the canvas came from `open_canvasight` and that widget ready was verified. Native Chat Run success follows the host-bridge Promise. Fallback Runs require a current claim and `await_canvasight_run`.
 
 **What if Run shows `failed to read thread` or `rollout does not start with session metadata`?**
 
-Codex could not read that task's local session/rollout metadata; this is not a node-content error. Plan directly requests Plan mode on the **exact task bound to the widget**, using the saved Current Codex model setting (default `gpt-5.6-terra`); Goal directly sets the objective on that same task. Canvasight resumes and retries only when Codex explicitly reports that the task is not loaded. A `failed to read thread` error never makes Canvasight resume or substitute an old task, recent task, or ordinary Chat, and it does not send node content.
+Codex could not read that task's local session/rollout metadata; this is not a node-content error. Canvasight resolves an explicitly configured runtime first, then Codex Desktop, then ChatGPT Desktop, and uses PATH `codex` only when no Desktop runtime is available. Canvasight resumes and retries only when Codex explicitly reports that the task is not loaded.
 
-This flow never simulates mouse or keyboard input, copies/pastes content, creates a task, or edits Codex session files. If direct mode setting still fails, Canvasight retains the node content and shows redacted diagnostics; reload or restart Codex, then reopen Canvasight and retry. Browser fallback and dev pages cannot repair native task storage.
+If the diagnostics say **Desktop runtime unavailable**, reload or restart the current Desktop app before reopening Canvasight. If they say **thread archive incompatible**, reload or restart Desktop, create a new task, then reopen Canvasight. Do not fall back to an old PATH CLI or an old/recent task. Both failures retain the node content. Canvasight never simulates mouse or keyboard input, copies/pastes content, automatically creates a task, or edits Codex session files. Browser fallback and dev pages cannot repair native task storage.
 
 **Do I need `npm run dev` in a new task?**
 

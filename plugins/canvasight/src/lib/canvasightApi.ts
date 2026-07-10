@@ -3,7 +3,6 @@ import type {
   AgentTeamRunConfig,
   Attachment,
   AttachmentInput,
-  CodexMode,
   LanguagePreference,
   NodeTemplate,
   NodeTemplateInput,
@@ -31,13 +30,11 @@ export interface SessionInfo {
 export interface RunPayload {
   attachments: Attachment[];
   agentTeam: AgentTeamRunConfig;
-  codexMode: CodexMode;
   codexModel: string;
   effort: string;
   imagePaths: string[];
   markdown: string;
   nodeIds: string[];
-  planMode: boolean;
   projectPath: string;
   runMode: RunMode;
   sessionId: string;
@@ -55,15 +52,24 @@ export interface RunResponse {
     codexTurn?: RunResponse["codexTurn"];
   };
   codexNative?: {
-    status: "applied" | "applied_chat" | "applied_goal" | "applied_plan" | "disabled" | "failed" | "not_applicable" | "pending" | "preflight_degraded_chat" | "skipped";
+    status: "applied" | "applied_chat" | "disabled" | "failed" | "not_applicable" | "pending" | "preflight_degraded_chat" | "skipped";
     action?: string;
     collaborationMode?: string;
     codexModel?: string;
     error?: string;
-    mode?: CodexMode;
+    errorCode?:
+      | "desktop_runtime_unavailable"
+      | "thread_archive_incompatible"
+      | "codex_native_mode_request_failed";
     reason?: string;
     path?: "direct" | "resume_retry";
+    rawError?: string;
+    runtimeBin?: string | null;
+    runtimeIsDesktop?: boolean;
+    runtimeSource?: "explicit_override" | "codex_desktop" | "chatgpt_desktop" | "path_fallback" | null;
+    runtimeVersion?: string | null;
     threadId?: string | null;
+    transport?: string | null;
   };
   codexTurn?: {
     status: "failed" | "skipped" | "started";
@@ -78,7 +84,6 @@ export interface RunResponse {
     } | null;
     confirmed?: boolean;
     error?: string;
-    mode?: CodexMode;
     reason?: string;
     stderr?: string;
     threadId?: string | null;
@@ -612,31 +617,36 @@ function sendWidgetFollowUpMessage(message: WidgetFollowUpMessage, timeoutMs = 9
   return Promise.reject(bridgeNotReadyError());
 }
 
-const expectedWidgetCodexStatus: Record<CodexMode, NonNullable<RunResponse["codexNative"]>["status"]> = {
-  chat: "applied_chat",
-  goal: "applied_goal",
-  plan: "applied_plan"
-};
-
 function assertPreparedWidgetRun(payload: RunPayload, preparedRun: RunResponse): void {
-  const expectedStatus = expectedWidgetCodexStatus[payload.codexMode];
+  const expectedStatus = "applied_chat";
   const actualStatus = preparedRun.codexNative?.status || preparedRun.delivery?.codexNative?.status;
-  if (payload.codexMode === "chat" && actualStatus === "preflight_degraded_chat") return;
+  if (actualStatus === "preflight_degraded_chat") return;
   if (actualStatus !== expectedStatus) {
     const reason = preparedRun.codexNative?.error || preparedRun.delivery?.codexNative?.error || preparedRun.codexNative?.reason || preparedRun.delivery?.codexNative?.reason || actualStatus || "unknown";
     throw new Error(`Canvasight Run blocked before sendMessage: expected ${expectedStatus}, got ${reason}.`);
   }
 }
 
+function normalizeChatRunPayload(payload: RunPayload): RunPayload {
+  // Old widgets and queued payloads can still carry retired mode fields.
+  // Never forward them to either the widget proxy or the daemon.
+  const { codexMode: _codexMode, planMode: _planMode, ...chatPayload } = payload as RunPayload & {
+    codexMode?: unknown;
+    planMode?: unknown;
+  };
+  return chatPayload;
+}
+
 async function runCanvasightNodeThroughWidget(payload: RunPayload): Promise<RunResponse> {
+  const chatPayload = normalizeChatRunPayload(payload);
   const directRun = (window as CanvasightWindow).canvasightMcp?.runCanvasightNode;
-  if (typeof directRun === "function") return directRun(payload);
+  if (typeof directRun === "function") return directRun(chatPayload);
   if (!canAttemptWidgetFollowUp()) throw bridgeNotReadyError();
-  const preparedRun = await canvasightApi.prepareWidgetRun(payload);
-  assertPreparedWidgetRun(payload, preparedRun);
+  const preparedRun = await canvasightApi.prepareWidgetRun(chatPayload);
+  assertPreparedWidgetRun(chatPayload, preparedRun);
   await sendWidgetFollowUpMessage({
-    prompt: payload.markdown,
-    content: [{ type: "text", text: payload.markdown }]
+    prompt: chatPayload.markdown,
+    content: [{ type: "text", text: chatPayload.markdown }]
   });
   return {
     ...preparedRun,
@@ -791,7 +801,7 @@ export const canvasightApi = {
   run(payload: RunPayload): Promise<RunResponse> {
     return requestSessionJson<RunResponse>("/run", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify(normalizeChatRunPayload(payload))
     });
   },
 
@@ -799,7 +809,7 @@ export const canvasightApi = {
     return requestSessionJson<RunResponse>("/run", {
       method: "POST",
       body: JSON.stringify({
-        ...payload,
+        ...normalizeChatRunPayload(payload),
         deliveryMode: "widget_bridge_prepare"
       })
     });

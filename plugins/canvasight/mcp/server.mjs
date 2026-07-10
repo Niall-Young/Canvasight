@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.4+codex.20260710204500";
+const SERVER_VERSION = "0.3.7+codex.20260710222500";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -22,7 +22,6 @@ const MAX_NODE_TEMPLATES = 200;
 const TEMPLATE_BODY_PREVIEW_CHARS = 240;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
-const VALID_CODEX_MODES = new Set(["chat", "plan", "goal"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
@@ -34,6 +33,7 @@ const GRAPH_ROW_GAP = 160;
 const GRAPH_GRID_COLUMNS = 3;
 const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
+const DEFAULT_CHATGPT_APP_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
 const CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = new Set(["turn/started", "item/started", "turn/completed"]);
 const AGENT_TEAM_ROLE_IDS = new Set([
@@ -276,8 +276,11 @@ function defaultGraphLayoutForType(graphType) {
   return "horizontal";
 }
 
-function normalizeCodexMode(value, legacyPlanMode = false) {
-  return VALID_CODEX_MODES.has(value) ? value : legacyPlanMode ? "plan" : "chat";
+function normalizeCodexMode() {
+  // Plan and Goal are intentionally retired until the native widget host
+  // exposes a real mode-control acknowledgement. Preserve old node content,
+  // but normalize all persisted and incoming mode values to Chat.
+  return "chat";
 }
 
 function optionalThreadId(threadId) {
@@ -309,9 +312,24 @@ function nativeCodexConfirmationTimeoutMs() {
   return Math.max(250, Math.min(toNumber(Number(process.env.CANVASIGHT_CODEX_NATIVE_CONFIRMATION_TIMEOUT_MS), 1500), 10000));
 }
 
-function codexAppBin() {
-  if (process.env.CANVASIGHT_CODEX_BIN) return process.env.CANVASIGHT_CODEX_BIN;
-  return fs.existsSync(DEFAULT_CODEX_APP_BIN) ? DEFAULT_CODEX_APP_BIN : "codex";
+function configuredExecutable(name) {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function codexAppRuntime() {
+  const explicitBin = configuredExecutable("CANVASIGHT_CODEX_BIN");
+  if (explicitBin) return { bin: explicitBin, source: "explicit_override", isDesktop: false };
+
+  // The two candidate overrides make the fixed macOS application locations
+  // testable without changing their production preference order.
+  const codexDesktopBin = configuredExecutable("CANVASIGHT_CODEX_APP_BIN") || DEFAULT_CODEX_APP_BIN;
+  if (fs.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
+
+  const chatGptDesktopBin = configuredExecutable("CANVASIGHT_CHATGPT_APP_BIN") || DEFAULT_CHATGPT_APP_BIN;
+  if (fs.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
+
+  return { bin: "codex", source: "path_fallback", isDesktop: false };
 }
 
 function codexAppServerArgs() {
@@ -1296,8 +1314,8 @@ function normalizeAttachment(value) {
 
 function normalizeScatterNode(value, index) {
   const node = isObject(value) ? value : {};
-  const data = isObject(node.data) ? node.data : {};
-  const codexMode = normalizeCodexMode(data.codexMode, Boolean(data.planMode));
+  const rawData = isObject(node.data) ? node.data : {};
+  const { codexMode: _codexMode, planMode: _planMode, ...data } = rawData;
   return {
     ...node,
     id: typeof node.id === "string" && node.id ? node.id : `node-${index + 1}`,
@@ -1311,9 +1329,7 @@ function normalizeScatterNode(value, index) {
       title: typeof data.title === "string" ? data.title : "",
       body: typeof data.body === "string" ? data.body : "",
       attachments: Array.isArray(data.attachments) ? data.attachments.map(normalizeAttachment) : [],
-      codexMode,
       effort: normalizeEffort(data.effort),
-      planMode: codexMode === "plan",
       runMode: normalizeRunMode(data.runMode)
     }
   };
@@ -1748,9 +1764,9 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], r
   if (usedNodeIds.has(id)) throw new HttpError(400, `Duplicate node id: ${id}`);
   usedNodeIds.add(id);
 
-  const data = isObject(value.data) ? value.data : {};
+  const rawData = isObject(value.data) ? value.data : {};
+  const { codexMode: _codexMode, planMode: _planMode, ...data } = rawData;
   const { template, match } = findTemplateForGraphNode(value, data, templates, index);
-  const codexMode = normalizeCodexMode(value.codexMode || data.codexMode, Boolean(value.planMode ?? data.planMode));
   const width = optionalDimension(value.width);
   const height = optionalDimension(value.height);
   const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : typeof data.title === "string" && data.title.trim() ? data.title.trim() : template?.title || "";
@@ -1787,9 +1803,7 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], r
       title,
       body,
       attachments,
-      codexMode,
       effort: normalizeEffort(value.effort || data.effort),
-      planMode: codexMode === "plan",
       runMode: normalizeRunMode(value.runMode || data.runMode)
     }
   };
@@ -2462,7 +2476,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
 function normalizeRunPayload(session, value) {
   const payload = isObject(value) ? value : {};
   const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path.resolve(payload.projectPath) : session.projectPath;
-  const codexMode = normalizeCodexMode(payload.codexMode, Boolean(payload.planMode));
+  const codexMode = normalizeCodexMode();
   return {
     status: "received",
     sessionId: session.id,
@@ -2477,7 +2491,6 @@ function normalizeRunPayload(session, value) {
       mode: codexMode
     },
     effort: normalizeEffort(payload.effort),
-    planMode: codexMode === "plan",
     runMode: normalizeRunMode(payload.runMode),
     agentTeam: normalizeAgentTeamPayload(payload.agentTeam),
     nodeIds: Array.isArray(payload.nodeIds) ? payload.nodeIds.filter((item) => typeof item === "string") : [],
@@ -2532,7 +2545,6 @@ function closedRunPayload(sessionIdValue, projectPath = null, threadId = null) {
       mode: "chat"
     },
     effort: "xhigh",
-    planMode: false,
     runMode: "flow",
     nodeIds: [],
     attachments: []
@@ -2554,7 +2566,6 @@ function timeoutRunPayload(sessionIdValue, projectPath = null, threadId = null) 
       mode: "chat"
     },
     effort: "xhigh",
-    planMode: false,
     runMode: "flow",
     nodeIds: [],
     attachments: []
@@ -2716,7 +2727,6 @@ function closeSession(sessionIdValue) {
         mode: "chat"
       },
       effort: "xhigh",
-      planMode: false,
       runMode: "flow",
       nodeIds: [],
       attachments: []
@@ -3122,16 +3132,24 @@ function turnConfirmationFromNotification(message, expected = {}) {
 async function appServerRequestSequence(requests, options = {}) {
   const transports = codexAppServerTransports();
   const transport = transports[0];
-  const results = await appServerRequestSequenceViaTransport(requests, options, transport);
+  // Resolve once for the entire native operation. In particular, never retry a
+  // Desktop request through PATH after its handshake or request fails: PATH may
+  // point at an older CLI that cannot read this Desktop task's rollout format.
+  const runtime = codexAppRuntime();
+  const results = await appServerRequestSequenceViaTransport(requests, options, transport, runtime);
   Object.defineProperty(results, "canvasightAppServerTransport", {
     value: transport.kind,
+    enumerable: false
+  });
+  Object.defineProperty(results, "canvasightCodexRuntime", {
+    value: results.canvasightCodexRuntime || runtime,
     enumerable: false
   });
   return results;
 }
 
-function appServerRequestSequenceViaTransport(requests, { experimentalApi = false } = {}, transport) {
-  const bin = codexAppBin();
+function appServerRequestSequenceViaTransport(requests, { experimentalApi = false } = {}, transport, runtime) {
+  const bin = runtime.bin;
   const args = transport.args;
   const timeoutMs = nativeCodexTimeoutMs();
   const confirmationTimeoutMs = nativeCodexConfirmationTimeoutMs();
@@ -3145,6 +3163,7 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
     let stderr = "";
     let settled = false;
     let initialized = false;
+    let runtimeVersion = null;
     let currentRequest = null;
     let confirmationTimer = null;
     const results = [];
@@ -3175,6 +3194,10 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
       error.canvasightAppServerArgs = args.join(" ");
       error.canvasightAppServerTransport = transport.kind;
       error.canvasightAppServerPhase = initialized ? "request" : "initialize";
+      error.canvasightCodexRuntimeBin = runtime.bin;
+      error.canvasightCodexRuntimeSource = runtime.source;
+      error.canvasightCodexRuntimeVersion = runtimeVersion;
+      error.canvasightCodexRuntimeIsDesktop = runtime.isDesktop;
       if (stderr) error.canvasightAppServerStderr = stderr.slice(-4000);
       if (!error.canvasightAppServerMethod) error.canvasightAppServerMethod = timeoutLabel;
       return error;
@@ -3189,6 +3212,11 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
       if (error) {
         reject(decorateError(error));
       } else {
+        Object.defineProperty(value, "canvasightCodexRuntime", {
+          value: { ...runtime, version: runtimeVersion },
+          enumerable: false,
+          configurable: true
+        });
         resolve(value);
       }
     }
@@ -3303,6 +3331,7 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
           finish(new Error(message.error.message || "Codex app-server initialize failed"));
           return;
         }
+        runtimeVersion = typeof message.result?.userAgent === "string" && message.result.userAgent.trim() ? message.result.userAgent.trim() : null;
         initialized = true;
         nextRequest();
         return;
@@ -3382,24 +3411,6 @@ function codexCollaborationMode(mode, model) {
   };
 }
 
-const DEFAULT_CODEX_MODEL = "gpt-5.6-terra";
-
-function codexModelFromPayload(payload) {
-  return typeof payload?.codexModel === "string" && payload.codexModel.trim() ? payload.codexModel.trim() : DEFAULT_CODEX_MODEL;
-}
-
-function goalObjectiveFromRun(payload) {
-  const heading = payload.threadName || "Canvasight Goal";
-  const projectLine = payload.projectPath ? `Project path: ${payload.projectPath}` : "";
-  const markdown = typeof payload.markdown === "string" ? payload.markdown.trim() : "";
-  return [heading, projectLine, markdown].filter(Boolean).join("\n\n").slice(0, 12000);
-}
-
-function isTaskNotLoadedError(error) {
-  const message = String(error?.message || "");
-  return /thread (?:is )?not loaded|thread_not_loaded|unknown thread|thread not found/i.test(message);
-}
-
 function isRetryableThreadResumeError(error) {
   if (error?.canvasightAppServerMethod !== "thread/resume") return false;
   const message = String(error?.message || "");
@@ -3438,56 +3449,10 @@ async function setCodexChatMode(threadId) {
     ).then((results) => ({
       result: results[1] || {},
       transport: results.canvasightAppServerTransport || "stdio_fallback",
-      model: typeof results[0]?.model === "string" ? results[0].model : ""
+      model: typeof results[0]?.model === "string" ? results[0].model : "",
+      runtime: results.canvasightCodexRuntime || null
     }))
   );
-}
-
-async function setCodexCollaborationMode(threadId, mode, payload) {
-  const model = codexModelFromPayload(payload);
-  const directRequest = {
-    method: "thread/settings/update",
-    params: { threadId, collaborationMode: codexCollaborationMode(mode, model) }
-  };
-  try {
-    const results = await appServerRequestSequence([directRequest], { experimentalApi: true });
-    return { result: results[0] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "direct", model };
-  } catch (error) {
-    if (!isTaskNotLoadedError(error)) throw error;
-    const results = await appServerRequestSequence(
-      [
-        { method: "thread/resume", params: { threadId } },
-        ([resumeResult]) => ({
-          method: "thread/settings/update",
-          params: {
-            threadId,
-            collaborationMode: codexCollaborationMode(
-              mode,
-              typeof resumeResult?.model === "string" && resumeResult.model ? resumeResult.model : model
-            )
-          }
-        })
-      ],
-      { experimentalApi: true }
-    );
-    const resumedModel = typeof results[0]?.model === "string" && results[0].model ? results[0].model : model;
-    return { result: results[1] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "resume_retry", model: resumedModel };
-  }
-}
-
-async function setCodexGoal(threadId, payload) {
-  const directRequest = { method: "thread/goal/set", params: { threadId, objective: goalObjectiveFromRun(payload), status: "active" } };
-  try {
-    const results = await appServerRequestSequence([directRequest], { experimentalApi: false });
-    return { result: results[0] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "direct" };
-  } catch (error) {
-    if (!isTaskNotLoadedError(error)) throw error;
-    const results = await appServerRequestSequence(
-      [{ method: "thread/resume", params: { threadId } }, directRequest],
-      { experimentalApi: false }
-    );
-    return { result: results[1] || {}, transport: results.canvasightAppServerTransport || "stdio_fallback", path: "resume_retry" };
-  }
 }
 
 function turnIdFromResult(result) {
@@ -3495,6 +3460,39 @@ function turnIdFromResult(result) {
   if (typeof result?.turnId === "string") return result.turnId;
   if (typeof result?.id === "string") return result.id;
   return null;
+}
+
+function codexRuntimeDiagnostics(runtime = {}) {
+  return {
+    runtimeBin: runtime.bin || runtime.path || null,
+    runtimeSource: runtime.source || null,
+    runtimeVersion: runtime.version || null,
+    runtimeIsDesktop: runtime.isDesktop === true
+  };
+}
+
+function codexNativeFailureDiagnostics(error) {
+  const message = error?.message || "Codex native mode request failed";
+  const runtime = {
+    bin: error?.canvasightCodexRuntimeBin || null,
+    source: error?.canvasightCodexRuntimeSource || null,
+    version: error?.canvasightCodexRuntimeVersion || null,
+    isDesktop: error?.canvasightCodexRuntimeIsDesktop === true
+  };
+  const threadStoreIncompatible = /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
+  const desktopUnavailable = runtime.isDesktop && error?.canvasightAppServerPhase === "initialize";
+  const errorCode = threadStoreIncompatible
+    ? "thread_archive_incompatible"
+    : desktopUnavailable
+      ? "desktop_runtime_unavailable"
+      : "codex_native_mode_request_failed";
+  const userMessage =
+    errorCode === "thread_archive_incompatible"
+      ? `Canvasight could not read the current Desktop task archive with the selected runtime. Reload or restart Codex Desktop, create a new task, then reopen Canvasight. Diagnostic: ${message}`
+      : errorCode === "desktop_runtime_unavailable"
+        ? `Canvasight could not start the selected Desktop runtime. Reload or restart Codex Desktop, then reopen Canvasight. Diagnostic: ${message}`
+        : message;
+  return { error: userMessage, rawError: message, errorCode, ...codexRuntimeDiagnostics(runtime) };
 }
 
 async function applyCodexNativeMode(session, payload) {
@@ -3517,47 +3515,21 @@ async function applyCodexNativeMode(session, payload) {
   }
 
   try {
-    if (payload.codexMode === "chat") {
-      const nativeResult = await setCodexChatMode(session.codexThreadId);
-      return {
-        status: "applied",
-        action: "thread/settings/update",
-        threadId: session.codexThreadId,
-        mode: payload.codexMode,
-        collaborationMode: "default",
-        transport: nativeResult.transport,
-        codexModel: nativeResult.model
-      };
-    }
-
-    if (payload.codexMode === "goal") {
-      const nativeResult = await setCodexGoal(session.codexThreadId, payload);
-      return {
-        status: "applied",
-        action: "thread/goal/set",
-        threadId: session.codexThreadId,
-        mode: payload.codexMode,
-        transport: nativeResult.transport,
-        path: nativeResult.path
-      };
-    }
-
-    const collaborationMode = payload.codexMode === "plan" ? "plan" : "default";
-    const nativeResult = await setCodexCollaborationMode(session.codexThreadId, collaborationMode, payload);
+    const nativeResult = await setCodexChatMode(session.codexThreadId);
     return {
       status: "applied",
       action: "thread/settings/update",
       threadId: session.codexThreadId,
-      mode: payload.codexMode,
-      collaborationMode,
+      mode: "chat",
+      collaborationMode: "default",
       transport: nativeResult.transport,
-      path: nativeResult.path,
-      codexModel: nativeResult.model
+      codexModel: nativeResult.model,
+      ...codexRuntimeDiagnostics(nativeResult.runtime)
     };
   } catch (error) {
     return {
       status: "failed",
-      error: error?.message || "Codex native mode request failed",
+      ...codexNativeFailureDiagnostics(error),
       transport: error?.canvasightAppServerTransport || null,
       transportPhase: error?.canvasightAppServerPhase || null,
       threadId: session.codexThreadId,
@@ -3566,20 +3538,14 @@ async function applyCodexNativeMode(session, payload) {
   }
 }
 
-function appliedWidgetModeStatus(mode) {
-  if (mode === "goal") return "applied_goal";
-  if (mode === "plan") return "applied_plan";
-  return "applied_chat";
-}
-
 function codexNativeModeApplied(status) {
-  return status === "applied" || status === "applied_chat" || status === "applied_plan" || status === "applied_goal";
+  return status === "applied" || status === "applied_chat";
 }
 
 async function applyWidgetCodexMode(session, payload) {
   const codexNative = await applyCodexNativeMode(session, payload);
   if (codexNative.status !== "applied") {
-    if (payload.codexMode === "chat" && isRetryableThreadResumeError({
+    if (isRetryableThreadResumeError({
       canvasightAppServerMethod: "thread/resume",
       message: codexNative.error
     })) {
@@ -3597,7 +3563,7 @@ async function applyWidgetCodexMode(session, payload) {
   }
   return {
     ...codexNative,
-    status: appliedWidgetModeStatus(payload.codexMode)
+    status: "applied_chat"
   };
 }
 
@@ -4670,7 +4636,7 @@ const tools = [
   {
     name: "render_canvasight_canvas_widget",
     description:
-      "Open Canvasight as a native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
+      "Open Canvasight as a native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat Run targets the same thread. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4704,7 +4670,7 @@ const tools = [
   {
     name: "open_canvasight",
     description:
-      "Open Canvasight as the default native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. This is the normal path: the widget has the Codex host bridge, so Run buttons can send follow-up messages to the current thread.",
+      "Open Canvasight as the default native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat Run targets the same thread. This is the normal path: the widget has the Codex host bridge, so Run buttons can send follow-up messages to the current thread.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4719,7 +4685,7 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat, Plan, and Goal preflight."
+          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat Run."
         }
       },
       required: ["threadId"],
@@ -4780,7 +4746,7 @@ const tools = [
   {
     name: "open_canvasight_recent_project",
     description:
-      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, as the default native Codex widget. Pass the active task's CODEX_THREAD_ID as threadId so Chat, Plan, and Goal preflight target the same thread. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
+      "Open the most recent remembered Canvasight project, or a chosen recent project path/index, as the default native Codex widget. Pass the active task's CODEX_THREAD_ID as threadId so Chat Run targets the same thread. The opened project becomes active Canvasight context for later graph-first handling of medium or complex requests.",
     inputSchema: {
       type: "object",
       properties: {
@@ -4800,7 +4766,7 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat, Plan, and Goal preflight."
+          description: "Current Codex thread id. Read CODEX_THREAD_ID in the active task and pass it for native Chat Run."
         }
       },
       required: ["threadId"],
@@ -4942,7 +4908,7 @@ const tools = [
         nodes: {
           type: "array",
           description:
-            "Single page node list. Each node accepts id, title, body, x/y or position, codexMode, runMode, effort, attachments, templateId, and templateQuery. Use templateId after calling list_canvasight_node_templates when a saved template should provide title, body, and attachments.",
+            "Single page node list. Each node accepts id, title, body, x/y or position, runMode, effort, attachments, templateId, and templateQuery. Use templateId after calling list_canvasight_node_templates when a saved template should provide title, body, and attachments.",
           items: { type: "object", additionalProperties: true }
         },
         edges: {
@@ -5046,7 +5012,7 @@ const tools = [
         },
         threadId: {
           type: "string",
-          description: "Optional current Codex thread id for native Plan/Goal integration. Defaults to CODEX_THREAD_ID when available."
+          description: "Optional current Codex thread id for native Chat Run. Defaults to CODEX_THREAD_ID when available."
         },
         timeoutMs: {
           type: "number",

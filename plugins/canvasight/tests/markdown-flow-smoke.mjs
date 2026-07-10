@@ -34,7 +34,7 @@ vm.runInNewContext(
 
 const { buildMarkdown } = module.exports;
 
-function taskNode(id, title, body, position, codexMode = "chat") {
+function taskNode(id, title, body, position, legacyMode = null) {
   return {
     id,
     type: "task",
@@ -43,9 +43,9 @@ function taskNode(id, title, body, position, codexMode = "chat") {
       title,
       body,
       attachments: [],
-      codexMode,
+      ...(legacyMode ? { codexMode: legacyMode } : {}),
       effort: "high",
-      planMode: codexMode === "plan",
+      ...(legacyMode === "plan" ? { planMode: true } : {}),
       runMode: "flow"
     }
   };
@@ -64,8 +64,11 @@ const edges = [
 
 const result = buildMarkdown(nodes, edges, "a", "flow", "Smoke Project", "/tmp/canvasight-smoke", "en", false);
 assert.equal(result.nodes.map((node) => node.id).join(","), "a,b,c");
-assert.equal(result.codexMode, "plan");
-assert.equal(result.planMode, true);
+assert.equal("codexMode" in result, false, "removed node execution modes must not leak from Markdown output");
+assert.equal("planMode" in result, false, "removed Plan state must not leak from Markdown output");
+assert.doesNotMatch(result.markdown, /Codex mode: (Plan|Goal)/);
+assert.doesNotMatch(result.markdown, /Plan mode requested:/);
+assert.doesNotMatch(result.markdown, /Goal mode requested:/);
 assert.match(result.markdown, /A/);
 assert.match(result.markdown, /Root prompt/);
 assert.match(result.markdown, /B/);

@@ -28,7 +28,6 @@ import {
   nodeTemplateLimit,
   type AppSettings,
   type AttachmentInput,
-  type CodexMode,
   type NodeTemplate,
   type NodeTemplateInput,
   type RunMode,
@@ -500,10 +499,6 @@ function saveStoredAppSettings(settings: AppSettings): void {
   window.localStorage.setItem(appSettingsStorageKey, JSON.stringify(settings));
 }
 
-function normalizeCodexMode(value: unknown, legacyPlanMode = false): CodexMode {
-  return value === "chat" || value === "plan" || value === "goal" ? value : legacyPlanMode ? "plan" : "chat";
-}
-
 function emptyNode(position: { x: number; y: number }, index: number): ScatterNode {
   return {
     id: nanoid(),
@@ -514,9 +509,7 @@ function emptyNode(position: { x: number; y: number }, index: number): ScatterNo
       title: `新建任务 ${index + 1}`,
       body: "",
       attachments: [],
-      codexMode: "chat",
       effort: "xhigh",
-      planMode: false,
       runMode: "flow"
     }
   };
@@ -533,9 +526,7 @@ function nodeFromTemplate(template: NodeTemplate, position: { x: number; y: numb
       title: template.title.trim() || body.slice(0, 40) || `新建任务 ${index + 1}`,
       body,
       attachments: template.attachments.map((attachment) => ({ ...attachment })),
-      codexMode: "chat",
       effort: "xhigh",
-      planMode: false,
       runMode: "flow"
     }
   };
@@ -565,21 +556,19 @@ function normalizeViewport(value: unknown): ScatterDocument["viewport"] {
 
 function normalizePageNodes(nodes: unknown): ScatterNode[] {
   return Array.isArray(nodes)
-    ? nodes.map((node) => {
-        const codexMode = normalizeCodexMode(node.data?.codexMode, Boolean(node.data?.planMode));
+      ? nodes.map((node) => {
+        const { codexMode: _codexMode, planMode: _planMode, ...nodeData } = node.data || {};
         return {
           ...node,
           type: "task",
           selected: false,
           data: {
-            ...node.data,
-            title: typeof node.data?.title === "string" ? node.data.title : "",
-            body: typeof node.data?.body === "string" ? node.data.body : "",
-            attachments: node.data?.attachments || [],
-            codexMode,
-            effort: node.data?.effort || "xhigh",
-            planMode: codexMode === "plan",
-            runMode: node.data?.runMode || "flow"
+            ...nodeData,
+            title: typeof nodeData.title === "string" ? nodeData.title : "",
+            body: typeof nodeData.body === "string" ? nodeData.body : "",
+            attachments: nodeData.attachments || [],
+            effort: nodeData.effort || "xhigh",
+            runMode: nodeData.runMode || "flow"
           }
         } satisfies ScatterNode;
       })
@@ -940,8 +929,6 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
             nodes: [],
             attachments: [],
             imagePaths: [],
-            codexMode: "chat",
-            planMode: false,
             agentTeam: {
               enabled: false,
               skillName: "canvasight-agent-team",
@@ -1784,13 +1771,11 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
       const runPayload = {
         attachments: result.attachments,
         agentTeam: result.agentTeam,
-        codexMode: result.codexMode,
         codexModel,
         effort: node.data.effort || "xhigh",
         imagePaths: result.imagePaths,
         markdown: result.markdown,
         nodeIds: result.nodes.map((item) => item.id),
-        planMode: result.planMode,
         projectPath: project.path,
         runMode: mode,
         sessionId: canvasightApi.sessionId,
@@ -1808,13 +1793,9 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
         setRunStatus(t("status.sentAssistant"), "positive");
       } catch (error) {
         const message = error instanceof Error ? error.message : t("status.sendAssistantFailed");
-        const modeLabel = result.codexMode === "plan" ? t("task.codexModePlan") : t("task.codexModeGoal");
-        const actionableMessage =
-          result.codexMode !== "chat" && isThreadStoreModePreflightFailure(message)
-            ? t("status.planGoalThreadStoreBlocked", { diagnostic: message, mode: modeLabel })
-            : message.includes("reason=browser_fallback_no_bridge")
-              ? t("status.browserFallbackNoBridge")
-              : message;
+        const actionableMessage = message.includes("reason=browser_fallback_no_bridge")
+          ? t("status.browserFallbackNoBridge")
+          : message;
         setRunStatus(actionableMessage, "negative");
       }
     },

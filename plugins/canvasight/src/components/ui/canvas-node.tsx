@@ -9,7 +9,6 @@ import { DropdownTrigger } from "./dropdown-trigger";
 import { IconButton } from "./icon-button";
 import { Icon } from "./icon";
 import { TooltipAnchor } from "./tooltip";
-import { Toggle } from "./toggle";
 import { UploadChip } from "./upload-chip";
 
 export interface CanvasNodeUpload {
@@ -36,10 +35,8 @@ interface CanvasNodeProps extends HTMLAttributes<HTMLDivElement> {
   onAddRight?: () => void;
   onMenu?: () => void;
   onEffortChange?: (effort: CanvasNodeEffort) => void;
-  onPlanModeChange?: (checked: boolean) => void;
   onRun?: () => void;
   onUploadFiles?: (files: FileList) => void;
-  planMode?: boolean;
   prompt?: string;
   selected?: boolean;
   unconnected?: boolean;
@@ -61,10 +58,8 @@ export function CanvasNode({
   onAddRight,
   onEffortChange,
   onMenu,
-  onPlanModeChange,
   onRun,
   onUploadFiles,
-  planMode = true,
   prompt,
   selected = false,
   unconnected = false,
@@ -200,8 +195,6 @@ export function CanvasNode({
                   </DropdownMenu>
                 ) : null}
               </div>
-              <span className="kit-canvas-node-plan-label">{t("task.planMode")}</span>
-              <Toggle checked={planMode} onCheckedChange={onPlanModeChange} aria-label={t("task.togglePlanMode")} />
             </div>
           </div>
         </div>

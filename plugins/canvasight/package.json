@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.3.4+codex.20260710204500",
+  "version": "0.3.7+codex.20260710222500",
   "private": true,
   "type": "module",
   "scripts": {

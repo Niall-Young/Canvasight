@@ -157,6 +157,11 @@ function shouldConfirmTurnStart(message) {
 
 function handle(message) {
   if (message.method === "initialize") {
+    append("runtime/initialize", { executable: process.argv[1] });
+    if (process.env.CANVASIGHT_FAKE_FAIL_INITIALIZE === "1") {
+      write({ id: message.id, error: { code: -32603, message: "fake Desktop app-server handshake failure" } });
+      return;
+    }
     write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
     return;
   }
@@ -415,6 +420,7 @@ async function assertDynamicWidgetRuntimeApi() {
   const runtime = {};
   const requests = [];
   const serverToolRequests = [];
+  const bridgeMessages = [];
   const windowListeners = new Map();
   const readyEvents = [];
   const mockBridgeState = {
@@ -434,6 +440,9 @@ async function assertDynamicWidgetRuntimeApi() {
     __CANVASIGHT_WIDGET_DATA__: runtime,
     __CANVASIGHT_WIDGET_SHELL__: true,
     canvasightMcp: {
+      canSendFollowUpMessage() {
+        return true;
+      },
       getBridgeState() {
         return { ...mockBridgeState };
       },
@@ -443,6 +452,24 @@ async function assertDynamicWidgetRuntimeApi() {
       async callServerTool(request) {
         serverToolRequests.push(request);
         const path = request.arguments.path;
+        const body = request.arguments.body;
+        if (path.endsWith("/run") && body?.deliveryMode === "widget_bridge_prepare") {
+          assert.equal("codexMode" in body, false, "widget payloads must not forward retired execution modes");
+          assert.equal("planMode" in body, false, "widget payloads must not forward retired Plan state");
+          return {
+            structuredContent: {
+              ok: true,
+              status: 200,
+              data: {
+                status: "prepared",
+                codexNative: { status: "applied_chat" },
+                delivery: { status: "prepared", via: "widget_bridge" }
+              },
+              error: null,
+              code: null
+            }
+          };
+        }
         return {
           structuredContent: {
             ok: true,
@@ -452,6 +479,9 @@ async function assertDynamicWidgetRuntimeApi() {
             code: null
           }
         };
+      },
+      async sendFollowUpMessage(message) {
+        bridgeMessages.push(message);
       }
     },
     location: { search: "", href: "https://canvasight-widget.test/" },
@@ -563,6 +593,24 @@ async function assertDynamicWidgetRuntimeApi() {
     assert.equal(readyEvents[0].status, "ready");
     assert.equal(api.sessionId, "session-runtime");
     assert.equal(api.token, "token-runtime");
+
+    const widgetRunPayload = {
+      sessionId: "session-runtime",
+      threadName: "Mode control smoke",
+      projectPath: "/tmp/widget-runtime",
+      markdown: "# Mode control smoke",
+      imagePaths: [],
+      codexMode: "plan",
+      effort: "medium",
+      planMode: true,
+      runMode: "single",
+      agentTeam: { enabled: false },
+      nodeIds: []
+    };
+    const chatRun = await api.runCanvasightNode(widgetRunPayload);
+    assert.equal(chatRun.status, "sent");
+    assert.equal(bridgeMessages.length, 1, "legacy mode payloads normalize and retain bridge delivery");
+    assert.equal(bridgeMessages[0].prompt, "# Mode control smoke");
   } finally {
     await viteServer.close();
     if (originalWindow === undefined) delete globalThis.window;
@@ -1202,6 +1250,107 @@ async function stopDaemon(home = canvasightHome) {
   }
 }
 
+async function assertDesktopRuntimeSelection() {
+  const runtimeRoot = path.join(tempRoot, "runtime-selection");
+  const explicitBin = path.join(runtimeRoot, "explicit-override.mjs");
+  const codexDesktopBin = path.join(runtimeRoot, "Codex.app", "Contents", "Resources", "codex");
+  const chatGptDesktopBin = path.join(runtimeRoot, "ChatGPT.app", "Contents", "Resources", "codex");
+  const pathBinDir = path.join(runtimeRoot, "path-bin");
+  const pathBin = path.join(pathBinDir, "codex");
+  const missingBin = path.join(runtimeRoot, "missing", "codex");
+  const brokenDesktopBin = path.join(runtimeRoot, "broken-desktop.mjs");
+
+  for (const target of [explicitBin, codexDesktopBin, chatGptDesktopBin, pathBin, brokenDesktopBin]) {
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.copyFile(fakeCodexPath, target);
+    await fsp.chmod(target, 0o755);
+  }
+
+  async function openWithRuntime(label, envOverrides, { expectsFailure = false } = {}) {
+    const home = path.join(runtimeRoot, `${label}-home`);
+    const client = createMcpClient(`runtime-${label}`, {
+      CANVASIGHT_HOME: home,
+      CANVASIGHT_CODEX_BIN: "",
+      CANVASIGHT_CODEX_APP_BIN: missingBin,
+      CANVASIGHT_CHATGPT_APP_BIN: missingBin,
+      CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
+      ...envOverrides
+    });
+    try {
+      await client.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: `canvasight-runtime-${label}`, version: "0.0.0" }
+      });
+      const action = client.request("tools/call", {
+        name: "open_canvasight",
+        arguments: { threadId: `thread-runtime-${label}`, language: "zh" }
+      });
+      if (expectsFailure) {
+        await assert.rejects(action, /current Codex task|handshake failure|app-server/);
+      } else {
+        const result = await action;
+        await client.request("tools/call", { name: "close_canvasight", arguments: { sessionId: result.structuredContent.sessionId } });
+      }
+    } finally {
+      client.stop();
+      await stopDaemon(home);
+    }
+  }
+
+  async function initializedExecutable() {
+    const entries = await readNativeLog();
+    const initialized = entries.filter((entry) => entry.method === "runtime/initialize");
+    return initialized.map((entry) => entry.params?.executable);
+  }
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
+  await openWithRuntime("explicit", {
+    CANVASIGHT_CODEX_BIN: explicitBin,
+    CANVASIGHT_CODEX_APP_BIN: codexDesktopBin,
+    CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
+    PATH: `${pathBinDir}:${process.env.PATH}`
+  });
+  assert.deepEqual(await initializedExecutable(), [explicitBin]);
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
+  await openWithRuntime("codex-desktop", {
+    CANVASIGHT_CODEX_APP_BIN: codexDesktopBin,
+    CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
+    PATH: `${pathBinDir}:${process.env.PATH}`
+  });
+  assert.deepEqual(await initializedExecutable(), [codexDesktopBin]);
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
+  await openWithRuntime("chatgpt-desktop", {
+    CANVASIGHT_CODEX_APP_BIN: missingBin,
+    CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
+    PATH: `${pathBinDir}:${process.env.PATH}`
+  });
+  assert.deepEqual(await initializedExecutable(), [chatGptDesktopBin]);
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
+  await openWithRuntime("path-fallback", {
+    CANVASIGHT_CODEX_APP_BIN: missingBin,
+    CANVASIGHT_CHATGPT_APP_BIN: missingBin,
+    PATH: `${pathBinDir}:${process.env.PATH}`
+  });
+  assert.deepEqual(await initializedExecutable(), [pathBin]);
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
+  await openWithRuntime(
+    "desktop-handshake-failure",
+    {
+      CANVASIGHT_CODEX_APP_BIN: brokenDesktopBin,
+      CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
+      CANVASIGHT_FAKE_FAIL_INITIALIZE: "1",
+      PATH: `${pathBinDir}:${process.env.PATH}`
+    },
+    { expectsFailure: true }
+  );
+  assert.deepEqual(await initializedExecutable(), [brokenDesktopBin], "a failed Desktop handshake must not retry through PATH codex");
+}
+
 async function assertStdoutClosureLifecycle() {
   const home = path.join(tempRoot, "stdout-closure-home");
   const logPath = path.join(home, "mcp-lifecycle.log");
@@ -1363,6 +1512,8 @@ async function main() {
   }, 30000);
 
   try {
+    await assertDesktopRuntimeSelection();
+
     const initialized = await request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
@@ -2118,9 +2269,9 @@ async function main() {
     assert.equal(graphScatterJson.pages.length, 2);
     assert.equal(graphScatterJson.nodes.length, 3);
     assert.equal(graphScatterJson.edges.length, 2);
-    assert.equal(graphScatterJson.nodes[1].data.codexMode, "plan");
-    assert.equal(graphScatterJson.nodes[1].data.planMode, true);
-    assert.equal(graphScatterJson.nodes[2].data.codexMode, "goal");
+    assert.equal("codexMode" in graphScatterJson.nodes[1].data, false, "legacy graph Plan fields are removed on persistence");
+    assert.equal("planMode" in graphScatterJson.nodes[1].data, false);
+    assert.equal("codexMode" in graphScatterJson.nodes[2].data, false, "legacy graph Goal fields are removed on persistence");
     assert.equal(graphScatterJson.nodes[0].position.x, 0);
     assert.equal(graphScatterJson.nodes[1].position.x, 680);
     assert.equal(graphScatterJson.nodes[2].position.x, 1360);
@@ -2453,6 +2604,8 @@ async function main() {
     assert.equal(templateScatterJson.nodes[0].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
     assert.equal(templateScatterJson.nodes[0].data.attachments[0].originalName, "figma-color-template.md");
     assert.equal(templateScatterJson.nodes[0].data.templateId, graphTemplate.id);
+    assert.equal("codexMode" in templateScatterJson.nodes[0].data, false, "legacy template Goal fields are removed");
+    assert.equal("planMode" in templateScatterJson.nodes[0].data, false);
     assert.equal(templateScatterJson.nodes[1].data.title, "Template query reuse");
     assert.equal(templateScatterJson.nodes[1].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
 
@@ -2642,8 +2795,8 @@ async function main() {
     const scatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(scatterJson.version, 1);
     assert.equal(scatterJson.nodes[0].data.title, "Smoke task");
-    assert.equal(scatterJson.nodes[0].data.codexMode, "plan");
-    assert.equal(scatterJson.nodes[0].data.planMode, true);
+    assert.equal("codexMode" in scatterJson.nodes[0].data, false, "saved legacy Plan fields are removed");
+    assert.equal("planMode" in scatterJson.nodes[0].data, false);
 
     const attachments = await fetchJson(`${origin}/api/sessions/${sessionId}/attachments`, {
       method: "POST",
@@ -2672,7 +2825,7 @@ async function main() {
       projectPath,
       markdown: "# Smoke task\n\nRun the smoke payload.",
       imagePaths: [],
-      codexMode: "goal",
+      codexMode: "chat",
       effort: "high",
       planMode: false,
       runMode: "flow",
@@ -2700,100 +2853,22 @@ async function main() {
       attachments
     };
 
-    const goalDirectLogOffset = (await readNativeLog()).length;
-    const widgetPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+    const legacyModePrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
       headers: openedIdentityHeaders,
       body: JSON.stringify({
         ...runPayload,
-        threadName: "Widget Prepared Run",
-        markdown: "# Widget Prepared Run\n\nThis is sent by the native widget bridge.",
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
-    assert.equal(widgetPrepared.status, "prepared");
-    assert.equal(widgetPrepared.delivery.status, "prepared");
-    assert.equal(widgetPrepared.delivery.via, "widget_bridge");
-    assert.equal(widgetPrepared.codexNative.status, "applied_goal");
-    assert.equal(widgetPrepared.codexNative.action, "thread/goal/set");
-    assert.equal(widgetPrepared.codexNative.threadId, "thread-smoke");
-    assert.equal(widgetPrepared.codexNative.transport, "stdio_fallback");
-    assert.equal(widgetPrepared.codexNative.path, "direct");
-    const goalDirectLog = (await readNativeLog()).slice(goalDirectLogOffset);
-    assert.equal(goalDirectLog.some((entry) => entry.method === "thread/resume"), false);
-    assert.equal(widgetPrepared.codexTurn.status, "skipped");
-    assert.equal(widgetPrepared.codexTurn.reason, "widget_bridge_sendMessage");
-    assert.equal(widgetPrepared.agentTeam.agentsMd.status, "created");
-    const widgetPreparedDrain = await request("tools/call", {
-      name: "await_canvasight_run",
-      arguments: {
-        sessionId,
-        timeoutMs: 20
-      }
-    });
-    assert.equal(widgetPreparedDrain.structuredContent.status, "timeout");
-
-    const chatPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-      method: "POST",
-      headers: openedIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        threadName: "Widget Chat Prepared",
-        markdown: "# Widget Chat Prepared",
-        codexMode: "chat",
-        planMode: false,
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
-    assert.equal(chatPrepared.status, "prepared");
-    assert.equal(chatPrepared.codexNative.status, "applied_chat");
-    assert.equal(chatPrepared.codexNative.action, "thread/settings/update");
-    assert.equal(chatPrepared.codexNative.collaborationMode, "default");
-
-    const directModeLogOffset = (await readNativeLog()).length;
-    const planPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-      method: "POST",
-      headers: openedIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        threadName: "Widget Plan Prepared",
-        markdown: "# Widget Plan Prepared",
-        codexMode: "plan",
+        threadName: "Widget legacy mode normalized to Chat",
+        markdown: "# Widget legacy mode normalized to Chat",
+        codexMode: "goal",
         planMode: true,
         deliveryMode: "widget_bridge_prepare"
       })
     });
-    assert.equal(planPrepared.status, "prepared");
-    assert.equal(planPrepared.codexNative.status, "applied_plan");
-    assert.equal(planPrepared.codexNative.action, "thread/settings/update");
-    assert.equal(planPrepared.codexNative.collaborationMode, "plan");
-    assert.equal(planPrepared.codexNative.transport, "stdio_fallback");
-    assert.equal(planPrepared.codexNative.path, "direct");
-    assert.equal(planPrepared.codexNative.codexModel, "gpt-5.6-terra");
-    const widgetModeLog = await readNativeLog();
-    const directModeLog = widgetModeLog.slice(directModeLogOffset);
-    assert.equal(directModeLog.some((entry) => entry.method === "thread/resume"), false);
-    assert.equal(
-      widgetModeLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "default" &&
-          entry.params.collaborationMode.settings.model === "gpt-5.5"
-      ),
-      true
-    );
-
-    assert.equal(
-      widgetModeLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "plan" &&
-          entry.params.collaborationMode.settings.reasoning_effort === "medium"
-      ),
-      true
-    );
+    assert.equal(legacyModePrepared.status, "prepared");
+    assert.equal("codexMode" in legacyModePrepared, false);
+    assert.equal("planMode" in legacyModePrepared, false);
+    assert.equal(legacyModePrepared.codexNative.status, "applied_chat");
 
     const staleProjectPath = path.join(tempRoot, "stale-thread-project");
     const staleWidget = await request("tools/call", {
@@ -2837,73 +2912,28 @@ async function main() {
     assert.equal(currentReady.verified, true);
     const currentThreadLogOffset = (await readNativeLog()).length;
     const currentThreadPrepared = await fetchJson(`${currentWidgetData.origin}/api/sessions/${currentSessionId}/run`, {
-      method: "POST",
-      headers: currentIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        sessionId: currentSessionId,
-        projectPath: staleProjectPath,
-        threadName: "Current Widget Plan Ignores Stale Task",
-        markdown: "# Current Widget Plan Ignores Stale Task",
-        codexMode: "plan",
-        planMode: true,
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
+        method: "POST",
+        headers: currentIdentityHeaders,
+        body: JSON.stringify({
+          ...runPayload,
+          sessionId: currentSessionId,
+          projectPath: staleProjectPath,
+          threadName: "Current Widget legacy mode stays Chat",
+          markdown: "# Current Widget legacy mode stays Chat",
+          codexMode: "plan",
+          planMode: true,
+          deliveryMode: "widget_bridge_prepare"
+        })
+      });
     assert.equal(currentThreadPrepared.status, "prepared");
-    assert.equal(currentThreadPrepared.codexNative.transport, "stdio_fallback");
-    assert.equal(currentThreadPrepared.codexNative.path, "direct");
-    assert.equal(currentThreadPrepared.codexNative.threadId, "thread-current-widget");
+    assert.equal("codexMode" in currentThreadPrepared, false);
     const currentThreadLog = (await readNativeLog()).slice(currentThreadLogOffset);
     assert.equal(currentThreadLog.some((entry) => entry.params?.threadId === "thread-old-broken"), false);
-    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-current-widget"), false);
-    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-current-widget"), true);
+    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/resume" && entry.params.threadId === "thread-current-widget"), true);
+    assert.equal(currentThreadLog.some((entry) => entry.method === "thread/settings/update" && entry.params.threadId === "thread-current-widget" && entry.params.collaborationMode.mode === "default"), true);
     await fsp.writeFile(resumeFailPath, "", "utf8");
     await request("tools/call", { name: "close_canvasight", arguments: { sessionId: staleWidget.structuredContent.sessionId } });
     await request("tools/call", { name: "close_canvasight", arguments: { sessionId: currentSessionId } });
-
-    // A not-loaded task is the sole retry exception: Canvasight may resume it
-    // once, then repeat the exact direct Plan or Goal request.
-    const notLoadedPlanLogOffset = (await readNativeLog()).length;
-    await fsp.writeFile(directModeNotLoadedPath, "thread-smoke\n", "utf8");
-    const notLoadedPlan = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-      method: "POST",
-      headers: openedIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        threadName: "Widget Plan Retries Only After Task Not Loaded",
-        markdown: "# Widget Plan Retries Only After Task Not Loaded",
-        codexMode: "plan",
-        planMode: true,
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
-    assert.equal(notLoadedPlan.status, "prepared");
-    assert.equal(notLoadedPlan.codexNative.path, "resume_retry");
-    assert.equal(notLoadedPlan.codexNative.codexModel, "gpt-5.5");
-    const notLoadedPlanLog = (await readNativeLog()).slice(notLoadedPlanLogOffset);
-    assert.equal(notLoadedPlanLog.filter((entry) => entry.method === "thread/settings/update").length, 2);
-    assert.equal(notLoadedPlanLog.filter((entry) => entry.method === "thread/resume").length, 1);
-
-    const notLoadedGoalLogOffset = (await readNativeLog()).length;
-    const notLoadedGoal = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-      method: "POST",
-      headers: openedIdentityHeaders,
-      body: JSON.stringify({
-        ...runPayload,
-        threadName: "Widget Goal Retries Only After Task Not Loaded",
-        markdown: "# Widget Goal Retries Only After Task Not Loaded",
-        codexMode: "goal",
-        planMode: false,
-        deliveryMode: "widget_bridge_prepare"
-      })
-    });
-    assert.equal(notLoadedGoal.status, "prepared");
-    assert.equal(notLoadedGoal.codexNative.path, "resume_retry");
-    const notLoadedGoalLog = (await readNativeLog()).slice(notLoadedGoalLogOffset);
-    assert.equal(notLoadedGoalLog.filter((entry) => entry.method === "thread/goal/set").length, 2);
-    assert.equal(notLoadedGoalLog.filter((entry) => entry.method === "thread/resume").length, 1);
-    await fsp.writeFile(directModeNotLoadedPath, "", "utf8");
 
     const transientResumeLogOffset = (await readNativeLog()).length;
     await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 2 }), "utf8");
@@ -2947,51 +2977,7 @@ async function main() {
     assert.equal(degradedChatLog.filter((entry) => entry.method === "thread/resume").length, 4);
     assert.equal(degradedChatLog.some((entry) => entry.method === "thread/settings/update"), false);
 
-    const blockedPlanLogOffset = (await readNativeLog()).length;
-    await fsp.writeFile(directModeThreadReadFailPath, "thread-smoke\n", "utf8");
-    await assert.rejects(
-      () =>
-        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-          method: "POST",
-          headers: openedIdentityHeaders,
-          body: JSON.stringify({
-            ...runPayload,
-            threadName: "Widget Plan Does Not Degrade Thread Store Failure",
-            markdown: "# Widget Plan Does Not Degrade Thread Store Failure",
-            codexMode: "plan",
-            planMode: true,
-            deliveryMode: "widget_bridge_prepare"
-          })
-        }),
-      /codex_mode_not_applied|Canvasight Run blocked/
-    );
-    const blockedPlanLog = (await readNativeLog()).slice(blockedPlanLogOffset);
-    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/resume").length, 0);
-    assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/settings/update").length, 1);
-
-    const blockedGoalLogOffset = (await readNativeLog()).length;
-    await assert.rejects(
-      () =>
-        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
-          method: "POST",
-          headers: openedIdentityHeaders,
-          body: JSON.stringify({
-            ...runPayload,
-            threadName: "Widget Goal Does Not Degrade Thread Store Failure",
-            markdown: "# Widget Goal Does Not Degrade Thread Store Failure",
-            codexMode: "goal",
-            planMode: false,
-            deliveryMode: "widget_bridge_prepare"
-          })
-        }),
-      /codex_mode_not_applied|Canvasight Run blocked/
-    );
-    const blockedGoalLog = (await readNativeLog()).slice(blockedGoalLogOffset);
-    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/resume").length, 0);
-    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/goal/set").length, 1);
-    await fsp.writeFile(directModeThreadReadFailPath, "", "utf8");
-
-    const awaitedGoalLogOffset = (await readNativeLog()).length;
+    const awaitedRunLogOffset = (await readNativeLog()).length;
     const waitForRun = request("tools/call", {
       name: "await_canvasight_run",
       arguments: {
@@ -3014,10 +3000,9 @@ async function main() {
     assert.equal(awaited.content[0].text, runPayload.markdown);
     assert.equal(awaited.structuredContent.status, "received");
     assert.equal(awaited.structuredContent.threadName, runPayload.threadName);
-    assert.equal(awaited.structuredContent.codexMode, "goal");
-    assert.equal(awaited.structuredContent.planMode, false);
+    assert.equal(awaited.structuredContent.codexMode, "chat", "queued Run reports must be Chat-only");
+    assert.equal("planMode" in awaited.structuredContent, false);
     assert.equal(awaited.structuredContent.codexNative.status, "applied");
-    assert.equal(awaited.structuredContent.codexNative.action, "thread/goal/set");
     assert.equal(awaited.structuredContent.codexNative.threadId, "thread-smoke");
     assert.equal(awaited.structuredContent.agentTeam.enabled, true);
     assert.equal(awaited.structuredContent.agentTeam.skillName, "canvasight-agent-team");
@@ -3033,13 +3018,12 @@ async function main() {
     assert.match(createdAgentsMd, /<!-- canvasight-agent-team:start -->/);
     assert.match(createdAgentsMd, /## Canvasight Agent Team/);
 
-    const goalNativeLog = await readNativeLog();
-    const awaitedGoalLog = goalNativeLog.slice(awaitedGoalLogOffset);
-    assert.equal(awaitedGoalLog.some((entry) => entry.method === "thread/resume"), false);
-    assert.equal(awaitedGoalLog.some((entry) => entry.method === "thread/goal/set" && entry.params.threadId === "thread-smoke"), true);
-    assert.equal(goalNativeLog.some((entry) => entry.method === "turn/start"), false);
+    const chatNativeLog = await readNativeLog();
+    const awaitedRunLog = chatNativeLog.slice(awaitedRunLogOffset);
+    assert.equal(awaitedRunLog.some((entry) => entry.method === "thread/goal/set"), false);
+    assert.equal(chatNativeLog.some((entry) => entry.method === "turn/start"), false);
     assert.equal(
-      goalNativeLog.some(
+      chatNativeLog.some(
         (entry) =>
           entry.method === "thread/settings/update" &&
           entry.params.threadId === "thread-smoke" &&
@@ -3049,7 +3033,7 @@ async function main() {
       false
     );
 
-    const directRunLogOffset = goalNativeLog.length;
+    const directRunLogOffset = chatNativeLog.length;
     const directRunPayload = {
       ...runPayload,
       threadName: "Scatter Direct Chat",
@@ -3169,29 +3153,18 @@ async function main() {
         agentTeam: undefined,
         codexMode: undefined,
         planMode: true,
-        threadName: "Scatter Flow: Legacy plan task"
+        threadName: "Scatter Flow: Legacy mode task"
       })
     });
     const legacyAwaited = await waitForLegacyRun;
-    assert.equal(legacyAwaited.structuredContent.codexMode, "plan");
-    assert.equal(legacyAwaited.structuredContent.planMode, true);
+    assert.equal(legacyAwaited.structuredContent.codexMode, "chat", "legacy queued Run reports normalize to Chat");
+    assert.equal("planMode" in legacyAwaited.structuredContent, false);
     assert.equal(legacyAwaited.structuredContent.agentTeam.enabled, false);
     assert.equal(legacyAwaited.structuredContent.codexNative.status, "applied");
-    assert.equal(legacyAwaited.structuredContent.codexNative.action, "thread/settings/update");
-    assert.equal(legacyAwaited.structuredContent.codexNative.collaborationMode, "plan");
 
-    const planNativeLog = await readNativeLog();
-    assert.equal(
-      planNativeLog.some(
-        (entry) =>
-          entry.method === "thread/settings/update" &&
-          entry.params.threadId === "thread-smoke" &&
-          entry.params.collaborationMode.mode === "plan" &&
-          entry.params.collaborationMode.settings.model === "gpt-5.5" &&
-          entry.params.collaborationMode.settings.reasoning_effort === "medium"
-      ),
-      true
-    );
+    const legacyNativeLog = await readNativeLog();
+    assert.equal(legacyNativeLog.some((entry) => entry.method === "thread/goal/set"), false);
+    assert.equal(legacyNativeLog.some((entry) => entry.method === "thread/settings/update" && entry.params.collaborationMode.mode === "plan"), false);
 
     const appendProjectPath = path.join(tempRoot, "agent-team-append-project");
     await fsp.mkdir(appendProjectPath, { recursive: true });
@@ -3388,8 +3361,9 @@ async function main() {
       assert.equal(drained.structuredContent.status, "received");
       assert.equal(drained.structuredContent.markdown, crossPayload.markdown);
       assert.equal(drained.structuredContent.delivery.reason, "browser_fallback_requires_await");
+      assert.equal(drained.structuredContent.codexMode, "chat");
+      assert.equal("planMode" in drained.structuredContent, false);
       assert.equal(drained.structuredContent.codexNative.status, "disabled");
-      assert.equal(drained.structuredContent.codexNative.reason, "native_direct_disabled");
     } finally {
       mcpB.stop();
     }

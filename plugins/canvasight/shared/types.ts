@@ -1,7 +1,6 @@
 export type AttachmentKind = "image" | "file";
 export type AttachmentSource = "upload" | "drop" | "paste" | "clipboard";
 export type RunMode = "flow" | "node";
-export type CodexMode = "chat" | "plan" | "goal";
 export type EffortLevel = "low" | "medium" | "high" | "xhigh";
 export type LanguagePreference = "zh" | "en";
 export type ThemePreference = "system" | "light" | "dark";
@@ -96,9 +95,7 @@ export interface ScatterNodeData extends Record<string, unknown> {
   title: string;
   body: string;
   attachments: Attachment[];
-  codexMode: CodexMode;
   effort: EffortLevel;
-  planMode: boolean;
   runMode: RunMode;
   lastRunAt?: string;
 }
@@ -180,8 +177,6 @@ export interface AssistantRunInput {
   markdown: string;
   imagePaths: string[];
   effort: EffortLevel;
-  codexMode: CodexMode;
-  planMode: boolean;
 }
 
 export interface AgentTeamRoleRecommendation {

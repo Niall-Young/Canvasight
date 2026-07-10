@@ -1,11 +1,11 @@
 ---
 name: canvasight-run
-description: Handle Canvasight Run output in the current Codex thread. Use when a Run arrives through the native widget host bridge, when a browser/dev Run is queued for await_canvasight_run fallback, or when the user asks about Chat, Plan, or Goal mode handling.
+description: Handle Chat-only Canvasight Run output in the current Codex thread. Use when a Run arrives through the native widget host bridge, when a browser/dev Run is queued for await_canvasight_run fallback, or when legacy Plan or Goal node data must be treated as Chat.
 ---
 
 # Canvasight Run
 
-Use this skill to handle Canvasight Run payloads and their Codex mode.
+Use this skill to handle Canvasight Run payloads as Chat follow-ups.
 
 ## Workflow
 
@@ -20,4 +20,4 @@ Normal Canvasight Run delivery must come from the Codex native widget host bridg
 
 Native open must have received the active task's explicit `CODEX_THREAD_ID` and passed the instance-bound await gate with verified fullscreen React/project/canvas evidence; Run is accepted only from that same instance. Do not use a missing `hostCapabilities.message` declaration alone to disable Run after the MCP App handshake succeeds. Call `sendMessage` and treat only its resolved Promise as sent.
 
-For native Chat, Plan, and Goal handling, read `references/run-output-contract.md`.
+Read `references/run-output-contract.md` for Chat delivery and legacy-node normalization.
