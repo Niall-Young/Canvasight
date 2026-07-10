@@ -9,9 +9,9 @@ Use this skill to open Canvasight through MCP and verify the real native widget 
 
 ## Native Open Workflow
 
-1. Read the active task's `CODEX_THREAD_ID` from the shell. Require a non-empty value and pass that exact value as `threadId`.
+1. Read the active task's `CODEX_THREAD_ID` and current working directory from the shell. Require both a non-empty thread id and an absolute project path; pass them as `threadId` and `projectPath`.
 2. If the tools are not callable, use `tool_search` for `canvasight open_canvasight await_canvasight_widget_ready render_canvasight_canvas_widget`.
-3. Call `open_canvasight` for normal use. Use `render_canvasight_canvas_widget` only as its compatibility alias.
+3. Call `open_canvasight` for normal use with the explicit `projectPath`. Use `render_canvasight_canvas_widget` only as its compatibility alias. Do not rely on a thread lookup or a daemon default to infer the project: an unreadable or archived task must never silently open another folder's `.scatter` document.
 4. Read both `sessionId` and `openAttemptId` from the provisional open result. Tool completion is not evidence that the canvas rendered.
 5. Immediately call `await_canvasight_widget_ready` with that `sessionId`, `openAttemptId`, and the same `threadId`. Treat these two MCP calls as one indivisible user-level open action.
 6. Report the canvas as opened or ready only when the result has `status: "ready"`, `verified: true`, `displayMode: "fullscreen"`, and all of `reactMounted`, `projectHydrated`, `canvasRendered`, and `canvasVisible` set to `true`.

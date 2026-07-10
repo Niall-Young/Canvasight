@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.1+codex.20260710190600";
+const SERVER_VERSION = "0.3.2+codex.20260710200000";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -374,11 +374,18 @@ async function codexThreadProjectPath(threadId) {
   }
 }
 
-async function resolveSessionProjectPath(projectPath, threadId) {
+async function resolveSessionProjectPath(projectPath, threadId, options = {}) {
   const explicitProjectPath = optionalProjectPath(projectPath);
   if (explicitProjectPath) return explicitProjectPath;
   const threadProjectPath = await codexThreadProjectPath(threadId);
   if (threadProjectPath) return threadProjectPath;
+  if (options.requireThreadProject === true && optionalThreadId(threadId)) {
+    throw new HttpError(
+      409,
+      "Canvasight could not resolve the current Codex task's project folder. Reopen from a healthy project task or pass projectPath explicitly; Canvasight did not fall back to another project's .scatter workspace.",
+      "current_thread_project_unavailable"
+    );
+  }
   return defaultProjectPath();
 }
 
@@ -1367,8 +1374,13 @@ function normalizeScatterDocument(value, projectPath) {
     typeof value.activePageId === "string" && pages.some((page) => page.id === value.activePageId) ? value.activePageId : pages[0].id;
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
 
+  // A Canvasight document belongs to its containing project folder. Runtime
+  // Codex task bindings live only in daemon sessions and must never make a
+  // .scatter document portable with a stale thread target.
+  const { codexThreadId, threadId, threadClaimedAt, ...documentFields } = value;
+
   return {
-    ...value,
+    ...documentFields,
     version: 1,
     projectName: typeof value.projectName === "string" && value.projectName ? value.projectName : projectNameFromPath(projectPath),
     updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : nowIso(),
@@ -1995,7 +2007,12 @@ function newOpenAttempt(session, targetDisplayMode = "fullscreen") {
 async function createSession({ projectPath, language, threadId, targetDisplayMode = null }) {
   const id = sessionId();
   const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
-  const resolvedProjectPath = await resolveSessionProjectPath(projectPath, resolvedThreadId);
+  const resolvedProjectPath = await resolveSessionProjectPath(projectPath, resolvedThreadId, {
+    // Native widgets must never silently open the daemon's default project
+    // when Codex cannot read the active task. That fallback caused unrelated
+    // project windows to show and run the same .scatter workspace.
+    requireThreadProject: targetDisplayMode === "fullscreen"
+  });
   const session = {
     id,
     projectPath: resolvedProjectPath,
@@ -2299,7 +2316,10 @@ async function claimThreadForProject({ projectPath, sessionId, language, threadI
   }
 
   let targetSession = sessionId ? getSession(sessionId) : null;
-  const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || (await resolveSessionProjectPath(null, resolvedThreadId));
+  const resolvedProjectPath =
+    optionalProjectPath(projectPath) ||
+    targetSession?.projectPath ||
+    (await resolveSessionProjectPath(null, resolvedThreadId, { requireThreadProject: Boolean(resolvedThreadId) }));
   if (targetSession && path.resolve(targetSession.projectPath) !== path.resolve(resolvedProjectPath)) {
     targetSession = null;
   }
@@ -3653,8 +3673,15 @@ async function handleSessionApi(req, res, url) {
   if (action === "resolve-thread-project") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
-    const threadId = optionalThreadId(body?.threadId) || session.codexThreadId || optionalThreadId(process.env.CODEX_THREAD_ID);
-    const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId);
+    // Do not inherit a session's previous thread here. A reopened Canvasight
+    // page must use the task that opened it, otherwise its project resolution
+    // and Run preflight can keep targeting an unrelated stale task.
+    const threadId = optionalThreadId(body?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+    const explicitProjectPath = optionalProjectPath(body?.projectPath);
+    // A session opened with an explicit project path already has an authoritative
+    // .scatter location. Hydration may refresh its task claim, but must not
+    // replace that folder by attempting a second thread/resume lookup.
+    const projectPath = explicitProjectPath || session.projectPath || (await resolveSessionProjectPath(null, threadId, { requireThreadProject: Boolean(threadId) }));
     session.projectPath = projectPath;
     if (threadId) rememberThreadClaim(session, threadId);
     const openedProject = await openProject(projectPath);
@@ -3826,7 +3853,7 @@ async function handleHttp(req, res) {
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
       const threadId = optionalThreadId(body?.threadId) || optionalThreadId(body?.args?.threadId);
-      const projectPath = await resolveSessionProjectPath(body.projectPath || body?.args?.projectPath, threadId);
+      const projectPath = await resolveSessionProjectPath(body.projectPath || body?.args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
       const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, body.args || body);
       sendJson(res, 200, {
         document,
@@ -4321,7 +4348,7 @@ async function toolClaimCanvasightThread(args) {
   const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   let projectPath = optionalProjectPath(args?.projectPath);
   if (!projectPath && typeof args?.sessionId !== "string") {
-    projectPath = await resolveSessionProjectPath(null, threadId);
+    projectPath = await resolveSessionProjectPath(null, threadId, { requireThreadProject: Boolean(threadId) });
   }
   const daemon = await ensureDaemonServer();
   const claimed = await daemonJson(daemon, "/api/sessions/claim", {
@@ -4386,7 +4413,7 @@ async function toolGetCanvasightNodeTemplate(args) {
 
 async function toolWriteCanvasightGraph(args) {
   const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
-  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
   const daemon = await ensureDaemonServer();
   const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await daemonJson(daemon, "/api/graphs/write", {
     method: "POST",
@@ -4437,7 +4464,7 @@ async function toolAwaitCanvasightRun(args) {
   let projectPathValue = optionalProjectPath(args?.projectPath);
   const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   if (!sessionIdValue && !projectPathValue) {
-    projectPathValue = await resolveSessionProjectPath(null, threadId);
+    projectPathValue = await resolveSessionProjectPath(null, threadId, { requireThreadProject: Boolean(threadId) });
   }
   const daemon = await ensureDaemonServer();
   const run = await daemonJson(daemon, "/api/runs/await", {

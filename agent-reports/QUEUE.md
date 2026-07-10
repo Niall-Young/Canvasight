@@ -17,6 +17,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-2025-integration-summary-project-scatter-binding.md` - integrated project-scoped `.scatter` binding protection, regression coverage, documentation, and the installed 0.3.2 plugin; native-host acceptance remains pending.
+- `agent-reports/resolved/20260710-2000-development-solution-project-scatter-run-binding.md` - prevented native current-task failures from silently opening a different project's `.scatter`, isolated runtime task fields from document persistence, and added regression coverage; real native-host acceptance remains required.
+- `agent-reports/resolved/20260710-1930-customer-support-solution-project-scoped-canvas-docs.md` - clarified the user-facing contract that `.scatter` follows the current task's project folder while widget / Run routing is temporary and bound to the current Codex task; runtime implementation remains pending verification.
 - `agent-reports/resolved/20260710-1910-integration-summary-chat-run-thread-store-degradation.md` - integrated Chat-only degraded preflight recovery, README guidance, regression coverage, version 0.3.1 reinstall, and recorded the required real-host acceptance.
 - `agent-reports/resolved/20260710-1908-development-solution-chat-run-thread-store-degradation.md` - Chat alone now accepts an explicit degraded thread-store preflight after limited retries and sends only when the verified native host bridge Promise resolves; Plan/Goal remain blocked.
 - `agent-reports/resolved/20260710-1905-customer-support-solution-thread-store-run-docs.md` - added bilingual README recovery guidance for the user-visible `failed to read thread` / malformed rollout-metadata Run block, including Chat bridge delivery and Plan/Goal restrictions.

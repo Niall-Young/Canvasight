@@ -1830,6 +1830,33 @@ async function main() {
       }
     });
 
+    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
+    await assert.rejects(
+      () =>
+        request("tools/call", {
+          name: "open_canvasight",
+          arguments: {}
+        }),
+      /project path.*cannot.*determined|current Codex task.*project|projectPath.*required|thread\/resume/i,
+      "A failed thread/resume must not silently bind a native Canvasight session to the default project."
+    );
+    const explicitProjectAfterResumeFailure = path.join(tempRoot, "explicit-project-after-resume-failure");
+    const explicitlyOpenedAfterResumeFailure = await request("tools/call", {
+      name: "open_canvasight",
+      arguments: {
+        projectPath: explicitProjectAfterResumeFailure
+      }
+    });
+    assert.equal(explicitlyOpenedAfterResumeFailure.structuredContent.projectPath, explicitProjectAfterResumeFailure);
+    assert.equal(fs.existsSync(path.join(explicitProjectAfterResumeFailure, ".scatter", "scatter.json")), true);
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: {
+        sessionId: explicitlyOpenedAfterResumeFailure.structuredContent.sessionId
+      }
+    });
+    await fsp.writeFile(resumeFailPath, "", "utf8");
+
     const projectPath = path.join(tempRoot, "demo-project");
     const opened = await request("tools/call", {
       name: "open_canvasight",
@@ -1855,7 +1882,7 @@ async function main() {
     });
     assert.equal(recentAfterProjectOpen.structuredContent.projects.length, 2);
     assert.equal(recentAfterProjectOpen.structuredContent.projects[0].path, projectPath);
-    assert.equal(recentAfterProjectOpen.structuredContent.projects[1].path, defaultProjectPath);
+    assert.equal(recentAfterProjectOpen.structuredContent.projects[1].path, explicitProjectAfterResumeFailure);
 
     const recentOpened = await request("tools/call", {
       name: "open_canvasight_recent_project",
@@ -1882,6 +1909,19 @@ async function main() {
     assert.equal(session.projectPath, projectPath);
     assert.equal(session.sessionId, sessionId);
     assert.equal(typeof session.threadClaimedAt, "string");
+
+    // Hydrating an explicitly opened workspace must retain its folder binding
+    // even if the current Codex thread can no longer be resumed.
+    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
+    const hydratedProject = await fetchJson(`${origin}/api/sessions/${sessionId}/resolve-thread-project`, {
+      method: "POST",
+      body: JSON.stringify({ threadId: "thread-smoke" })
+    });
+    assert.equal(hydratedProject.project.path, projectPath);
+    assert.equal(hydratedProject.session.projectPath, projectPath);
+    assert.equal(hydratedProject.session.codexThreadId, "thread-smoke");
+    await fsp.writeFile(resumeFailPath, "", "utf8");
+
     const openedWidgetInstanceId = "widget-project-fullscreen-smoke";
     const openedIdentityHeaders = {
       "x-canvasight-open-attempt-id": openedData.openAttemptId,
