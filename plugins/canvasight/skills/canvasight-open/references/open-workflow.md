@@ -1,37 +1,59 @@
 # Canvasight Open Workflow
 
-## Open A Session
+## Native Open Is A Two-Step Contract
 
-Read the active Codex task's `CODEX_THREAD_ID` from the shell, then call `open_canvasight` with that exact value as `threadId`. The MCP child process may not inherit `CODEX_THREAD_ID`; never assume the server can recover it from its own environment. When `projectPath` is omitted, Canvasight uses the explicit thread id with Codex app-server `thread/resume` to resolve that thread's `cwd`, creating `.scatter` there if needed. Pass `projectPath` only as an explicit override when the workspace path is already known. If the active task id is empty, stop with `current_thread_id_required` instead of opening a widget whose Chat / Plan / Goal preflight cannot target the current thread. The tool starts or reuses Canvasight's project-level local daemon and renders a Codex native widget that directly hosts the built Canvasight web app and talks to the daemon for project APIs. Native open public output must not include the daemon URL; use `_meta.widgetData` only inside the widget shell. `render_canvasight_canvas_widget` remains a compatibility alias for explicit widget rendering.
+Read the active Codex task's `CODEX_THREAD_ID`, then call `open_canvasight` with that exact value as `threadId`. When `projectPath` is omitted, Canvasight resolves the task workspace and creates or opens `.scatter` there. Pass `projectPath` only as an explicit override when it is already known.
 
-If `open_canvasight` is missing from the active tool list, call `tool_search` with `canvasight open_canvasight render_canvasight_canvas_widget` before deciding tools are unavailable. Canvasight MCP tools may be lazy-loaded. If `tool_search` exposes `open_canvasight`, call it. If it exposes only `render_canvasight_canvas_widget`, call that compatibility alias. If neither native widget tool is callable after `tool_search`, stop and report `native_canvasight_tool_unavailable`; ask the user to reload or open a new thread. Do not open `127.0.0.1:5173` as the normal recovery path.
+The open result prepares a widget session and returns its `sessionId`. It does not prove that Codex loaded the widget resource, mounted React, or reached the session API. Immediately call:
 
-If a Canvasight native tool is visible/callable but the call fails with `Transport closed`, stop and report `canvasight_mcp_transport_closed`. This is different from missing tools: the current Codex thread has a stale or dead Canvasight MCP transport. `codex plugin list`, `npm run dev:status`, or direct JSON-RPC smoke tests can still look healthy because the repo-local plugin and daemon are separate from the live thread transport. Since 0.1.44, the stdio shim writes `mcp-lifecycle.log` in the Canvasight state directory and exits cleanly on host stdin close; inspect that log before guessing. If the installed cache is old, reinstall and reload/new-thread, then call `open_canvasight` again. Do not treat browser fallback as a successful native open path in this state.
+```text
+await_canvasight_widget_ready({ sessionId, threadId })
+```
 
-The native widget is the normal path because it can receive the Codex host bridge. The bridge posts the follow-up to its owning task without using the thread id as a delivery address, but the explicit `threadId` supplied during open is still required for Chat / Plan / Goal preflight. The widget bridge can use MCP Apps `ui/message` or Codex/OpenAI compatibility `window.openai.sendFollowUpMessage`; both are native widget transports, not browser fallback. Treat `hostCapabilities.message` as diagnostic only: after the MCP App handshake succeeds, call `sendMessage` and let its Promise determine success or failure.
+The default wait is 15 seconds. `timeoutMs` may be set for a deliberate diagnostic wait, up to 300000 ms; do not use repeated long waits to hide a failed bootstrap.
 
-`openai/outputTemplate` and widget metadata are necessary but not sufficient proof that Codex Desktop actually rendered the widget. Use Canvasight Diagnostics to classify the live page: `canvasightHost=widget`, `window.canvasightMcp`, `bridgeTransport`, `bridgeReason`, bridge availability, and recent Run `status/via/reason`. A direct widget app may have `window.parent === window`; iframe status alone is not the widget test. A `threadId` scopes browser fallback queues; it is not direct-send permission.
+Interpret the result strictly:
 
-Use `open_canvasight_browser_fallback` only when a browser URL fallback is explicitly requested for debugging or dev-page inspection. A browser fallback page does not have the widget host bridge; after `claim_canvasight_thread` the project daemon scopes future Run payloads to the current thread and keeps them available for `await_canvasight_run`. It must not report app-server delivery as sent. If `open_canvasight` lacks widget metadata in the current thread after a plugin update, tell the user that the thread has stale MCP tools and must be reloaded or replaced before widget-bridge delivery can work. If the visible Canvasight tools fail with `Transport closed`, inspect the MCP lifecycle log and report `canvasight_mcp_transport_closed` instead of attempting browser fallback as recovery.
+| Result | Meaning | Agent response |
+| --- | --- | --- |
+| `status=ready`, `reactMounted=true` | React mounted and the initial session/API health check acknowledged ready | The canvas is open and ready |
+| `status=timeout` | No positive acknowledgement arrived before the deadline | Report `stage` and `error`; mark native opening `unverified` |
+| `status=failed` | The widget or daemon reported a startup failure, a task/session mismatch, or the wait was cancelled | Report `stage` and `error`; mark native opening failed |
+| `status=ready`, `reactMounted!=true` | Invalid or incomplete acknowledgement | Do not claim success; treat it as failed contract validation |
 
-In fallback cases, open the full returned `browserUrl` / `url` in Codex's in-app Browser/sidebar. Do not navigate only to the origin because the session id and token are part of the usable URL. Canvasight does not launch the system browser by default; set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` only for local development debugging.
+Preserve `sessionId`, `threadId`, `projectPath`, `stage`, `reactMounted`, `error`, and `reportedAt` in diagnostic handoff. Do not expose the daemon URL or token in user-facing output.
 
-Do not use generic browser control to open the dev server for normal "open Canvasight" requests. A `127.0.0.1:5173` page is browser fallback, not a native widget, and Run cannot direct-send from it. Use generic browser control only after the user explicitly asks for a browser fallback/dev page.
+## Tool Discovery And Task Binding
 
-The returned `canvasRouting` marks the project as active Canvasight context. For later medium or complex requests that benefit from decomposition, prefer `write_canvasight_graph` with `append-page` before direct execution. Do not route small direct commands, simple questions, or Canvasight Run payloads back into graph writing.
+If `open_canvasight` or `await_canvasight_widget_ready` is missing, call `tool_search` with `canvasight open_canvasight await_canvasight_widget_ready render_canvasight_canvas_widget`. If the required native open and ready tools still cannot be called, report the exact missing capability and request a plugin reload or new Codex task.
 
-## Recover A Recent Project
+An empty task id is `current_thread_id_required`. Stop instead of opening a partially bound widget. If the ready result reports `stage: "thread"`, the session belongs to another task; create a new session with the current task id rather than accepting the old acknowledgement.
 
-If a browser fallback page is still open and the user moved to a new Codex thread, call `claim_canvasight_thread` with the known `projectPath`, `sessionId`, or most recent project. This scopes future fallback Run attempts and queued payloads to the current thread without opening another page. Native widget Run delivery does not require this manual claim when the host bridge is available.
+If a callable Canvasight tool fails with `Transport closed`, report `canvasight_mcp_transport_closed`. The current task's MCP transport is stale or dead even when local plugin and daemon checks pass. Inspect `mcp-lifecycle.log` when available, then reload or use a new task. Do not switch to browser fallback and describe it as native success.
 
-Use `list_canvasight_recent_projects` followed by `open_canvasight_recent_project` when the user wants to reopen a recent project from a new Codex thread. That path defaults to the native widget; if the recent-project tool is not callable, use `tool_search` before declaring it unavailable. Use `open_canvasight_browser_fallback` only for explicit fallback debugging.
+## What Counts As Evidence
 
-The web service is project-level and should survive the Codex thread that opened it. If an older URL was created before persistent daemon support, reopen with `open_canvasight_recent_project`.
+Only the positive ready acknowledgement proves widget initialization. These are supporting diagnostics, never substitutes:
 
-## Attach From A New Thread
+- `open_canvasight` tool completion;
+- `openai/outputTemplate` or successful `resources/read`;
+- daemon process, port, session, or API health observed outside the widget;
+- typecheck, build, MCP smoke, VM, DOM, metadata-shape, or postMessage tests;
+- a working browser/dev fallback;
+- a loading shell or a bundle `load` event.
 
-Opening the native widget and receiving Run output should be one flow: the widget host bridge sends a follow-up message to the current thread. Browser fallback pages are different: a browser Run should target the latest thread that explicitly claimed the project/session and stay recoverable through `await_canvasight_run`; it is not a sent path. A new Codex thread should call `claim_canvasight_thread` before the user clicks Run in an old browser tab; an unclaimed bare dev page must report `unbound_dev_session` instead of sending to an old launch thread. Use `canvasight-run` to recover queued payloads when needed.
+Native-host acceptance additionally requires the full canvas to be visible, one meaningful control to work, and a node Run to reach the same Codex task through the native host bridge. Until those checks are observed, describe the implementation delivery as `unverified` even if the ready tool passes in a synthetic environment.
 
-## Close A Session
+## Recent Projects
 
-`close_canvasight` closes the specific Canvasight session. It does not stop the project-level daemon.
+Use `list_canvasight_recent_projects`, then `open_canvasight_recent_project` with the current `threadId`. Read the returned `sessionId` and apply the same ready wait. A recent-project tool result alone is provisional.
+
+## Browser Fallback
+
+Use `open_canvasight_browser_fallback` only for an explicit fallback request or browser diagnosis. Open the complete returned URL in Codex's in-app Browser. After `claim_canvasight_thread`, fallback Run payloads are queued for `await_canvasight_run`; they are not sent through the native widget bridge.
+
+Browser visibility, fallback controls, and queued Run delivery do not satisfy native ready or native-host acceptance. Do not open a bare `127.0.0.1:5173` page as the normal response to "open Canvasight".
+
+## Closing
+
+`close_canvasight` closes one session. It does not stop the project-level daemon.

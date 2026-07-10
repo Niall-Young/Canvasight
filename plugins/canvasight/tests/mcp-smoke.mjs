@@ -5,7 +5,6 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,16 +39,17 @@ function assertOpenFlowSkillContract() {
   assert.match(openSkill, /tool_search/);
   assert.match(openSkill, /打开画布/);
   assert.match(openSkill, /打开 Canvasight/);
-  assert.match(openSkill, /canvasight open_canvasight render_canvasight_canvas_widget/);
+  assert.match(openSkill, /canvasight open_canvasight await_canvasight_widget_ready render_canvasight_canvas_widget/);
   assert.match(openSkill, /CODEX_THREAD_ID/);
-  assert.match(openSkill, /current_thread_id_required/);
-  assert.match(openSkill, /native_canvasight_tool_unavailable/);
+  assert.match(openSkill, /await_canvasight_widget_ready/);
+  assert.match(openSkill, /status: "ready"/);
+  assert.match(openSkill, /reactMounted: true/);
   assert.match(openSkill, /Transport closed/);
   assert.match(openSkill, /canvasight_mcp_transport_closed/);
   assert.match(openWorkflow, /tool_search/);
   assert.match(openWorkflow, /CODEX_THREAD_ID/);
   assert.match(openWorkflow, /current_thread_id_required/);
-  assert.match(openWorkflow, /Do not open `127\.0\.0\.1:5173` as the normal recovery path/);
+  assert.match(openWorkflow, /Do not open a bare `127\.0\.0\.1:5173` page as the normal response/);
   assert.match(openWorkflow, /Transport closed/);
   assert.match(openWorkflow, /canvasight_mcp_transport_closed/);
   assert.match(runSkill, /browser_fallback_no_bridge/);
@@ -62,7 +62,8 @@ function assertOpenFlowSkillContract() {
   assert.match(troubleshooting, /browser_fallback_no_bridge/);
   assert.match(troubleshooting, /Transport closed/);
   assert.match(troubleshooting, /canvasight_mcp_transport_closed/);
-  assert.match(troubleshooting, /Do not use generic browser control to open it for normal Canvasight recovery/);
+  assert.match(troubleshooting, /real native-host acceptance is still required/);
+  assert.match(troubleshooting, /Browser fallback and automated harnesses cannot fill the gap/);
   assert.match(appSource, /status\.browserFallbackNoBridge/);
   assert.match(appSource, /diagnostics\.nativeWidget/);
   assert.match(apiSource, /reason === "browser_fallback_no_bridge"/);
@@ -364,7 +365,7 @@ async function fetchJson(url, init) {
 }
 
 function assertNativeWidgetPublicResult(result) {
-  assert.equal(result.structuredContent.status, "opened");
+  assert.equal(result.structuredContent.status, "opening");
   assert.equal(result.structuredContent.openTarget, "codex_native_widget");
   for (const key of ["url", "browserUrl", "origin", "apiBaseUrl", "token"]) {
     assert.equal(Object.prototype.hasOwnProperty.call(result.structuredContent, key), false, `native widget structuredContent leaked ${key}`);
@@ -385,309 +386,390 @@ function widgetDataFor(result) {
   return result._meta.widgetData;
 }
 
-function extractWidgetBridgeScript(widgetHtml) {
-  const match = widgetHtml.match(/<script id="canvasightMcpHostBridge">([\s\S]*?)<\/script>/);
-  assert.ok(match, "widget host bridge script is missing");
-  return match[1].replaceAll("<\\/script", "</script");
+async function assertDynamicWidgetRuntimeApi() {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const originalCustomEvent = globalThis.CustomEvent;
+  const runtime = {};
+  const requests = [];
+  const windowListeners = new Map();
+  const readyEvents = [];
+  const vite = await import("vite");
+  const viteServer = await vite.createServer({
+    root: pluginRoot,
+    server: { middlewareMode: true },
+    appType: "custom",
+    logLevel: "silent"
+  });
+
+  globalThis.window = {
+    __CANVASIGHT_WIDGET_DATA__: runtime,
+    location: { search: "", href: "https://canvasight-widget.test/" },
+    parent: {},
+    setTimeout,
+    clearTimeout,
+    addEventListener(type, listener) {
+      const listeners = windowListeners.get(type) || [];
+      listeners.push(listener);
+      windowListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      const listeners = windowListeners.get(type) || [];
+      windowListeners.set(type, listeners.filter((candidate) => candidate !== listener));
+    },
+    dispatchEvent(event) {
+      for (const listener of windowListeners.get(event.type) || []) listener(event);
+      return true;
+    },
+    localStorage: {
+      getItem() {
+        return null;
+      },
+      setItem() {}
+    }
+  };
+  class TestCustomEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.detail = init.detail;
+    }
+  }
+  globalThis.CustomEvent = TestCustomEvent;
+  globalThis.window.addEventListener("canvasight:app-ready", (event) => readyEvents.push(event.detail));
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({ url: String(url), init });
+    return {
+      ok: true,
+      json: async () =>
+        String(url).endsWith("/widget-ready")
+          ? { status: "ready" }
+          : { sessionId: "session-runtime" },
+      text: async () => ""
+    };
+  };
+
+  try {
+    const module = await viteServer.ssrLoadModule("/src/lib/canvasightApi.ts");
+    const api = module.canvasightApi;
+    assert.equal(api.sessionId, "local");
+    assert.equal(api.token, "");
+
+    Object.assign(runtime, {
+      apiBaseUrl: "http://127.0.0.1:54321",
+      canvasightHost: "widget",
+      sessionId: "session-runtime",
+      token: "token-runtime"
+    });
+    await api.getSession();
+    await api.reportWidgetReady();
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url, "http://127.0.0.1:54321/api/sessions/session-runtime");
+    assert.equal(requests[0].init.headers["x-canvasight-token"], "token-runtime");
+    assert.equal(requests[1].url, "http://127.0.0.1:54321/api/sessions/session-runtime/widget-ready");
+    assert.equal(requests[1].init.method, "POST");
+    assert.deepEqual(JSON.parse(requests[1].init.body), {
+      status: "ready",
+      stage: "api-ready",
+      reactMounted: true
+    });
+    assert.equal(requests[1].init.headers["x-canvasight-token"], "token-runtime");
+    assert.equal(readyEvents.length, 1);
+    assert.equal(readyEvents[0].status, "ready");
+    assert.equal(api.sessionId, "session-runtime");
+    assert.equal(api.token, "token-runtime");
+  } finally {
+    await viteServer.close();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+    if (originalCustomEvent === undefined) delete globalThis.CustomEvent;
+    else globalThis.CustomEvent = originalCustomEvent;
+  }
 }
 
-async function runWidgetBridgeHarness(scriptSource, options = {}) {
+async function waitForCondition(predicate, label, timeoutMs = 1500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await sleep(5);
+  }
+  assert.fail(`Timed out waiting for ${label}`);
+}
+
+function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40 } = {}) {
   const records = {
-    mcpMessages: [],
-    openaiMessages: [],
-    sizeChanges: [],
-    displayModeRequests: []
+    appMessages: [],
+    openaiGlobalEvents: []
   };
-  const statusEl = { dataset: {}, textContent: "" };
   const listeners = new Map();
+  const statusEl = { dataset: {}, textContent: "Starting Canvasight..." };
+  const documentElement = {
+    classList: { contains: () => false },
+    clientWidth: 800,
+    offsetHeight: 600,
+    scrollHeight: 600,
+    style: {
+      colorScheme: "",
+      height: "",
+      setProperty() {}
+    },
+    getAttribute() {
+      return null;
+    },
+    setAttribute() {},
+    getBoundingClientRect() {
+      return { height: 600, width: 800 };
+    }
+  };
   const document = {
     body: {
       offsetHeight: 600,
-      scrollHeight: 600,
-      appendChild(node) {
-        records.appendedScript = node;
-        Promise.resolve().then(() => node.trigger(options.appModuleError ? "error" : "load"));
-      }
+      scrollHeight: 600
     },
-    documentElement: {
-      clientWidth: 800,
-      offsetHeight: 600,
-      scrollHeight: 600,
-      style: {}
+    documentElement,
+    head: {
+      appendChild() {}
     },
-    createElement(tagName) {
-      const scriptListeners = new Map();
-      return {
-        id: "",
-        tagName,
-        textContent: "",
-        addEventListener(type, listener) {
-          const handlers = scriptListeners.get(type) || [];
-          handlers.push(listener);
-          scriptListeners.set(type, handlers);
-        },
-        trigger(type) {
-          for (const listener of scriptListeners.get(type) || []) listener();
-        }
-      };
+    createElement() {
+      return { id: "", style: {}, textContent: "" };
     },
     getElementById(id) {
-      if (id === "canvasight-frame") return null;
       if (id === "canvasight-widget-status") return statusEl;
-      if (id === "canvasightAppBundleSource") return { textContent: "" };
-      if (id === "canvasight-app-module") return null;
       return null;
     }
   };
-  const window = {
-    document,
-    innerWidth: 800,
-    openai: {
-      ...(options.openaiGlobals || {}),
-      ...(options.openaiFollowUp
-        ? {
-          sendFollowUpMessage(payload) {
-            records.openaiMessages.push(payload);
-            return Promise.resolve({ ok: true });
-          }
-        }
-        : {})
-    },
-    addEventListener(type, listener) {
-      const existing = listeners.get(type) || [];
-      existing.push(listener);
-      listeners.set(type, existing);
-    },
-    dispatchEvent(event) {
-      const existing = listeners.get(event.type) || [];
-      for (const listener of existing) listener(event);
-    }
-  };
-  window.window = window;
-  window.parent = window;
 
-  class FakeApp {
-    constructor() {
-      this.listeners = new Map();
-    }
-    addEventListener(type, listener) {
-      const existing = this.listeners.get(type) || [];
-      existing.push(listener);
-      this.listeners.set(type, existing);
-    }
-    connect() {
-      if (options.connectReject) return Promise.reject(new Error(options.connectReject));
-      return Promise.resolve();
-    }
-    getHostCapabilities() {
-      return options.hostCapabilities || { message: {} };
-    }
-    getHostVersion() {
-      return { name: "fake-host", version: "1.0.0" };
-    }
-    getHostContext() {
-      return {};
-    }
-    requestDisplayMode(request) {
-      records.displayModeRequests.push(request);
-      return Promise.resolve({});
-    }
-    sendSizeChanged(size) {
-      records.sizeChanges.push(size);
-    }
-    sendMessage(message) {
-      records.mcpMessages.push(message);
-      if (options.mcpSendReject) return Promise.reject(new Error(options.mcpSendReject));
-      return Promise.resolve({ ok: true });
-    }
-    callServerTool(request) {
-      records.serverToolCalls = [...(records.serverToolCalls || []), request];
-      return Promise.resolve({});
+  class TestCustomEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.detail = init.detail;
     }
   }
 
-  const context = {
-    __CANVASIGHT_MCP_APPS__: {
-      App: FakeApp,
-      applyDocumentTheme() {},
-      applyHostFonts() {},
-      applyHostStyleVariables() {}
-    },
-    clearTimeout,
-    console,
-    CustomEvent: class CustomEvent {
-      constructor(type, init = {}) {
-        this.type = type;
-        this.detail = init.detail;
-      }
-    },
+  let hostWindow;
+  const window = {
+    __CANVASIGHT_WIDGET_BOOTSTRAP_TIMEOUT_MS__: bootstrapTimeoutMs,
+    __CANVASIGHT_WIDGET_SERVER_VERSION__: expectedPluginVersion,
+    __CANVASIGHT_WIDGET_SHELL__: true,
     document,
-    Error,
-    Promise,
+    innerWidth: 800,
+    location: { href: "https://canvasight-widget.test/", search: "" },
+    openai: {},
     setTimeout,
-    URL,
-    window
+    clearTimeout,
+    requestAnimationFrame(callback) {
+      return setTimeout(() => callback(Date.now()), 0);
+    },
+    cancelAnimationFrame(timer) {
+      clearTimeout(timer);
+    },
+    addEventListener(type, listener) {
+      const current = listeners.get(type) || [];
+      current.push(listener);
+      listeners.set(type, current);
+    },
+    removeEventListener(type, listener) {
+      const current = listeners.get(type) || [];
+      listeners.set(type, current.filter((candidate) => candidate !== listener));
+    },
+    dispatchEvent(event) {
+      for (const listener of [...(listeners.get(event.type) || [])]) listener(event);
+      return true;
+    }
   };
-  context.globalThis = context;
-  vm.runInNewContext(scriptSource, context);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.window = window;
+
+  function dispatchHostMessage(message) {
+    window.dispatchEvent({
+      type: "message",
+      data: message,
+      origin: "https://codex-host.test",
+      source: hostWindow
+    });
+  }
+
+  hostWindow = {
+    postMessage(message) {
+      records.appMessages.push(message);
+      if (!Object.prototype.hasOwnProperty.call(message, "id")) return;
+      let result = {};
+      if (message.method === "ui/initialize") {
+        result = {
+          protocolVersion: "2026-01-26",
+          hostInfo: { name: "canvasight-bootstrap-test-host", version: "1.0.0" },
+          hostCapabilities: { message: {} },
+          hostContext: {
+            theme: "light",
+            displayMode: "inline",
+            availableDisplayModes: ["inline", "fullscreen"],
+            containerDimensions: { width: 800, height: 600 }
+          }
+        };
+      } else if (message.method === "ui/request-display-mode") {
+        result = { mode: message.params?.mode || "fullscreen" };
+      } else if (message.method === "ui/message") {
+        result = {};
+      } else if (message.method === "tools/call") {
+        result = { content: [] };
+      }
+      queueMicrotask(() => dispatchHostMessage({ jsonrpc: "2.0", id: message.id, result }));
+    }
+  };
+  window.parent = hostWindow;
+
   return {
-    api: window.canvasightMcp,
+    TestCustomEvent,
+    document,
     records,
-    state: () => window.canvasightMcp.getBridgeState(),
-    statusEl
+    statusEl,
+    window,
+    dispatchOpenAiGlobals(globals) {
+      records.openaiGlobalEvents.push(globals);
+      window.dispatchEvent(new TestCustomEvent("openai:set_globals", { detail: { globals } }));
+    },
+    sendToolResult(widgetData) {
+      dispatchHostMessage({
+        jsonrpc: "2.0",
+        method: "ui/notifications/tool-result",
+        params: {
+          content: [],
+          structuredContent: { status: "opening" },
+          _meta: { widgetData }
+        }
+      });
+    }
   };
 }
 
-async function assertWidgetBridgeAdapters(widgetHtml) {
-  const bridgeScript = extractWidgetBridgeScript(widgetHtml);
-  const mcpHarness = await runWidgetBridgeHarness(bridgeScript);
-  assert.equal(mcpHarness.api.canSendFollowUpMessage(), true);
-  assert.equal(mcpHarness.state().bridgeTransport, "mcp_ui_message");
-  await mcpHarness.api.sendFollowUpMessage({
-    prompt: "MCP bridge prompt",
-    content: [{ type: "text", text: "MCP bridge prompt" }]
-  });
-  assert.equal(mcpHarness.records.mcpMessages.length, 1);
-  assert.equal(mcpHarness.records.mcpMessages[0].role, "user");
-  assert.deepEqual(mcpHarness.records.mcpMessages[0].content, [{ type: "text", text: "MCP bridge prompt" }]);
-  assert.equal(mcpHarness.records.openaiMessages.length, 0);
-
-  const openaiHarness = await runWidgetBridgeHarness(bridgeScript, {
-    connectReject: "ui initialize failed",
-    openaiFollowUp: true
-  });
-  assert.equal(openaiHarness.api.canSendFollowUpMessage(), true);
-  assert.equal(openaiHarness.state().bridgeTransport, "openai_compat_followup");
-  await openaiHarness.api.sendFollowUpMessage({
-    prompt: "OpenAI bridge prompt",
-    content: [{ type: "text", text: "OpenAI bridge prompt" }]
-  });
-  assert.equal(openaiHarness.records.mcpMessages.length, 0);
-  assert.equal(openaiHarness.records.openaiMessages[0].prompt, "OpenAI bridge prompt");
-  assert.equal(openaiHarness.records.openaiMessages[0].scrollToBottom, true);
-
-  const missingMessageCapabilityHarness = await runWidgetBridgeHarness(bridgeScript, {
-    hostCapabilities: {}
-  });
-  assert.equal(missingMessageCapabilityHarness.api.canSendFollowUpMessage(), true);
-  assert.equal(missingMessageCapabilityHarness.state().hostCapabilitiesMessage, false);
-  assert.equal(missingMessageCapabilityHarness.state().bridgeTransport, "mcp_ui_message");
-  await missingMessageCapabilityHarness.api.sendFollowUpMessage({
-    prompt: "No advertised message capability",
-    content: [{ type: "text", text: "No advertised message capability" }]
-  });
-  assert.equal(missingMessageCapabilityHarness.records.mcpMessages.length, 1);
-
-  const rejectedMessageHarness = await runWidgetBridgeHarness(bridgeScript, {
-    hostCapabilities: {},
-    mcpSendReject: "ui/message rejected"
-  });
-  await assert.rejects(
-    rejectedMessageHarness.api.sendFollowUpMessage({
-      prompt: "Rejected message",
-      content: [{ type: "text", text: "Rejected message" }]
-    }),
-    /ui\/message rejected/
-  );
-
-  const initialToolResultHarness = await runWidgetBridgeHarness(bridgeScript, {
-    openaiGlobals: {
-      toolResponseMetadata: {
-        mcp_tool_result: {
-          structuredContent: { status: "opened" },
-          _meta: {
-            widgetData: {
-              status: "opened",
-              canvasightHost: "widget",
-              sessionId: "session-initial-result",
-              token: "widget-token",
-              url: "http://127.0.0.1:54321/?sessionId=session-initial-result&token=widget-token"
-            }
-          }
-        }
-      }
+function installWidgetBridgeGlobals(environment) {
+  const keys = [
+    "window",
+    "document",
+    "CustomEvent",
+    "ResizeObserver",
+    "requestAnimationFrame",
+    "cancelAnimationFrame"
+  ];
+  const originals = new Map(keys.map((key) => [key, globalThis[key]]));
+  globalThis.window = environment.window;
+  globalThis.document = environment.document;
+  globalThis.CustomEvent = environment.TestCustomEvent;
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    disconnect() {}
+  };
+  globalThis.requestAnimationFrame = environment.window.requestAnimationFrame;
+  globalThis.cancelAnimationFrame = environment.window.cancelAnimationFrame;
+  return () => {
+    for (const [key, value] of originals) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
     }
-  });
-  assert.equal(initialToolResultHarness.records.appendedScript?.id, "canvasight-app-module");
-  assert.equal(initialToolResultHarness.records.appendedScript?.type, "module");
-  assert.equal(initialToolResultHarness.statusEl.textContent, "");
+  };
+}
 
-  const directWidgetMetadataHarness = await runWidgetBridgeHarness(bridgeScript, {
-    openaiGlobals: {
-      toolOutput: {
-        status: "opened",
-        rendering: "native-widget",
-        sessionId: "session-direct-widget-metadata"
-      },
-      toolResponseMetadata: {
-        status: "opened",
-        canvasightHost: "widget",
-        sessionId: "session-direct-widget-metadata",
-        token: "widget-token",
-        url: "http://127.0.0.1:54321/?sessionId=session-direct-widget-metadata&token=widget-token"
-      }
-    }
-  });
-  assert.equal(directWidgetMetadataHarness.records.appendedScript?.id, "canvasight-app-module");
-  assert.equal(directWidgetMetadataHarness.records.appendedScript?.type, "module");
-  assert.equal(directWidgetMetadataHarness.statusEl.textContent, "");
+async function closeWidgetBridgeEnvironment(environment) {
+  try {
+    await environment.window.__CANVASIGHT_MCP_APP__?.close();
+  } catch {
+    // The transport may already be closed after an initialization failure.
+  }
+}
 
-  const directMetaContainerHarness = await runWidgetBridgeHarness(bridgeScript, {
-    openaiGlobals: {
-      toolOutput: {
-        status: "opened",
-        rendering: "native-widget",
-        sessionId: "session-direct-meta-container"
-      },
+async function assertWidgetBootstrapContracts(widgetHtml) {
+  assert.match(widgetHtml, /id="canvasightAppModule"\s+type="module"/);
+  assert.match(widgetHtml, /Starting Canvasight\.\.\./);
+  assert.doesNotMatch(widgetHtml, /canvasightAppBundleSource/);
+  assert.doesNotMatch(widgetHtml, /canvasightMcpHostBridge/);
+
+  const vite = await import("vite");
+  const viteServer = await vite.createServer({
+    root: pluginRoot,
+    server: { middlewareMode: true },
+    appType: "custom",
+    logLevel: "silent"
+  });
+  const originalConsoleDebug = console.debug;
+  console.debug = () => {};
+
+  try {
+    const standard = createWidgetBridgeEnvironment();
+    let restore = installWidgetBridgeGlobals(standard);
+    const bridgeModule = await viteServer.ssrLoadModule("/src/lib/widgetBridge.ts");
+    bridgeModule.startCanvasightWidgetBridge();
+    await waitForCondition(
+      () => standard.records.appMessages.some((message) => message.method === "ui/notifications/initialized"),
+      "real MCP Apps postMessage initialization"
+    );
+    assert.equal(standard.records.appMessages.some((message) => message.method === "ui/initialize"), true);
+    standard.sendToolResult({
+      status: "opened",
+      sessionId: "session-postmessage",
+      token: "token-postmessage",
+      url: "http://127.0.0.1:54321/?sessionId=session-postmessage&token=token-postmessage"
+    });
+    await waitForCondition(
+      () => standard.window.__CANVASIGHT_WIDGET_DATA__?.sessionId === "session-postmessage",
+      "ui/notifications/tool-result widget data"
+    );
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.token, "token-postmessage");
+    assert.match(standard.statusEl.textContent, /Connecting Canvasight session/);
+    standard.window.dispatchEvent({ type: "load" });
+    assert.match(standard.statusEl.textContent, /Connecting Canvasight session/);
+    standard.window.dispatchEvent(new standard.TestCustomEvent("canvasight:app-ready", { detail: { status: "ready" } }));
+    assert.equal(standard.statusEl.textContent, "");
+    await closeWidgetBridgeEnvironment(standard);
+    restore();
+
+    const openaiCompat = createWidgetBridgeEnvironment();
+    restore = installWidgetBridgeGlobals(openaiCompat);
+    bridgeModule.startCanvasightWidgetBridge();
+    await waitForCondition(
+      () => openaiCompat.records.appMessages.some((message) => message.method === "ui/notifications/initialized"),
+      "OpenAI compatibility harness MCP initialization"
+    );
+    assert.equal(openaiCompat.window.openai.toolResponseMetadata, undefined);
+    openaiCompat.dispatchOpenAiGlobals({
+      sendFollowUpMessage: async () => ({ ok: true }),
+      toolOutput: { status: "opened" },
       toolResponseMetadata: {
         widgetData: {
           status: "opened",
-          canvasightHost: "widget",
-          sessionId: "session-direct-meta-container",
-          token: "widget-token",
-          browserUrl: "http://127.0.0.1:54321/?sessionId=session-direct-meta-container&token=widget-token"
+          sessionId: "session-openai-event",
+          token: "token-openai-event",
+          browserUrl: "http://127.0.0.1:54321/?sessionId=session-openai-event&token=token-openai-event"
         }
       }
-    }
-  });
-  assert.equal(directMetaContainerHarness.records.appendedScript?.id, "canvasight-app-module");
-  assert.equal(directMetaContainerHarness.records.appendedScript?.type, "module");
-  assert.equal(directMetaContainerHarness.statusEl.textContent, "");
+    });
+    await waitForCondition(
+      () => openaiCompat.window.__CANVASIGHT_WIDGET_DATA__?.sessionId === "session-openai-event",
+      "openai:set_globals event.detail.globals widget data"
+    );
+    assert.equal(openaiCompat.window.__CANVASIGHT_WIDGET_DATA__.token, "token-openai-event");
+    assert.equal(openaiCompat.window.canvasightMcp.getBridgeState().openaiFollowUpAvailable, true);
+    await closeWidgetBridgeEnvironment(openaiCompat);
+    restore();
 
-  const appModuleFailureHarness = await runWidgetBridgeHarness(bridgeScript, {
-    appModuleError: true,
-    openaiGlobals: {
-      toolResponseMetadata: {
-        mcp_tool_result: {
-          structuredContent: { status: "opened" },
-          _meta: {
-            widgetData: {
-              status: "opened",
-              canvasightHost: "widget",
-              sessionId: "session-app-module-failure",
-              token: "widget-token",
-              url: "http://127.0.0.1:54321/?sessionId=session-app-module-failure&token=widget-token"
-            }
-          }
-        }
-      }
-    }
-  });
-  assert.equal(appModuleFailureHarness.records.appendedScript?.type, "module");
-  assert.match(appModuleFailureHarness.statusEl.textContent, /Canvasight app failed to load/);
-
-  const unavailableHarness = await runWidgetBridgeHarness(bridgeScript, {
-    connectReject: "ui initialize failed"
-  });
-  assert.equal(unavailableHarness.api.canSendFollowUpMessage(), false);
-  await assert.rejects(
-    unavailableHarness.api.sendFollowUpMessage({
-      prompt: "Unavailable bridge",
-      content: [{ type: "text", text: "Unavailable bridge" }]
-    }),
-    /reason=openai_followup_missing/
-  );
+    const missingMetadata = createWidgetBridgeEnvironment({ bootstrapTimeoutMs: 25 });
+    restore = installWidgetBridgeGlobals(missingMetadata);
+    bridgeModule.startCanvasightWidgetBridge();
+    await waitForCondition(
+      () => missingMetadata.records.appMessages.some((message) => message.method === "ui/notifications/initialized"),
+      "missing metadata harness MCP initialization"
+    );
+    await waitForCondition(
+      () => /Canvasight session metadata timed out/.test(missingMetadata.statusEl.textContent),
+      "visible widget metadata timeout"
+    );
+    assert.equal(missingMetadata.statusEl.dataset.tone, "error");
+    assert.equal(missingMetadata.window.__CANVASIGHT_BRIDGE_STATE__.reason, "widget_metadata_timeout");
+    await closeWidgetBridgeEnvironment(missingMetadata);
+    restore();
+  } finally {
+    console.debug = originalConsoleDebug;
+    await viteServer.close();
+  }
 }
 
 function assertUniqueNodePositions(nodes, label) {
@@ -1130,6 +1212,7 @@ async function main() {
     assert.equal(toolNames.has("list_canvasight_node_templates"), true);
     assert.equal(toolNames.has("get_canvasight_node_template"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
+    assert.equal(toolNames.has("await_canvasight_widget_ready"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
     const renderTool = listed.tools.find((tool) => tool.name === "render_canvasight_canvas_widget");
@@ -1174,6 +1257,9 @@ async function main() {
       "task-plan",
       "general"
     ]);
+    const awaitWidgetReadyTool = listed.tools.find((tool) => tool.name === "await_canvasight_widget_ready");
+    assert.match(awaitWidgetReadyTool.description, /only status=ready confirms/);
+    assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId"]);
 
     const lifecycleClient = createMcpClient("lifecycle", {
       CODEX_THREAD_ID: "thread-lifecycle"
@@ -1313,22 +1399,17 @@ async function main() {
     const widgetHtml = widgetResource.contents[0].text;
     assert.match(widgetHtml, /id="root"/);
     assert.doesNotMatch(widgetHtml, /<iframe\b/i);
-    assert.doesNotMatch(widgetHtml, /<script\b[^>]*\btype=["']module/i);
-    assert.match(widgetHtml, /script\.type\s*=\s*["']module["']/);
-    assert.match(widgetHtml, /canvasightAppBundleSource/);
-    assert.match(widgetHtml, /window\.canvasightMcp/);
+    assert.match(widgetHtml, /<script\b[^>]*\bid="canvasightAppModule"[^>]*\btype="module"/i);
+    assert.doesNotMatch(widgetHtml, /canvasightAppBundleSource/);
+    assert.doesNotMatch(widgetHtml, /canvasightMcpHostBridge/);
+    assert.match(widgetHtml, /__CANVASIGHT_WIDGET_SHELL__/);
     assert.match(widgetHtml, /__CANVASIGHT_WIDGET_DATA__/);
-    assert.match(widgetHtml, /canvasightHost/);
-    assert.match(widgetHtml, /canvasight:send-follow-up/);
-    assert.match(widgetHtml, /sendFollowUpMessage/);
-    assert.match(widgetHtml, /mcpApp\.sendMessage/);
-    assert.match(widgetHtml, /window\.openai\?\.sendFollowUpMessage/);
-    assert.match(widgetHtml, /getBridgeState/);
-    assert.match(widgetHtml, /bridgeTransport/);
-    await assertWidgetBridgeAdapters(widgetHtml);
-    assert.ok(
-      widgetHtml.indexOf('id="root"') < widgetHtml.indexOf('id="canvasightMcpHostBridge"')
-    );
+    assert.match(widgetHtml, /canvasight:app-ready/);
+    assert.match(widgetHtml, /ui\/notifications\/tool-result/);
+    assert.match(widgetHtml, /openai:set_globals/);
+    assert.match(widgetHtml, /widget-ready/);
+    await assertDynamicWidgetRuntimeApi();
+    await assertWidgetBootstrapContracts(widgetHtml);
 
     const widgetOpened = await request("tools/call", {
       name: "render_canvasight_canvas_widget",
@@ -1337,6 +1418,7 @@ async function main() {
       }
     });
     const widgetOpenedData = widgetDataFor(widgetOpened);
+    daemonToken = new URL(widgetOpenedData.url).searchParams.get("token") || daemonToken;
     assert.equal(widgetOpened.structuredContent.activeCanvasContext, true);
     assert.equal(widgetOpenedData.browserUrl, widgetOpenedData.url);
     assert.equal(widgetOpenedData.apiBaseUrl, widgetOpenedData.origin);
@@ -1364,6 +1446,51 @@ async function main() {
     assert.match(await widgetPageResponse.text(), /id="root"/);
     const widgetSession = await fetchJson(`${widgetOpenedData.origin}/api/sessions/${widgetOpened.structuredContent.sessionId}`);
     assert.equal(widgetSession.codexThreadId, "thread-smoke");
+    assert.equal(widgetSession.widgetReady, null);
+    const widgetReadyBeforeAck = await request("tools/call", {
+      name: "await_canvasight_widget_ready",
+      arguments: {
+        sessionId: widgetOpened.structuredContent.sessionId,
+        threadId: "thread-smoke",
+        timeoutMs: 10
+      }
+    });
+    assert.equal(widgetReadyBeforeAck.structuredContent.status, "timeout");
+    assert.equal(widgetReadyBeforeAck.structuredContent.reactMounted, false);
+    const widgetReadyAck = await fetchJson(
+      `${widgetOpenedData.origin}/api/sessions/${widgetOpened.structuredContent.sessionId}/widget-ready`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          status: "ready",
+          stage: "api-ready",
+          reactMounted: true
+        })
+      }
+    );
+    assert.equal(widgetReadyAck.status, "ready");
+    assert.equal(widgetReadyAck.reactMounted, true);
+    const widgetReadyAfterAck = await request("tools/call", {
+      name: "await_canvasight_widget_ready",
+      arguments: {
+        sessionId: widgetOpened.structuredContent.sessionId,
+        threadId: "thread-smoke",
+        timeoutMs: 10
+      }
+    });
+    assert.equal(widgetReadyAfterAck.structuredContent.status, "ready");
+    assert.equal(widgetReadyAfterAck.structuredContent.reactMounted, true);
+    assert.equal(widgetReadyAfterAck.structuredContent.sessionId, widgetOpened.structuredContent.sessionId);
+    const widgetReadyWrongThread = await request("tools/call", {
+      name: "await_canvasight_widget_ready",
+      arguments: {
+        sessionId: widgetOpened.structuredContent.sessionId,
+        threadId: "thread-other",
+        timeoutMs: 10
+      }
+    });
+    assert.equal(widgetReadyWrongThread.structuredContent.status, "failed");
+    assert.match(widgetReadyWrongThread.structuredContent.error, /different Codex task/);
     await request("tools/call", {
       name: "close_canvasight",
       arguments: {
@@ -1410,7 +1537,8 @@ async function main() {
     const autoOpenedData = widgetDataFor(autoOpened);
     daemonToken = new URL(autoOpenedData.url).searchParams.get("token") || daemonToken;
     assert.equal(autoOpenedData.browserUrl, autoOpenedData.url);
-    assert.match(autoOpened.content[0].text, /native widget opened/);
+    assert.match(autoOpened.content[0].text, /native widget session created/);
+    assert.match(autoOpened.content[0].text, /await_canvasight_widget_ready/);
     assert.equal(autoOpened.structuredContent.activeCanvasContext, true);
     assert.equal(autoOpened.structuredContent.activeCanvasRouting.status, "active");
     assert.equal(autoOpened.structuredContent.canvasRouting.activeCanvasContext, true);

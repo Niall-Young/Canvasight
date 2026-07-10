@@ -4,14 +4,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import http from "node:http";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.51";
+const SERVER_VERSION = "0.2.0+codex.20260710062412";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -108,7 +107,6 @@ const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const require = createRequire(import.meta.url);
 const pluginRoot = path.resolve(__dirname, "..");
 const distRoot = path.join(pluginRoot, "dist");
 const isDaemonMode = process.argv.includes("--daemon");
@@ -1952,7 +1950,9 @@ async function createSession({ projectPath, language, threadId }) {
     documentRevision: projectDocumentRevision(resolvedProjectPath),
     createdAt: nowIso(),
     runQueue: [],
-    waiters: []
+    waiters: [],
+    widgetReady: null,
+    widgetReadyWaiters: []
   };
   sessions.set(id, session);
   if (session.codexThreadId) rememberThreadClaim(session, session.codexThreadId);
@@ -1966,8 +1966,118 @@ function sessionInfo(session) {
     documentRevision: projectDocumentRevision(session.projectPath),
     language: session.language,
     projectPath: session.projectPath,
-    sessionId: session.id
+    sessionId: session.id,
+    widgetReady: session.widgetReady
   };
+}
+
+function widgetReadyResult(session, value = {}) {
+  const status = value.status === "failed" ? "failed" : "ready";
+  return {
+    status,
+    sessionId: session.id,
+    threadId: session.codexThreadId || null,
+    projectPath: session.projectPath,
+    stage: typeof value.stage === "string" && value.stage ? value.stage : status === "ready" ? "api-ready" : "startup",
+    reactMounted: value.reactMounted === true,
+    error: status === "failed" && typeof value.error === "string" ? value.error : null,
+    reportedAt: nowIso()
+  };
+}
+
+function completeWidgetReadyWaiter(waiter, result) {
+  clearTimeout(waiter.timer);
+  if (waiter.abortSignal && waiter.abortHandler) {
+    waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
+  }
+  waiter.resolve(result);
+}
+
+function detachWidgetReadyWaiter(session, waiter) {
+  clearTimeout(waiter.timer);
+  if (waiter.abortSignal && waiter.abortHandler) {
+    waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
+  }
+  const index = session.widgetReadyWaiters.indexOf(waiter);
+  if (index >= 0) session.widgetReadyWaiters.splice(index, 1);
+}
+
+function setWidgetReady(session, value) {
+  const result = widgetReadyResult(session, value);
+  if (session.widgetReady?.status === "ready" && result.status !== "ready") return session.widgetReady;
+  session.widgetReady = result;
+  while (session.widgetReadyWaiters.length) {
+    completeWidgetReadyWaiter(session.widgetReadyWaiters.shift(), result);
+  }
+  return result;
+}
+
+function waitForWidgetReady(sessionIdValue, timeoutMs, options = {}) {
+  const session = sessions.get(sessionIdValue);
+  const threadId = optionalThreadId(options.threadId);
+  if (!session) {
+    return Promise.resolve({
+      status: "failed",
+      sessionId: sessionIdValue || "",
+      threadId,
+      projectPath: null,
+      stage: "session",
+      reactMounted: false,
+      error: "Canvasight session not found.",
+      reportedAt: nowIso()
+    });
+  }
+  if (threadId && session.codexThreadId && threadId !== session.codexThreadId) {
+    return Promise.resolve({
+      status: "failed",
+      sessionId: session.id,
+      threadId,
+      projectPath: session.projectPath,
+      stage: "thread",
+      reactMounted: false,
+      error: "Canvasight widget belongs to a different Codex task.",
+      reportedAt: nowIso()
+    });
+  }
+  if (session.widgetReady) return Promise.resolve(session.widgetReady);
+
+  const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 15_000), 300_000));
+  return new Promise((resolve) => {
+    const waiter = {
+      resolve,
+      timer: setTimeout(() => {
+        detachWidgetReadyWaiter(session, waiter);
+        resolve({
+          status: "timeout",
+          sessionId: session.id,
+          threadId: session.codexThreadId || threadId || null,
+          projectPath: session.projectPath,
+          stage: "widget-ready",
+          reactMounted: false,
+          error: `Canvasight widget did not report ready within ${timeout}ms.`,
+          reportedAt: nowIso()
+        });
+      }, timeout)
+    };
+    if (options.abortSignal) {
+      waiter.abortSignal = options.abortSignal;
+      waiter.abortHandler = () => {
+        detachWidgetReadyWaiter(session, waiter);
+        resolve({
+          status: "failed",
+          sessionId: session.id,
+          threadId: session.codexThreadId || threadId || null,
+          projectPath: session.projectPath,
+          stage: "widget-ready",
+          reactMounted: false,
+          error: "Canvasight widget ready wait was cancelled.",
+          reportedAt: nowIso()
+        });
+      };
+      options.abortSignal.addEventListener("abort", waiter.abortHandler, { once: true });
+    }
+    session.widgetReadyWaiters.push(waiter);
+  });
 }
 
 function getSession(id) {
@@ -2435,6 +2545,18 @@ function closeSession(sessionIdValue) {
       attachments: []
     });
   }
+  while (session.widgetReadyWaiters.length) {
+    completeWidgetReadyWaiter(session.widgetReadyWaiters.shift(), {
+      status: "failed",
+      sessionId: session.id,
+      threadId: session.codexThreadId || null,
+      projectPath: session.projectPath,
+      stage: "session",
+      reactMounted: false,
+      error: "Canvasight session closed before the widget became ready.",
+      reportedAt: nowIso()
+    });
+  }
   return true;
 }
 
@@ -2616,7 +2738,6 @@ function openExternalBrowser(url) {
   };
 }
 
-let cachedMcpAppsGlobalScript = "";
 let cachedInlineCanvasightApp = null;
 
 function escapeInlineScript(source) {
@@ -2641,42 +2762,6 @@ function inlineCanvasightApp() {
     style: stylePath ? fs.readFileSync(stylePath, "utf8") : ""
   };
   return cachedInlineCanvasightApp;
-}
-
-function parseExportMap(body) {
-  const exportMap = new Map();
-  for (const rawEntry of body.split(",")) {
-    const entry = rawEntry.trim();
-    if (!entry) continue;
-    const parts = entry.split(/\s+as\s+/);
-    const local = parts[0]?.trim();
-    const exported = (parts[1] || parts[0])?.trim();
-    if (local && exported) exportMap.set(exported, local);
-  }
-  return exportMap;
-}
-
-function mcpAppsGlobalScript() {
-  if (cachedMcpAppsGlobalScript) return cachedMcpAppsGlobalScript;
-
-  const sourcePath = require.resolve("@modelcontextprotocol/ext-apps/app-with-deps");
-  const source = fs.readFileSync(sourcePath, "utf8");
-  const exportStart = source.lastIndexOf("export{");
-  if (exportStart === -1) throw new Error("Could not find ext-apps browser export block.");
-  const exportBlock = source.slice(exportStart).match(/^export\{([^}]+)\};?\s*$/s);
-  if (!exportBlock) throw new Error("Could not parse ext-apps browser export block.");
-  const exportMap = parseExportMap(exportBlock[1]);
-  const requiredExports = ["App", "applyDocumentTheme", "applyHostFonts", "applyHostStyleVariables"];
-  for (const name of requiredExports) {
-    if (!exportMap.has(name)) throw new Error(`Missing ext-apps browser export: ${name}`);
-  }
-  cachedMcpAppsGlobalScript = [
-    source.slice(0, exportStart),
-    ";globalThis.__CANVASIGHT_MCP_APPS__={",
-    requiredExports.map((name) => `${JSON.stringify(name)}:${exportMap.get(name)}`).join(","),
-    "};"
-  ].join("");
-  return cachedMcpAppsGlobalScript;
 }
 
 function canvasightWidgetConnectDomains(extraOrigins = []) {
@@ -2714,508 +2799,8 @@ function canvasightWidgetResourceMeta(extraOrigins = []) {
   };
 }
 
-function canvasightWidgetBridgeScript() {
-  return `(() => {
-  "use strict";
-
-  const apps = globalThis.__CANVASIGHT_MCP_APPS__;
-  const frame = document.getElementById("canvasight-frame");
-  const status = document.getElementById("canvasight-widget-status");
-  let mcpApp = null;
-  let toolOutput = null;
-  let statusTimer = null;
-  let publishingHostGlobals = false;
-  const bridgeState = {
-    bridgeTransport: "none",
-    mcpInitialized: false,
-    hostCapabilitiesMessage: false,
-    openaiFollowUpAvailable: false,
-    lastBridgeError: null,
-    reason: "mcp_initialize_timeout",
-  };
-
-  function bridgeStateSnapshot() {
-    return { ...bridgeState };
-  }
-
-  function updateBridgeState(patch = {}) {
-    Object.assign(bridgeState, patch);
-    globalThis.__CANVASIGHT_BRIDGE_STATE__ = bridgeStateSnapshot();
-    window.dispatchEvent(new CustomEvent("canvasight:bridge-state", { detail: bridgeStateSnapshot() }));
-  }
-
-  function setStatus(message, tone = "muted") {
-    if (!status) return;
-    if (statusTimer) {
-      clearTimeout(statusTimer);
-      statusTimer = null;
-    }
-    status.textContent = message || "";
-    status.dataset.tone = tone;
-    if (message && tone === "ok") {
-      statusTimer = setTimeout(() => {
-        status.textContent = "";
-        statusTimer = null;
-      }, 1400);
-    }
-  }
-
-  function publishHostGlobals(globals) {
-    window.openai = Object.assign(window.openai || {}, globals);
-    publishingHostGlobals = true;
-    try {
-      window.dispatchEvent(new CustomEvent("openai:set_globals", {
-        detail: { globals: window.openai },
-      }));
-    } finally {
-      publishingHostGlobals = false;
-    }
-    refreshOpenAiBridge();
-  }
-
-  function withTimeout(promise, ms, label) {
-    let timer;
-    const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(label)), ms);
-    });
-    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-  }
-
-  function toBridgeError(error) {
-    if (error instanceof Error) return error;
-    return new Error(String(error || "Canvasight host bridge is unavailable."));
-  }
-
-  function hostCapabilities() {
-    try {
-      return mcpApp?.getHostCapabilities?.() || null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function refreshMcpBridgeState() {
-    const capabilities = hostCapabilities();
-    const hostCapabilitiesMessage = Boolean(capabilities?.message);
-    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
-      updateBridgeState({
-        bridgeTransport: "mcp_ui_message",
-        hostCapabilitiesMessage,
-        reason: "native_bridge_ready",
-        lastBridgeError: null,
-      });
-      return;
-    }
-    updateBridgeState({
-      hostCapabilitiesMessage,
-      reason: bridgeState.mcpInitialized ? "host_message_method_missing" : bridgeState.reason,
-    });
-  }
-
-  function openAiFollowUpFunction() {
-    if (typeof window.openai?.sendFollowUpMessage === "function") {
-      return window.openai.sendFollowUpMessage.bind(window.openai);
-    }
-    if (typeof window.openai?.sendFollowupMessage === "function") {
-      return window.openai.sendFollowupMessage.bind(window.openai);
-    }
-    return null;
-  }
-
-  function refreshOpenAiBridge() {
-    const openaiFollowUpAvailable = Boolean(openAiFollowUpFunction());
-    if (openaiFollowUpAvailable && bridgeState.bridgeTransport !== "mcp_ui_message") {
-      updateBridgeState({
-        bridgeTransport: "openai_compat_followup",
-        openaiFollowUpAvailable,
-        reason: "native_bridge_ready",
-        lastBridgeError: null,
-      });
-      return true;
-    }
-    updateBridgeState({ openaiFollowUpAvailable });
-    return openaiFollowUpAvailable;
-  }
-
-  function isNativeBridgeReady() {
-    refreshMcpBridgeState();
-    refreshOpenAiBridge();
-    return bridgeState.bridgeTransport === "mcp_ui_message" || bridgeState.bridgeTransport === "openai_compat_followup";
-  }
-
-  function bridgeUnavailableError(reason) {
-    const finalReason =
-      reason ||
-      bridgeState.reason ||
-      (bridgeState.mcpInitialized ? "host_message_capability_missing" : "mcp_initialize_timeout");
-    const detail = [
-      "Canvasight native widget host bridge is not ready.",
-      \`reason=\${finalReason}\`,
-      \`bridgeTransport=\${bridgeState.bridgeTransport}\`,
-      \`mcpInitialized=\${bridgeState.mcpInitialized}\`,
-      \`hostCapabilitiesMessage=\${bridgeState.hostCapabilitiesMessage}\`,
-      \`openaiFollowUpAvailable=\${bridgeState.openaiFollowUpAvailable}\`,
-      bridgeState.lastBridgeError ? \`lastBridgeError=\${bridgeState.lastBridgeError}\` : "",
-    ].filter(Boolean).join(" ");
-    return new Error(detail);
-  }
-
-  async function waitForMcpReady() {
-    if (bridgeState.mcpInitialized) return true;
-    if (!mcpApp?.ready) return false;
-    try {
-      await withTimeout(mcpApp.ready, 4000, "mcp_initialize_timeout");
-      refreshMcpBridgeState();
-      return bridgeState.mcpInitialized;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
-      updateBridgeState({
-        bridgeTransport: "none",
-        mcpInitialized: false,
-        lastBridgeError: message,
-        reason: "mcp_initialize_timeout",
-      });
-      return false;
-    }
-  }
-
-  function currentSize() {
-    const root = document.documentElement;
-    const body = document.body;
-    return {
-      width: Math.ceil(window.innerWidth || root.clientWidth || 0),
-      height: Math.ceil(Math.max(root.scrollHeight || 0, root.offsetHeight || 0, body?.scrollHeight || 0, body?.offsetHeight || 0)),
-    };
-  }
-
-  function sendCurrentSize() {
-    try {
-      if (mcpApp && typeof mcpApp.sendSizeChanged === "function") mcpApp.sendSizeChanged(currentSize());
-    } catch (_error) {
-      // Hosts without size notifications can keep the default widget size.
-    }
-  }
-
-  function applyHostContext(context) {
-    if (!context) return;
-    try {
-      if (context.theme && typeof apps.applyDocumentTheme === "function") apps.applyDocumentTheme(context.theme);
-      if (context.styles?.variables && typeof apps.applyHostStyleVariables === "function") apps.applyHostStyleVariables(context.styles.variables);
-      if (context.styles?.css?.fonts && typeof apps.applyHostFonts === "function") apps.applyHostFonts(context.styles.css.fonts);
-    } catch (_error) {
-      // Host styling is a progressive enhancement.
-    }
-    publishHostGlobals({
-      hostContext: context,
-      displayMode: context.displayMode,
-      availableDisplayModes: context.availableDisplayModes,
-      widgetInstanceId: context.widgetInstanceId || context.widgetId,
-    });
-  }
-
-  function payloadFromToolResult(result) {
-    const directWidgetData = result?.widgetData;
-    const metadata = result?._meta || (directWidgetData ? result : {});
-    const payload = directWidgetData || metadata.widgetData || result?.structuredContent || result || {};
-    return { metadata, payload };
-  }
-
-  function hasWidgetSessionUrl(value) {
-    if (!value || typeof value !== "object") return false;
-    const widgetData = value.widgetData || value._meta?.widgetData || value;
-    return typeof widgetData.url === "string" || typeof widgetData.browserUrl === "string";
-  }
-
-  function canonicalToolResult(value) {
-    if (!value || typeof value !== "object") return null;
-    const nested = value.mcp_tool_result || value.call_tool_result || value.result;
-    if (nested && nested !== value && typeof nested === "object") return canonicalToolResult(nested);
-    return value;
-  }
-
-  function toolResultFromOpenAiGlobals() {
-    const metadata = window.openai?.toolResponseMetadata;
-    const canonical = canonicalToolResult(metadata);
-    if (hasWidgetSessionUrl(canonical)) return canonical;
-    const structuredContent = window.openai?.toolOutput;
-    if (!structuredContent || typeof structuredContent !== "object") return canonical;
-    return {
-      structuredContent,
-      _meta: metadata && typeof metadata === "object" ? metadata : {},
-    };
-  }
-
-  function setFrameSource(payload) {
-    if (!payload) return;
-    const url = payload.browserUrl || payload.url;
-    if (!url) return;
-    toolOutput = payload;
-    const frameUrl = new URL(url);
-    frameUrl.searchParams.set("canvasightHost", "widget");
-    const widgetData = {
-      ...payload,
-      apiBaseUrl: payload.origin || frameUrl.origin,
-      canvasightHost: "widget",
-      sessionId: payload.sessionId || frameUrl.searchParams.get("sessionId") || "local",
-      token: frameUrl.searchParams.get("token") || payload.token || "",
-      url: frameUrl.toString(),
-      browserUrl: frameUrl.toString(),
-    };
-    globalThis.__CANVASIGHT_WIDGET_DATA__ = widgetData;
-    publishHostGlobals({
-      toolOutput: widgetData,
-      toolResponseMetadata: widgetData,
-      widgetData,
-    });
-    window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: widgetData }));
-    const href = frameUrl.toString();
-    if (frame) {
-      if (frame.src !== href) frame.src = href;
-    } else {
-      startCanvasightApp();
-    }
-  }
-
-  function startCanvasightApp() {
-    if (document.getElementById("canvasight-app-module")) return;
-    const source = document.getElementById("canvasightAppBundleSource");
-    if (!source) {
-      setStatus("Canvasight app bundle is missing.", "error");
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "canvasight-app-module";
-    script.type = "module";
-    script.textContent = source.textContent || "";
-    script.addEventListener("load", () => {
-      setStatus("", "ok");
-      sendCurrentSize();
-    });
-    script.addEventListener("error", () => {
-      setStatus("Canvasight app failed to load. Reopen Canvasight and try again.", "error");
-    });
-    setStatus("Loading Canvasight...", "muted");
-    document.body.appendChild(script);
-  }
-
-  function handleToolResult(result) {
-    const { metadata, payload } = payloadFromToolResult(result);
-    toolOutput = payload;
-    publishHostGlobals({
-      rawToolResult: result,
-      toolOutput: payload,
-      toolResponseMetadata: metadata,
-    });
-    setFrameSource(payload);
-    sendCurrentSize();
-  }
-
-  function hydrateFromOpenAiGlobals() {
-    const result = toolResultFromOpenAiGlobals();
-    if (!result) return false;
-    const { payload } = payloadFromToolResult(result);
-    if (!payload?.url && !payload?.browserUrl) return false;
-    handleToolResult(result);
-    return true;
-  }
-
-  function promptFromMessage(message, content) {
-    if (typeof message?.prompt === "string" && message.prompt.trim()) return message.prompt;
-    return content
-      .map((item) => (item && typeof item.text === "string" ? item.text : ""))
-      .filter(Boolean)
-      .join("\\n\\n");
-  }
-
-  async function sendWithOpenAiFollowUp(prompt) {
-    const sendFollowUp = openAiFollowUpFunction();
-    if (!sendFollowUp) {
-      updateBridgeState({
-        bridgeTransport: "none",
-        openaiFollowUpAvailable: false,
-        reason: bridgeState.mcpInitialized ? "host_message_capability_missing" : "openai_followup_missing",
-      });
-      throw bridgeUnavailableError(bridgeState.reason);
-    }
-    updateBridgeState({
-      bridgeTransport: "openai_compat_followup",
-      openaiFollowUpAvailable: true,
-      reason: "native_bridge_ready",
-      lastBridgeError: null,
-    });
-    return withTimeout(
-      Promise.resolve(sendFollowUp({ prompt, scrollToBottom: true })),
-      8000,
-      "Host did not accept the Canvasight Run through window.openai.sendFollowUpMessage."
-    );
-  }
-
-  async function sendWithMcpUiMessage(content) {
-    if (!mcpApp || typeof mcpApp.sendMessage !== "function") throw bridgeUnavailableError("mcp_initialize_timeout");
-    await waitForMcpReady();
-    refreshMcpBridgeState();
-    if (!bridgeState.mcpInitialized) throw bridgeUnavailableError("mcp_initialize_timeout");
-    updateBridgeState({
-      bridgeTransport: "mcp_ui_message",
-      reason: "native_bridge_ready",
-      lastBridgeError: null,
-    });
-    return withTimeout(mcpApp.sendMessage({ role: "user", content }), 8000, "Host did not accept the Canvasight Run.");
-  }
-
-  async function sendFollowUpMessage(message) {
-    const prompt = typeof message?.prompt === "string" ? message.prompt : "";
-    const content = Array.isArray(message?.content) ? message.content : [{ type: "text", text: prompt }];
-    const resolvedPrompt = promptFromMessage(message, content);
-    if (!resolvedPrompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
-    refreshMcpBridgeState();
-    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
-      const result = await sendWithMcpUiMessage(content);
-      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
-      return result || {};
-    }
-    if (refreshOpenAiBridge()) {
-      const result = await sendWithOpenAiFollowUp(resolvedPrompt);
-      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
-      return result || {};
-    }
-    await waitForMcpReady();
-    refreshMcpBridgeState();
-    if (bridgeState.mcpInitialized && typeof mcpApp?.sendMessage === "function") {
-      const result = await sendWithMcpUiMessage(content);
-      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
-      return result || {};
-    }
-    if (refreshOpenAiBridge()) {
-      const result = await sendWithOpenAiFollowUp(resolvedPrompt);
-      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
-      return result || {};
-    }
-    const reason = bridgeState.mcpInitialized ? "host_message_method_missing" : "openai_followup_missing";
-    updateBridgeState({ reason });
-    throw bridgeUnavailableError(reason);
-  }
-
-  async function callServerTool(request, options) {
-    if (!mcpApp || typeof mcpApp.callServerTool !== "function") throw new Error("Host tool bridge is unavailable.");
-    await waitForMcpReady();
-    if (!bridgeState.mcpInitialized) throw bridgeUnavailableError("mcp_initialize_timeout");
-    return withTimeout(mcpApp.callServerTool(request, options), options?.timeoutMs || 30000, "Canvasight server tool call timed out.");
-  }
-
-  function installCanvasightApi() {
-    const api = window.canvasightMcp || {};
-    api.sendFollowUpMessage = sendFollowUpMessage;
-    api.callServerTool = callServerTool;
-    api.canSendFollowUpMessage = isNativeBridgeReady;
-    api.getBridgeState = bridgeStateSnapshot;
-    api.getHostCapabilities = () => {
-      try {
-        return mcpApp?.getHostCapabilities?.() || null;
-      } catch (_error) {
-        return null;
-      }
-    };
-    api.toolOutput = () => toolOutput;
-    window.canvasightMcp = api;
-    updateBridgeState({});
-  }
-
-  window.addEventListener("message", async (event) => {
-    const data = event.data || {};
-    if (data.source !== "canvasight-web" || data.type !== "canvasight:send-follow-up") return;
-    if (frame && event.source !== frame.contentWindow) return;
-    try {
-      setStatus("Sending Canvasight Run to current thread...", "muted");
-      await sendFollowUpMessage(data);
-      event.source?.postMessage({
-        source: "canvasight-widget",
-        type: "canvasight:send-follow-up-result",
-        requestId: data.requestId,
-        ok: true,
-      }, event.origin || "*");
-      setStatus("Sent to current Codex thread", "ok");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      event.source?.postMessage({
-        source: "canvasight-widget",
-        type: "canvasight:send-follow-up-result",
-        requestId: data.requestId,
-        ok: false,
-        error: message,
-      }, event.origin || "*");
-      setStatus(message, "error");
-    }
-  });
-
-  window.addEventListener("message", (event) => {
-    const result = event.data?.params?.result || event.data?.params;
-    if (event.data?.method === "ui/notifications/tool-result" && result) handleToolResult(result);
-  });
-
-  window.addEventListener("openai:set_globals", () => {
-    if (!publishingHostGlobals) hydrateFromOpenAiGlobals();
-  });
-
-  try {
-    if (!apps || typeof apps.App !== "function") throw new Error("Canvasight MCP Apps bridge bundle is unavailable.");
-    mcpApp = new apps.App(
-      { name: "canvasight", version: ${JSON.stringify(SERVER_VERSION)} },
-      { availableDisplayModes: ["inline", "fullscreen"] },
-      { autoResize: true },
-    );
-    globalThis.__CANVASIGHT_MCP_APP__ = mcpApp;
-    installCanvasightApi();
-    hydrateFromOpenAiGlobals();
-    mcpApp.addEventListener("hostcontextchanged", applyHostContext);
-    mcpApp.addEventListener("toolresult", handleToolResult);
-    mcpApp.ready = mcpApp.connect()
-      .then(() => {
-        installCanvasightApi();
-        updateBridgeState({
-          mcpInitialized: true,
-          lastBridgeError: null,
-        });
-        refreshMcpBridgeState();
-        publishHostGlobals({
-          hostCapabilities: mcpApp.getHostCapabilities && mcpApp.getHostCapabilities(),
-          hostInfo: mcpApp.getHostVersion && mcpApp.getHostVersion(),
-        });
-        applyHostContext(mcpApp.getHostContext && mcpApp.getHostContext());
-        mcpApp.requestDisplayMode?.({ mode: "fullscreen" }).catch(() => {});
-        sendCurrentSize();
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
-        updateBridgeState({
-          bridgeTransport: refreshOpenAiBridge() ? "openai_compat_followup" : "none",
-          mcpInitialized: false,
-          lastBridgeError: message,
-          reason: refreshOpenAiBridge() ? "native_bridge_ready" : "mcp_initialize_timeout",
-        });
-        if (!bridgeState.openaiFollowUpAvailable) setStatus(message, "error");
-      });
-    setStatus("Opening Canvasight...", "muted");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    globalThis.__CANVASIGHT_MCP_HOST_ERROR__ = error;
-    updateBridgeState({
-      bridgeTransport: refreshOpenAiBridge() ? "openai_compat_followup" : "none",
-      mcpInitialized: false,
-      lastBridgeError: message,
-      reason: refreshOpenAiBridge() ? "native_bridge_ready" : "mcp_initialize_timeout",
-    });
-    if (!bridgeState.openaiFollowUpAvailable) setStatus(message, "error");
-  }
-})();`;
-}
-
 function canvasightWidgetHtml() {
   const app = inlineCanvasightApp();
-  const bridgeBundle = escapeInlineScript(mcpAppsGlobalScript());
-  const bridgeScript = escapeInlineScript(canvasightWidgetBridgeScript());
   const appScript = escapeInlineScript(app.script);
   const appStyle = escapeInlineStyle(app.style);
   return `<!doctype html>
@@ -3279,15 +2864,31 @@ function canvasightWidgetHtml() {
       color: #a62626;
     }
   </style>
-  <script id="canvasightMcpAppsBundle">${bridgeBundle}</script>
-  <script id="canvasightAppBundleSource" type="text/plain">${appScript}</script>
+  <script>
+    globalThis.__CANVASIGHT_WIDGET_SHELL__ = true;
+    globalThis.__CANVASIGHT_WIDGET_SERVER_VERSION__ = ${JSON.stringify(SERVER_VERSION)};
+  </script>
 </head>
 <body>
   <div id="canvasight-widget-root">
     <div id="root"></div>
-    <div id="canvasight-widget-status" role="status" aria-live="polite"></div>
+    <div id="canvasight-widget-status" role="status" aria-live="polite">Starting Canvasight...</div>
   </div>
-  <script id="canvasightMcpHostBridge">${bridgeScript}</script>
+  <script>
+    window.addEventListener("error", (event) => {
+      const status = document.getElementById("canvasight-widget-status");
+      if (!status) return;
+      status.textContent = event.error?.message || event.message || "Canvasight module failed to start.";
+      status.dataset.tone = "error";
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      const status = document.getElementById("canvasight-widget-status");
+      if (!status) return;
+      status.textContent = event.reason?.message || String(event.reason || "Canvasight startup promise failed.");
+      status.dataset.tone = "error";
+    });
+  </script>
+  <script id="canvasightAppModule" type="module">${appScript}</script>
 </body>
 </html>`;
 }
@@ -3830,6 +3431,32 @@ async function handleSessionApi(req, res, url) {
     return true;
   }
 
+  if (action === "widget-ready") {
+    if (req.method === "GET") {
+      sendJson(res, 200, session.widgetReady || {
+        status: "pending",
+        sessionId: session.id,
+        threadId: session.codexThreadId || null,
+        projectPath: session.projectPath,
+        stage: "widget-ready",
+        reactMounted: false,
+        error: null,
+        reportedAt: null
+      });
+      return true;
+    }
+    assertMethod(req, "POST");
+    const body = await readJsonBody(req);
+    if (body?.status !== "ready" && body?.status !== "failed") {
+      throw new HttpError(400, "Widget ready status must be ready or failed.", "invalid_widget_ready_status");
+    }
+    if (body.status === "ready" && body.reactMounted !== true) {
+      throw new HttpError(400, "Widget ready acknowledgement requires reactMounted=true.", "widget_not_mounted");
+    }
+    sendJson(res, 200, setWidgetReady(session, body));
+    return true;
+  }
+
   if (action === "open-project") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
@@ -4108,6 +3735,27 @@ async function handleHttp(req, res) {
       res.off("close", abort);
       if (res.destroyed) return;
       sendJson(res, 200, run);
+      return;
+    }
+
+    if (url.pathname === "/api/widget-ready/await") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const sessionIdValue = typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+      if (!sessionIdValue) throw new HttpError(400, "sessionId is required", "missing_session_id");
+      const abortController = new AbortController();
+      const abort = () => {
+        if (!res.writableEnded) abortController.abort();
+      };
+      res.on("close", abort);
+      const result = await waitForWidgetReady(sessionIdValue, body?.timeoutMs, {
+        threadId: body?.threadId,
+        abortSignal: abortController.signal
+      });
+      res.off("close", abort);
+      if (res.destroyed) return;
+      sendJson(res, 200, result);
       return;
     }
 
@@ -4393,7 +4041,7 @@ async function toolRenderCanvasightCanvasWidget(args) {
   });
   const canvasRouting = canvasRoutingContext();
   const widgetData = {
-    status: "opened",
+    status: "opening",
     rendering: "native-widget",
     widget: "canvasight-canvas-widget",
     sessionId: session.sessionId,
@@ -4414,7 +4062,7 @@ async function toolRenderCanvasightCanvasWidget(args) {
   return toolResult(
     publicWidgetOpenResult(widgetData),
     [
-      `Canvasight native widget opened for project: ${session.projectPath}`,
+      `Canvasight native widget session created for project: ${session.projectPath}. Await await_canvasight_widget_ready before reporting that the canvas is open.`,
       canvasRouting.userFacingInstruction
     ].join("\n\n"),
     widgetToolMeta(widgetData)
@@ -4629,6 +4277,26 @@ async function toolAwaitCanvasightRun(args) {
   return toolResult(run, text);
 }
 
+async function toolAwaitCanvasightWidgetReady(args) {
+  const sessionIdValue = typeof args?.sessionId === "string" ? args.sessionId.trim() : "";
+  if (!sessionIdValue) throw new Error("sessionId is required");
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const daemon = await ensureDaemonServer();
+  const result = await daemonJson(daemon, "/api/widget-ready/await", {
+    method: "POST",
+    body: JSON.stringify({
+      sessionId: sessionIdValue,
+      threadId,
+      timeoutMs: args?.timeoutMs
+    })
+  });
+  const text =
+    result.status === "ready"
+      ? `Canvasight widget ready: ${result.sessionId}`
+      : `Canvasight widget ${result.status}: ${result.error || result.stage || "unknown"}`;
+  return toolResult(result, text);
+}
+
 async function toolCloseCanvasight(args) {
   if (typeof args?.sessionId !== "string" || !args.sessionId) {
     throw new Error("sessionId is required");
@@ -4692,7 +4360,7 @@ const tools = [
       "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
       "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
-      "openai/toolInvocation/invoked": "Canvasight widget ready"
+      "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
   },
   {
@@ -4729,7 +4397,7 @@ const tools = [
       "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
       "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
-      "openai/toolInvocation/invoked": "Canvasight widget ready"
+      "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
   },
   {
@@ -4813,7 +4481,7 @@ const tools = [
       "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
       "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
-      "openai/toolInvocation/invoked": "Canvasight widget ready"
+      "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
   },
   {
@@ -4972,6 +4640,33 @@ const tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "await_canvasight_widget_ready",
+    description:
+      "Wait for the real Canvasight native widget client to mount React, reach its daemon session API, and acknowledge ready. Call this after open_canvasight; only status=ready confirms that the canvas is visibly initialized.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "Session id returned by open_canvasight."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional current Codex task id used to reject readiness from a different task."
+        },
+        timeoutMs: {
+          type: "number",
+          minimum: 1,
+          maximum: 300000,
+          description: "Maximum wait in milliseconds. Defaults to 15000."
+        }
+      },
+      required: ["sessionId"],
+      additionalProperties: false
+    },
+    outputSchema: looseObjectOutputSchema
+  },
+  {
     name: "await_canvasight_run",
     description: "Wait for a browser run payload from a Canvasight session. The current Codex thread receives and applies the run payload.",
     inputSchema: {
@@ -5024,6 +4719,7 @@ async function callTool(name, args) {
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
+  if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
   if (name === "close_canvasight") return toolCloseCanvasight(args || {});
   throw new Error(`Unknown tool: ${name}`);

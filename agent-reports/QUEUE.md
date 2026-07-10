@@ -10,10 +10,13 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- None.
+- `agent-reports/assigned/20260710-1359-development-issue-native-widget-bootstrap-architecture-reset.md` - critical architecture reset implemented and installed as 0.2.0; real-host acceptance is blocked until Codex Desktop reloads its app-level plugin registry, then a newly tagged task verifies ready, controls, and Run.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1433-integration-summary-native-widget-bootstrap-architecture-reset.md` - integrated the 0.2.0 bootstrap reset, ready acknowledgement, regression gates, docs/skills, exact-version reinstall, and recorded the Codex host-reload acceptance blocker.
+- `agent-reports/resolved/20260710-1426-test-solution-native-widget-bootstrap-regression-gates.md` - replaced FakeApp/load-event false positives with real ext-apps postMessage, dynamic runtime, timeout, and widget-ready regression gates; native Codex host acceptance remains pending.
+- `agent-reports/resolved/20260710-1420-development-solution-native-widget-bootstrap-architecture-reset.md` - replaced the server-string bridge with a typed MCP Apps bootstrap, dynamic widget runtime, and daemon-backed ready acknowledgement; real Codex acceptance remains assigned.
 - `agent-reports/resolved/20260710-1058-integration-summary-direct-widget-metadata-bootstrap.md` - integrated the 0.1.51 direct widget metadata bootstrap fix, red-to-green host-shape smoke, validation, and native-host reload risk.
 - `agent-reports/resolved/20260710-1056-development-solution-direct-widget-metadata-bootstrap.md` - made native widget bootstrap accept direct Codex host metadata while preserving the widget bridge.
 - `agent-reports/resolved/20260710-1056-development-issue-direct-widget-metadata-bootstrap.md` - resolved native Canvasight opening stuck on direct metadata host shapes.

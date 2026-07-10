@@ -589,6 +589,13 @@ function canvasightDevApiPlugin() {
 
 export default defineConfig({
   plugins: [canvasightDevApiPlugin(), react()],
+  build: {
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true
+      }
+    }
+  },
   server: {
     host: "127.0.0.1"
   },

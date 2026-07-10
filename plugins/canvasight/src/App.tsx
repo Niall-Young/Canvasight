@@ -1096,7 +1096,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
     canvasightApi
       .getSession()
-      .then((session) => {
+      .then(async (session) => {
+        await canvasightApi.reportWidgetReady();
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
         const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
@@ -1113,6 +1114,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         return undefined;
       })
       .catch((error) => {
+        void canvasightApi.reportWidgetFailure(error, "session");
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
         const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;

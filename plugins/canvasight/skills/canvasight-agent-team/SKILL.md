@@ -34,7 +34,7 @@ Do not create every role by default. Small, self-contained tasks may only need t
 - When a role agent is created, reused, unavailable, or replaced, record that in an integration summary.
 - This skill does not replace `canvasight-open`, `canvasight-run`, `canvasight-graph-writer`, or `canvasight-troubleshooting`.
 - The Canvasight setting controls whether Run Markdown includes this protocol. It does not delete repo rules, existing reports, or `AGENTS.md`.
-- New Canvasight servers persist the managed `AGENTS.md` block before delivering the Run payload. Older servers may require Codex to perform the same Development Standards Lead bootstrap manually.
+- Require the Canvasight server or the Development Standards Lead bootstrap to persist the managed `AGENTS.md` block before relying on Agent Team rules from a Run payload.
 - If required subagents cannot be created or reused because of tool limits, record that limitation in the integration summary and perform that role's checklist in the main thread.
 - Every blocking, high-risk, or cross-role issue must be written as a Markdown report before solution work continues.
 - Every role agent that accepts, blocks, solves, or hands off work must update the relevant report status and queue entry before the main thread delivers.

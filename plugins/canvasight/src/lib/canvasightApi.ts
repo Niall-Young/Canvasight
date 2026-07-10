@@ -137,6 +137,8 @@ interface CanvasightWidgetRuntimeData {
 type CanvasightWindow = Window &
   typeof globalThis & {
     __CANVASIGHT_WIDGET_DATA__?: CanvasightWidgetRuntimeData;
+    __CANVASIGHT_WIDGET_BOOTSTRAP_TIMEOUT_MS__?: number;
+    __CANVASIGHT_WIDGET_SHELL__?: boolean;
     canvasightMcp?: {
       canSendFollowUpMessage?: () => boolean;
       getBridgeState?: () => CanvasightBridgeState;
@@ -148,6 +150,55 @@ type CanvasightWindow = Window &
 
 function widgetRuntimeData(): CanvasightWidgetRuntimeData {
   return ((window as CanvasightWindow).__CANVASIGHT_WIDGET_DATA__ ?? {}) as CanvasightWidgetRuntimeData;
+}
+
+const defaultWidgetRuntimeTimeoutMs = 10_000;
+let widgetRuntimeWaitPromise: Promise<CanvasightWidgetRuntimeData> | null = null;
+
+function isNativeWidgetShell(): boolean {
+  const runtime = widgetRuntimeData();
+  return Boolean((window as CanvasightWindow).__CANVASIGHT_WIDGET_SHELL__ || runtime.canvasightHost === "widget");
+}
+
+function widgetRuntimeReady(): boolean {
+  if (!isNativeWidgetShell()) return true;
+  const runtime = widgetRuntimeData();
+  const sessionId = runtime.sessionId || "";
+  const baseUrl = runtime.apiBaseUrl || runtime.origin || runtime.url || runtime.browserUrl || "";
+  return Boolean(sessionId && sessionId !== "local" && baseUrl);
+}
+
+function widgetRuntimeTimeoutMs(): number {
+  const configured = Number((window as CanvasightWindow).__CANVASIGHT_WIDGET_BOOTSTRAP_TIMEOUT_MS__);
+  return Number.isFinite(configured) && configured > 0 ? configured : defaultWidgetRuntimeTimeoutMs;
+}
+
+export function waitForCanvasightRuntimeData(): Promise<CanvasightWidgetRuntimeData> {
+  if (widgetRuntimeReady()) return Promise.resolve(widgetRuntimeData());
+  if (widgetRuntimeWaitPromise) return widgetRuntimeWaitPromise;
+
+  widgetRuntimeWaitPromise = new Promise<CanvasightWidgetRuntimeData>((resolve, reject) => {
+    const timeoutMs = widgetRuntimeTimeoutMs();
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Canvasight session metadata timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+    const handleWidgetData = () => {
+      if (!widgetRuntimeReady()) return;
+      cleanup();
+      resolve(widgetRuntimeData());
+    };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("canvasight:widget-data", handleWidgetData);
+    };
+    window.addEventListener("canvasight:widget-data", handleWidgetData);
+    handleWidgetData();
+  }).finally(() => {
+    widgetRuntimeWaitPromise = null;
+  });
+
+  return widgetRuntimeWaitPromise;
 }
 
 function tokenFromRuntimeUrl(): string {
@@ -351,6 +402,7 @@ function shouldUseLocalTemplateStore(error: unknown): boolean {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  await waitForCanvasightRuntimeData();
   const token = sessionTokenFromUrl();
   const targetUrl = apiUrl(path);
   let response: Response;
@@ -381,6 +433,11 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new CanvasightApiError(message, response.status, payload);
   }
   return response.json() as Promise<T>;
+}
+
+async function requestSessionJson<T>(suffix = "", init?: RequestInit): Promise<T> {
+  await waitForCanvasightRuntimeData();
+  return requestJson<T>(`/api/sessions/${sessionIdFromUrl()}${suffix}`, init);
 }
 
 function canAttemptWidgetFollowUp(): boolean {
@@ -520,42 +577,77 @@ async function fileInputToPayload(input: AttachmentInput): Promise<{
 }
 
 export const canvasightApi = {
-  sessionId: sessionIdFromUrl(),
-  token: sessionTokenFromUrl(),
+  get sessionId(): string {
+    return sessionIdFromUrl();
+  },
 
-  getSession(): Promise<SessionInfo> {
-    return requestJson<SessionInfo>(`/api/sessions/${this.sessionId}`);
+  get token(): string {
+    return sessionTokenFromUrl();
+  },
+
+  async getSession(): Promise<SessionInfo> {
+    return requestSessionJson<SessionInfo>();
+  },
+
+  async reportWidgetReady(): Promise<void> {
+    if (!isNativeWidgetShell()) return;
+    const response = await requestSessionJson<{ status: "ready" }>("/widget-ready", {
+      method: "POST",
+      body: JSON.stringify({
+        status: "ready",
+        stage: "api-ready",
+        reactMounted: true
+      })
+    });
+    if (response.status !== "ready") throw new Error("Canvasight daemon did not accept the widget ready acknowledgement.");
+    window.dispatchEvent(new CustomEvent("canvasight:app-ready", { detail: response }));
+  },
+
+  async reportWidgetFailure(error: unknown, stage = "session"): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error || "Canvasight failed to start.");
+    window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage } }));
+    if (!isNativeWidgetShell() || !widgetRuntimeReady()) return;
+    try {
+      await requestSessionJson("/widget-ready", {
+        method: "POST",
+        body: JSON.stringify({ status: "failed", stage, error: message })
+      });
+    } catch {
+      // The visible app error remains authoritative when the daemon cannot receive failure telemetry.
+    }
   },
 
   openProject(projectPath: string): Promise<OpenProjectResult> {
-    return requestJson<OpenProjectResult>(`/api/sessions/${this.sessionId}/open-project`, {
+    return requestSessionJson<OpenProjectResult>("/open-project", {
       method: "POST",
       body: JSON.stringify({ projectPath })
     });
   },
 
   resolveThreadProject(threadId: string, language?: LanguagePreference): Promise<OpenProjectResult> {
-    return requestJson<OpenProjectResult>(`/api/sessions/${this.sessionId}/resolve-thread-project`, {
+    return requestSessionJson<OpenProjectResult>("/resolve-thread-project", {
       method: "POST",
       body: JSON.stringify({ language, threadId })
     });
   },
 
-  claimThread(projectPath: string, threadId: string, language?: LanguagePreference): Promise<ThreadClaimResponse> {
-    const path = this.sessionId === "local" ? "/api/sessions/local/claim" : "/api/sessions/claim";
+  async claimThread(projectPath: string, threadId: string, language?: LanguagePreference): Promise<ThreadClaimResponse> {
+    await waitForCanvasightRuntimeData();
+    const currentSessionId = sessionIdFromUrl();
+    const path = currentSessionId === "local" ? "/api/sessions/local/claim" : "/api/sessions/claim";
     return requestJson<ThreadClaimResponse>(path, {
       method: "POST",
       body: JSON.stringify({
         language,
         projectPath,
-        sessionId: this.sessionId,
+        sessionId: currentSessionId,
         threadId
       })
     });
   },
 
   saveDocument(projectPath: string, document: ScatterDocument, expectedRevision: number | null): Promise<SaveDocumentResult> {
-    return requestJson<SaveDocumentResult>(`/api/sessions/${this.sessionId}/document`, {
+    return requestSessionJson<SaveDocumentResult>("/document", {
       method: "POST",
       body: JSON.stringify({ document, expectedRevision, projectPath })
     });
@@ -563,21 +655,21 @@ export const canvasightApi = {
 
   async saveAttachments(projectPath: string, inputs: AttachmentInput[]): Promise<Attachment[]> {
     const files = await Promise.all(inputs.map(fileInputToPayload));
-    return requestJson<Attachment[]>(`/api/sessions/${this.sessionId}/attachments`, {
+    return requestSessionJson<Attachment[]>("/attachments", {
       method: "POST",
       body: JSON.stringify({ files, projectPath })
     });
   },
 
   run(payload: RunPayload): Promise<RunResponse> {
-    return requestJson<RunResponse>(`/api/sessions/${this.sessionId}/run`, {
+    return requestSessionJson<RunResponse>("/run", {
       method: "POST",
       body: JSON.stringify(payload)
     });
   },
 
   prepareWidgetRun(payload: RunPayload): Promise<RunResponse> {
-    return requestJson<RunResponse>(`/api/sessions/${this.sessionId}/run`, {
+    return requestSessionJson<RunResponse>("/run", {
       method: "POST",
       body: JSON.stringify({
         ...payload,
