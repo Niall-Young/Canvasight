@@ -14,6 +14,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1056-development-solution-direct-widget-metadata-bootstrap.md` - made native widget bootstrap accept direct Codex host metadata while preserving the widget bridge.
+- `agent-reports/resolved/20260710-1056-development-issue-direct-widget-metadata-bootstrap.md` - resolved native Canvasight opening stuck on direct metadata host shapes.
 - `agent-reports/resolved/20260710-1035-integration-summary-daemon-node-executable-fallback.md` - integrated the 0.1.50 daemon Node executable fallback, ENOENT regression smoke, validation, and current-task reload risk.
 - `agent-reports/resolved/20260710-1033-development-solution-daemon-node-executable-fallback.md` - added Node executable fallback and lifecycle diagnostics for daemon start failures, with a 0.1.50 ENOENT regression smoke.
 - `agent-reports/resolved/20260710-1033-development-issue-daemon-node-executable-fallback.md` - resolved stale Homebrew Node executable paths causing daemon start timeout.

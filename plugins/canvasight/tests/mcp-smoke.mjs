@@ -613,6 +613,48 @@ async function assertWidgetBridgeAdapters(widgetHtml) {
   assert.equal(initialToolResultHarness.records.appendedScript?.type, "module");
   assert.equal(initialToolResultHarness.statusEl.textContent, "");
 
+  const directWidgetMetadataHarness = await runWidgetBridgeHarness(bridgeScript, {
+    openaiGlobals: {
+      toolOutput: {
+        status: "opened",
+        rendering: "native-widget",
+        sessionId: "session-direct-widget-metadata"
+      },
+      toolResponseMetadata: {
+        status: "opened",
+        canvasightHost: "widget",
+        sessionId: "session-direct-widget-metadata",
+        token: "widget-token",
+        url: "http://127.0.0.1:54321/?sessionId=session-direct-widget-metadata&token=widget-token"
+      }
+    }
+  });
+  assert.equal(directWidgetMetadataHarness.records.appendedScript?.id, "canvasight-app-module");
+  assert.equal(directWidgetMetadataHarness.records.appendedScript?.type, "module");
+  assert.equal(directWidgetMetadataHarness.statusEl.textContent, "");
+
+  const directMetaContainerHarness = await runWidgetBridgeHarness(bridgeScript, {
+    openaiGlobals: {
+      toolOutput: {
+        status: "opened",
+        rendering: "native-widget",
+        sessionId: "session-direct-meta-container"
+      },
+      toolResponseMetadata: {
+        widgetData: {
+          status: "opened",
+          canvasightHost: "widget",
+          sessionId: "session-direct-meta-container",
+          token: "widget-token",
+          browserUrl: "http://127.0.0.1:54321/?sessionId=session-direct-meta-container&token=widget-token"
+        }
+      }
+    }
+  });
+  assert.equal(directMetaContainerHarness.records.appendedScript?.id, "canvasight-app-module");
+  assert.equal(directMetaContainerHarness.records.appendedScript?.type, "module");
+  assert.equal(directMetaContainerHarness.statusEl.textContent, "");
+
   const appModuleFailureHarness = await runWidgetBridgeHarness(bridgeScript, {
     appModuleError: true,
     openaiGlobals: {

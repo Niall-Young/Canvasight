@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.50";
+const SERVER_VERSION = "0.1.51";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -2915,9 +2915,16 @@ function canvasightWidgetBridgeScript() {
   }
 
   function payloadFromToolResult(result) {
-    const metadata = result?._meta || {};
-    const payload = metadata.widgetData || result?.structuredContent || result || {};
+    const directWidgetData = result?.widgetData;
+    const metadata = result?._meta || (directWidgetData ? result : {});
+    const payload = directWidgetData || metadata.widgetData || result?.structuredContent || result || {};
     return { metadata, payload };
+  }
+
+  function hasWidgetSessionUrl(value) {
+    if (!value || typeof value !== "object") return false;
+    const widgetData = value.widgetData || value._meta?.widgetData || value;
+    return typeof widgetData.url === "string" || typeof widgetData.browserUrl === "string";
   }
 
   function canonicalToolResult(value) {
@@ -2930,7 +2937,7 @@ function canvasightWidgetBridgeScript() {
   function toolResultFromOpenAiGlobals() {
     const metadata = window.openai?.toolResponseMetadata;
     const canonical = canonicalToolResult(metadata);
-    if (canonical && (canonical._meta || canonical.structuredContent || canonical.content)) return canonical;
+    if (hasWidgetSessionUrl(canonical)) return canonical;
     const structuredContent = window.openai?.toolOutput;
     if (!structuredContent || typeof structuredContent !== "object") return canonical;
     return {
