@@ -2824,6 +2824,28 @@ async function main() {
     assert.equal(blockedPlanLog.filter((entry) => entry.method === "thread/resume").length, 4);
     assert.equal(blockedPlanLog.some((entry) => entry.method === "thread/settings/update"), false);
 
+    const blockedGoalLogOffset = (await readNativeLog()).length;
+    await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 4 }), "utf8");
+    await assert.rejects(
+      () =>
+        fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+          method: "POST",
+          headers: openedIdentityHeaders,
+          body: JSON.stringify({
+            ...runPayload,
+            threadName: "Widget Goal Does Not Degrade Thread Store Failure",
+            markdown: "# Widget Goal Does Not Degrade Thread Store Failure",
+            codexMode: "goal",
+            planMode: false,
+            deliveryMode: "widget_bridge_prepare"
+          })
+        }),
+      /codex_mode_not_applied|Canvasight Run blocked/
+    );
+    const blockedGoalLog = (await readNativeLog()).slice(blockedGoalLogOffset);
+    assert.equal(blockedGoalLog.filter((entry) => entry.method === "thread/resume").length, 4);
+    assert.equal(blockedGoalLog.some((entry) => entry.method === "thread/goal/set"), false);
+
     await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
     await assert.rejects(
       () =>

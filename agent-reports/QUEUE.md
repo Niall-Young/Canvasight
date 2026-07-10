@@ -17,6 +17,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1937-integration-summary-plan-goal-thread-store-recovery.md` - kept Plan/Goal mode integrity when Codex cannot read a task rollout, added actionable recovery feedback and Goal regression coverage; real native-host acceptance remains unverified.
+- `agent-reports/resolved/20260710-1937-development-solution-plan-goal-thread-store-recovery.md` - retained the required block, added localized recovery guidance with raw diagnostic retention, and covered persistent Goal preflight failure.
+- `agent-reports/resolved/20260710-1933-test-issue-plan-goal-thread-store-run-block.md` - resolved Plan/Goal thread-store preflight issue with an explicit safe recovery contract.
 - `agent-reports/resolved/20260710-2025-integration-summary-project-scatter-binding.md` - integrated project-scoped `.scatter` binding protection, regression coverage, documentation, and the installed 0.3.2 plugin; native-host acceptance remains pending.
 - `agent-reports/resolved/20260710-2000-development-solution-project-scatter-run-binding.md` - prevented native current-task failures from silently opening a different project's `.scatter`, isolated runtime task fields from document persistence, and added regression coverage; real native-host acceptance remains required.
 - `agent-reports/resolved/20260710-1930-customer-support-solution-project-scoped-canvas-docs.md` - clarified the user-facing contract that `.scatter` follows the current task's project folder while widget / Run routing is temporary and bound to the current Codex task; runtime implementation remains pending verification.

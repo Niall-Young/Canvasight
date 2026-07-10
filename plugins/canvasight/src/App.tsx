@@ -104,6 +104,13 @@ const zoomOptions = [
 type FlowPosition = { x: number; y: number };
 type MeasuredScatterNode = ScatterNode & { measured?: { width?: number; height?: number } };
 type CanvasTool = "select" | "pan";
+
+function isThreadStoreModePreflightFailure(message: string): boolean {
+  return (
+    /Canvasight Run blocked before sendMessage/i.test(message) &&
+    /failed to read thread|thread-store internal error|rollout does not start with session metadata/i.test(message)
+  );
+}
 type ConnectionStart = {
   nodeId: string;
   handleType: "source" | "target";
@@ -1793,7 +1800,14 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setRunStatus(t("status.sentAssistant"), "positive");
       } catch (error) {
         const message = error instanceof Error ? error.message : t("status.sendAssistantFailed");
-        setRunStatus(message.includes("reason=browser_fallback_no_bridge") ? t("status.browserFallbackNoBridge") : message, "negative");
+        const modeLabel = result.codexMode === "plan" ? t("task.codexModePlan") : t("task.codexModeGoal");
+        const actionableMessage =
+          result.codexMode !== "chat" && isThreadStoreModePreflightFailure(message)
+            ? t("status.planGoalThreadStoreBlocked", { diagnostic: message, mode: modeLabel })
+            : message.includes("reason=browser_fallback_no_bridge")
+              ? t("status.browserFallbackNoBridge")
+              : message;
+        setRunStatus(actionableMessage, "negative");
       }
     },
     [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
