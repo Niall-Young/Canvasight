@@ -42,22 +42,29 @@ import {
 import {
   canvasightApi,
   getCanvasightBridgeDiagnostics,
+  getCanvasightStartupIdentity,
+  isNativeWidgetShell,
   isStaleDocumentError,
   isTemplateLimitError,
   isThreadOnlyFallbackUrl,
   projectPathFromUrl,
+  setCanvasightStartupStage,
   threadIdFromUrl,
   type CanvasightBridgeDiagnostics,
+  type CanvasightStartupStage,
   type RunResponse
 } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { CanvasightErrorBoundary } from "./components/CanvasightErrorBoundary";
 import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TaskNode, setTaskNodeActions } from "./components/TaskNode";
+import { StartupFailurePanel } from "./components/StartupFailurePanel";
+import { WorkspaceStartupSkeleton } from "./components/WorkspaceStartupSkeleton";
 import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { Icon } from "./components/ui/icon";
 import { IconButton } from "./components/ui/icon-button";
@@ -831,6 +838,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     undo
   } = useScatterStore();
   const [loadingProject, setLoadingProject] = useState(true);
+  const nativeWidget = isNativeWidgetShell();
+  const [startupStage, setStartupStageState] = useState<CanvasightStartupStage>(() =>
+    nativeWidget ? getCanvasightStartupIdentity().stage : "ready"
+  );
+  const [startupFailure, setStartupFailure] = useState<{ stage: string; reason: string } | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionPreview, setConnectionPreview] = useState<ConnectionHoverTarget | null>(null);
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("select");
@@ -871,6 +883,31 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const connectionHoverTargetRef = useRef<ConnectionHoverTarget | null>(null);
   const canvasClipboardRef = useRef<CanvasClipboardPayload | null>(null);
   const clipboardPasteSerialRef = useRef(0);
+  const startupInitializedRef = useRef(false);
+
+  const advanceStartupStage = useCallback((stage: CanvasightStartupStage) => {
+    setStartupStageState((current) => {
+      const order: CanvasightStartupStage[] = [
+        "starting",
+        "connecting_bridge",
+        "connecting_session",
+        "hydrating_project",
+        "ready",
+        "failed"
+      ];
+      if (current === "ready" || current === "failed") return current;
+      return order.indexOf(stage) >= order.indexOf(current) ? stage : current;
+    });
+    setCanvasightStartupStage(stage);
+  }, []);
+
+  const failStartup = useCallback((error: unknown, stage = "session") => {
+    const reason = error instanceof Error ? error.message : String(error || "Canvasight failed to start.");
+    setStartupFailure({ stage, reason });
+    setStartupStageState("failed");
+    setCanvasightStartupStage("failed");
+    void canvasightApi.reportWidgetFailure(error, stage);
+  }, []);
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
@@ -1047,7 +1084,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const openProjectPath = useCallback(
-    async (projectPath: string, options: { silent?: boolean; status?: string } = {}) => {
+    async (projectPath: string, options: { silent?: boolean; status?: string; fatal?: boolean } = {}) => {
       const trimmedPath = projectPath.trim();
       if (!trimmedPath) return;
       if (!options.silent) {
@@ -1058,6 +1095,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         const result = await canvasightApi.openProject(trimmedPath);
         await applyOpenedProject(trimmedPath, result, options.status);
       } catch (error) {
+        if (options.fatal) throw error;
         const fallbackProject = {
           name: projectNameFromPath(trimmedPath),
           path: trimmedPath,
@@ -1076,17 +1114,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   useEffect(() => {
+    if (startupInitializedRef.current) return;
+    startupInitializedRef.current = true;
     window.scatter = {
       showInFolder: (targetPath: string) => canvasightApi.showInFolder(targetPath)
     };
 
     const threadOnlyFallbackStatus = "Unable to resolve the current Codex project. Reopen Canvasight from a project thread.";
-    const resolveAndOpenThreadProject = () => {
+    const resolveAndOpenThreadProject = (fatal = false) => {
       const threadId = threadIdFromUrl();
       return canvasightApi
         .resolveThreadProject(threadId, language)
         .then((result) => applyOpenedProject(result.project.path, result))
         .catch((error) => {
+          if (fatal) throw error;
           setLoadingProject(false);
           hydratedRef.current = true;
           setStatus(error instanceof Error ? error.message : threadOnlyFallbackStatus);
@@ -1094,27 +1135,58 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         });
     };
 
-    canvasightApi
-      .getSession()
-      .then(async (session) => {
-        await canvasightApi.reportWidgetReady();
+    const nextPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const waitForFullscreen = async (): Promise<void> => {
+      const deadline = Date.now() + 8_000;
+      while (Date.now() < deadline) {
+        if (getCanvasightStartupIdentity().displayMode === "fullscreen") return;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+      }
+      throw new Error("Canvasight host did not confirm the fullscreen widget presentation.");
+    };
+
+    const initialize = async (): Promise<void> => {
+      try {
+        if (nativeWidget) advanceStartupStage("connecting_session");
+        const session = await canvasightApi.getSession();
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
         const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
         const projectPath = urlProjectPath || (isThreadOnlyFallback || isBareLocalFallback ? "" : session.projectPath || defaultProjectPathFromBrowser());
+        if (nativeWidget) advanceStartupStage("hydrating_project");
         if (projectPath) {
-          return openProjectPath(projectPath);
+          await openProjectPath(projectPath, { fatal: nativeWidget });
+        } else if (isThreadOnlyFallback) {
+          await resolveAndOpenThreadProject(nativeWidget);
+        } else {
+          setLoadingProject(false);
+          hydratedRef.current = true;
+          setStatus("Open Canvasight from a Codex project to create a workspace.");
         }
-        if (isThreadOnlyFallback) {
-          return resolveAndOpenThreadProject();
+
+        if (nativeWidget) {
+          await nextPaint();
+          await nextPaint();
+          await waitForFullscreen();
+          const canvas = canvasShellRef.current;
+          const rect = canvas?.getBoundingClientRect();
+          if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) {
+            throw new Error("Canvasight canvas did not render with a visible size.");
+          }
+          await canvasightApi.reportWidgetReady({
+            projectHydrated: hydratedRef.current,
+            canvasRendered: canvas.isConnected,
+            canvasVisible: getComputedStyle(canvas).display !== "none" && getComputedStyle(canvas).visibility !== "hidden",
+            canvasWidth: rect.width,
+            canvasHeight: rect.height
+          });
+          advanceStartupStage("ready");
         }
-        setLoadingProject(false);
-        hydratedRef.current = true;
-        setStatus("Open Canvasight from a Codex project to create a workspace.");
-        return undefined;
-      })
-      .catch((error) => {
-        void canvasightApi.reportWidgetFailure(error, "session");
+      } catch (error) {
+        if (nativeWidget) {
+          failStartup(error, getCanvasightStartupIdentity().stage === "hydrating_project" ? "project" : "session");
+          return;
+        }
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
         const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
@@ -1128,9 +1200,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setLoadingProject(false);
         hydratedRef.current = true;
         setStatus(isThreadOnlyFallback ? threadOnlyFallbackStatus : error instanceof Error ? error.message : t("app.genericError"));
-        return undefined;
-      });
-  }, [applyOpenedProject, language, openProjectPath, setStatus, t]);
+      }
+    };
+
+    void initialize();
+  }, [advanceStartupStage, applyOpenedProject, failStartup, language, nativeWidget, openProjectPath, setStatus, t]);
 
   useEffect(() => {
     let mounted = true;
@@ -2136,6 +2210,40 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }}
       onMouseLeave={() => setHoveredNodeId(null)}
     >
+      {nativeWidget && startupStage !== "ready" ? (
+        <div className="canvasight-startup-overlay">
+          {startupFailure ? (
+            <StartupFailurePanel
+              stage={startupFailure.stage}
+              reason={startupFailure.reason}
+              diagnostics={[
+                `stage=${startupFailure.stage}`,
+                `reason=${startupFailure.reason}`,
+                `sessionId=${canvasightApi.sessionId}`,
+                `threadId=${threadIdFromUrl()}`,
+                `openAttemptId=${getCanvasightStartupIdentity().openAttemptId}`,
+                `widgetInstanceId=${getCanvasightStartupIdentity().widgetInstanceId}`,
+                `displayMode=${getCanvasightStartupIdentity().displayMode}`
+              ].join("\n")}
+              onRetry={() => window.location.reload()}
+              onReopenInNewTask={reopenCanvasightInNewTask}
+            />
+          ) : (
+            <WorkspaceStartupSkeleton
+              stage={startupStage === "failed" ? "starting" : startupStage}
+              label={
+                startupStage === "starting"
+                  ? "Starting Canvasight..."
+                  : startupStage === "connecting_bridge"
+                    ? "Connecting Canvasight bridge..."
+                    : startupStage === "connecting_session"
+                      ? "Connecting Canvasight session..."
+                      : "Loading Canvasight project..."
+              }
+            />
+          )}
+        </div>
+      ) : null}
       <main
         ref={workspaceContentRef}
         className={`workspace-content ${drawer ? "has-right-sidebar" : ""} ${drawer === "markdown" ? "has-markdown-sidebar" : ""} ${isResizingMarkdown ? "is-resizing-markdown" : ""}`}
@@ -2504,6 +2612,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 }
 
+function reopenCanvasightInNewTask(): void {
+  void canvasightApi
+    .sendFollowUpMessage({
+      content: [
+        {
+          type: "text",
+          text: "Create a new Codex task for this project and open Canvasight there using the verified native open flow."
+        }
+      ],
+      prompt: "Create a new Codex task for this project and open Canvasight there using the verified native open flow."
+    })
+    .catch(() => window.location.reload());
+}
+
 export default function App(): ReactElement {
   const [savedSettings, setSavedSettings] = useState<AppSettings>(() => loadStoredAppSettings() ?? webDefaultAppSettings);
   const [previewSettings, setPreviewSettings] = useState<AppSettings | null>(null);
@@ -2557,23 +2679,29 @@ export default function App(): ReactElement {
   }, []);
 
   return (
-    <I18nProvider language={activeSettings.language}>
-      <ReactFlowProvider>
-        <CanvasightWorkspace agentTeamEnabled={activeSettings.agentTeamEnabled} onOpenSettings={() => setSettingsOpen(true)} />
-      </ReactFlowProvider>
-      <SettingsDialog
-        agentTeamEnabled={activeSettings.agentTeamEnabled}
-        assistantProvider={activeSettings.assistantProvider}
-        assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
-        language={activeSettings.language}
-        open={settingsOpen}
-        showTranslucentBackground={false}
-        themePreference={activeSettings.themePreference}
-        translucentBackground={false}
-        onOpenChange={handleSettingsOpenChange}
-        onPreview={previewAppSettings}
-        onSave={saveAppSettings}
-      />
-    </I18nProvider>
+    <CanvasightErrorBoundary
+      onError={(error) => void canvasightApi.reportWidgetFailure(error, "react_render")}
+      onRetry={() => window.location.reload()}
+      onReopenInNewTask={reopenCanvasightInNewTask}
+    >
+      <I18nProvider language={activeSettings.language}>
+        <ReactFlowProvider>
+          <CanvasightWorkspace agentTeamEnabled={activeSettings.agentTeamEnabled} onOpenSettings={() => setSettingsOpen(true)} />
+        </ReactFlowProvider>
+        <SettingsDialog
+          agentTeamEnabled={activeSettings.agentTeamEnabled}
+          assistantProvider={activeSettings.assistantProvider}
+          assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
+          language={activeSettings.language}
+          open={settingsOpen}
+          showTranslucentBackground={false}
+          themePreference={activeSettings.themePreference}
+          translucentBackground={false}
+          onOpenChange={handleSettingsOpenChange}
+          onPreview={previewAppSettings}
+          onSave={saveAppSettings}
+        />
+      </I18nProvider>
+    </CanvasightErrorBoundary>
   );
 }

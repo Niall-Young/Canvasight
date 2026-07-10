@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.2.0+codex.20260710064916",
+  "version": "0.3.0+codex.20260710073625",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test:dev-server": "node tests/dev-server-smoke.mjs",
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
-    "test:mcp": "node tests/mcp-smoke.mjs"
+    "test:mcp": "node tests/mcp-smoke.mjs",
+    "test:widget-runtime": "node tests/widget-runtime-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.4",

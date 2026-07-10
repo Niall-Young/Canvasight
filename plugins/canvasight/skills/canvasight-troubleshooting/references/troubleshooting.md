@@ -5,11 +5,11 @@
 For every native opening failure, use the active task id and run the complete contract:
 
 1. Call `open_canvasight({ threadId })`.
-2. Capture the returned `sessionId`.
-3. Call `await_canvasight_widget_ready({ sessionId, threadId })`.
+2. Capture the returned `sessionId` and `openAttemptId`.
+3. Call `await_canvasight_widget_ready({ sessionId, openAttemptId, threadId })`.
 4. Preserve the full ready result before restarting, reinstalling, or opening another surface.
 
-Only `status=ready` with `reactMounted=true` confirms widget readiness. A completed open tool, readable widget resource, healthy daemon, visible loading shell, successful bundle load, browser fallback, or passing automated test does not.
+Only `status=ready`, `verified=true`, `displayMode=fullscreen`, and true React/project/canvas evidence confirms readiness for the visible product instance. A completed tool, another renderer's acknowledgement, resource read, daemon health, fallback, or automated test does not.
 
 ## Ready Timeout Or Failure
 
@@ -22,7 +22,7 @@ Use `stage` and `error` to choose the next check:
 - session/API stage: React may be present, but the widget could not initialize its daemon session through the app-only MCP API proxy. Check the returned error, MCP Apps connection, proxy tool result, and daemon lifecycle. Direct localhost fetch is not the native JSON API path.
 - host-bridge or Run stage: readiness and Run delivery are separate. First confirm ready, then inspect the bridge Promise result and diagnostics.
 
-If `status=ready` is ever returned without `reactMounted=true`, treat it as an invalid acknowledgement and keep the opening failed/unverified.
+If ready lacks `openAttemptId`, `widgetInstanceId`, fullscreen mode, or any render evidence, treat it as invalid and keep opening failed/unverified.
 
 Report failures with the actual fields, for example: `status=timeout`, `stage=widget-ready`, and the returned `error`. Do not collapse them into “打不开” or guess a historical cause.
 
@@ -76,10 +76,11 @@ A working fallback can isolate canvas and daemon behavior but cannot satisfy nat
 
 After automated checks and exact-version installation, reload/restart Codex Desktop if the version changed, then create a new task, tag `@Canvasight`, and verify all of the following:
 
-1. `open_canvasight` returns a session and `await_canvasight_widget_ready` returns `status=ready`, `reactMounted=true`.
+1. `open_canvasight` returns attempt/session identity and await returns verified fullscreen ready with all render evidence true.
 2. The full canvas is visible in the native widget.
 3. At least one meaningful canvas control works.
-4. A node Run reaches the same Codex task through the native host bridge.
+4. A node Run reaches the same Codex task through the accepted fullscreen instance and native host bridge.
+5. Late or duplicate metadata does not return the visible UI to Connecting.
 
 If any item is missing, keep the issue open and mark the delivery `unverified`. Browser fallback and automated harnesses cannot fill the gap.
 

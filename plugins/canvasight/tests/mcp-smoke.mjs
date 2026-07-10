@@ -43,7 +43,7 @@ function assertOpenFlowSkillContract() {
   assert.match(openSkill, /CODEX_THREAD_ID/);
   assert.match(openSkill, /await_canvasight_widget_ready/);
   assert.match(openSkill, /status: "ready"/);
-  assert.match(openSkill, /reactMounted: true/);
+  assert.match(openSkill, /reactMounted.*projectHydrated.*canvasRendered.*canvasVisible.*true/s);
   assert.match(openSkill, /Transport closed/);
   assert.match(openSkill, /canvasight_mcp_transport_closed/);
   assert.match(openWorkflow, /tool_search/);
@@ -372,11 +372,10 @@ function assertNativeWidgetPublicResult(result) {
   }
   assert.doesNotMatch(JSON.stringify(result.structuredContent), /127\.0\.0\.1:\d+/);
   assert.doesNotMatch(result.content[0].text, /127\.0\.0\.1:\d+/);
-  assert.equal(result._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
-  assert.equal(result._meta["ui/resourceUri"], "ui://widget/canvasight/canvas.html");
-  assert.equal(result._meta["openai/widgetAccessible"], true);
-  assert.equal(result._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
-  assert.equal(result._meta.ui.visibility.includes("app"), true);
+  assert.equal(typeof result.structuredContent.openAttemptId, "string");
+  assert.equal(result.structuredContent.targetDisplayMode, "fullscreen");
+  assert.deepEqual(Object.keys(result._meta), ["widgetData"]);
+  assert.equal(result._meta.widgetData.openAttemptId, result.structuredContent.openAttemptId);
   assert.equal(result._meta.widgetData.canvasightHost, "widget");
   assert.match(result._meta.widgetData.url, /^http:\/\/127\.0\.0\.1:\d+\//);
 }
@@ -395,6 +394,11 @@ async function assertDynamicWidgetRuntimeApi() {
   const serverToolRequests = [];
   const windowListeners = new Map();
   const readyEvents = [];
+  const mockBridgeState = {
+    startupStage: "starting",
+    displayMode: "unknown",
+    widgetInstanceId: "widget-runtime"
+  };
   const vite = await import("vite");
   const viteServer = await vite.createServer({
     root: pluginRoot,
@@ -407,6 +411,12 @@ async function assertDynamicWidgetRuntimeApi() {
     __CANVASIGHT_WIDGET_DATA__: runtime,
     __CANVASIGHT_WIDGET_SHELL__: true,
     canvasightMcp: {
+      getBridgeState() {
+        return { ...mockBridgeState };
+      },
+      setStartupStage(stage) {
+        mockBridgeState.startupStage = stage;
+      },
       async callServerTool(request) {
         serverToolRequests.push(request);
         const path = request.arguments.path;
@@ -414,7 +424,7 @@ async function assertDynamicWidgetRuntimeApi() {
           structuredContent: {
             ok: true,
             status: 200,
-            data: path.endsWith("/widget-ready") ? { status: "ready" } : { sessionId: "session-runtime" },
+            data: path.endsWith("/widget-ready") ? { status: "ready", verified: true } : { sessionId: "session-runtime" },
             error: null,
             code: null
           }
@@ -467,11 +477,20 @@ async function assertDynamicWidgetRuntimeApi() {
     Object.assign(runtime, {
       apiBaseUrl: "http://127.0.0.1:54321",
       canvasightHost: "widget",
+      codexThreadId: "thread-runtime",
+      openAttemptId: "open-runtime",
       sessionId: "session-runtime",
+      widgetInstanceId: "widget-runtime",
       token: "token-runtime"
     });
     await api.getSession();
-    await api.reportWidgetReady();
+    await api.reportWidgetReady({
+      projectHydrated: true,
+      canvasRendered: true,
+      canvasVisible: true,
+      canvasWidth: 800,
+      canvasHeight: 600
+    });
 
     assert.equal(requests.length, 0);
     assert.equal(serverToolRequests.length, 2);
@@ -480,7 +499,13 @@ async function assertDynamicWidgetRuntimeApi() {
       arguments: {
         path: "/api/sessions/session-runtime",
         method: "GET",
-        body: null
+        body: null,
+        openAttemptId: "open-runtime",
+        widgetInstanceId: "widget-runtime",
+        startupStage: "starting",
+        displayMode: "unknown",
+        threadId: "thread-runtime",
+        reactMounted: false
       }
     });
     assert.deepEqual(serverToolRequests[1], {
@@ -489,10 +514,26 @@ async function assertDynamicWidgetRuntimeApi() {
         path: "/api/sessions/session-runtime/widget-ready",
         method: "POST",
         body: {
-      status: "ready",
-      stage: "api-ready",
-      reactMounted: true
-        }
+          status: "ready",
+          startupStage: "ready",
+          stage: "ready",
+          openAttemptId: "open-runtime",
+          widgetInstanceId: "widget-runtime",
+          displayMode: "unknown",
+          threadId: "thread-runtime",
+          reactMounted: true,
+          projectHydrated: true,
+          canvasRendered: true,
+          canvasVisible: true,
+          canvasWidth: 800,
+          canvasHeight: 600
+        },
+        openAttemptId: "open-runtime",
+        widgetInstanceId: "widget-runtime",
+        startupStage: "hydrating_project",
+        displayMode: "unknown",
+        threadId: "thread-runtime",
+        reactMounted: true
       }
     });
     assert.equal(readyEvents.length, 1);
@@ -726,6 +767,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     assert.equal(standard.records.appMessages.some((message) => message.method === "ui/initialize"), true);
     standard.sendToolResult({
       status: "opened",
+      openAttemptId: "open-postmessage",
       sessionId: "session-postmessage",
       token: "token-postmessage",
       url: "http://127.0.0.1:54321/?sessionId=session-postmessage&token=token-postmessage"
@@ -740,6 +782,35 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     assert.match(standard.statusEl.textContent, /Connecting Canvasight session/);
     standard.window.dispatchEvent(new standard.TestCustomEvent("canvasight:app-ready", { detail: { status: "ready" } }));
     assert.equal(standard.statusEl.textContent, "");
+    assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready");
+    standard.sendToolResult({
+      status: "opened",
+      openAttemptId: "open-postmessage",
+      sessionId: "session-postmessage",
+      token: "token-postmessage",
+      url: "http://127.0.0.1:54321/?sessionId=session-postmessage&token=token-postmessage"
+    });
+    standard.dispatchOpenAiGlobals({
+      toolResponseMetadata: {
+        widgetData: {
+          status: "opened",
+          openAttemptId: "open-postmessage",
+          sessionId: "session-postmessage",
+          token: "token-postmessage",
+          url: "http://127.0.0.1:54321/?sessionId=session-postmessage&token=token-postmessage"
+        }
+      }
+    });
+    assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready", "late metadata cannot regress ready");
+    assert.equal(standard.statusEl.textContent, "", "late metadata cannot restore the Connecting overlay");
+    standard.sendToolResult({
+      status: "opened",
+      openAttemptId: "open-other",
+      sessionId: "session-other",
+      token: "token-other",
+      url: "http://127.0.0.1:54321/?sessionId=session-other&token=token-other"
+    });
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.sessionId, "session-postmessage", "a mounted instance cannot switch sessions from a late event");
     await closeWidgetBridgeEnvironment(standard);
     restore();
 
@@ -757,6 +828,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
       toolResponseMetadata: {
         widgetData: {
           status: "opened",
+          openAttemptId: "open-openai-event",
           sessionId: "session-openai-event",
           token: "token-openai-event",
           browserUrl: "http://127.0.0.1:54321/?sessionId=session-openai-event&token=token-openai-event"
@@ -786,6 +858,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
           toolResponseMetadata: {
             widgetData: {
               status: "opened",
+              openAttemptId: "open-openai-direct-detail",
               sessionId: "session-openai-direct-detail",
               token: "token-openai-direct-detail",
               browserUrl: "http://127.0.0.1:54321/?sessionId=session-openai-direct-detail&token=token-openai-direct-detail"
@@ -799,6 +872,34 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
       "openai:set_globals direct event.detail widget data"
     );
     await closeWidgetBridgeEnvironment(openaiDirectDetail);
+    restore();
+
+    const terminalFailure = createWidgetBridgeEnvironment();
+    restore = installWidgetBridgeGlobals(terminalFailure);
+    bridgeModule.startCanvasightWidgetBridge();
+    await waitForCondition(
+      () => terminalFailure.records.appMessages.some((message) => message.method === "ui/notifications/initialized"),
+      "terminal failure harness MCP initialization"
+    );
+    terminalFailure.sendToolResult({
+      status: "opened",
+      openAttemptId: "open-failed",
+      sessionId: "session-failed",
+      token: "token-failed",
+      url: "http://127.0.0.1:54321/?sessionId=session-failed&token=token-failed"
+    });
+    terminalFailure.window.dispatchEvent(new terminalFailure.TestCustomEvent("canvasight:app-error", { detail: { error: "boom" } }));
+    terminalFailure.window.dispatchEvent(new terminalFailure.TestCustomEvent("canvasight:app-ready", { detail: { status: "ready" } }));
+    terminalFailure.sendToolResult({
+      status: "opened",
+      openAttemptId: "open-failed",
+      sessionId: "session-failed",
+      token: "token-failed",
+      url: "http://127.0.0.1:54321/?sessionId=session-failed&token=token-failed"
+    });
+    assert.equal(terminalFailure.window.canvasightMcp.getBridgeState().startupStage, "failed", "late ready/metadata cannot escape failed");
+    assert.equal(terminalFailure.statusEl.dataset.tone, "error");
+    await closeWidgetBridgeEnvironment(terminalFailure);
     restore();
 
     const missingMetadata = createWidgetBridgeEnvironment({ bootstrapTimeoutMs: 25 });
@@ -870,7 +971,7 @@ function createMcpClient(label, envOverrides = {}) {
       if (!handler) continue;
       clientPending.delete(message.id);
       if (message.error) {
-        handler.reject(new Error(message.error.message));
+        handler.reject(new Error(`MCP ${label} request ${message.id} failed: ${message.error.message}`));
       } else {
         handler.resolve(message.result);
       }
@@ -1268,8 +1369,8 @@ async function main() {
     const renderTool = listed.tools.find((tool) => tool.name === "render_canvasight_canvas_widget");
     assert.match(renderTool.description, /native Codex widget/);
     assert.match(renderTool.description, /send follow-up messages to the current thread/);
-    assert.equal(renderTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
-    assert.equal(renderTool._meta["openai/widgetAccessible"], true);
+    assert.equal(renderTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
+    assert.equal(renderTool._meta["openai/outputTemplate"], undefined);
     assert.deepEqual(renderTool.inputSchema.required, ["threadId"]);
     assert.equal(renderTool.outputSchema.properties.openTarget.type, "string");
     assert.equal(renderTool.outputSchema.properties.url, undefined);
@@ -1277,8 +1378,7 @@ async function main() {
     const openTool = listed.tools.find((tool) => tool.name === "open_canvasight");
     assert.match(openTool.description, /default native Codex widget/);
     assert.match(openTool.description, /send follow-up messages to the current thread/);
-    assert.equal(openTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
-    assert.equal(openTool._meta["openai/widgetAccessible"], true);
+    assert.equal(openTool._meta["openai/outputTemplate"], undefined);
     assert.equal(openTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
     assert.deepEqual(openTool.inputSchema.required, ["threadId"]);
     assert.equal(openTool.outputSchema.properties.openTarget.type, "string");
@@ -1292,7 +1392,7 @@ async function main() {
     const recentOpenTool = listed.tools.find((tool) => tool.name === "open_canvasight_recent_project");
     assert.match(recentOpenTool.description, /default native Codex widget/);
     assert.match(recentOpenTool.description, /active Canvasight context/);
-    assert.equal(recentOpenTool._meta["openai/outputTemplate"], "ui://widget/canvasight/canvas.html");
+    assert.equal(recentOpenTool._meta.ui.resourceUri, "ui://widget/canvasight/canvas.html");
     assert.deepEqual(recentOpenTool.inputSchema.required, ["threadId"]);
     const claimTool = listed.tools.find((tool) => tool.name === "claim_canvasight_thread");
     assert.match(claimTool.description, /current Codex thread/);
@@ -1309,7 +1409,7 @@ async function main() {
     ]);
     const awaitWidgetReadyTool = listed.tools.find((tool) => tool.name === "await_canvasight_widget_ready");
     assert.match(awaitWidgetReadyTool.description, /only status=ready confirms/);
-    assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId"]);
+    assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId", "openAttemptId", "threadId"]);
 
     const lifecycleClient = createMcpClient("lifecycle", {
       CODEX_THREAD_ID: "thread-lifecycle"
@@ -1472,13 +1572,24 @@ async function main() {
       }
     });
     const widgetOpenedData = widgetDataFor(widgetOpened);
+    assert.equal(widgetOpenedData.openAttemptId, widgetOpened.structuredContent.openAttemptId);
+    const fullscreenInstanceId = "widget-fullscreen-smoke";
+    const inlineInstanceId = "widget-inline-smoke";
+    const widgetIdentity = (overrides = {}) => ({
+      openAttemptId: widgetOpenedData.openAttemptId,
+      widgetInstanceId: fullscreenInstanceId,
+      startupStage: "connecting_session",
+      displayMode: "fullscreen",
+      threadId: "thread-smoke",
+      reactMounted: true,
+      ...overrides
+    });
     daemonToken = new URL(widgetOpenedData.url).searchParams.get("token") || daemonToken;
     assert.equal(widgetOpened.structuredContent.activeCanvasContext, true);
     assert.equal(widgetOpenedData.browserUrl, widgetOpenedData.url);
     assert.equal(widgetOpenedData.apiBaseUrl, widgetOpenedData.origin);
     assert.equal(widgetOpenedData.token, new URL(widgetOpenedData.url).searchParams.get("token"));
-    assert.ok(widgetOpened._meta["openai/widgetCSP"].connect_domains.includes(widgetOpenedData.origin));
-    assert.ok(widgetOpened._meta.ui.csp.connectDomains.includes(widgetOpenedData.origin));
+    assert.deepEqual(Object.keys(widgetOpened._meta), ["widgetData"]);
     const widgetResourceAfterOpen = await request("resources/read", {
       uri: "ui://widget/canvasight/canvas.html"
     });
@@ -1502,23 +1613,82 @@ async function main() {
       name: "canvasight_widget_api",
       arguments: {
         path: `/api/sessions/${widgetOpened.structuredContent.sessionId}`,
-        method: "GET"
+        method: "GET",
+        ...widgetIdentity()
       }
     });
     assert.equal(widgetSessionProxy.structuredContent.ok, true);
     const widgetSession = widgetSessionProxy.structuredContent.data;
     assert.equal(widgetSession.codexThreadId, "thread-smoke");
-    assert.equal(widgetSession.widgetReady, null);
+    assert.equal(widgetSession.openAttempt.openAttemptId, widgetOpenedData.openAttemptId);
+    assert.equal(widgetSession.openAttempt.status, "opening");
     const widgetReadyBeforeAck = await request("tools/call", {
       name: "await_canvasight_widget_ready",
       arguments: {
         sessionId: widgetOpened.structuredContent.sessionId,
+        openAttemptId: widgetOpenedData.openAttemptId,
         threadId: "thread-smoke",
         timeoutMs: 10
       }
     });
     assert.equal(widgetReadyBeforeAck.structuredContent.status, "timeout");
     assert.equal(widgetReadyBeforeAck.structuredContent.reactMounted, false);
+    const inlineReadyAckProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${widgetOpened.structuredContent.sessionId}/widget-ready`,
+        method: "POST",
+        body: {
+          status: "ready",
+          stage: "ready",
+          openAttemptId: widgetOpenedData.openAttemptId,
+          widgetInstanceId: inlineInstanceId,
+          displayMode: "inline",
+          threadId: "thread-smoke",
+          reactMounted: true,
+          projectHydrated: true,
+          canvasRendered: true,
+          canvasVisible: true,
+          canvasWidth: 800,
+          canvasHeight: 600
+        },
+        ...widgetIdentity({ widgetInstanceId: inlineInstanceId, startupStage: "hydrating_project", displayMode: "inline" })
+      }
+    });
+    assert.equal(inlineReadyAckProxy.structuredContent.ok, false);
+    assert.equal(inlineReadyAckProxy.structuredContent.code, "fullscreen_instance_required");
+    const widgetReadyAfterInline = await request("tools/call", {
+      name: "await_canvasight_widget_ready",
+      arguments: {
+        sessionId: widgetOpened.structuredContent.sessionId,
+        openAttemptId: widgetOpenedData.openAttemptId,
+        threadId: "thread-smoke",
+        timeoutMs: 10
+      }
+    });
+    assert.equal(widgetReadyAfterInline.structuredContent.status, "timeout", "inline/hidden renderers cannot satisfy fullscreen ready");
+
+    const wrongAttemptProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${widgetOpened.structuredContent.sessionId}`,
+        method: "GET",
+        ...widgetIdentity({ openAttemptId: "open-wrong" })
+      }
+    });
+    assert.equal(wrongAttemptProxy.structuredContent.ok, false);
+    assert.equal(wrongAttemptProxy.structuredContent.code, "open_attempt_mismatch");
+    const wrongThreadProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${widgetOpened.structuredContent.sessionId}`,
+        method: "GET",
+        ...widgetIdentity({ threadId: "thread-other" })
+      }
+    });
+    assert.equal(wrongThreadProxy.structuredContent.ok, false);
+    assert.equal(wrongThreadProxy.structuredContent.code, "widget_thread_mismatch");
+
     const widgetReadyAckProxy = await request("tools/call", {
       name: "canvasight_widget_api",
       arguments: {
@@ -1526,9 +1696,19 @@ async function main() {
         method: "POST",
         body: {
           status: "ready",
-          stage: "api-ready",
-          reactMounted: true
-        }
+          stage: "ready",
+          openAttemptId: widgetOpenedData.openAttemptId,
+          widgetInstanceId: fullscreenInstanceId,
+          displayMode: "fullscreen",
+          threadId: "thread-smoke",
+          reactMounted: true,
+          projectHydrated: true,
+          canvasRendered: true,
+          canvasVisible: true,
+          canvasWidth: 800,
+          canvasHeight: 600
+        },
+        ...widgetIdentity({ startupStage: "hydrating_project" })
       }
     });
     assert.equal(widgetReadyAckProxy.structuredContent.ok, true);
@@ -1539,17 +1719,25 @@ async function main() {
       name: "await_canvasight_widget_ready",
       arguments: {
         sessionId: widgetOpened.structuredContent.sessionId,
+        openAttemptId: widgetOpenedData.openAttemptId,
         threadId: "thread-smoke",
         timeoutMs: 10
       }
     });
     assert.equal(widgetReadyAfterAck.structuredContent.status, "ready");
     assert.equal(widgetReadyAfterAck.structuredContent.reactMounted, true);
+    assert.equal(widgetReadyAfterAck.structuredContent.verified, true);
+    assert.equal(widgetReadyAfterAck.structuredContent.displayMode, "fullscreen");
+    assert.equal(widgetReadyAfterAck.structuredContent.widgetInstanceId, fullscreenInstanceId);
+    assert.equal(widgetReadyAfterAck.structuredContent.projectHydrated, true);
+    assert.equal(widgetReadyAfterAck.structuredContent.canvasRendered, true);
+    assert.equal(widgetReadyAfterAck.structuredContent.canvasVisible, true);
     assert.equal(widgetReadyAfterAck.structuredContent.sessionId, widgetOpened.structuredContent.sessionId);
     const widgetReadyWrongThread = await request("tools/call", {
       name: "await_canvasight_widget_ready",
       arguments: {
         sessionId: widgetOpened.structuredContent.sessionId,
+        openAttemptId: widgetOpenedData.openAttemptId,
         threadId: "thread-other",
         timeoutMs: 10
       }
@@ -1694,6 +1882,34 @@ async function main() {
     assert.equal(session.projectPath, projectPath);
     assert.equal(session.sessionId, sessionId);
     assert.equal(typeof session.threadClaimedAt, "string");
+    const openedWidgetInstanceId = "widget-project-fullscreen-smoke";
+    const openedIdentityHeaders = {
+      "x-canvasight-open-attempt-id": openedData.openAttemptId,
+      "x-canvasight-widget-instance-id": openedWidgetInstanceId,
+      "x-canvasight-startup-stage": "hydrating_project",
+      "x-canvasight-display-mode": "fullscreen",
+      "x-canvasight-thread-id": "thread-smoke",
+      "x-canvasight-react-mounted": "true"
+    };
+    const openedReady = await fetchJson(`${origin}/api/sessions/${sessionId}/widget-ready`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        status: "ready",
+        stage: "ready",
+        openAttemptId: openedData.openAttemptId,
+        widgetInstanceId: openedWidgetInstanceId,
+        displayMode: "fullscreen",
+        threadId: "thread-smoke",
+        reactMounted: true,
+        projectHydrated: true,
+        canvasRendered: true,
+        canvasVisible: true,
+        canvasWidth: 1200,
+        canvasHeight: 800
+      })
+    });
+    assert.equal(openedReady.verified, true);
 
     const emptyTemplates = await fetchJson(`${origin}/api/templates`);
     assert.deepEqual(emptyTemplates, []);
@@ -2423,6 +2639,7 @@ async function main() {
 
     const widgetPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
+      headers: openedIdentityHeaders,
       body: JSON.stringify({
         ...runPayload,
         threadName: "Widget Prepared Run",
@@ -2450,6 +2667,7 @@ async function main() {
 
     const chatPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
+      headers: openedIdentityHeaders,
       body: JSON.stringify({
         ...runPayload,
         threadName: "Widget Chat Prepared",
@@ -2466,6 +2684,7 @@ async function main() {
 
     const planPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
+      headers: openedIdentityHeaders,
       body: JSON.stringify({
         ...runPayload,
         threadName: "Widget Plan Prepared",
@@ -2505,6 +2724,7 @@ async function main() {
     await fsp.writeFile(transientResumeFailCountPath, JSON.stringify({ "thread-smoke": 2 }), "utf8");
     const retryPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
       method: "POST",
+      headers: openedIdentityHeaders,
       body: JSON.stringify({
         ...runPayload,
         threadName: "Widget Chat Prepared After Resume Retry",
@@ -2525,6 +2745,7 @@ async function main() {
       () =>
         fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
           method: "POST",
+          headers: openedIdentityHeaders,
           body: JSON.stringify({
             ...runPayload,
             threadName: "Widget Plan Prepare Failure",

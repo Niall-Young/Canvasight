@@ -7,10 +7,10 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
+import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.2.0+codex.20260710064916";
+const SERVER_VERSION = "0.3.0+codex.20260710073625";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -226,6 +226,19 @@ function appendMcpLifecycle(event, data = {}) {
     );
   } catch {
     // Lifecycle logging is diagnostic only; it must never break JSON-RPC.
+  }
+}
+
+function appendOpenAttemptLifecycle(event, data = {}) {
+  try {
+    fs.mkdirSync(canvasightHome(), { recursive: true });
+    fs.appendFileSync(
+      canvasightMcpLifecycleLogPath(),
+      `${JSON.stringify({ ts: nowIso(), pid: process.pid, version: SERVER_VERSION, pluginRoot, event, ...data })}\n`,
+      "utf8"
+    );
+  } catch {
+    // Open-attempt logging is diagnostic only.
   }
 }
 
@@ -1938,7 +1951,48 @@ function sessionId() {
   return `session-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-async function createSession({ projectPath, language, threadId }) {
+function openAttemptId() {
+  return `open-${Date.now().toString(36)}-${crypto.randomBytes(6).toString("hex")}`;
+}
+
+const STARTUP_STAGE_RANK = new Map([
+  ["starting", 0],
+  ["connecting_bridge", 1],
+  ["connecting_session", 2],
+  ["hydrating_project", 3],
+  ["ready", 4],
+  ["failed", 5]
+]);
+
+function normalizeStartupStage(value, fallback = "starting") {
+  return typeof value === "string" && STARTUP_STAGE_RANK.has(value) ? value : fallback;
+}
+
+function newOpenAttempt(session, targetDisplayMode = "fullscreen") {
+  const attempt = {
+    id: openAttemptId(),
+    sessionId: session.id,
+    threadId: session.codexThreadId || null,
+    targetDisplayMode,
+    status: "opening",
+    stage: "starting",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    instances: new Map(),
+    waiters: []
+  };
+  session.openAttempts.set(attempt.id, attempt);
+  session.currentOpenAttemptId = attempt.id;
+  appendOpenAttemptLifecycle("canvasight_open_attempt_created", {
+    openAttemptId: attempt.id,
+    sessionId: session.id,
+    threadId: attempt.threadId,
+    targetDisplayMode
+  });
+  return attempt;
+}
+
+async function createSession({ projectPath, language, threadId, targetDisplayMode = null }) {
   const id = sessionId();
   const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const resolvedProjectPath = await resolveSessionProjectPath(projectPath, resolvedThreadId);
@@ -1951,12 +2005,28 @@ async function createSession({ projectPath, language, threadId }) {
     createdAt: nowIso(),
     runQueue: [],
     waiters: [],
-    widgetReady: null,
-    widgetReadyWaiters: []
+    openAttempts: new Map(),
+    currentOpenAttemptId: null
   };
   sessions.set(id, session);
   if (session.codexThreadId) rememberThreadClaim(session, session.codexThreadId);
+  if (targetDisplayMode) newOpenAttempt(session, targetDisplayMode);
   return session;
+}
+
+function summarizeOpenAttempt(attempt) {
+  if (!attempt) return null;
+  return {
+    openAttemptId: attempt.id,
+    sessionId: attempt.sessionId,
+    threadId: attempt.threadId,
+    targetDisplayMode: attempt.targetDisplayMode,
+    status: attempt.status,
+    stage: attempt.stage,
+    createdAt: attempt.createdAt,
+    updatedAt: attempt.updatedAt,
+    instances: Array.from(attempt.instances.values()).map((instance) => ({ ...instance }))
+  };
 }
 
 function sessionInfo(session) {
@@ -1967,25 +2037,34 @@ function sessionInfo(session) {
     language: session.language,
     projectPath: session.projectPath,
     sessionId: session.id,
-    widgetReady: session.widgetReady
+    openAttempt: summarizeOpenAttempt(session.openAttempts.get(session.currentOpenAttemptId))
   };
 }
 
-function widgetReadyResult(session, value = {}) {
-  const status = value.status === "failed" ? "failed" : "ready";
+function openAttemptResult(session, attempt, instance, value = {}) {
+  const status = value.status === "failed" ? "failed" : value.status === "timeout" ? "timeout" : "ready";
   return {
     status,
+    verified: status === "ready",
+    openAttemptId: attempt?.id || value.openAttemptId || "",
     sessionId: session.id,
-    threadId: session.codexThreadId || null,
+    threadId: attempt?.threadId || session.codexThreadId || null,
     projectPath: session.projectPath,
-    stage: typeof value.stage === "string" && value.stage ? value.stage : status === "ready" ? "api-ready" : "startup",
-    reactMounted: value.reactMounted === true,
-    error: status === "failed" && typeof value.error === "string" ? value.error : null,
-    reportedAt: nowIso()
+    widgetInstanceId: instance?.widgetInstanceId || value.widgetInstanceId || null,
+    displayMode: instance?.displayMode || value.displayMode || null,
+    stage: normalizeStartupStage(value.stage, status === "ready" ? "ready" : "failed"),
+    reactMounted: instance?.reactMounted === true || value.reactMounted === true,
+    projectHydrated: instance?.projectHydrated === true || value.projectHydrated === true,
+    canvasRendered: instance?.canvasRendered === true || value.canvasRendered === true,
+    canvasVisible: instance?.canvasVisible === true || value.canvasVisible === true,
+    canvasWidth: instance?.canvasWidth || value.canvasWidth || 0,
+    canvasHeight: instance?.canvasHeight || value.canvasHeight || 0,
+    error: (status === "failed" || status === "timeout") && typeof value.error === "string" ? value.error : null,
+    reportedAt: value.reportedAt || instance?.reportedAt || nowIso()
   };
 }
 
-function completeWidgetReadyWaiter(waiter, result) {
+function completeOpenAttemptWaiter(waiter, result) {
   clearTimeout(waiter.timer);
   if (waiter.abortSignal && waiter.abortHandler) {
     waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
@@ -1993,90 +2072,161 @@ function completeWidgetReadyWaiter(waiter, result) {
   waiter.resolve(result);
 }
 
-function detachWidgetReadyWaiter(session, waiter) {
+function detachOpenAttemptWaiter(attempt, waiter) {
   clearTimeout(waiter.timer);
   if (waiter.abortSignal && waiter.abortHandler) {
     waiter.abortSignal.removeEventListener("abort", waiter.abortHandler);
   }
-  const index = session.widgetReadyWaiters.indexOf(waiter);
-  if (index >= 0) session.widgetReadyWaiters.splice(index, 1);
+  const index = attempt.waiters.indexOf(waiter);
+  if (index >= 0) attempt.waiters.splice(index, 1);
 }
 
-function setWidgetReady(session, value) {
-  const result = widgetReadyResult(session, value);
-  if (session.widgetReady?.status === "ready" && result.status !== "ready") return session.widgetReady;
-  session.widgetReady = result;
-  while (session.widgetReadyWaiters.length) {
-    completeWidgetReadyWaiter(session.widgetReadyWaiters.shift(), result);
+function requireOpenAttempt(session, attemptId) {
+  const attempt = session.openAttempts.get(typeof attemptId === "string" ? attemptId : "");
+  if (!attempt) throw new HttpError(409, "Canvasight open attempt does not match this session.", "open_attempt_mismatch");
+  if (attempt.sessionId !== session.id) throw new HttpError(409, "Canvasight open attempt session mismatch.", "open_attempt_session_mismatch");
+  return attempt;
+}
+
+function registerOpenAttemptInstance(session, identity = {}) {
+  const attempt = requireOpenAttempt(session, identity.openAttemptId);
+  const widgetInstanceId = typeof identity.widgetInstanceId === "string" ? identity.widgetInstanceId.trim() : "";
+  if (!widgetInstanceId) throw new HttpError(400, "widgetInstanceId is required.", "missing_widget_instance_id");
+  if (attempt.threadId && identity.threadId && identity.threadId !== attempt.threadId) {
+    throw new HttpError(409, "Canvasight widget belongs to a different Codex task.", "widget_thread_mismatch");
   }
+  const incomingStage = normalizeStartupStage(identity.startupStage);
+  const existing = attempt.instances.get(widgetInstanceId);
+  if (existing && STARTUP_STAGE_RANK.get(incomingStage) < STARTUP_STAGE_RANK.get(existing.stage)) return { attempt, instance: existing };
+  if (existing?.stage === "failed" || existing?.stage === "ready") return { attempt, instance: existing };
+  const instance = {
+    widgetInstanceId,
+    displayMode: typeof identity.displayMode === "string" ? identity.displayMode : existing?.displayMode || "unknown",
+    stage: incomingStage,
+    reactMounted: identity.reactMounted === true || existing?.reactMounted === true,
+    projectHydrated: identity.projectHydrated === true || existing?.projectHydrated === true,
+    canvasRendered: identity.canvasRendered === true || existing?.canvasRendered === true,
+    canvasVisible: identity.canvasVisible === true || existing?.canvasVisible === true,
+    canvasWidth: Math.max(0, toNumber(identity.canvasWidth, existing?.canvasWidth || 0)),
+    canvasHeight: Math.max(0, toNumber(identity.canvasHeight, existing?.canvasHeight || 0)),
+    registeredAt: existing?.registeredAt || nowIso(),
+    reportedAt: nowIso(),
+    error: typeof identity.error === "string" ? identity.error : existing?.error || null
+  };
+  attempt.instances.set(widgetInstanceId, instance);
+  if (STARTUP_STAGE_RANK.get(instance.stage) >= STARTUP_STAGE_RANK.get(attempt.stage)) attempt.stage = instance.stage;
+  attempt.updatedAt = nowIso();
+  appendOpenAttemptLifecycle("canvasight_widget_instance_stage", {
+    openAttemptId: attempt.id,
+    sessionId: session.id,
+    threadId: attempt.threadId,
+    widgetInstanceId,
+    displayMode: instance.displayMode,
+    stage: instance.stage
+  });
+  return { attempt, instance };
+}
+
+function assertVerifiedFullscreenInstance(attempt, instance) {
+  if (instance.displayMode !== attempt.targetDisplayMode || instance.displayMode !== "fullscreen") {
+    throw new HttpError(409, "Only the fullscreen Canvasight instance can become ready or Run.", "fullscreen_instance_required");
+  }
+  if (!instance.reactMounted || !instance.projectHydrated || !instance.canvasRendered || !instance.canvasVisible || instance.canvasWidth <= 0 || instance.canvasHeight <= 0) {
+    throw new HttpError(409, "Canvasight fullscreen instance is missing required ready evidence.", "widget_ready_evidence_incomplete");
+  }
+}
+
+function setOpenAttemptReady(session, value) {
+  const { attempt, instance } = registerOpenAttemptInstance(session, {
+    ...value,
+    startupStage: value.status === "ready" ? "hydrating_project" : "failed"
+  });
+  if (value.status === "ready") {
+    assertVerifiedFullscreenInstance(attempt, instance);
+    instance.stage = "ready";
+    attempt.status = "ready";
+    attempt.stage = "ready";
+  } else {
+    instance.stage = "failed";
+    instance.error = typeof value.error === "string" ? value.error : "Canvasight widget failed to start.";
+    if (instance.displayMode === "fullscreen") {
+      attempt.status = "failed";
+      attempt.stage = "failed";
+    }
+  }
+  instance.reportedAt = nowIso();
+  attempt.updatedAt = instance.reportedAt;
+  const result = openAttemptResult(session, attempt, instance, value);
+  if (instance.displayMode === "fullscreen") {
+    const matched = attempt.waiters.filter((waiter) => !waiter.widgetInstanceId || waiter.widgetInstanceId === instance.widgetInstanceId);
+    attempt.waiters = attempt.waiters.filter((waiter) => !matched.includes(waiter));
+    for (const waiter of matched) completeOpenAttemptWaiter(waiter, result);
+  }
+  appendOpenAttemptLifecycle(`canvasight_open_attempt_${result.status}`, result);
   return result;
 }
 
-function waitForWidgetReady(sessionIdValue, timeoutMs, options = {}) {
+function waitForOpenAttemptReady(sessionIdValue, openAttemptIdValue, timeoutMs, options = {}) {
   const session = sessions.get(sessionIdValue);
   const threadId = optionalThreadId(options.threadId);
   if (!session) {
     return Promise.resolve({
       status: "failed",
+      verified: false,
+      openAttemptId: openAttemptIdValue || "",
       sessionId: sessionIdValue || "",
       threadId,
       projectPath: null,
-      stage: "session",
+      stage: "failed",
       reactMounted: false,
       error: "Canvasight session not found.",
       reportedAt: nowIso()
     });
   }
-  if (threadId && session.codexThreadId && threadId !== session.codexThreadId) {
-    return Promise.resolve({
+  const attempt = session.openAttempts.get(openAttemptIdValue);
+  if (!attempt) {
+    return Promise.resolve(openAttemptResult(session, null, null, {
       status: "failed",
-      sessionId: session.id,
-      threadId,
-      projectPath: session.projectPath,
-      stage: "thread",
-      reactMounted: false,
-      error: "Canvasight widget belongs to a different Codex task.",
-      reportedAt: nowIso()
-    });
+      openAttemptId: openAttemptIdValue,
+      stage: "failed",
+      error: "Canvasight open attempt not found."
+    }));
   }
-  if (session.widgetReady) return Promise.resolve(session.widgetReady);
+  if (threadId && session.codexThreadId && threadId !== session.codexThreadId) {
+    return Promise.resolve(openAttemptResult(session, attempt, null, { status: "failed", stage: "failed", error: "Canvasight widget belongs to a different Codex task." }));
+  }
+  if (attempt.threadId && threadId !== attempt.threadId) {
+    return Promise.resolve(openAttemptResult(session, attempt, null, { status: "failed", stage: "failed", error: "Canvasight open attempt belongs to a different Codex task." }));
+  }
+  const requestedInstanceId = typeof options.widgetInstanceId === "string" ? options.widgetInstanceId.trim() : "";
+  const readyInstance = Array.from(attempt.instances.values()).find((instance) =>
+    instance.stage === "ready" && instance.displayMode === "fullscreen" && (!requestedInstanceId || instance.widgetInstanceId === requestedInstanceId)
+  );
+  if (readyInstance) return Promise.resolve(openAttemptResult(session, attempt, readyInstance));
+  if (attempt.status === "failed") {
+    const failedInstance = Array.from(attempt.instances.values()).find((instance) => instance.displayMode === "fullscreen" && instance.stage === "failed");
+    return Promise.resolve(openAttemptResult(session, attempt, failedInstance, { status: "failed", error: failedInstance?.error || "Canvasight fullscreen instance failed." }));
+  }
 
   const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 15_000), 300_000));
   return new Promise((resolve) => {
     const waiter = {
       resolve,
       timer: setTimeout(() => {
-        detachWidgetReadyWaiter(session, waiter);
-        resolve({
-          status: "timeout",
-          sessionId: session.id,
-          threadId: session.codexThreadId || threadId || null,
-          projectPath: session.projectPath,
-          stage: "widget-ready",
-          reactMounted: false,
-          error: `Canvasight widget did not report ready within ${timeout}ms.`,
-          reportedAt: nowIso()
-        });
+        detachOpenAttemptWaiter(attempt, waiter);
+        resolve(openAttemptResult(session, attempt, null, { status: "timeout", stage: attempt.stage, error: `Canvasight fullscreen widget did not report ready within ${timeout}ms.` }));
       }, timeout)
     };
     if (options.abortSignal) {
       waiter.abortSignal = options.abortSignal;
       waiter.abortHandler = () => {
-        detachWidgetReadyWaiter(session, waiter);
-        resolve({
-          status: "failed",
-          sessionId: session.id,
-          threadId: session.codexThreadId || threadId || null,
-          projectPath: session.projectPath,
-          stage: "widget-ready",
-          reactMounted: false,
-          error: "Canvasight widget ready wait was cancelled.",
-          reportedAt: nowIso()
-        });
+        detachOpenAttemptWaiter(attempt, waiter);
+        resolve(openAttemptResult(session, attempt, null, { status: "failed", stage: attempt.stage, error: "Canvasight widget ready wait was cancelled." }));
       };
       options.abortSignal.addEventListener("abort", waiter.abortHandler, { once: true });
     }
-    session.widgetReadyWaiters.push(waiter);
+    waiter.widgetInstanceId = requestedInstanceId || null;
+    attempt.waiters.push(waiter);
   });
 }
 
@@ -2545,17 +2695,17 @@ function closeSession(sessionIdValue) {
       attachments: []
     });
   }
-  while (session.widgetReadyWaiters.length) {
-    completeWidgetReadyWaiter(session.widgetReadyWaiters.shift(), {
-      status: "failed",
-      sessionId: session.id,
-      threadId: session.codexThreadId || null,
-      projectPath: session.projectPath,
-      stage: "session",
-      reactMounted: false,
-      error: "Canvasight session closed before the widget became ready.",
-      reportedAt: nowIso()
-    });
+  for (const attempt of session.openAttempts.values()) {
+    while (attempt.waiters.length) {
+      completeOpenAttemptWaiter(
+        attempt.waiters.shift(),
+        openAttemptResult(session, attempt, null, {
+          status: "failed",
+          stage: "failed",
+          error: "Canvasight session closed before the fullscreen widget became ready."
+        })
+      );
+    }
   }
   return true;
 }
@@ -2564,7 +2714,7 @@ function responseHeaders(headers = {}) {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-    "access-control-allow-headers": "content-type, x-canvasight-token",
+    "access-control-allow-headers": "content-type, x-canvasight-token, x-canvasight-open-attempt-id, x-canvasight-widget-instance-id, x-canvasight-startup-stage, x-canvasight-display-mode, x-canvasight-thread-id, x-canvasight-react-mounted",
     "access-control-allow-private-network": "true",
     ...headers
   };
@@ -3424,6 +3574,17 @@ async function handleSessionApi(req, res, url) {
   if (!match) return false;
   const session = getSession(decodeURIComponent(match[1]));
   const action = match[2] || "";
+  const requestIdentity = {
+    openAttemptId: req.headers["x-canvasight-open-attempt-id"],
+    widgetInstanceId: req.headers["x-canvasight-widget-instance-id"],
+    startupStage: req.headers["x-canvasight-startup-stage"],
+    displayMode: req.headers["x-canvasight-display-mode"],
+    threadId: req.headers["x-canvasight-thread-id"],
+    reactMounted: req.headers["x-canvasight-react-mounted"] === "true"
+  };
+  if (session.currentOpenAttemptId && requestIdentity.openAttemptId) {
+    registerOpenAttemptInstance(session, requestIdentity);
+  }
 
   if (!action) {
     assertMethod(req, "GET");
@@ -3433,13 +3594,22 @@ async function handleSessionApi(req, res, url) {
 
   if (action === "widget-ready") {
     if (req.method === "GET") {
-      sendJson(res, 200, session.widgetReady || {
+      const attempt = session.openAttempts.get(session.currentOpenAttemptId);
+      const instance = attempt?.instances.get(String(requestIdentity.widgetInstanceId || ""));
+      sendJson(res, 200, instance?.stage === "ready" ? openAttemptResult(session, attempt, instance) : {
         status: "pending",
+        verified: false,
+        openAttemptId: attempt?.id || "",
         sessionId: session.id,
         threadId: session.codexThreadId || null,
         projectPath: session.projectPath,
-        stage: "widget-ready",
-        reactMounted: false,
+        widgetInstanceId: instance?.widgetInstanceId || null,
+        displayMode: instance?.displayMode || null,
+        stage: instance?.stage || "starting",
+        reactMounted: instance?.reactMounted === true,
+        projectHydrated: instance?.projectHydrated === true,
+        canvasRendered: instance?.canvasRendered === true,
+        canvasVisible: instance?.canvasVisible === true,
         error: null,
         reportedAt: null
       });
@@ -3450,10 +3620,7 @@ async function handleSessionApi(req, res, url) {
     if (body?.status !== "ready" && body?.status !== "failed") {
       throw new HttpError(400, "Widget ready status must be ready or failed.", "invalid_widget_ready_status");
     }
-    if (body.status === "ready" && body.reactMounted !== true) {
-      throw new HttpError(400, "Widget ready acknowledgement requires reactMounted=true.", "widget_not_mounted");
-    }
-    sendJson(res, 200, setWidgetReady(session, body));
+    sendJson(res, 200, setOpenAttemptReady(session, { ...requestIdentity, ...body }));
     return true;
   }
 
@@ -3533,6 +3700,12 @@ async function handleSessionApi(req, res, url) {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
     if (body?.deliveryMode === "widget_bridge_prepare") {
+      const attempt = requireOpenAttempt(session, requestIdentity.openAttemptId);
+      const instance = attempt.instances.get(String(requestIdentity.widgetInstanceId || ""));
+      if (!instance || instance.stage !== "ready" || attempt.status !== "ready") {
+        throw new HttpError(409, "Canvasight Run requires the verified fullscreen widget instance.", "widget_instance_not_ready");
+      }
+      assertVerifiedFullscreenInstance(attempt, instance);
       const prepared = await prepareWidgetRun(session, body);
       sendJson(res, 200, {
         status: "prepared",
@@ -3700,7 +3873,8 @@ async function handleHttp(req, res) {
       const session = await createSession({
         projectPath: typeof body?.projectPath === "string" && body.projectPath ? body.projectPath : null,
         language: body?.language,
-        threadId: body?.threadId
+        threadId: body?.threadId,
+        targetDisplayMode: body?.targetDisplayMode === "fullscreen" ? "fullscreen" : null
       });
       const openedProject = await openProject(session.projectPath);
       session.documentRevision = projectDocumentRevision(session.projectPath);
@@ -3749,8 +3923,11 @@ async function handleHttp(req, res) {
         if (!res.writableEnded) abortController.abort();
       };
       res.on("close", abort);
-      const result = await waitForWidgetReady(sessionIdValue, body?.timeoutMs, {
+      const openAttemptIdValue = typeof body?.openAttemptId === "string" ? body.openAttemptId.trim() : "";
+      if (!openAttemptIdValue) throw new HttpError(400, "openAttemptId is required", "missing_open_attempt_id");
+      const result = await waitForOpenAttemptReady(sessionIdValue, openAttemptIdValue, body?.timeoutMs, {
         threadId: body?.threadId,
+        widgetInstanceId: body?.widgetInstanceId,
         abortSignal: abortController.signal
       });
       res.off("close", abort);
@@ -3927,7 +4104,8 @@ async function createBrowserSession(args) {
     body: JSON.stringify({
       projectPath: typeof args?.projectPath === "string" && args.projectPath ? args.projectPath : null,
       language: args?.language,
-      threadId: args?.threadId || process.env.CODEX_THREAD_ID || null
+      threadId: args?.threadId || process.env.CODEX_THREAD_ID || null,
+      targetDisplayMode: args?.targetDisplayMode === "fullscreen" ? "fullscreen" : null
     })
   });
   const session = opened.session;
@@ -3942,26 +4120,16 @@ async function createBrowserSession(args) {
 }
 
 function widgetToolMeta(widgetData) {
-  const widgetMeta = canvasightWidgetResourceMeta([widgetData?.origin]);
-  return {
-    ...widgetMeta,
-    ui: {
-      ...(widgetMeta.ui || {}),
-      resourceUri: CANVASIGHT_WIDGET_URI,
-      visibility: ["model", "app"]
-    },
-    "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
-    "openai/widgetAccessible": true,
-    [RESOURCE_URI_META_KEY]: CANVASIGHT_WIDGET_URI,
-    widgetData
-  };
+  return { widgetData };
 }
 
 const openCanvasightWidgetOutputSchema = {
   type: "object",
   properties: {
     status: { type: "string" },
+    openAttemptId: { type: "string" },
     sessionId: { type: "string" },
+    targetDisplayMode: { type: "string" },
     rendering: { type: "string" },
     widget: { type: "string" },
     canvasightHost: { type: "string" },
@@ -4019,9 +4187,11 @@ const looseObjectOutputSchema = {
 function publicWidgetOpenResult(widgetData) {
   return {
     status: widgetData.status,
+    openAttemptId: widgetData.openAttemptId,
     rendering: widgetData.rendering,
     widget: widgetData.widget,
     sessionId: widgetData.sessionId,
+    targetDisplayMode: widgetData.targetDisplayMode,
     canvasightHost: widgetData.canvasightHost,
     projectPath: widgetData.projectPath,
     codexThreadId: widgetData.codexThreadId,
@@ -4038,7 +4208,8 @@ async function toolRenderCanvasightCanvasWidget(args) {
   const threadId = requiredNativeThreadId(args?.threadId);
   const { daemon, opened, session, url } = await createBrowserSession({
     ...(args || {}),
-    threadId
+    threadId,
+    targetDisplayMode: "fullscreen"
   });
   const canvasRouting = canvasRoutingContext();
   const widgetData = {
@@ -4046,6 +4217,8 @@ async function toolRenderCanvasightCanvasWidget(args) {
     rendering: "native-widget",
     widget: "canvasight-canvas-widget",
     sessionId: session.sessionId,
+    openAttemptId: session.openAttempt?.openAttemptId,
+    targetDisplayMode: "fullscreen",
     apiBaseUrl: daemon.origin,
     canvasightHost: "widget",
     token: daemon.token || "",
@@ -4281,13 +4454,18 @@ async function toolAwaitCanvasightRun(args) {
 async function toolAwaitCanvasightWidgetReady(args) {
   const sessionIdValue = typeof args?.sessionId === "string" ? args.sessionId.trim() : "";
   if (!sessionIdValue) throw new Error("sessionId is required");
-  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const openAttemptIdValue = typeof args?.openAttemptId === "string" ? args.openAttemptId.trim() : "";
+  if (!openAttemptIdValue) throw new Error("openAttemptId is required");
+  const threadId = optionalThreadId(args?.threadId);
+  if (!threadId) throw new Error("threadId is required");
   const daemon = await ensureDaemonServer();
   const result = await daemonJson(daemon, "/api/widget-ready/await", {
     method: "POST",
     body: JSON.stringify({
       sessionId: sessionIdValue,
+      openAttemptId: openAttemptIdValue,
       threadId,
+      widgetInstanceId: args?.widgetInstanceId,
       timeoutMs: args?.timeoutMs
     })
   });
@@ -4320,10 +4498,22 @@ async function toolCanvasightWidgetApi(args) {
   if (!new Set(["GET", "POST", "DELETE"]).has(method)) {
     throw new Error(`Canvasight widget API method is not allowed: ${method}`);
   }
+  const openAttemptIdValue = typeof args?.openAttemptId === "string" ? args.openAttemptId.trim() : "";
+  const widgetInstanceId = typeof args?.widgetInstanceId === "string" ? args.widgetInstanceId.trim() : "";
+  const startupStage = normalizeStartupStage(args?.startupStage);
+  if (!openAttemptIdValue || !widgetInstanceId) throw new Error("Canvasight widget API requires openAttemptId and widgetInstanceId.");
   const daemon = await ensureDaemonServer();
   const response = await fetch(new URL(route, daemon.origin), {
     method,
-    headers: daemonHeaders(daemon, args?.body === null || args?.body === undefined ? {} : { "content-type": "application/json" }),
+    headers: daemonHeaders(daemon, {
+      ...(args?.body === null || args?.body === undefined ? {} : { "content-type": "application/json" }),
+      "x-canvasight-open-attempt-id": openAttemptIdValue,
+      "x-canvasight-widget-instance-id": widgetInstanceId,
+      "x-canvasight-startup-stage": startupStage,
+      "x-canvasight-display-mode": typeof args?.displayMode === "string" ? args.displayMode : "unknown",
+      "x-canvasight-thread-id": typeof args?.threadId === "string" ? args.threadId : "",
+      "x-canvasight-react-mounted": args?.reactMounted === true ? "true" : "false"
+    }),
     ...(args?.body === null || args?.body === undefined ? {} : { body: JSON.stringify(args.body) })
   });
   const text = await response.text();
@@ -4411,9 +4601,6 @@ const tools = [
         resourceUri: CANVASIGHT_WIDGET_URI,
         visibility: ["model", "app"]
       },
-      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
-      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
-      "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
       "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
@@ -4448,9 +4635,6 @@ const tools = [
         resourceUri: CANVASIGHT_WIDGET_URI,
         visibility: ["model", "app"]
       },
-      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
-      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
-      "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
       "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
@@ -4532,9 +4716,6 @@ const tools = [
         resourceUri: CANVASIGHT_WIDGET_URI,
         visibility: ["model", "app"]
       },
-      "ui/resourceUri": CANVASIGHT_WIDGET_URI,
-      "openai/outputTemplate": CANVASIGHT_WIDGET_URI,
-      "openai/widgetAccessible": true,
       "openai/toolInvocation/invoking": "Opening Canvasight widget...",
       "openai/toolInvocation/invoked": "Canvasight widget session created"
     }
@@ -4702,9 +4883,15 @@ const tools = [
       properties: {
         path: { type: "string" },
         method: { type: "string", enum: ["GET", "POST", "DELETE"] },
-        body: {}
+        body: {},
+        openAttemptId: { type: "string" },
+        widgetInstanceId: { type: "string" },
+        startupStage: { type: "string", enum: ["starting", "connecting_bridge", "connecting_session", "hydrating_project", "ready", "failed"] },
+        displayMode: { type: "string", enum: ["inline", "fullscreen", "pip", "unknown"] },
+        threadId: { type: "string" },
+        reactMounted: { type: "boolean" }
       },
-      required: ["path", "method"],
+      required: ["path", "method", "openAttemptId", "widgetInstanceId", "startupStage", "displayMode"],
       additionalProperties: false
     },
     outputSchema: looseObjectOutputSchema,
@@ -4723,9 +4910,17 @@ const tools = [
           type: "string",
           description: "Session id returned by open_canvasight."
         },
+        openAttemptId: {
+          type: "string",
+          description: "Open attempt id returned by open_canvasight."
+        },
         threadId: {
           type: "string",
-          description: "Optional current Codex task id used to reject readiness from a different task."
+          description: "Current Codex task id used to reject readiness from a different task."
+        },
+        widgetInstanceId: {
+          type: "string",
+          description: "Optional exact fullscreen widget instance id when the caller already observed it."
         },
         timeoutMs: {
           type: "number",
@@ -4734,7 +4929,7 @@ const tools = [
           description: "Maximum wait in milliseconds. Defaults to 15000."
         }
       },
-      required: ["sessionId"],
+      required: ["sessionId", "openAttemptId", "threadId"],
       additionalProperties: false
     },
     outputSchema: looseObjectOutputSchema

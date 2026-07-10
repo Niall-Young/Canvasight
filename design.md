@@ -77,14 +77,22 @@ Normal plugin Run delivery happens through the Codex native widget host bridge. 
 
 The React application shell owns startup feedback and must render on the widget resource's first paint. Session metadata, daemon connection, and initial project data are progressive startup dependencies; none may block the shell from mounting.
 
-Use four explicit startup stages:
+Use one monotonic startup state machine: `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`. A repeated or late host event may confirm the current stage but must never move the visible UI backward.
 
-- Starting: the widget resource is active and the React shell is mounting. Show `Starting Canvasight...` briefly in the real app shell.
-- Connecting: the bridge has valid widget session metadata and is waiting for the app-only MCP API proxy plus the initial session health check. This label is not proof that the daemon connection or ready acknowledgement succeeded. Keep the workspace structure visible while controls that require a session remain unavailable.
-- Ready: React is mounted, session metadata is valid, the initial session/API health check has succeeded, and the widget runtime has emitted a positive ready acknowledgement. Only this stage may clear startup feedback and present the canvas as opened.
-- Failed: bootstrap, metadata, bridge, session, or initial API setup failed. Replace loading feedback with a visible error that names the failed stage and offers a concrete recovery action.
+- `starting`: the widget resource is active and the React shell is committing. Show the workspace skeleton immediately; do not leave a standalone static fallback covering React.
+- `connecting_bridge`: the React shell is mounted and is establishing the MCP Apps bridge plus fullscreen host context.
+- `connecting_session`: attempt, session, thread, and fullscreen widget instance are bound; the app-only MCP API proxy and initial session health check are pending.
+- `hydrating_project`: bridge and session API are usable, and the initial `.scatter` project is loading into application state and the canvas DOM.
+- `ready`: the actual React commit, MCP Apps bridge, fullscreen host context, session API, project hydration, and a visible, non-zero-size canvas DOM have all been verified for the same open attempt and widget instance. Only this stage may clear startup feedback and enable Run.
+- `failed`: a stage deadline, React render, bridge, host context, session, hydration, or canvas visibility requirement failed. Failed is terminal for that attempt; late events must not restore or obscure loading feedback.
 
-Widget session metadata has a hard 10-second deadline from bootstrap start. If it is still unavailable at the deadline, transition to Failed immediately. Starting and Connecting must never remain on screen indefinitely, and an error must not be hidden in console output, diagnostics, or a dismissed toast while the main surface continues to look busy.
+During all non-terminal startup stages, preserve the recognizable workspace frame with a topbar and canvas skeleton. Session-dependent controls are visibly disabled and removed from keyboard order. The status label remains compact, names the current operation, uses `aria-live="polite"`, and does not imply success.
+
+Failed replaces the skeleton with a persistent panel in the React tree. It must include the failed stage, a short human-readable reason, Reconnect, Reopen in a new task, and Copy diagnostics actions. Diagnostics copied from the panel must redact daemon URLs, credentials, access tokens, and user-home path segments. The failure heading receives focus, the panel uses an assertive live region, all actions are keyboard reachable with visible focus, and recovery never depends on a transient toast.
+
+An ErrorBoundary around the workspace must route uncaught React render errors to the same Failed panel with stage `react_render`. Reconnect resets the boundary and starts a new attempt through an injected runtime callback; the UI component itself must not invent session, task, or navigation behavior.
+
+Every non-terminal stage has a bounded runtime deadline. Missing session metadata still has a hard 10-second deadline from bootstrap start. No startup stage may remain on screen indefinitely, and an error must not be hidden in console output, diagnostics, or a dismissed toast while the main surface continues to look busy.
 
 MCP tool completion, widget resource loading, script loading, daemon health, and browser/dev rendering are supporting signals only. They are not Ready. Native opening succeeds only when the real widget runtime's ready acknowledgement is observed after React mount and the initial session/API health check.
 

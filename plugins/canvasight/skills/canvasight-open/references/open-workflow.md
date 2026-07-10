@@ -4,10 +4,10 @@
 
 Read the active Codex task's `CODEX_THREAD_ID`, then call `open_canvasight` with that exact value as `threadId`. When `projectPath` is omitted, Canvasight resolves the task workspace and creates or opens `.scatter` there. Pass `projectPath` only as an explicit override when it is already known.
 
-The open result prepares a widget session and returns its `sessionId`. It does not prove that Codex loaded the widget resource, mounted React, or reached the session API. Immediately call:
+The open result prepares an `OpenAttempt` and returns both `sessionId` and `openAttemptId`. It does not prove that Codex loaded the widget resource, mounted React, or reached the session API. Immediately call:
 
 ```text
-await_canvasight_widget_ready({ sessionId, threadId })
+await_canvasight_widget_ready({ sessionId, openAttemptId, threadId })
 ```
 
 The default wait is 15 seconds. `timeoutMs` may be set for a deliberate diagnostic wait, up to 300000 ms; do not use repeated long waits to hide a failed bootstrap.
@@ -16,12 +16,12 @@ Interpret the result strictly:
 
 | Result | Meaning | Agent response |
 | --- | --- | --- |
-| `status=ready`, `reactMounted=true` | React mounted and the initial session/API health check acknowledged ready | The canvas is open and ready |
+| `status=ready`, `verified=true`, `displayMode=fullscreen`, all render evidence true | The exact fullscreen instance mounted React, hydrated the project, and exposed a visible canvas | The canvas is open and ready |
 | `status=timeout` | No positive acknowledgement arrived before the deadline | Report `stage` and `error`; mark native opening `unverified` |
 | `status=failed` | The widget or daemon reported a startup failure, a task/session mismatch, or the wait was cancelled | Report `stage` and `error`; mark native opening failed |
-| `status=ready`, `reactMounted!=true` | Invalid or incomplete acknowledgement | Do not claim success; treat it as failed contract validation |
+| `status=ready` with missing identity, fullscreen mode, or render evidence | Invalid or incomplete acknowledgement | Do not claim success; treat it as failed contract validation |
 
-Preserve `sessionId`, `threadId`, `projectPath`, `stage`, `reactMounted`, `error`, and `reportedAt` in diagnostic handoff. Do not expose the daemon URL or token in user-facing output.
+Preserve `openAttemptId`, `sessionId`, `widgetInstanceId`, `threadId`, `projectPath`, `displayMode`, `stage`, render evidence, `error`, and `reportedAt` in diagnostic handoff. Do not expose daemon URLs or tokens.
 
 ## Tool Discovery And Task Binding
 
@@ -33,7 +33,7 @@ If a callable Canvasight tool fails with `Transport closed`, report `canvasight_
 
 ## What Counts As Evidence
 
-Only the positive ready acknowledgement proves widget initialization. These are supporting diagnostics, never substitutes:
+Only the instance-bound fullscreen ready acknowledgement proves widget initialization. These are supporting diagnostics, never substitutes:
 
 - `open_canvasight` tool completion;
 - `openai/outputTemplate` or successful `resources/read`;
@@ -46,7 +46,7 @@ Native-host acceptance additionally requires the full canvas to be visible, one 
 
 ## Recent Projects
 
-Use `list_canvasight_recent_projects`, then `open_canvasight_recent_project` with the current `threadId`. Read the returned `sessionId` and apply the same ready wait. A recent-project tool result alone is provisional.
+Use `list_canvasight_recent_projects`, then `open_canvasight_recent_project` with the current `threadId`. Read its `sessionId` and `openAttemptId` and apply the same ready wait. A recent-project tool result alone is provisional.
 
 ## Browser Fallback
 

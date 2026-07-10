@@ -21,6 +21,6 @@ Use this skill as the narrow index for Canvasight-specific work that does not cl
 - Do not use macOS Accessibility automation, virtual clicks, clipboard paste, DOM clicks, or `codex://threads/new`.
 - Page write behavior is controlled by `mode`; task structure is controlled by `graphType`.
 - Normal plugin use should not ask the user to run `npm run dev`.
-- `open_canvasight` completion is provisional. Only `await_canvasight_widget_ready` returning `status: "ready"` with `reactMounted: true` confirms native widget readiness; browser fallback, daemon health, resource reads, and automated tests do not.
+- `open_canvasight` completion is provisional. Treat its `sessionId` plus `openAttemptId` and the mandatory instance-bound await as one open action. Only verified fullscreen readiness with true React/project/canvas evidence confirms the native widget; fallback, daemon health, resource reads, and automated tests do not.
 - An open Canvasight session creates active canvas context. If the user says "用画布", "放到画布", "写到画布", or equivalent while Canvasight is active, treat "canvas" as Canvasight graph writing unless they explicitly mean a web `<canvas>` element.
 - Prefer graph writing for later medium or complex structured requests, but keep small direct commands and Run payloads on their normal path.

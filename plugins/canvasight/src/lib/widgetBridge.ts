@@ -25,15 +25,31 @@ export type CanvasightBridgeState = {
   lastBridgeError: string | null;
   mcpInitialized: boolean;
   openaiFollowUpAvailable: boolean;
+  displayMode: "inline" | "fullscreen" | "pip" | "unknown";
+  startupStage: CanvasightStartupStage;
+  widgetInstanceId: string;
   reason: string;
 };
+
+export type CanvasightStartupStage =
+  | "starting"
+  | "connecting_bridge"
+  | "connecting_session"
+  | "hydrating_project"
+  | "ready"
+  | "failed";
 
 type CanvasightWidgetData = Record<string, unknown> & {
   apiBaseUrl?: string;
   browserUrl?: string;
   canvasightHost?: string;
   origin?: string;
+  openAttemptId?: string;
   sessionId?: string;
+  targetDisplayMode?: string;
+  threadId?: string | null;
+  codexThreadId?: string | null;
+  widgetInstanceId?: string;
   token?: string;
   url?: string;
 };
@@ -43,6 +59,7 @@ type CanvasightMcpApi = {
   canSendFollowUpMessage: () => boolean;
   getBridgeState: () => CanvasightBridgeState;
   getHostCapabilities: () => unknown;
+  setStartupStage: (stage: CanvasightStartupStage) => void;
   sendFollowUpMessage: (message: { content?: Array<Record<string, unknown>>; prompt?: string }) => Promise<unknown>;
   toolOutput: () => Record<string, unknown> | null;
 };
@@ -63,6 +80,19 @@ declare global {
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const BRIDGE_TIMEOUT_MS = 8_000;
+const STARTUP_STAGE_RANK: Record<CanvasightStartupStage, number> = {
+  starting: 0,
+  connecting_bridge: 1,
+  connecting_session: 2,
+  hydrating_project: 3,
+  ready: 4,
+  failed: 5
+};
+
+function createWidgetInstanceId(): string {
+  if (typeof crypto.randomUUID === "function") return `widget-${crypto.randomUUID()}`;
+  return `widget-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer = 0;
@@ -149,19 +179,40 @@ export function startCanvasightWidgetBridge(): void {
   const openAiHostObject = window.openai;
   let openAiGlobals: OpenAiGlobals = { ...(window.openai ?? {}) };
   let metadataReceived = false;
+  let reactMounted = false;
+  const widgetInstanceId = createWidgetInstanceId();
   const bridgeState: CanvasightBridgeState = {
     bridgeTransport: "none",
     hostCapabilitiesMessage: false,
     lastBridgeError: null,
     mcpInitialized: false,
     openaiFollowUpAvailable: false,
+    displayMode: "unknown",
+    startupStage: "starting",
+    widgetInstanceId,
     reason: "mcp_initialize_pending"
   };
 
   const updateBridgeState = (patch: Partial<CanvasightBridgeState>): void => {
+    const changed = Object.entries(patch).some(
+      ([key, value]) => bridgeState[key as keyof CanvasightBridgeState] !== value
+    );
+    if (!changed) return;
     Object.assign(bridgeState, patch);
     window.__CANVASIGHT_BRIDGE_STATE__ = { ...bridgeState };
     window.dispatchEvent(new CustomEvent("canvasight:bridge-state", { detail: { ...bridgeState } }));
+  };
+
+  const setStartupStage = (stage: CanvasightStartupStage): void => {
+    if (bridgeState.startupStage === "ready" || bridgeState.startupStage === "failed") return;
+    if (STARTUP_STAGE_RANK[stage] < STARTUP_STAGE_RANK[bridgeState.startupStage]) return;
+    updateBridgeState({ startupStage: stage });
+  };
+
+  const updateDisplayMode = (value: unknown): void => {
+    if (value === "inline" || value === "fullscreen" || value === "pip") {
+      updateBridgeState({ displayMode: value });
+    }
   };
 
   const openAiFollowUp = (): OpenAiGlobals["sendFollowUpMessage"] => {
@@ -197,14 +248,23 @@ export function startCanvasightWidgetBridge(): void {
     const { payload } = payloadFromToolResult(result);
     try {
       const widgetData = normalizedWidgetData(payload);
+      if (!widgetData.openAttemptId) throw new Error("Canvasight tool result did not include openAttemptId.");
       metadataReceived = true;
-      toolOutput = widgetData;
-      window.__CANVASIGHT_WIDGET_DATA__ = widgetData;
-      setStatus("Connecting Canvasight session...", "muted");
-      window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: widgetData }));
+      const currentSessionId = window.__CANVASIGHT_WIDGET_DATA__?.sessionId;
+      const currentAttemptId = window.__CANVASIGHT_WIDGET_DATA__?.openAttemptId;
+      if (currentSessionId && (currentSessionId !== widgetData.sessionId || currentAttemptId !== widgetData.openAttemptId)) return;
+      const runtimeData = { ...widgetData, widgetInstanceId };
+      toolOutput = runtimeData;
+      window.__CANVASIGHT_WIDGET_DATA__ = runtimeData;
+      setStartupStage(bridgeState.mcpInitialized ? "connecting_session" : "connecting_bridge");
+      if (!reactMounted && bridgeState.startupStage !== "ready" && bridgeState.startupStage !== "failed") {
+        setStatus("Connecting Canvasight session...", "muted");
+      }
+      window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: runtimeData }));
     } catch (error) {
       const message = errorMessage(error, "Canvasight widget metadata is invalid.");
       updateBridgeState({ lastBridgeError: message, reason: "widget_metadata_invalid" });
+      setStartupStage("failed");
       setStatus(message, "error");
       window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage: "metadata" } }));
     }
@@ -270,9 +330,25 @@ export function startCanvasightWidgetBridge(): void {
   const callServerTool: CanvasightMcpApi["callServerTool"] = async (request, options) => {
     if (!bridgeState.mcpInitialized) await waitForMcpReady();
     if (!bridgeState.mcpInitialized || !app) throw new Error("Canvasight MCP Apps server-tool bridge is not ready.");
+    const runtime = window.__CANVASIGHT_WIDGET_DATA__;
+    const requestName = request.name;
+    const enrichedRequest = requestName === "canvasight_widget_api"
+      ? {
+          ...request,
+          arguments: {
+            ...((request.arguments && typeof request.arguments === "object" ? request.arguments : {}) as Record<string, unknown>),
+            openAttemptId: runtime?.openAttemptId,
+            widgetInstanceId,
+            startupStage: bridgeState.startupStage,
+            displayMode: bridgeState.displayMode,
+            threadId: runtime?.threadId ?? runtime?.codexThreadId ?? "",
+            reactMounted: STARTUP_STAGE_RANK[bridgeState.startupStage] >= STARTUP_STAGE_RANK.connecting_session
+          }
+        }
+      : request;
     return withTimeout(
       app.callServerTool(
-        request as Parameters<App["callServerTool"]>[0],
+        enrichedRequest as Parameters<App["callServerTool"]>[0],
         options as Parameters<App["callServerTool"]>[1]
       ),
       typeof options?.timeoutMs === "number" ? options.timeoutMs : 30_000,
@@ -288,6 +364,7 @@ export function startCanvasightWidgetBridge(): void {
     },
     getBridgeState: () => ({ ...bridgeState }),
     getHostCapabilities: () => app?.getHostCapabilities() ?? null,
+    setStartupStage,
     sendFollowUpMessage,
     toolOutput: () => toolOutput
   };
@@ -300,9 +377,22 @@ export function startCanvasightWidgetBridge(): void {
   });
   consumeOpenAiGlobals(window.openai);
 
-  window.addEventListener("canvasight:app-ready", () => setStatus("", "ok"));
+  window.addEventListener("canvasight:react-mounted", () => {
+    reactMounted = true;
+    setStartupStage("connecting_bridge");
+    setStatus("", "ok");
+  });
+  window.addEventListener("canvasight:startup-stage", (event) => {
+    const stage = (event as CustomEvent<{ stage?: CanvasightStartupStage }>).detail?.stage;
+    if (stage && stage in STARTUP_STAGE_RANK) setStartupStage(stage);
+  });
+  window.addEventListener("canvasight:app-ready", () => {
+    setStartupStage("ready");
+    if (bridgeState.startupStage === "ready") setStatus("", "ok");
+  });
   window.addEventListener("canvasight:app-error", (event) => {
     const detail = (event as CustomEvent<{ error?: string }>).detail;
+    updateBridgeState({ startupStage: "failed" });
     setStatus(detail?.error || "Canvasight failed to start.", "error");
   });
 
@@ -310,6 +400,7 @@ export function startCanvasightWidgetBridge(): void {
     if (metadataReceived) return;
     const message = `Canvasight session metadata timed out after ${bootstrapTimeoutMs()}ms. Reopen Canvasight from a new Codex task.`;
     updateBridgeState({ lastBridgeError: message, reason: "widget_metadata_timeout" });
+    updateBridgeState({ startupStage: "failed" });
     setStatus(message, "error");
     window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage: "metadata" } }));
   }, bootstrapTimeoutMs());
@@ -323,6 +414,7 @@ export function startCanvasightWidgetBridge(): void {
     window.__CANVASIGHT_MCP_APP__ = app;
     app.addEventListener("toolresult", handleToolResult);
     app.addEventListener("hostcontextchanged", (context) => {
+      updateDisplayMode(context.displayMode);
       try {
         if (context.theme) applyDocumentTheme(context.theme);
         if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
@@ -333,18 +425,22 @@ export function startCanvasightWidgetBridge(): void {
     });
     const ready = withTimeout(app.connect(), BRIDGE_TIMEOUT_MS, "Canvasight MCP Apps bridge initialization timed out.")
       .then(() => {
-        updateBridgeState({ mcpInitialized: true, lastBridgeError: null });
+        updateBridgeState({ mcpInitialized: true, lastBridgeError: null, startupStage: metadataReceived ? "connecting_session" : "connecting_bridge" });
         refreshBridgeState();
         const context = app?.getHostContext();
+        updateDisplayMode(context?.displayMode);
         if (context?.theme) applyDocumentTheme(context.theme);
         if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
         if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts);
-        void app?.requestDisplayMode({ mode: "fullscreen" }).catch(() => undefined);
+        void app?.requestDisplayMode({ mode: "fullscreen" }).then((result) => updateDisplayMode(result?.mode)).catch((error) => {
+          updateBridgeState({ lastBridgeError: errorMessage(error, "Canvasight fullscreen request failed."), reason: "fullscreen_request_failed" });
+        });
       })
       .catch((error) => {
         const message = errorMessage(error, "Canvasight MCP Apps bridge initialization failed.");
         window.__CANVASIGHT_MCP_HOST_ERROR__ = error;
         updateBridgeState({ lastBridgeError: message, mcpInitialized: false, reason: "mcp_initialize_timeout" });
+        updateBridgeState({ startupStage: "failed" });
         refreshBridgeState();
         setStatus(message, "error");
       });
@@ -353,6 +449,7 @@ export function startCanvasightWidgetBridge(): void {
     const message = errorMessage(error, "Canvasight MCP Apps bridge could not start.");
     window.__CANVASIGHT_MCP_HOST_ERROR__ = error;
     updateBridgeState({ lastBridgeError: message, mcpInitialized: false, reason: "mcp_initialize_failed" });
+    updateBridgeState({ startupStage: "failed" });
     refreshBridgeState();
     setStatus(message, "error");
   }

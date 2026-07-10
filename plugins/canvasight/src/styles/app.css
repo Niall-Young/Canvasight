@@ -4391,3 +4391,309 @@ body {
     gap: 8px;
   }
 }
+
+/* Native widget startup is a full workspace state, not a floating connection toast. */
+.canvasight-startup-overlay {
+  position: absolute;
+  z-index: 100;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.workspace-startup-skeleton,
+.startup-failure-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-background-canvas);
+}
+
+.workspace-startup-skeleton {
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+}
+
+.workspace-startup-topbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
+  background: var(--color-background-surface);
+}
+
+.workspace-startup-brand,
+.workspace-startup-project,
+.workspace-startup-node span {
+  display: block;
+  border-radius: var(--radius-full);
+  background: var(--color-background-grey);
+}
+
+.workspace-startup-brand {
+  width: 112px;
+  height: 12px;
+}
+
+.workspace-startup-project {
+  width: min(220px, 24vw);
+  height: 10px;
+  margin-inline: auto;
+}
+
+.workspace-startup-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-startup-controls button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-sm);
+  background: var(--color-background-disabled);
+}
+
+.workspace-startup-canvas {
+  position: relative;
+  overflow: hidden;
+  background-image: radial-gradient(var(--color-border-divider) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.workspace-startup-node {
+  position: absolute;
+  display: grid;
+  width: 240px;
+  gap: 12px;
+  padding: 18px;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-node);
+}
+
+.workspace-startup-node-primary {
+  top: 28%;
+  left: 20%;
+}
+
+.workspace-startup-node-secondary {
+  top: 48%;
+  left: 58%;
+}
+
+.workspace-startup-node span {
+  width: 100%;
+  height: 9px;
+}
+
+.workspace-startup-node span:first-child {
+  width: 58%;
+  height: 12px;
+}
+
+.workspace-startup-node span:last-child {
+  width: 76%;
+}
+
+.workspace-startup-edge {
+  position: absolute;
+  top: 45%;
+  left: 41%;
+  width: 19%;
+  height: 1px;
+  background: var(--color-border-connecting);
+  transform: rotate(10deg);
+  transform-origin: left center;
+}
+
+.workspace-startup-status {
+  position: absolute;
+  z-index: 2;
+  bottom: 20px;
+  left: 50%;
+  display: inline-flex;
+  max-width: calc(100vw - 32px);
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  color: var(--color-text-subtle);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-full);
+  background: var(--color-background-raised);
+  box-shadow: var(--shadow-node);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+  transform: translateX(-50%);
+}
+
+.workspace-startup-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid var(--color-border-divider);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: canvasight-startup-spin 800ms linear infinite;
+}
+
+.skeleton-pulse {
+  animation: canvasight-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.startup-failure-shell {
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background-image: radial-gradient(var(--color-border-divider) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.startup-failure-panel {
+  display: grid;
+  width: min(620px, 100%);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  padding: 24px;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-raised);
+  box-shadow: var(--shadow-popover);
+}
+
+.startup-failure-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: var(--color-negative);
+  border-radius: var(--radius-md);
+  background: var(--color-negative-subtle);
+}
+
+.startup-failure-content,
+.startup-failure-header {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.startup-failure-header h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-20);
+  line-height: var(--line-20);
+  font-weight: 600;
+}
+
+.startup-failure-header h1:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.startup-failure-header p {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-14);
+  line-height: var(--line-14);
+}
+
+.startup-failure-details {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 16px;
+}
+
+.startup-failure-details > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.startup-failure-details dt {
+  color: var(--color-text-subtle);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.startup-failure-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.startup-failure-details code {
+  padding: 2px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--color-background-sunken);
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+
+.startup-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.startup-failure-actions .ui-button:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+@keyframes canvasight-startup-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes canvasight-skeleton-pulse {
+  0%, 100% { opacity: 0.58; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .workspace-startup-node {
+    width: 190px;
+  }
+
+  .workspace-startup-node-primary {
+    left: 8%;
+  }
+
+  .workspace-startup-node-secondary {
+    left: 52%;
+  }
+
+  .startup-failure-shell {
+    padding: 16px;
+  }
+
+  .startup-failure-panel {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+
+  .startup-failure-details > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .startup-failure-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-startup-spinner,
+  .skeleton-pulse {
+    animation: none;
+  }
+}

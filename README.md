@@ -23,24 +23,24 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
 
 1. 在 Codex 中 `@Canvasight`，然后说“打开画布”或“打开 Canvasight”。
 2. Codex 读取当前任务的 `CODEX_THREAD_ID`，把它作为 `threadId` 调用 `open_canvasight`。
-3. `open_canvasight` 返回 `sessionId` 后，Codex 必须调用：
+3. `open_canvasight` 返回 provisional `status: "opening"`、`openAttemptId` 和 `sessionId` 后，Codex 必须立即调用：
 
    ```text
-   await_canvasight_widget_ready({ sessionId, threadId })
+   await_canvasight_widget_ready({ openAttemptId, sessionId, threadId })
    ```
 
-4. 只有返回 `status: "ready"`，并且 `reactMounted: true`，才代表原生画布完成 React 挂载和初始 session/API 健康检查。`timeout` 或 `failed` 都不是成功。
+4. 只有同一 attempt、session 和任务绑定到真实 fullscreen widget instance，且返回 `status: "ready"`、`verified: true`、`displayMode: "fullscreen"`、`reactMounted: true`、`projectHydrated: true`、`canvasRendered: true`、`canvasVisible: true` 和非零画布尺寸，才代表原生画布已验证。`timeout`、`failed` 或证据不完整都不是成功。
 5. 在画布里编辑节点、附件、连线和 Page；选择 Chat、Plan 或 Goal 后点击 Run。
 
 `open_canvasight` 调用完成只表示原生 widget 会话已经准备好，不表示画布已经打开。工具输出、resource read、daemon 健康、构建成功或浏览器 fallback 都不能代替 `await_canvasight_widget_ready` 的真实 `ready` 回执。
 
 ### 原生 widget 合同
 
-- React 应在 widget 资源加载时立即挂载，启动状态不会等待隐藏元数据后才创建应用。
-- 会话数据优先通过标准 MCP Apps `tool-result` 事件进入应用；OpenAI 兼容桥从 `openai:set_globals` 的 `event.detail.globals` 读取更新。
-- widget 取得会话数据后，通过 app-only MCP API 代理访问 daemon；原生 widget 不再直接 fetch localhost。初始 API 检查成功后才上报 ready。
-- 启动失败或超时必须显示具体错误，不能永久停在 “Opening”、“Starting” 或 “Connecting”。
-- native Run 只有在 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
+- React shell 在 widget 第一帧立即挂载；启动过程使用单调状态机 `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`。重复或乱序的 `tool-result` / `openai:set_globals` 只能确认当前进度，不能把 Ready 回退为 Connecting，也不能让失败的 attempt 恢复。
+- 每个 widget 客户端生成唯一 `widgetInstanceId`。只有与 `openAttemptId`、`sessionId`、`threadId` 同时匹配的 fullscreen instance 能满足 ready；hidden、inline 和 browser renderer 只能上报诊断。
+- widget 通过 app-only `canvasight_widget_api` 访问 daemon，并在请求中携带 attempt、instance 和当前 startup stage。原生 widget 不直接 fetch localhost。
+- 启动失败、阶段超时或 React render error 会进入持久失败面板，显示失败阶段和可读原因，并提供重新连接、在新任务中重开和复制脱敏诊断；不能永久停在 “Opening”、“Starting” 或 “Connecting”。
+- native Run 只允许由已验证的 fullscreen instance 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
 - daemon URL 和 token 只存在于 widget 内部元数据，不出现在 native open 的公开结果中。
 
 浏览器 URL 和裸 dev 页面是诊断 fallback，不是原生打开路径。它们没有 native widget host bridge：claim 当前任务后，Run 只进入 `await_canvasight_run` 队列，不能显示为 native sent。
@@ -74,11 +74,11 @@ codex plugin list
 
 原生打开与确认：
 
-- `open_canvasight`：正常入口；创建绑定当前任务的 native widget 会话。
+- `open_canvasight`：正常入口；返回 provisional `opening`、`openAttemptId` 和 `sessionId`，不代表画布已打开。
 - `render_canvasight_canvas_widget`：显式 widget 兼容入口。
 - `open_canvasight_recent_project`：在新任务中打开最近项目。
 - `list_canvasight_recent_projects`：列出最近项目。
-- `await_canvasight_widget_ready`：等待真实 widget 完成 React 挂载和初始 API 健康检查；这是 native open 的成功判定。
+- `await_canvasight_widget_ready`：绑定 attempt、session、任务和 fullscreen instance，等待真实 React commit、项目 hydration 与可见画布；这是 native open 的成功判定。
 
 画布和模板：
 
@@ -95,11 +95,13 @@ fallback 与会话：
 
 `await_canvasight_widget_ready` 参数：
 
+- `openAttemptId`：必填，来自 `open_canvasight`。
 - `sessionId`：必填，来自 `open_canvasight`。
-- `threadId`：可选；传入后会拒绝来自其他 Codex 任务的 ready。
+- `threadId`：必填，必须是调用 `open_canvasight` 时使用的当前 Codex 任务 id。
+- `widgetInstanceId`：可选；调用方已观察到具体实例时，可进一步限定到该 fullscreen instance。
 - `timeoutMs`：可选，范围 `1..300000`，默认 `15000`。
 
-它返回 `status`（`ready`、`timeout` 或 `failed`），以及 `sessionId`、`threadId`、`projectPath`、`stage`、`reactMounted`、`error`、`reportedAt`。
+它返回 `status`（`ready`、`timeout` 或 `failed`）、`verified`、`openAttemptId`、`sessionId`、`threadId`、`widgetInstanceId`、`displayMode`、`stage`、`reactMounted`、`projectHydrated`、`canvasRendered`、`canvasVisible`、画布尺寸、`error` 和 `reportedAt`。只有上述 fullscreen ready 证据完整时 `verified` 才能为 true。
 
 ### Skills 分工
 
@@ -155,9 +157,10 @@ python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_
 1. 安装待交付的准确插件版本。
 2. 若升级发生在 Codex 运行期间，先重新加载窗口或重启 Codex；再新建任务并重新 `@Canvasight`。
 3. 通过正常 `@Canvasight` / `open_canvasight` 路径打开。
-4. 调用 `await_canvasight_widget_ready`，观察真实 `status: "ready"` 和 `reactMounted: true`。
+4. 使用 open 返回的 `openAttemptId`、`sessionId` 和同一 `threadId` 调用 `await_canvasight_widget_ready`，确认返回已验证的 fullscreen instance，且 React、项目 hydration、canvas rendered/visible 与非零尺寸证据完整。
 5. 确认完整画布可见，并实际操作至少一个有意义的画布控件。
-6. 点击一个节点 Run，确认消息通过 native host bridge 到达同一个 Codex 任务。
+6. 点击一个节点 Run，确认消息由同一已验证 fullscreen instance 通过 native host bridge 到达同一个 Codex 任务。
+7. 等待并触发重复或乱序的 metadata / host 事件，确认可见状态不再从 Ready 回退到 Connecting。
 
 synthetic VM、DOM mock、metadata shape、postMessage、MCP smoke、build、plugin validation 和 browser fallback 都只能作为辅助检查。缺少上述真实证据时，交付状态必须写为 `unverified`，不能声称“画布已打开”“已就绪”或“已修复”。
 
@@ -167,9 +170,9 @@ synthetic VM、DOM mock、metadata shape、postMessage、MCP smoke、build、plu
 
 先查看 `await_canvasight_widget_ready`：
 
-- `ready`：原生启动已确认。
+- `ready`：只有 `verified: true` 且 fullscreen、React、项目 hydration 和可见画布证据完整时，原生启动才已确认。
 - `timeout`：widget 没有在等待时间内完成 ready 回执；按未验证处理，查看可见启动错误、插件版本和 MCP lifecycle 日志。看到 `Connecting` 只证明 bridge 收到了 session metadata，不证明初始 API 或 ready 回执成功；daemon 尚未收到 telemetry 时，`reactMounted:false` 也不能单独证明 React 没运行。
-- `failed`：根据 `stage` 和 `error` 定位 metadata、session、thread、React 或 API 阶段。
+- `failed`：根据持久失败面板和 ready 结果中的 `stage`、`error` 定位 React、bridge、fullscreen host context、session、hydration 或 canvas visibility 阶段。可以选择重新连接、在新任务中重开或复制脱敏诊断。
 
 不要用 browser fallback、daemon health 或再次看到 tool success 来覆盖这个结论。
 
@@ -214,24 +217,24 @@ Canvasight is a repo-local Codex plugin for organizing tasks, attachments, and p
 
 1. Mention `@Canvasight` in Codex and ask to “open Canvasight” or “open the canvas.”
 2. Codex reads the current task's `CODEX_THREAD_ID` and passes it as `threadId` to `open_canvasight`.
-3. After `open_canvasight` returns a `sessionId`, Codex must call:
+3. After `open_canvasight` returns provisional `status: "opening"`, an `openAttemptId`, and a `sessionId`, Codex must immediately call:
 
    ```text
-   await_canvasight_widget_ready({ sessionId, threadId })
+   await_canvasight_widget_ready({ openAttemptId, sessionId, threadId })
    ```
 
-4. The native canvas is confirmed only when the result has `status: "ready"` and `reactMounted: true`, after the initial session/API health check. `timeout` and `failed` are not success.
+4. The native canvas is verified only when the same attempt, session, and task bind to a real fullscreen widget instance and the result has `status: "ready"`, `verified: true`, `displayMode: "fullscreen"`, `reactMounted: true`, `projectHydrated: true`, `canvasRendered: true`, `canvasVisible: true`, and non-zero canvas dimensions. `timeout`, `failed`, and incomplete evidence are not success.
 5. Edit nodes, attachments, edges, and Pages. Choose Chat, Plan, or Goal, then click Run.
 
 Completion of `open_canvasight` only means that the native widget session was prepared. It does not prove that the canvas opened. Tool output, resource reads, daemon health, successful builds, and browser fallbacks cannot replace a real `ready` result from `await_canvasight_widget_ready`.
 
 ### Native Widget Contract
 
-- React mounts as soon as the widget resource loads; application creation does not wait on hidden session metadata.
-- Session data primarily arrives through the standard MCP Apps `tool-result` event. The OpenAI compatibility path consumes `event.detail.globals` from `openai:set_globals`.
-- After receiving session data, the widget reaches the daemon through an app-only MCP API proxy; the native widget no longer fetches localhost directly. It reports ready only after the initial API check succeeds.
-- Startup failures and timeouts must show a concrete error instead of remaining on “Opening”, “Starting”, or “Connecting” forever.
-- A native Run is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
+- The React shell mounts on the widget's first frame. Startup follows the monotonic state machine `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`. Repeated or out-of-order `tool-result` / `openai:set_globals` events may confirm progress but cannot move Ready back to Connecting or revive a failed attempt.
+- Every widget client creates a unique `widgetInstanceId`. Only a fullscreen instance matching the same `openAttemptId`, `sessionId`, and `threadId` can satisfy ready; hidden, inline, and browser renderers are diagnostic only.
+- The widget reaches the daemon through the app-only `canvasight_widget_api`, carrying its attempt, instance, and startup stage on every request. The native widget does not fetch localhost directly.
+- Startup failures, stage timeouts, and React render errors enter a persistent failure panel with the failed stage, a readable reason, Reconnect, Reopen in a new task, and Copy redacted diagnostics. The UI must not remain on “Opening”, “Starting”, or “Connecting” forever.
+- A native Run is allowed only from the verified fullscreen instance to its bound task and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
 - Daemon URLs and tokens remain in widget-only metadata and are not exposed in public native-open output.
 
 Browser URLs and bare dev pages are diagnostic fallbacks, not native-open paths. They have no native widget host bridge. After claiming the current task, their Runs only enter the `await_canvasight_run` queue and cannot be labelled as native sent.
@@ -265,11 +268,11 @@ After installing, reinstalling, or upgrading while Codex Desktop is running, rel
 
 Native open and confirmation:
 
-- `open_canvasight`: normal entrypoint; creates a native widget session bound to the current task.
+- `open_canvasight`: normal entrypoint; returns provisional `opening`, `openAttemptId`, and `sessionId`, which do not prove that the canvas opened.
 - `render_canvasight_canvas_widget`: explicit compatibility alias for widget rendering.
 - `open_canvasight_recent_project`: opens a recent project in a new task.
 - `list_canvasight_recent_projects`: lists recent projects.
-- `await_canvasight_widget_ready`: waits for the real widget to mount React and pass the initial API health check; this is the native-open success gate.
+- `await_canvasight_widget_ready`: binds the attempt, session, task, and fullscreen instance, then waits for the real React commit, project hydration, and visible canvas; this is the native-open success gate.
 
 Canvas and templates:
 
@@ -286,11 +289,13 @@ Fallback and session tools:
 
 `await_canvasight_widget_ready` accepts:
 
+- `openAttemptId`: required; returned by `open_canvasight`.
 - `sessionId`: required; returned by `open_canvasight`.
-- `threadId`: optional; rejects readiness reported for another Codex task.
+- `threadId`: required; it must be the current Codex task id passed to `open_canvasight`.
+- `widgetInstanceId`: optional; when the caller has observed an exact instance, this further restricts the wait to that fullscreen instance.
 - `timeoutMs`: optional, `1..300000`, default `15000`.
 
-It returns `status` (`ready`, `timeout`, or `failed`) plus `sessionId`, `threadId`, `projectPath`, `stage`, `reactMounted`, `error`, and `reportedAt`.
+It returns `status` (`ready`, `timeout`, or `failed`), `verified`, `openAttemptId`, `sessionId`, `threadId`, `widgetInstanceId`, `displayMode`, `stage`, `reactMounted`, `projectHydrated`, `canvasRendered`, `canvasVisible`, canvas dimensions, `error`, and `reportedAt`. `verified` can be true only when all fullscreen ready evidence is complete.
 
 ### Skill Split
 
@@ -346,9 +351,10 @@ Typecheck, build, MCP smoke, and plugin validation are useful supporting checks.
 1. Install the exact plugin version being delivered.
 2. If the upgrade happened while Codex was running, reload the window or restart Codex; then create a new task and tag `@Canvasight` again.
 3. Use the normal `@Canvasight` / `open_canvasight` path.
-4. Call `await_canvasight_widget_ready` and observe real `status: "ready"` with `reactMounted: true`.
+4. Call `await_canvasight_widget_ready` with the returned `openAttemptId`, `sessionId`, and the same `threadId`. Confirm a verified fullscreen instance with complete React, project-hydration, canvas-rendered/visible, and non-zero-size evidence.
 5. Confirm that the full canvas is visible and exercise at least one meaningful canvas control.
-6. Click a node Run and confirm that it reaches the same Codex task through the native host bridge.
+6. Click a node Run and confirm that the same verified fullscreen instance reaches the same Codex task through the native host bridge.
+7. Wait and trigger repeated or out-of-order metadata / host events; confirm that the visible UI does not regress from Ready to Connecting.
 
 Synthetic VM, DOM mocks, metadata-shape checks, postMessage tests, MCP smoke, build, plugin validation, and browser fallback are supporting evidence only. If real host evidence is missing, the delivery must be marked `unverified`; it must not be described as opened, ready, or fixed.
 
@@ -358,9 +364,9 @@ Synthetic VM, DOM mocks, metadata-shape checks, postMessage tests, MCP smoke, bu
 
 Check `await_canvasight_widget_ready` first:
 
-- `ready`: native startup is confirmed.
+- `ready`: native startup is confirmed only with `verified: true` and complete fullscreen, React, project-hydration, and visible-canvas evidence.
 - `timeout`: the widget did not acknowledge ready in time. Treat it as unverified and inspect the visible startup error, resolved plugin version, and MCP lifecycle log. `Connecting` proves only that the bridge received session metadata, not that the initial API or ready acknowledgement succeeded. Before the daemon receives telemetry, `reactMounted:false` does not by itself prove React never ran.
-- `failed`: use `stage` and `error` to identify the metadata, session, task, React, or API failure.
+- `failed`: use the persistent failure panel and the ready result's `stage` and `error` to identify the React, bridge, fullscreen host-context, session, hydration, or canvas-visibility failure. You can Reconnect, Reopen in a new task, or copy redacted diagnostics.
 
 Do not override this result with a browser fallback, daemon health, or another successful open-tool response.
 

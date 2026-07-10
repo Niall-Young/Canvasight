@@ -10,10 +10,17 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `agent-reports/assigned/20260710-1506-test-issue-open-attempt-regression-gates.md` - automated event-ordering, instance-isolation, and composed production-widget gates pass; remains assigned pending real Codex native-host acceptance.
+- `agent-reports/assigned/20260710-1506-design-issue-native-startup-states.md` - Design UI/components and baseline completed in `resolved/20260710-1513-design-solution-native-startup-states.md`; awaiting App/runtime integration and native-host acceptance, remains assigned/unverified.
+- `agent-reports/assigned/20260710-1506-development-issue-native-open-attempt-refactor.md` - implementation, composition tests, and exact-version reinstall completed; remains critical assigned/unverified until a restarted Codex host passes the five native acceptance items.
 - `agent-reports/assigned/20260710-1359-development-issue-native-widget-bootstrap-architecture-reset.md` - 0.2.0 real host reached Connecting but timed out before API ready; 0.2.0+codex.20260710064916 now routes native JSON APIs through an app-only MCP proxy and awaits exact CSP origin, pending another real-host ready/control/Run acceptance.
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1537-integration-summary-native-open-attempt-refactor.md` - integrated OpenAttempt, fullscreen instance identity, monotonic startup/failure UI, strict Run gating, docs/skills, tests, and version 0.3.0 reinstall; native-host acceptance remains assigned.
+- `agent-reports/resolved/20260710-1537-development-solution-native-open-attempt-refactor.md` - replaced session-level ready with attempt/session/thread/fullscreen-instance evidence and recorded the required host-restart verification boundary.
+- `agent-reports/resolved/20260710-1534-test-solution-open-attempt-regression-gates.md` - added monotonic event, renderer identity, fullscreen isolation, and full production-widget fake-host gates; native-host acceptance remains pending.
+- `agent-reports/resolved/20260710-1526-customer-support-solution-native-open-docs.md` - bilingual README documents provisional OpenAttempt opening, fullscreen-only verified readiness, persistent failure recovery, diagnostic fallback, same-task Run, and the no-regression host gate; runtime acceptance remains assigned/unverified.
 - `agent-reports/resolved/20260710-1450-integration-summary-native-widget-api-proxy.md` - integrated the app-only native widget API proxy, exact-origin resource gate, real session/ready tests, docs, and exact-version reinstall; real-host acceptance remains assigned.
 - `agent-reports/resolved/20260710-1450-development-solution-native-widget-api-proxy.md` - replaced sandboxed native localhost JSON fetches with a strict MCP app proxy after the real host reached Connecting but timed out before ready.
 - `agent-reports/resolved/20260710-1433-integration-summary-native-widget-bootstrap-architecture-reset.md` - integrated the 0.2.0 bootstrap reset, ready acknowledgement, regression gates, docs/skills, exact-version reinstall, and recorded the Codex host-reload acceptance blocker.

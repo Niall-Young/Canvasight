@@ -19,6 +19,12 @@ export interface SessionInfo {
   language: LanguagePreference;
   projectPath: string | null;
   sessionId: string;
+  openAttempt?: {
+    openAttemptId: string;
+    status: string;
+    stage: CanvasightStartupStage;
+    targetDisplayMode: string;
+  } | null;
   threadClaimedAt?: string | null;
 }
 
@@ -119,7 +125,18 @@ interface CanvasightBridgeState {
   mcpInitialized?: boolean;
   openaiFollowUpAvailable?: boolean;
   reason?: string | null;
+  displayMode?: "inline" | "fullscreen" | "pip" | "unknown";
+  startupStage?: CanvasightStartupStage;
+  widgetInstanceId?: string;
 }
+
+export type CanvasightStartupStage =
+  | "starting"
+  | "connecting_bridge"
+  | "connecting_session"
+  | "hydrating_project"
+  | "ready"
+  | "failed";
 
 interface CanvasightWidgetRuntimeData {
   apiBaseUrl?: string;
@@ -127,11 +144,14 @@ interface CanvasightWidgetRuntimeData {
   canvasightHost?: string;
   codexThreadId?: string | null;
   origin?: string;
+  openAttemptId?: string;
   projectPath?: string | null;
   sessionId?: string;
   threadId?: string | null;
   token?: string;
+  targetDisplayMode?: string;
   url?: string;
+  widgetInstanceId?: string;
 }
 
 type CanvasightWindow = Window &
@@ -143,6 +163,7 @@ type CanvasightWindow = Window &
       callServerTool?: (request: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
       canSendFollowUpMessage?: () => boolean;
       getBridgeState?: () => CanvasightBridgeState;
+      setStartupStage?: (stage: CanvasightStartupStage) => void;
       runCanvasightNode?: (payload: RunPayload) => Promise<RunResponse>;
       sendFollowUpMessage?: (message: WidgetFollowUpMessage) => Promise<unknown>;
     };
@@ -156,7 +177,7 @@ function widgetRuntimeData(): CanvasightWidgetRuntimeData {
 const defaultWidgetRuntimeTimeoutMs = 10_000;
 let widgetRuntimeWaitPromise: Promise<CanvasightWidgetRuntimeData> | null = null;
 
-function isNativeWidgetShell(): boolean {
+export function isNativeWidgetShell(): boolean {
   const runtime = widgetRuntimeData();
   return Boolean((window as CanvasightWindow).__CANVASIGHT_WIDGET_SHELL__ || runtime.canvasightHost === "widget");
 }
@@ -166,7 +187,36 @@ function widgetRuntimeReady(): boolean {
   const runtime = widgetRuntimeData();
   const sessionId = runtime.sessionId || "";
   const baseUrl = runtime.apiBaseUrl || runtime.origin || runtime.url || runtime.browserUrl || "";
-  return Boolean(sessionId && sessionId !== "local" && baseUrl);
+  return Boolean(
+    sessionId &&
+    sessionId !== "local" &&
+    baseUrl &&
+    runtime.openAttemptId &&
+    runtime.widgetInstanceId
+  );
+}
+
+export function setCanvasightStartupStage(stage: CanvasightStartupStage): void {
+  (window as CanvasightWindow).canvasightMcp?.setStartupStage?.(stage);
+  window.dispatchEvent(new CustomEvent("canvasight:startup-stage", { detail: { stage } }));
+}
+
+export function getCanvasightStartupIdentity(): {
+  openAttemptId: string;
+  widgetInstanceId: string;
+  displayMode: string;
+  threadId: string;
+  stage: CanvasightStartupStage;
+} {
+  const runtime = widgetRuntimeData();
+  const bridge = (window as CanvasightWindow).canvasightMcp?.getBridgeState?.();
+  return {
+    openAttemptId: runtime.openAttemptId || "",
+    widgetInstanceId: runtime.widgetInstanceId || bridge?.widgetInstanceId || "",
+    displayMode: bridge?.displayMode || "unknown",
+    threadId: runtime.threadId || runtime.codexThreadId || "",
+    stage: bridge?.startupStage || "starting"
+  };
 }
 
 function widgetRuntimeTimeoutMs(): number {
@@ -416,9 +466,20 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         throw new CanvasightApiError("Canvasight widget API body must be JSON.", 400, { code: "invalid_widget_api_body", path });
       }
     }
+    const identity = getCanvasightStartupIdentity();
     const result = (await callServerTool({
       name: "canvasight_widget_api",
-      arguments: { path, method, body }
+      arguments: {
+        path,
+        method,
+        body,
+        openAttemptId: identity.openAttemptId,
+        widgetInstanceId: identity.widgetInstanceId,
+        startupStage: identity.stage,
+        displayMode: identity.displayMode,
+        threadId: identity.threadId,
+        reactMounted: identity.stage !== "starting" && identity.stage !== "connecting_bridge"
+      }
     })) as {
       isError?: boolean;
       structuredContent?: {
@@ -627,28 +688,52 @@ export const canvasightApi = {
     return requestSessionJson<SessionInfo>();
   },
 
-  async reportWidgetReady(): Promise<void> {
+  async reportWidgetReady(evidence: {
+    projectHydrated: boolean;
+    canvasRendered: boolean;
+    canvasVisible: boolean;
+    canvasWidth: number;
+    canvasHeight: number;
+  }): Promise<void> {
     if (!isNativeWidgetShell()) return;
-    const response = await requestSessionJson<{ status: "ready" }>("/widget-ready", {
+    setCanvasightStartupStage("hydrating_project");
+    const identity = getCanvasightStartupIdentity();
+    const response = await requestSessionJson<{ status: "ready"; verified?: boolean }>("/widget-ready", {
       method: "POST",
       body: JSON.stringify({
         status: "ready",
-        stage: "api-ready",
-        reactMounted: true
+        startupStage: "ready",
+        stage: "ready",
+        openAttemptId: identity.openAttemptId,
+        widgetInstanceId: identity.widgetInstanceId,
+        displayMode: identity.displayMode,
+        threadId: identity.threadId,
+        reactMounted: true,
+        ...evidence
       })
     });
-    if (response.status !== "ready") throw new Error("Canvasight daemon did not accept the widget ready acknowledgement.");
+    if (response.status !== "ready" || response.verified !== true) {
+      throw new Error("Canvasight daemon did not verify the fullscreen widget ready acknowledgement.");
+    }
+    setCanvasightStartupStage("ready");
     window.dispatchEvent(new CustomEvent("canvasight:app-ready", { detail: response }));
   },
 
   async reportWidgetFailure(error: unknown, stage = "session"): Promise<void> {
     const message = error instanceof Error ? error.message : String(error || "Canvasight failed to start.");
+    setCanvasightStartupStage("failed");
     window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage } }));
     if (!isNativeWidgetShell() || !widgetRuntimeReady()) return;
     try {
       await requestSessionJson("/widget-ready", {
         method: "POST",
-        body: JSON.stringify({ status: "failed", stage, error: message })
+        body: JSON.stringify({
+          ...getCanvasightStartupIdentity(),
+          status: "failed",
+          startupStage: "failed",
+          stage,
+          error: message
+        })
       });
     } catch {
       // The visible app error remains authoritative when the daemon cannot receive failure telemetry.
