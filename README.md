@@ -92,7 +92,7 @@ codex plugin add canvasight@canvasight-local
 
 安装或重装后，请新开 Codex 线程或 reload 当前 Codex session。已经打开的线程不会热刷新新安装的 MCP tools。
 
-升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.48` 或更高版本。如果显示低于 `0.1.48`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
+升级后可用 `codex plugin list` 确认 `canvasight@canvasight-local` 显示为 `0.1.49` 或更高版本。如果显示低于 `0.1.49`，旧的 MCP cache 可能还在运行旧版 server，请重新执行 `codex plugin add canvasight@canvasight-local` 并新开线程。
 
 ### Skills 分工
 
@@ -126,6 +126,8 @@ Canvasight 插件现在按任务拆成多个 Codex Skill，避免一个总入口
 `0.1.47` 起，多个 MCP shim 并发打开时通过跨进程锁只启动一个 daemon；host 关闭 stdout 后 shim 不再递归写 EPIPE，`mcp-lifecycle.log` 默认限制为 5 MB。
 
 `0.1.48` 起，共用默认 `~/.canvasight` 状态的源码 checkout daemon 和插件缓存 daemon 也会互相识别并清理孤儿进程，只保留 state 指向的一个实例。
+
+`0.1.49` 起，native widget 的内联 Vite bundle 会以 ES module 加载；加载失败会显示明确的恢复错误，不再把空白壳误报为 `Canvasight ready`。
 
 `open_canvasight_browser_fallback` 是浏览器 URL fallback。它默认面向 Codex 侧边栏内置浏览器，不会直接调用系统默认浏览器；开发调试时如需外部浏览器，可显式设置 `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1`。新 Codex 线程里如果旧浏览器 fallback 已经打开，先调用 `claim_canvasight_thread` claim 最近项目或指定 `projectPath`；如果需要重新进入正常 widget，调用 `open_canvasight` 或 `open_canvasight_recent_project`。浏览器 fallback 没有 widget host bridge，点击 Run 只能把 payload 放进队列，随后 `await_canvasight_run` 可以按 `sessionId` 等待，也可以按 `projectPath` attach 到同一项目的 Run 队列。正常插件使用不需要手动运行 `npm run dev`。
 
@@ -214,7 +216,7 @@ AI 生成画布只是写入 `.scatter/scatter.json`，创建可编辑的 Page、
 
 **native widget 或内置浏览器打不开 Canvasight 怎么办？**
 
-正常入口是 `open_canvasight`。先读取当前任务的 `CODEX_THREAD_ID` 并作为 `threadId` 传入；`current_thread_id_required` 表示这一步被漏掉，不是可以忽略的警告。如果 widget 没渲染，再确认插件版本已经更新并新开线程或 reload session；旧线程可能还在使用旧 tool/resource metadata。`0.1.34` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost，并会把当前 daemon 的精确 origin 写进 widget CSP。如果使用 `open_canvasight_browser_fallback`，它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`；它仍不是 Run 成功路径。
+正常入口是 `open_canvasight`。先读取当前任务的 `CODEX_THREAD_ID` 并作为 `threadId` 传入；`current_thread_id_required` 表示这一步被漏掉，不是可以忽略的警告。如果只看到 `Canvasight ready` 空白卡片，升级到 `0.1.49` 或更高版本后新开线程或 reload session；旧线程可能仍使用旧的 widget resource。`0.1.34` 起 native widget 直接承载 Canvasight app，不再在 widget 里 iframe localhost，并会把当前 daemon 的精确 origin 写进 widget CSP。需要临时在 Codex 侧边栏编辑时可显式使用 `open_canvasight_browser_fallback`；它返回前会验证完整会话 URL 可访问，并把 `openTarget` 标记为 `codex_in_app_browser`，但 Run 仍只能排队给 `await_canvasight_run`，不是原生直发路径。
 
 **当前 thread 怎么接收旧浏览器 fallback 里的 Run？**
 
@@ -333,7 +335,7 @@ codex plugin add canvasight@canvasight-local
 
 After installing or reinstalling the plugin, open a new Codex thread or reload the current Codex session. Already-open threads do not hot-refresh newly installed MCP tools.
 
-After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.48` or newer. If it shows a version below `0.1.48`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
+After upgrading, run `codex plugin list` and confirm `canvasight@canvasight-local` shows `0.1.49` or newer. If it shows a version below `0.1.49`, the old MCP cache may still be running an older server; run `codex plugin add canvasight@canvasight-local` again and open a new thread.
 
 ### Skill Split
 
@@ -367,6 +369,8 @@ These Skills only affect Codex routing and workflow instructions. They do not ch
 Since `0.1.47`, concurrent MCP opens share one daemon through a cross-process start lock; closed stdout no longer causes recursive EPIPE logging, and `mcp-lifecycle.log` is capped at 5 MB by default.
 
 Since `0.1.48`, source-checkout and installed-cache daemons that share the default `~/.canvasight` state also recognize and clean up each other, leaving only the instance referenced by daemon state.
+
+Since `0.1.49`, the native widget executes its inline Vite bundle as an ES module. A failed bundle now shows a specific recovery error instead of leaving an empty shell labelled `Canvasight ready`.
 
 `open_canvasight_browser_fallback` is the browser URL fallback. It targets Codex's in-app browser sidebar by default and does not launch the system default browser directly; for development debugging, set `CANVASIGHT_OPEN_EXTERNAL_BROWSER=1` explicitly. In a new Codex thread, if an old browser fallback page is already open, call `claim_canvasight_thread` for the recent or explicit `projectPath`; call `open_canvasight` or `open_canvasight_recent_project` when you want the normal widget again. Browser fallback pages do not have the widget host bridge. Clicking Run in a claimed browser fallback only queues the payload for `await_canvasight_run`. Normal plugin use does not require running `npm run dev`.
 
@@ -454,7 +458,7 @@ Yes. The local canvas service is hosted by the project-level daemon, not the thr
 
 **What if the native widget or in-app browser cannot open Canvasight?**
 
-The normal entrypoint is `open_canvasight`. Read the active task's `CODEX_THREAD_ID` and pass it as `threadId`; `current_thread_id_required` means that binding step was omitted. If the widget does not render, confirm the plugin version was updated and open a new Codex task or reload the session. Since `0.1.34`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost and includes the daemon origin in CSP. Browser fallback remains a diagnostic surface and is not a direct Run path.
+The normal entrypoint is `open_canvasight`. Read the active task's `CODEX_THREAD_ID` and pass it as `threadId`; `current_thread_id_required` means that binding step was omitted. If you only see an empty `Canvasight ready` card, upgrade to `0.1.49` or newer, then open a new Codex task or reload the session so it gets the current widget resource. Since `0.1.34`, the native widget hosts the Canvasight app directly instead of iframe-loading localhost and includes the daemon origin in CSP. To edit temporarily in Codex's sidebar, explicitly use `open_canvasight_browser_fallback`; it remains a queued `await_canvasight_run` path, not direct native Run delivery.
 
 **How does the current thread receive a Run from an old browser fallback tab?**
 

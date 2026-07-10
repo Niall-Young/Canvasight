@@ -406,6 +406,7 @@ async function runWidgetBridgeHarness(scriptSource, options = {}) {
       scrollHeight: 600,
       appendChild(node) {
         records.appendedScript = node;
+        Promise.resolve().then(() => node.trigger(options.appModuleError ? "error" : "load"));
       }
     },
     documentElement: {
@@ -415,7 +416,20 @@ async function runWidgetBridgeHarness(scriptSource, options = {}) {
       style: {}
     },
     createElement(tagName) {
-      return { id: "", tagName, textContent: "" };
+      const scriptListeners = new Map();
+      return {
+        id: "",
+        tagName,
+        textContent: "",
+        addEventListener(type, listener) {
+          const handlers = scriptListeners.get(type) || [];
+          handlers.push(listener);
+          scriptListeners.set(type, handlers);
+        },
+        trigger(type) {
+          for (const listener of scriptListeners.get(type) || []) listener();
+        }
+      };
     },
     getElementById(id) {
       if (id === "canvasight-frame") return null;
@@ -596,6 +610,30 @@ async function assertWidgetBridgeAdapters(widgetHtml) {
     }
   });
   assert.equal(initialToolResultHarness.records.appendedScript?.id, "canvasight-app-module");
+  assert.equal(initialToolResultHarness.records.appendedScript?.type, "module");
+  assert.equal(initialToolResultHarness.statusEl.textContent, "");
+
+  const appModuleFailureHarness = await runWidgetBridgeHarness(bridgeScript, {
+    appModuleError: true,
+    openaiGlobals: {
+      toolResponseMetadata: {
+        mcp_tool_result: {
+          structuredContent: { status: "opened" },
+          _meta: {
+            widgetData: {
+              status: "opened",
+              canvasightHost: "widget",
+              sessionId: "session-app-module-failure",
+              token: "widget-token",
+              url: "http://127.0.0.1:54321/?sessionId=session-app-module-failure&token=widget-token"
+            }
+          }
+        }
+      }
+    }
+  });
+  assert.equal(appModuleFailureHarness.records.appendedScript?.type, "module");
+  assert.match(appModuleFailureHarness.statusEl.textContent, /Canvasight app failed to load/);
 
   const unavailableHarness = await runWidgetBridgeHarness(bridgeScript, {
     connectReject: "ui initialize failed"
@@ -1179,7 +1217,7 @@ async function main() {
     assert.match(widgetHtml, /id="root"/);
     assert.doesNotMatch(widgetHtml, /<iframe\b/i);
     assert.doesNotMatch(widgetHtml, /<script\b[^>]*\btype=["']module/i);
-    assert.doesNotMatch(widgetHtml, /script\.type\s*=\s*["']module["']/);
+    assert.match(widgetHtml, /script\.type\s*=\s*["']module["']/);
     assert.match(widgetHtml, /canvasightAppBundleSource/);
     assert.match(widgetHtml, /window\.canvasightMcp/);
     assert.match(widgetHtml, /__CANVASIGHT_WIDGET_DATA__/);

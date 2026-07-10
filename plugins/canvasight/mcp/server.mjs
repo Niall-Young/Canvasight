@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.1.48";
+const SERVER_VERSION = "0.1.49";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -2873,7 +2873,6 @@ function canvasightWidgetBridgeScript() {
     } else {
       startCanvasightApp();
     }
-    setStatus("Canvasight ready", "ok");
   }
 
   function startCanvasightApp() {
@@ -2885,7 +2884,16 @@ function canvasightWidgetBridgeScript() {
     }
     const script = document.createElement("script");
     script.id = "canvasight-app-module";
+    script.type = "module";
     script.textContent = source.textContent || "";
+    script.addEventListener("load", () => {
+      setStatus("", "ok");
+      sendCurrentSize();
+    });
+    script.addEventListener("error", () => {
+      setStatus("Canvasight app failed to load. Reopen Canvasight and try again.", "error");
+    });
+    setStatus("Loading Canvasight...", "muted");
     document.body.appendChild(script);
   }
 

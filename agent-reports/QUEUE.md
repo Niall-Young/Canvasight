@@ -14,6 +14,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260710-1013-integration-summary-native-widget-module-bootstrap.md` - fixed native widget app bootstrap as an ES module, documented the current sidebar fallback, and installed Canvasight 0.1.49.
+- `agent-reports/resolved/20260710-1013-development-solution-native-widget-module-bootstrap.md` - resolved the blank `Canvasight ready` widget shell and added module bootstrap coverage.
+- `agent-reports/assigned/20260710-1003-test-issue-native-widget-shell-only.md` - resolved high-priority native widget shell-only issue; report status is resolved and links to its solution.
 - `agent-reports/resolved/20260710-0927-integration-summary-native-run-contract.md` - integrated current-task binding, bridge Promise readiness, resume retry, cross-path daemon single-flight, EPIPE/log cap, tests, docs, and version 0.1.48.
 - `agent-reports/resolved/20260710-0927-development-solution-native-run-contract-gaps.md` - fixed native widget Run capability false negatives and preflight/bootstrap gaps without browser fallback success.
 - `agent-reports/resolved/20260710-0908-development-issue-native-run-contract-gaps.md` - resolved the remaining native widget Run contract failures.
