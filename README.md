@@ -8,6 +8,10 @@ Language / 语言: [中文](#中文) | [English](#english)
 
 Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、附件和提示词流程。正常使用时，画布直接渲染在 Codex 原生 widget 中；项目级本地 daemon 负责画布数据和 API，不依赖某个任务持续运行。
 
+### 许可证
+
+Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
+
 画布归属与 Run 投递是两套独立的绑定：画布内容跟随项目文件夹，保存为该项目的 `.scatter/scatter.json`（附件在 `.scatter/assets/`）；每次打开则以**当前 Codex 任务**临时绑定 native widget 和 Run。切换到另一个项目后，Canvasight 必须重新解析该任务的项目目录并加载那个目录的 `.scatter`，不能因为先前任务或最近项目记录而复用旧项目画布或旧任务作为 Run 目标。
 
 ### 主要功能
@@ -211,6 +215,10 @@ browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_threa
 ## English
 
 Canvasight is a repo-local Codex plugin for organizing tasks, attachments, and prompt flows on an editable canvas. In normal use, the canvas renders directly inside a Codex native widget. A project-level local daemon serves canvas data and APIs independently of any single task.
+
+### License
+
+Canvasight is open source under the [MIT License](LICENSE), Copyright (c) 2026 Niall Young.
 
 Canvas ownership and Run delivery are separate bindings: canvas content follows the project folder and is stored in that project's `.scatter/scatter.json` (with attachments in `.scatter/assets/`); each open temporarily binds the native widget and Run to the **current Codex task**. After switching projects, Canvasight must resolve that task's project directory again and load that directory's `.scatter`; it must not reuse a prior task's canvas or Run recipient merely because that task or project was opened previously.
 

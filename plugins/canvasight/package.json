@@ -2,6 +2,7 @@
   "name": "canvasight-plugin",
   "version": "0.3.9+codex.20260711093000",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev-server.mjs start",
