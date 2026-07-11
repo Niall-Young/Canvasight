@@ -288,8 +288,13 @@ export function RightDrawer({
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = exportFile.fileName;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
       anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      window.setTimeout(() => {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }, 60_000);
     } catch {
       setDownloadError(t("drawer.downloadFailed"));
     } finally {
