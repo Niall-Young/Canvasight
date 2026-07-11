@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
 import { nodeTemplateLimit, type Attachment, type NodeTemplate, type RunMode, type ScatterEdge, type ScatterNode } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
-import { canvasightAssetUrl } from "../lib/canvasightApi";
+import { canvasightApi } from "../lib/canvasightApi";
 import { childCount } from "../lib/markdown";
-import { buildMarkdownExport } from "../lib/markdownExport";
 import type { Translate } from "../lib/translations";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
@@ -251,6 +250,7 @@ export function RightDrawer({
   const { t } = useI18n();
   const [downloadStatus, setDownloadStatus] = useState<"idle" | "preparing">("idle");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
   const [markdownView, setMarkdownView] = useState<MarkdownView>("source");
   const [renderedDrawer, setRenderedDrawer] = useState<DrawerMode>("tasks");
 
@@ -270,31 +270,16 @@ export function RightDrawer({
   });
   async function downloadMarkdown(): Promise<void> {
     setDownloadError(null);
+    setDownloadNotice(null);
     setDownloadStatus("preparing");
     try {
-      const exportFile = await buildMarkdownExport({
-        attachments: markdownAttachments,
+      const exported = await canvasightApi.exportMarkdown(
         markdown,
-        title: markdownNode?.data.title || selectedNode?.data.title || "scatter-prompt",
-        loadAttachment: async (attachment) => {
-          const response = await fetch(canvasightAssetUrl(attachment.fileUrl));
-          if (!response.ok) throw new Error(`Attachment download failed: ${attachment.originalName}`);
-          return new Uint8Array(await response.arrayBuffer());
-        }
-      });
-      const bytes = exportFile.bytes;
-      const blob = new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], { type: exportFile.mime });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = exportFile.fileName;
-      anchor.style.display = "none";
-      document.body.appendChild(anchor);
-      anchor.click();
-      window.setTimeout(() => {
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      }, 60_000);
+        markdownNode?.data.title || selectedNode?.data.title || "scatter-prompt",
+        markdownAttachments
+      );
+      await canvasightApi.showInFolder(exported.targetPath);
+      setDownloadNotice(t("drawer.downloadSaved", { fileName: exported.fileName }));
     } catch {
       setDownloadError(t("drawer.downloadFailed"));
     } finally {
@@ -444,6 +429,7 @@ export function RightDrawer({
             </div>
           )}
           {downloadError ? <p className="markdown-download-error" role="alert">{downloadError}</p> : null}
+          {downloadNotice ? <p className="markdown-download-notice" role="status">{downloadNotice}</p> : null}
         </div>
       )}
     </aside>

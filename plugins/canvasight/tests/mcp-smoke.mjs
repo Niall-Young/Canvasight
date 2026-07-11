@@ -6,6 +6,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { unzipSync } from "fflate";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,6 +78,7 @@ assertOpenFlowSkillContract();
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-mcp-"));
 const defaultProjectPath = path.join(tempRoot, "auto-project");
 const canvasightHome = path.join(tempRoot, "canvasight-home");
+const exportDirectory = path.join(tempRoot, "exports");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
@@ -271,6 +273,7 @@ const child = spawn(process.execPath, [serverPath], {
     ...process.env,
     CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
     CANVASIGHT_HOME: canvasightHome,
+    CANVASIGHT_EXPORT_DIR: exportDirectory,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
     CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
@@ -2818,6 +2821,38 @@ async function main() {
     const assetResponse = await fetch(`${origin}${attachments[0].fileUrl}`);
     assert.equal(assetResponse.ok, true);
     assert.equal(await assetResponse.text(), "hello canvasight");
+
+    const exportedMarkdown = await fetchJson(`${origin}/api/sessions/${sessionId}/export-markdown`, {
+      method: "POST",
+      body: JSON.stringify({ attachments: [], markdown: "# Exported Markdown\n", title: "Smoke export" })
+    });
+    assert.equal(exportedMarkdown.fileName, "Smoke export.md");
+    assert.equal(exportedMarkdown.targetPath, path.join(exportDirectory, "Smoke export.md"));
+    assert.equal(await fsp.readFile(exportedMarkdown.targetPath, "utf8"), "# Exported Markdown\n");
+
+    const exportMarkdown = `# Bundle\n\n- \`${attachments[0].relativePath}\`\n- \`${attachments[0].storedPath}\`\n`;
+    const exportedBundle = await fetchJson(`${origin}/api/sessions/${sessionId}/export-markdown`, {
+      method: "POST",
+      body: JSON.stringify({ attachments: [attachments[0], { ...attachments[0], id: "duplicate-asset" }], markdown: exportMarkdown, title: "Smoke export" })
+    });
+    assert.equal(exportedBundle.fileName, "Smoke export.zip");
+    const bundledFiles = unzipSync(await fsp.readFile(exportedBundle.targetPath));
+    assert.deepEqual(Object.keys(bundledFiles).sort(), ["Smoke export.md", "assets/note-2.txt", "assets/note.txt"]);
+    assert.equal(new TextDecoder().decode(bundledFiles["assets/note.txt"]), "hello canvasight");
+    const bundledMarkdown = new TextDecoder().decode(bundledFiles["Smoke export.md"]);
+    assert.match(bundledMarkdown, /assets\/note/);
+    assert.doesNotMatch(bundledMarkdown, new RegExp(attachments[0].storedPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+    const invalidExport = await fetch(`${origin}/api/sessions/${sessionId}/export-markdown`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        attachments: [{ ...attachments[0], storedPath: path.join(tempRoot, "outside.txt") }],
+        markdown: "# Invalid",
+        title: "Invalid"
+      })
+    });
+    assert.equal(invalidExport.status, 400);
 
     const runPayload = {
       sessionId,

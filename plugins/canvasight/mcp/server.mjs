@@ -8,9 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
+import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.9+codex.20260711112812";
+const SERVER_VERSION = "0.3.9+codex.20260711114500";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -518,6 +519,112 @@ function safeFileName(name) {
   const base = path.basename(typeof name === "string" && name.trim() ? name : "attachment");
   const sanitized = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/\s+/g, " ").trim();
   return sanitized.slice(0, 140) || "attachment";
+}
+
+function exportFileStem(value) {
+  const stem = safeFileName(value || "scatter-prompt").replace(/^[. ]+|[. ]+$/g, "");
+  return stem || "scatter-prompt";
+}
+
+function uniqueAssetExportName(originalName, usedNames) {
+  const safeName = safeFileName(originalName || "attachment");
+  const extension = path.extname(safeName);
+  const stem = extension ? safeName.slice(0, -extension.length) : safeName;
+  let candidate = safeName;
+  let serial = 2;
+  while (usedNames.has(candidate.toLocaleLowerCase())) {
+    candidate = `${stem}-${serial}${extension}`;
+    serial += 1;
+  }
+  usedNames.add(candidate.toLocaleLowerCase());
+  return candidate;
+}
+
+function isPathInside(targetPath, parentPath) {
+  const relative = path.relative(parentPath, targetPath);
+  return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
+}
+
+function archiveExportMarkdown(markdown, assetPaths, attachments) {
+  let result = markdown;
+  for (const attachment of attachments) {
+    const assetPath = assetPaths.get(attachment.id);
+    if (!assetPath) continue;
+    if (attachment.storedPath) {
+      result = result
+        .split("\n")
+        .filter((line) => !line.includes(attachment.storedPath))
+        .join("\n");
+    }
+    if (attachment.relativePath) result = result.split(attachment.relativePath).join(assetPath);
+  }
+  return result;
+}
+
+async function uniqueDownloadPath(directory, stem, extension) {
+  for (let serial = 1; serial < 10_000; serial += 1) {
+    const suffix = serial === 1 ? "" : `-${serial}`;
+    const candidate = path.join(directory, `${stem}${suffix}${extension}`);
+    try {
+      await fsp.access(candidate);
+    } catch (error) {
+      if (error?.code === "ENOENT") return candidate;
+      throw error;
+    }
+  }
+  throw new HttpError(409, "Could not choose a unique export file name.", "export_name_conflict");
+}
+
+async function exportMarkdownToDownloads(session, input) {
+  if (!session.projectPath) throw new HttpError(409, "Canvasight project is not open.", "project_not_open");
+  if (typeof input?.markdown !== "string") throw new HttpError(400, "markdown must be a string", "invalid_export_markdown");
+  if (!Array.isArray(input?.attachments)) throw new HttpError(400, "attachments must be an array", "invalid_export_attachments");
+
+  const projectPath = normalizeProjectPath(session.projectPath);
+  const assetsDirectory = path.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsDirectory = path.resolve(canvasightTemplateAssetsDir());
+  const attachments = input.attachments.map(normalizeAttachment);
+  const files = {};
+  const usedAssetNames = new Set();
+  const assetPaths = new Map();
+
+  for (const attachment of attachments) {
+    const storedPath = path.resolve(attachment.storedPath);
+    if (!attachment.storedPath || (!isPathInside(storedPath, assetsDirectory) && !isPathInside(storedPath, templateAssetsDirectory))) {
+      throw new HttpError(400, `Attachment is not a Canvasight project asset: ${attachment.originalName}`, "invalid_export_attachment_path");
+    }
+    let stat;
+    try {
+      stat = await fsp.lstat(storedPath);
+    } catch {
+      throw new HttpError(404, `Attachment is unavailable: ${attachment.originalName}`, "export_attachment_missing");
+    }
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, `Attachment is not a regular file: ${attachment.originalName}`, "invalid_export_attachment_path");
+    const archivePath = `assets/${uniqueAssetExportName(attachment.originalName, usedAssetNames)}`;
+    files[archivePath] = await fsp.readFile(storedPath);
+    assetPaths.set(attachment.id, archivePath);
+  }
+
+  const stem = exportFileStem(typeof input?.title === "string" ? input.title : "scatter-prompt");
+  const markdown = attachments.length ? archiveExportMarkdown(input.markdown, assetPaths, attachments) : input.markdown;
+  const extension = attachments.length ? ".zip" : ".md";
+  if (attachments.length) files[`${stem}.md`] = strToU8(markdown);
+  const bytes = attachments.length ? zipSync(files) : Buffer.from(markdown, "utf8");
+  const downloadsDirectory = path.resolve(process.env.CANVASIGHT_EXPORT_DIR || path.join(os.homedir(), "Downloads"));
+  await fsp.mkdir(downloadsDirectory, { recursive: true });
+  const targetPath = await uniqueDownloadPath(downloadsDirectory, stem, extension);
+  const temporaryPath = path.join(downloadsDirectory, `.${path.basename(targetPath)}.${crypto.randomUUID()}.tmp`);
+  try {
+    await fsp.writeFile(temporaryPath, bytes);
+    await fsp.rename(temporaryPath, targetPath);
+  } catch (error) {
+    await fsp.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+  return {
+    fileName: path.basename(targetPath),
+    targetPath
+  };
 }
 
 function extensionFromName(name) {
@@ -3814,6 +3921,14 @@ async function handleSessionApi(req, res, url) {
     session.projectPath = projectPath;
     await rememberProjectBestEffort(projectPath);
     sendJson(res, 200, attachments);
+    return true;
+  }
+
+  if (action === "export-markdown") {
+    assertMethod(req, "POST");
+    const body = await readJsonBody(req);
+    const exported = await exportMarkdownToDownloads(session, body);
+    sendJson(res, 200, exported);
     return true;
   }
 

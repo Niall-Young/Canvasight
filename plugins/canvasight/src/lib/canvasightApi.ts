@@ -119,6 +119,11 @@ export interface ThreadClaimResponse {
   status: "claimed";
 }
 
+export interface MarkdownExportResponse {
+  fileName: string;
+  targetPath: string;
+}
+
 interface WidgetFollowUpMessage {
   content: Array<Record<string, unknown>>;
   prompt: string;
@@ -286,10 +291,6 @@ function apiUrl(path: string): string {
   const baseUrl = apiBaseUrl();
   if (!baseUrl) return path;
   return new URL(path, baseUrl).toString();
-}
-
-export function canvasightAssetUrl(path: string): string {
-  return apiUrl(path);
 }
 
 function sessionIdFromUrl(): string {
@@ -797,6 +798,13 @@ export const canvasightApi = {
     return requestSessionJson<Attachment[]>("/attachments", {
       method: "POST",
       body: JSON.stringify({ files, projectPath })
+    });
+  },
+
+  exportMarkdown(markdown: string, title: string, attachments: Attachment[]): Promise<MarkdownExportResponse> {
+    return requestSessionJson<MarkdownExportResponse>("/export-markdown", {
+      method: "POST",
+      body: JSON.stringify({ attachments, markdown, title })
     });
   },
 

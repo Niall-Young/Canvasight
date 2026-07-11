@@ -43,10 +43,10 @@ roles:
     created_at: 2026-07-11T11:08:45Z
     last_seen: 2026-07-11T11:08:45Z
     handoff_source: null
-    last_report: solution-markdown-export-bundle
+    last_report: solution-native-markdown-export
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Main Thread completed integration after an interrupted implementation handoff
+    notes: Implemented daemon-backed native Markdown export
   - role: Development Standards Lead
     status: missing
     agent_id: null
@@ -65,10 +65,10 @@ roles:
     created_at: 2026-07-11T11:08:45Z
     last_seen: 2026-07-11T11:08:45Z
     handoff_source: null
-    last_report: solution-markdown-export-bundle
+    last_report: integration-summary-native-markdown-export
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined and reviewed export regression coverage
+    notes: Reviewed daemon export security and regression coverage
   - role: Customer Support Agent
     status: missing
     agent_id: null
