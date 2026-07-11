@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Background,
@@ -114,10 +114,6 @@ type ConnectionHoverTarget = {
   sourceId: string;
   targetId: string;
   hoveredNodeId: string;
-};
-type PanelRatios = {
-  canvas: number;
-  markdown: number;
 };
 type CanvasClipboardPayload = {
   kind: "canvasight.nodes";
@@ -778,8 +774,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("select");
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [spacePanActive, setSpacePanActive] = useState(false);
-  const [isResizingMarkdown, setIsResizingMarkdown] = useState(false);
-  const [panelRatios, setPanelRatios] = useState<PanelRatios>({ canvas: 1, markdown: 1 });
   const [viewportZoom, setViewportZoom] = useState(1);
   const [selectedRunMode, setSelectedRunMode] = useState<RunMode>("flow");
   const [markdownNodeId, setMarkdownNodeId] = useState<string | null>(null);
@@ -800,7 +794,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const urlThreadIdRef = useRef(threadIdFromUrl());
   const claimedThreadProjectRef = useRef<string | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
-  const workspaceContentRef = useRef<HTMLElement | null>(null);
   const canvasShellRef = useRef<HTMLDivElement | null>(null);
   const pageNameInputRef = useRef<HTMLInputElement | null>(null);
   const latestMouseRef = useRef<FlowPosition>({ x: 360, y: 240 });
@@ -871,15 +864,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [agentTeamEnabled, edges, language, markdownNode, nodes, project, selectedRunMode]
   );
   const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
-  const workspaceStyle = useMemo(
-    () =>
-      ({
-        "--canvas-panel-ratio": panelRatios.canvas,
-        "--markdown-panel-ratio": panelRatios.markdown
-      }) as CSSProperties,
-    [panelRatios]
-  );
-
   const hideRunFeedback = useCallback(() => {
     if (runFeedbackTimerRef.current) {
       window.clearTimeout(runFeedbackTimerRef.current);
@@ -1913,76 +1897,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     setViewportZoom(viewport.zoom);
   }, []);
 
-  const updateMarkdownPanelRatios = useCallback((clientX: number) => {
-    const workspace = workspaceContentRef.current;
-    if (!workspace) return;
-
-    const rect = workspace.getBoundingClientRect();
-    const handleWidth = 12;
-    const availableWidth = Math.max(1, rect.width - handleWidth);
-    const minCanvasWidth = Math.min(360, availableWidth * 0.45);
-    const minMarkdownWidth = Math.min(360, availableWidth - minCanvasWidth);
-    const maxCanvasWidth = Math.max(minCanvasWidth, availableWidth - minMarkdownWidth);
-    const pointerCanvasWidth = clientX - rect.left;
-    const canvasWidth = Math.min(Math.max(pointerCanvasWidth, minCanvasWidth), maxCanvasWidth);
-    const markdownWidth = Math.max(minMarkdownWidth, availableWidth - canvasWidth);
-    const totalWidth = Math.max(1, canvasWidth + markdownWidth);
-
-    setPanelRatios({
-      canvas: canvasWidth / totalWidth,
-      markdown: markdownWidth / totalWidth
-    });
-  }, []);
-
-  const beginMarkdownResize = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (drawer !== "markdown") return;
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      setIsResizingMarkdown(true);
-      updateMarkdownPanelRatios(event.clientX);
-    },
-    [drawer, updateMarkdownPanelRatios]
-  );
-
-  const resizeMarkdownPanel = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (!isResizingMarkdown) return;
-      event.preventDefault();
-      updateMarkdownPanelRatios(event.clientX);
-    },
-    [isResizingMarkdown, updateMarkdownPanelRatios]
-  );
-
-  const finishMarkdownResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    setIsResizingMarkdown(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isResizingMarkdown) return;
-
-    function handleMouseMove(event: MouseEvent): void {
-      event.preventDefault();
-      updateMarkdownPanelRatios(event.clientX);
-    }
-
-    function stopResizing(): void {
-      setIsResizingMarkdown(false);
-    }
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", stopResizing);
-    window.addEventListener("blur", stopResizing);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", stopResizing);
-      window.removeEventListener("blur", stopResizing);
-    };
-  }, [isResizingMarkdown, updateMarkdownPanelRatios]);
-
   const runActiveNode = useCallback(() => {
     if (!selectedNode) return;
     void runNode(selectedNode.id, "flow");
@@ -2165,9 +2079,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         </div>
       ) : null}
       <main
-        ref={workspaceContentRef}
-        className={`workspace-content ${drawer ? "has-right-sidebar" : ""} ${drawer === "markdown" ? "has-markdown-sidebar" : ""} ${isResizingMarkdown ? "is-resizing-markdown" : ""}`}
-        style={workspaceStyle}
+        className="workspace-content"
       >
         <section
           ref={canvasShellRef}
@@ -2441,16 +2353,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           )}
         </section>
 
-        <button
-          className={`workspace-resize-handle ${drawer === "markdown" ? "is-active" : ""}`}
-          type="button"
-          aria-hidden
-          tabIndex={-1}
-          onPointerDown={beginMarkdownResize}
-          onPointerMove={resizeMarkdownPanel}
-          onPointerUp={finishMarkdownResize}
-          onPointerCancel={finishMarkdownResize}
-        />
         <RightDrawer
           drawer={drawer}
           nodes={nodes}

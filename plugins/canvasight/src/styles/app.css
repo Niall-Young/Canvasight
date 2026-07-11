@@ -3790,6 +3790,51 @@ button.achievement-card.is-unlocked:focus-visible {
   min-width: 360px;
 }
 
+/* The right-side tools open one floating canvas panel at a time. */
+.workspace-content {
+  position: relative;
+}
+
+.workspace-resize-handle {
+  display: none;
+}
+
+.right-drawer {
+  position: absolute;
+  top: 70px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 7;
+  width: 0;
+  min-width: 0;
+  flex: none;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-node);
+  transform: translateY(-4px);
+  transition:
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.right-drawer.is-open {
+  transform: translateY(0);
+}
+
+.right-drawer.is-tasks.is-open {
+  width: 288px;
+}
+
+.right-drawer.is-templates.is-open {
+  width: 320px;
+}
+
+.right-drawer.is-markdown.is-open {
+  width: min(480px, calc(100vw - 48px));
+  min-width: 0;
+}
+
 .task-sidebar,
 .template-sidebar,
 .markdown-pane {
