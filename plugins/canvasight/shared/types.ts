@@ -2,7 +2,8 @@ export type AttachmentKind = "image" | "file";
 export type AttachmentSource = "upload" | "drop" | "paste" | "clipboard";
 export type RunMode = "flow" | "node";
 export type EffortLevel = "low" | "medium" | "high" | "xhigh";
-export type LanguagePreference = "zh" | "en";
+export type LanguagePreference = "system" | "zh" | "en";
+export type ResolvedLanguage = Exclude<LanguagePreference, "system">;
 export type ThemePreference = "system" | "light" | "dark";
 export type AssistantProvider = "codex" | "claude-cli";
 export type AgentTeamRoleId =
@@ -41,7 +42,7 @@ export interface AppSettings {
 
 export const defaultAppSettings = {
   themePreference: "system",
-  language: "zh",
+  language: "system",
   translucentBackground: true,
   assistantProvider: "codex",
   assistantProviderOnboardingCompleted: false,

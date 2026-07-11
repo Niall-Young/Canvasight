@@ -86,7 +86,6 @@ const templateDragMime = "application/x-canvasight-template";
 const appSettingsStorageKey = "canvasight.settings";
 const webDefaultAppSettings = {
   ...defaultAppSettings,
-  themePreference: "light",
   translucentBackground: false
 } satisfies AppSettings;
 const zoomOptions = [
@@ -423,14 +422,6 @@ function loadStoredAppSettings(): AppSettings | null {
     return normalized;
   } catch {
     return null;
-  }
-}
-
-function hasStoredAppSettings(): boolean {
-  try {
-    return Boolean(window.localStorage.getItem(appSettingsStorageKey));
-  } catch {
-    return false;
   }
 }
 
@@ -2546,7 +2537,6 @@ export default function App(): ReactElement {
   const [previewSettings, setPreviewSettings] = useState<AppSettings | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
-  const hasStoredSettingsRef = useRef(hasStoredAppSettings());
   const activeSettings = previewSettings ?? savedSettings;
   const resolvedTheme = activeSettings.themePreference === "system" ? systemTheme : activeSettings.themePreference;
 
@@ -2562,19 +2552,6 @@ export default function App(): ReactElement {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.translucent = "false";
   }, [resolvedTheme]);
-
-  useEffect(() => {
-    if (hasStoredSettingsRef.current) return;
-    canvasightApi
-      .getSession()
-      .then((session) =>
-        setSavedSettings((current) => {
-          const next = normalizeAppSettings({ ...current, language: session.language });
-          return settingsEqual(current, next) ? current : next;
-        })
-      )
-      .catch(() => undefined);
-  }, []);
 
   const previewAppSettings = useCallback((values: AppSettings) => {
     const next = normalizeAppSettings(values);

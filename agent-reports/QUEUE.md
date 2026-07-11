@@ -17,6 +17,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260711-0848-integration-summary-system-settings-defaults.md` - settings defaults now follow the system for theme and language; typecheck, build, browser-visible Settings dialog verification, and local plugin reinstall (`0.3.8+codex.20260711005032`) passed.
 - `agent-reports/resolved/20260711-0838-integration-summary-remove-retired-settings-and-diagnostics.md` - removed the retired Codex current-model setting and manual workspace Diagnostics UI; Chat Run and startup failure recovery diagnostics remain.
 - `agent-reports/resolved/20260711-0836-project-management-solution-remove-retired-ui-hygiene.md` - scope and git-hygiene review passed: no staged files, no diff whitespace errors, retired model/Diagnostics UI removal remains focused, and no commit was created.
 - `agent-reports/resolved/20260711-0834-test-solution-remove-current-model-and-workspace-diagnostics.md` - typecheck/build and source regression scans pass: retired current-model settings and manual workspace Diagnostics are removed; StartupFailurePanel diagnostic copy remains. Native widget visual acceptance is unverified because no bound Codex project/session was available.

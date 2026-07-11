@@ -94,6 +94,7 @@ export function SettingsDialog({
     { label: t("settings.theme.dark"), value: "dark" }
   ];
   const languageOptions: Array<SettingsOption<LanguagePreference>> = [
+    { label: t("settings.language.system"), value: "system" },
     { label: t("settings.language.zh"), value: "zh" },
     { label: t("settings.language.en"), value: "en" }
   ];

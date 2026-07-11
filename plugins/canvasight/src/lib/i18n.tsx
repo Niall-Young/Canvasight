@@ -1,9 +1,9 @@
 import { createContext, useContext, useMemo, type ReactElement, type ReactNode } from "react";
-import type { LanguagePreference } from "../../shared/types";
+import type { LanguagePreference, ResolvedLanguage } from "../../shared/types";
 import { createTranslator, type Translate } from "./translations";
 
 interface I18nContextValue {
-  language: LanguagePreference;
+  language: ResolvedLanguage;
   t: Translate;
 }
 
@@ -19,12 +19,14 @@ export function I18nProvider({
   children: ReactNode;
   language: LanguagePreference;
 }): ReactElement {
+  const resolvedLanguage: ResolvedLanguage =
+    language === "system" ? (navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en") : language;
   const value = useMemo(
     () => ({
-      language,
-      t: createTranslator(language)
+      language: resolvedLanguage,
+      t: createTranslator(resolvedLanguage)
     }),
-    [language]
+    [resolvedLanguage]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

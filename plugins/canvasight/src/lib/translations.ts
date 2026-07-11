@@ -1,4 +1,4 @@
-import { defaultAppSettings, type EffortLevel, type LanguagePreference } from "../../shared/types";
+import { type EffortLevel, type ResolvedLanguage } from "../../shared/types";
 
 const zh = {
   "app.ready": "就绪",
@@ -11,6 +11,7 @@ const zh = {
   "settings.theme.light": "浅色",
   "settings.theme.dark": "深色",
   "settings.language": "语言",
+  "settings.language.system": "系统",
   "settings.language.zh": "中文",
   "settings.language.en": "English",
   "settings.assistantProvider": "运行器",
@@ -219,6 +220,7 @@ const en = {
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
   "settings.language": "Language",
+  "settings.language.system": "System",
   "settings.language.zh": "中文",
   "settings.language.en": "English",
   "settings.assistantProvider": "Runner",
@@ -422,10 +424,10 @@ export type Translate = (key: TranslationKey, values?: Record<string, string | n
 const dictionaries = {
   zh,
   en
-} satisfies Record<LanguagePreference, Record<TranslationKey, string>>;
+} satisfies Record<ResolvedLanguage, Record<TranslationKey, string>>;
 
-export function createTranslator(language: LanguagePreference): Translate {
-  const dictionary = dictionaries[language] ?? dictionaries[defaultAppSettings.language];
+export function createTranslator(language: ResolvedLanguage): Translate {
+  const dictionary = dictionaries[language];
   return (key, values = {}) =>
     dictionary[key].replace(/\{(\w+)\}/g, (match, name: string) =>
       Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match

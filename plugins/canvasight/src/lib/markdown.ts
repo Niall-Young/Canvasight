@@ -2,7 +2,7 @@ import type {
   AgentTeamRoleId,
   AgentTeamRunConfig,
   Attachment,
-  LanguagePreference,
+  ResolvedLanguage,
   RunMode,
   ScatterEdge,
   ScatterNode
@@ -105,7 +105,7 @@ interface MarkdownText {
   warningCycle: string;
 }
 
-const markdownTexts: Record<LanguagePreference, MarkdownText> = {
+const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
   zh: {
     absolutePath: "绝对路径",
     allAttachments: "所有附件",
@@ -174,7 +174,7 @@ const markdownTexts: Record<LanguagePreference, MarkdownText> = {
   }
 };
 
-function markdownText(language: LanguagePreference): MarkdownText {
+function markdownText(language: ResolvedLanguage): MarkdownText {
   return markdownTexts[language] ?? markdownTexts.zh;
 }
 
@@ -183,7 +183,7 @@ const reportProtocol = {
   statuses: ["open", "assigned", "resolved", "archived"]
 } satisfies AgentTeamRunConfig["reportProtocol"];
 
-const agentTeamRoleTexts: Record<LanguagePreference, Record<AgentTeamRoleId, { label: string; reason: string }>> = {
+const agentTeamRoleTexts: Record<ResolvedLanguage, Record<AgentTeamRoleId, { label: string; reason: string }>> = {
   zh: {
     "product-agent": {
       label: "产品 Agent",
@@ -302,7 +302,7 @@ function nodeSearchText(nodes: ScatterNode[], projectName: string, projectPath: 
   );
 }
 
-function recommendAgentTeamRoles(nodes: ScatterNode[], projectName: string, projectPath: string, language: LanguagePreference): AgentTeamRunConfig["recommendedRoles"] {
+function recommendAgentTeamRoles(nodes: ScatterNode[], projectName: string, projectPath: string, language: ResolvedLanguage): AgentTeamRunConfig["recommendedRoles"] {
   const searchText = nodeSearchText(nodes, projectName, projectPath);
   const roleIds = new Set<AgentTeamRoleId>();
 
@@ -325,7 +325,7 @@ function buildAgentTeamConfig(
   nodes: ScatterNode[],
   projectName: string,
   projectPath: string,
-  language: LanguagePreference
+  language: ResolvedLanguage
 ): AgentTeamRunConfig {
   if (!enabled) return disabledAgentTeam();
   return {
@@ -388,7 +388,7 @@ export function buildMarkdown(
   runMode: RunMode,
   projectName: string,
   projectPath: string,
-  language: LanguagePreference = "zh",
+  language: ResolvedLanguage = "zh",
   agentTeamEnabled = true
 ): MarkdownResult {
   const text = markdownText(language);
