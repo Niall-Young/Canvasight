@@ -288,6 +288,10 @@ function apiUrl(path: string): string {
   return new URL(path, baseUrl).toString();
 }
 
+export function canvasightAssetUrl(path: string): string {
+  return apiUrl(path);
+}
+
 function sessionIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("sessionId") || widgetRuntimeData().sessionId || "local";
 }

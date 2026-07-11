@@ -2460,6 +2460,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           selectedNodeId={selectedNodeId}
           markdownNodeId={markdownNodeId}
           markdown={markdownResult.markdown}
+          markdownAttachments={markdownResult.attachments}
           currentRunMode={selectedRunMode}
           onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
           onSelectNode={(nodeId, mode) => selectNode(nodeId, mode)}

@@ -1,14 +1,15 @@
 import { Fragment, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
-import { nodeTemplateLimit, type NodeTemplate, type RunMode, type ScatterEdge, type ScatterNode } from "../../shared/types";
+import { nodeTemplateLimit, type Attachment, type NodeTemplate, type RunMode, type ScatterEdge, type ScatterNode } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
+import { canvasightAssetUrl } from "../lib/canvasightApi";
 import { childCount } from "../lib/markdown";
+import { buildMarkdownExport } from "../lib/markdownExport";
 import type { Translate } from "../lib/translations";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 import { Segmented, SegmentedItem } from "./ui/segmented";
 import { TooltipAnchor } from "./ui/tooltip";
 import { TaskItem } from "./ui/task-item";
-import { Toast, ToastViewport } from "./ui/toast";
 import type { DrawerMode } from "../store/scatterStore";
 
 interface RightDrawerProps {
@@ -20,6 +21,7 @@ interface RightDrawerProps {
   selectedNodeId: string | null;
   markdownNodeId: string | null;
   markdown: string;
+  markdownAttachments: Attachment[];
   currentRunMode: RunMode;
   onLocateNode: (nodeId: string, mode: RunMode) => void;
   onSelectNode: (nodeId: string, mode: RunMode) => void;
@@ -236,6 +238,7 @@ export function RightDrawer({
   selectedNodeId,
   markdownNodeId,
   markdown,
+  markdownAttachments,
   currentRunMode,
   onLocateNode,
   onSelectNode,
@@ -246,19 +249,14 @@ export function RightDrawer({
   onTemplateDragEnd
 }: RightDrawerProps): ReactElement {
   const { t } = useI18n();
-  const [copyStatus, setCopyStatus] = useState<"idle" | "success">("idle");
+  const [downloadStatus, setDownloadStatus] = useState<"idle" | "preparing">("idle");
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [markdownView, setMarkdownView] = useState<MarkdownView>("source");
   const [renderedDrawer, setRenderedDrawer] = useState<DrawerMode>("tasks");
 
   useEffect(() => {
     if (drawer) setRenderedDrawer(drawer);
   }, [drawer]);
-
-  useEffect(() => {
-    if (copyStatus !== "success") return undefined;
-    const timer = window.setTimeout(() => setCopyStatus("idle"), 1800);
-    return () => window.clearTimeout(timer);
-  }, [copyStatus]);
 
   const isOpen = drawer !== null;
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
@@ -270,20 +268,42 @@ export function RightDrawer({
     if (!normalizedTemplateSearch) return true;
     return `${template.title} ${template.body}`.toLowerCase().includes(normalizedTemplateSearch);
   });
-  function downloadMarkdown(): void {
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${markdownNode?.data.title || selectedNode?.data.title || "scatter-prompt"}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  async function downloadMarkdown(): Promise<void> {
+    setDownloadError(null);
+    setDownloadStatus("preparing");
+    try {
+      const exportFile = await buildMarkdownExport({
+        attachments: markdownAttachments,
+        markdown,
+        title: markdownNode?.data.title || selectedNode?.data.title || "scatter-prompt",
+        loadAttachment: async (attachment) => {
+          const response = await fetch(canvasightAssetUrl(attachment.fileUrl));
+          if (!response.ok) throw new Error(`Attachment download failed: ${attachment.originalName}`);
+          return new Uint8Array(await response.arrayBuffer());
+        }
+      });
+      const bytes = exportFile.bytes;
+      const blob = new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], { type: exportFile.mime });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = exportFile.fileName;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      setDownloadError(t("drawer.downloadFailed"));
+    } finally {
+      setDownloadStatus("idle");
+    }
   }
 
-  async function copyMarkdown(): Promise<void> {
-    await navigator.clipboard.writeText(markdown);
-    setCopyStatus("success");
-  }
+  const hasMarkdownAttachments = markdownAttachments.length > 0;
+  const downloadLabel =
+    downloadStatus === "preparing"
+      ? t("drawer.preparingDownload")
+      : hasMarkdownAttachments
+        ? t("drawer.downloadMarkdownBundle")
+        : t("drawer.downloadMarkdown");
 
   return (
     <aside
@@ -395,18 +415,16 @@ export function RightDrawer({
               />
             </Segmented>
             <div className="markdown-actions">
-              <TooltipAnchor label={t("drawer.downloadMarkdown")} side="bottom" align="end">
-                <IconButton className="topbar-icon-button" filled={false} icon="download" size="md" aria-label={t("drawer.downloadMarkdown")} disabled={!markdown} onClick={downloadMarkdown} />
-              </TooltipAnchor>
-              <TooltipAnchor label={copyStatus === "success" ? t("drawer.copiedMarkdown") : t("drawer.copyMarkdown")} side="bottom" align="end">
+              <TooltipAnchor label={downloadLabel} side="bottom" align="end">
                 <IconButton
                   className="topbar-icon-button"
                   filled={false}
-                  icon={copyStatus === "success" ? "check-md" : "copy"}
+                  icon="download"
                   size="md"
-                  aria-label={copyStatus === "success" ? t("drawer.copiedMarkdown") : t("drawer.copyMarkdown")}
-                  disabled={!markdown}
-                  onClick={() => void copyMarkdown()}
+                  aria-busy={downloadStatus === "preparing"}
+                  aria-label={downloadLabel}
+                  disabled={!markdown || downloadStatus === "preparing"}
+                  onClick={() => void downloadMarkdown()}
                 />
               </TooltipAnchor>
             </div>
@@ -420,11 +438,7 @@ export function RightDrawer({
               <p>{t("drawer.markdownPlaceholder")}</p>
             </div>
           )}
-          {copyStatus === "success" ? (
-            <ToastViewport>
-              <Toast tone="positive" message={t("drawer.copiedMarkdown")} onClose={() => setCopyStatus("idle")} />
-            </ToastViewport>
-          ) : null}
+          {downloadError ? <p className="markdown-download-error" role="alert">{downloadError}</p> : null}
         </div>
       )}
     </aside>

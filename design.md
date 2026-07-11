@@ -67,6 +67,14 @@ Run is a submit action, not a Markdown preview action. A successful node Run sho
 
 Normal plugin Run delivery happens through the Codex native widget host bridge. Native open binds the active Codex task before rendering and hosts the Canvasight app directly. Native widget JSON APIs travel through an app-only MCP proxy to the project daemon so startup and editing do not depend on sandboxed localhost fetches; browser/dev surfaces may still call the daemon directly. Local daemon URLs and tokens must not appear as the user-facing open result. Routine delivery feedback should stay compact and distinguish queued from sent delivery without exposing full Run Markdown; it must not become a manual diagnostics workspace surface.
 
+## Markdown Review And Export
+
+The Markdown drawer is a review surface with one stable export action. It must not offer Clipboard-dependent copying in the native widget.
+
+- Export Markdown alone as a `.md` file when the reviewed Run scope has no attachments.
+- Export a `.zip` when that scope includes attachments: place the Markdown at the archive root and the related files under `assets/`; the archived Markdown refers only to those relative asset paths.
+- While an export is being prepared, keep the single export action visibly busy and unavailable for a duplicate click. If preparation or packaging fails, restore the action and show concise, in-drawer error feedback; do not rely on a host-level or transient toast for this failure.
+
 ## Native Widget Startup
 
 The React application shell owns startup feedback and must render on the widget resource's first paint. Session metadata, daemon connection, and initial project data are progressive startup dependencies; none may block the shell from mounting.

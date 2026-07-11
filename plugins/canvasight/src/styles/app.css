@@ -3613,6 +3613,13 @@ button.achievement-card.is-unlocked:focus-visible {
   transform: translateX(-50%);
 }
 
+.markdown-download-error {
+  margin: 8px 16px 0;
+  color: var(--color-negative);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
 .canvas-run-toast-viewport {
   top: 76px;
   width: auto;
