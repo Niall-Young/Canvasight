@@ -11,7 +11,7 @@ Use this skill as the narrow index for Canvasight-specific work that does not cl
 
 - Use `canvasight-open` for opening the native widget through `open_canvasight`, verifying it through `await_canvasight_widget_ready`, recovering an explicit browser fallback, or claiming an existing browser canvas for the current Codex task.
 - Use `canvasight-run` for Chat-only native widget bridge Run delivery, `claim_canvasight_thread`, `await_canvasight_run` fallback, and legacy Plan/Goal-to-Chat normalization.
-- Use `canvasight-agent-team` when a Canvasight Run payload enables Agent Team or the user asks for agent-report coordination.
+- Use `canvasight-agent-team` when a Canvasight Run payload enables Agent Team or the user asks for role-registry or agent-report coordination.
 - Use `canvasight-graph-writer` for creating or updating Canvasight nodes and edges from AI analysis, including active-canvas medium or complex requests that should be decomposed before direct execution.
 - Use `canvasight-troubleshooting` for install, daemon, MCP cache, browser URL, or connection failures.
 

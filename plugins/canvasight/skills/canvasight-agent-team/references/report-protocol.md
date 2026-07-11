@@ -1,149 +1,55 @@
 # Report Protocol
 
-Use a file-system queue when Agent Team is enabled and the project has or needs `agent-reports/`. Reports are the durable communication layer between persistent role agents.
+`references/agent-team-schema.json` is the authoritative contract for schema versions, fields, role names, status enums, report paths, queue columns, and validation states. This document defines the write order and collaboration behavior that use that contract.
 
-If the target project lacks `AGENTS.md` guidance for reports, route that gap to the Development Standards Lead and persist the missing Agent Team report rules before establishing a long-lived report workflow. If the project already defines different report folders or templates, preserve them and adapt Canvasight handoff wording to the existing structure instead of replacing it.
+## Sources Of Truth
 
-## Status Folders
+- A report file is authoritative for its issue's `owner`, `status`, dependencies, and verification evidence.
+- `ROSTER.md` is authoritative for persistent role-seat state and its current `agent_id` / `thread_id` mapping.
+- `agent-reports/QUEUE.md` is a derived index of active issues only.
+
+If a queue row differs from its report, discard the row's values and regenerate it from the report. If a report's issue owner differs from roster state, keep the report's owner and synchronize the affected roster seat after the report succeeds. A new thread reads the roster before rebuilding a role, but it must re-read the current issue before taking ownership.
+
+## Report Layout
 
 ```text
 agent-reports/
-  open/
-  assigned/
-  resolved/
-  archived/
+  QUEUE.md
+  open/       # open issues
+  assigned/   # assigned and blocked issues
+  resolved/   # resolved issues, solutions, integration summaries
+  archived/   # auditable closed history
 ```
 
-- `open/`: newly discovered issues not yet assigned.
-- `assigned/`: accepted issues with a responsible owner.
-- `resolved/`: solution reports, completed summaries, and issues with recorded fixes.
-- `archived/`: closed history that should remain auditable.
-
-Use `agent-reports/QUEUE.md` as the active queue index when it exists.
-
-## Communication Rule
-
-- Cross-agent handoff happens through Markdown reports, not only transient chat messages.
-- Every report must carry frontmatter status, owner, created_by, priority, created_at, and updated_at.
-- `owner`, `created_by`, and handoff fields should use stable roster role names such as `Product Agent` or `Test Supervisor Agent`, not random tool nicknames.
-- If the runtime exposes a concrete agent id, record it in the integration summary role mapping instead of replacing the role name in reports.
-- Every status change must update the report file and `agent-reports/QUEUE.md` when the queue exists.
-- Role agents should read the linked issue or solution report before responding to a handoff.
-- Role agents must write status back when they accept work, find a blocker, finish analysis, finish implementation, or hand work to another role.
-- Do not leave a report stale after doing work. At minimum update `updated_at`, `status`, `owner`, `当前状态`, and either `处理结果`, `验证方式`, or `后续风险`.
-- Integration summaries must record which role agents were called, reused, missing, or represented by main-thread checklist.
-
-## Status Write-Back Rule
-
-Agents own the report state for work they touch.
-
-- When accepting work: set `status: assigned`, set `owner`, move or keep the file under `agent-reports/assigned/`, and update `agent-reports/QUEUE.md`.
-- While working: keep `status: assigned`, append concise progress or blocker notes in the report body, and update `updated_at`.
-- When blocked: keep the report assigned, write the blocker, evidence, needed answer, and next owner. If the blocker needs another role, create or link a new issue report.
-- When solved: write a solution report under `agent-reports/resolved/`, update the original issue to `status: resolved`, add `solution_report`, and fill `处理结果`, `修改文件`, `验证方式`, and `后续风险`.
-- When archived: move only after the integration summary records the closure. Do not archive active or unverified work.
+Use the schema's filename rule: `issue-<kebab-slug>.md`, `solution-<kebab-slug>.md`, or `integration-summary-<kebab-slug>.md`. `report_id` equals the filename without `.md`; references in `depends_on` use that ID, never an informal title or path.
 
 ## Required Frontmatter
 
-```yaml
----
-status: open
-report_type: issue
-owner: frontend-agent
-created_by: qa-agent
-priority: medium
-created_at: YYYY-MM-DD HH:MM
-updated_at: YYYY-MM-DD HH:MM
-related_files:
-  - src/example.tsx
-solution_report:
-agent_id:
----
+Every report carries the fields required by the schema. A report needs `schema_version`, `report_id`, `report_type`, `status`, `owner`, `created_by`, `priority`, `version`, `agent_id`, `thread_id`, `created_at`, `updated_at`, `depends_on`, `related_files`, `verification_status`, and `verification_evidence`. `agent_id` and `thread_id` may be `null` only when runtime identity is unavailable. Use RFC 3339 UTC timestamps.
+
+## Single Owner And Optimistic Concurrency
+
+1. Read the latest issue and record its scalar `owner`, `status`, and `version`.
+2. Confirm the actor may write: the issue is explicitly handed off, blocker-reassigned, or reassigned by the main thread.
+3. Re-read the report immediately before writing. Only continue if the version still equals the expected value.
+4. Write the report with `version + 1` and a fresh `updated_at` in the same change.
+5. If ownership or runtime mapping changed, update the relevant `ROSTER.md` seat.
+6. Derive the matching `QUEUE.md` row from the new report version.
+
+## Status Write-Back
+
+- On acceptance, set `status: assigned` and move the issue to `assigned/`.
+- On a blocker, set `status: blocked`, keep the issue in `assigned/`, record the blocker and next owner, and mark the affected roster seat as needed.
+- On resolution, create the linked solution report, update the issue to `resolved`, set verification metadata, and move it to `resolved/`.
+- After an integration round, write an `integration-summary` report that depends on the relevant issue and solution reports and records roster changes, validation, unresolved work, and risks.
+- Archive only verified resolved material after its integration summary records the closure.
+
+## Queue Rules
+
+When `QUEUE.md` exists, it contains exactly one row for each `open`, `assigned`, or `blocked` issue and no row for resolved or archived reports. Its columns and values must match the linked report exactly. The `summary` is the source report's level-one title; `report_version` is the report's `version`, not an independent queue version.
+
+Run the validator after report-protocol changes or before delivering an Agent Team project:
+
+```sh
+node scripts/validate-agent-team.mjs --root <project-root>
 ```
-
-Use local project role names when they differ from the example. `agent_id` is optional and should only be used when the runtime provides a useful stable id for the owner.
-
-## Issue Report Body
-
-```markdown
-# 问题标题
-
-## 提交 Agent
-
-## 建议交接 Agent
-
-## 问题描述
-
-## 复现方式
-
-## 影响范围
-
-## 相关文件
-
-## 期望结果
-
-## 当前状态
-
-open
-
-## Closure Criteria
-
-- [ ] 问题原因明确
-- [ ] 方案报告已回写
-- [ ] 修改文件已记录
-- [ ] 验证方式已记录
-- [ ] 后续风险已记录
-```
-
-## Solution Report Body
-
-```markdown
-# 解决方案标题
-
-## Linked Issue
-
-## 负责 Agent
-
-## Root Cause
-
-## 调研过程
-
-## 可选方案
-
-## 推荐方案
-
-## 实施步骤
-
-## 风险与回滚
-
-## 验证方式
-```
-
-## Solution Write-Back
-
-Every resolved report must include:
-
-```markdown
-## 处理结果
-
-## 修改文件
-
-## 验证方式
-
-## 后续风险
-```
-
-## Integration Summary
-
-After each integration round, write a summary with:
-
-- goal for the round,
-- agents involved,
-- status changes,
-- resolved items,
-- unresolved items,
-- verification results,
-- next assignments or risks,
-- archived or resolved report links.
-
-The main thread owns final verification and final delivery even when specialist agents contribute analysis or patches.

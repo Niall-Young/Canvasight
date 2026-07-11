@@ -17,6 +17,10 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260711-0907-integration-summary-agent-team-role-registry-sync.md` - integrated the Agent Team role-registry sync, validation results, compatibility boundary, installation, and follow-up risks.
+- `agent-reports/resolved/20260711-0905-skill-expert-solution-agent-team-role-registry-sync.md` - reviewed the upstream role-registry sync and recorded the narrower packaged validator coverage.
+- `agent-reports/resolved/20260711-0854-skill-expert-issue-upstream-agent-team-role-registry.md` - Canvasight Agent Team role-registry protocol synchronized with retained compatibility name and schema/ref path audit; local validator/test coverage remains explicitly narrower than upstream.
+- `agent-reports/resolved/20260711-0854-test-solution-agent-team-skill-update-verification.md` - schema/ROSTER bootstrap 的插件校验、typecheck 与静态合同检查通过；MCP smoke 被既有 `diagnostics.nativeWidget` 前置断言阻断，根项目尚未迁移 ROSTER/schema validator。
 - `agent-reports/resolved/20260711-0848-integration-summary-system-settings-defaults.md` - settings defaults now follow the system for theme and language; typecheck, build, browser-visible Settings dialog verification, and local plugin reinstall (`0.3.8+codex.20260711005032`) passed.
 - `agent-reports/resolved/20260711-0838-integration-summary-remove-retired-settings-and-diagnostics.md` - removed the retired Codex current-model setting and manual workspace Diagnostics UI; Chat Run and startup failure recovery diagnostics remain.
 - `agent-reports/resolved/20260711-0836-project-management-solution-remove-retired-ui-hygiene.md` - scope and git-hygiene review passed: no staged files, no diff whitespace errors, retired model/Diagnostics UI removal remains focused, and no commit was created.

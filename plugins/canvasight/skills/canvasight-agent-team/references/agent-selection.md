@@ -1,76 +1,49 @@
 # Agent Selection
 
-Use this reference after `structuredContent.agentTeam.enabled` is true.
+Read `references/agent-team-schema.json` before assigning roles. It fixes the valid role names and the role-seat statuses used by this document.
 
-## Selection Rule
+## Recovery And Assignment Order
 
-Classify the work first. Call only the agents needed for the current request. Do not launch the whole team just because Agent Team is enabled.
+1. Read the project's `AGENTS.md` and `ROSTER.md`.
+2. Read the latest integration summary and linked reports for the needed role.
+3. If work belongs to an issue, read its latest `owner`, `status`, and `version` before assigning anyone.
+4. Reuse the live role agent in the current thread when the roster mapping still matches.
+5. On a new thread, mark a needed seat `rebuilding`, rebuild only that seat, and write its `agent_id`, `thread_id`, `last_seen`, and report links back to `ROSTER.md`.
+6. Create a role only when no reusable or rebuildable seat exists.
 
-## Persistent Roster Rule
+`ROSTER.md` stores the role-seat mapping. The issue report remains authoritative for issue ownership; update the report first, then synchronize roster state and `QUEUE.md`.
 
-Agent Team roles are long-lived project role seats. They should behave like the fixed Canvasight project agents: the same roles keep handling the project across turns, instead of creating a fresh set for every task.
+## Role Lifecycle
 
-## AGENTS.md Bootstrap Rule
+- `active`: a current runtime agent and thread are available for the seat.
+- `inactive`: the seat is intentionally dormant.
+- `blocked`: the seat cannot continue until its recorded blocker is cleared.
+- `rebuilding`: a replacement is required on the current thread.
+- `replaced`: the prior seat was superseded and `replaced_by` identifies its successor.
+- `missing`: the role is expected but has not been created.
 
-Before assigning fixed role agents for a project, ensure the target project `AGENTS.md` contains the durable collaboration rules the agents need. This bootstrap is part of the Agent Team workflow because a new Codex thread cannot inherit previous thread-local subagent state.
+Do not add aliases such as `current_agent_id` or ad hoc role names. Use the schema's core roles; `Main Thread` is reserved for coordination and is not a roster seat.
 
-- If `AGENTS.md` is missing and Agent Team work is actually used, route the gap to the Development Standards Lead.
-- Create `AGENTS.md` by default before role assignment when it is missing.
-- If `AGENTS.md` exists but lacks Agent Team lifecycle or report protocol sections, append a minimal Agent Team section instead of rewriting the file.
-- The minimum content is: project context, role responsibilities, persistent roster lifecycle, report queue/status protocol, verification expectations, and delivery/git rules.
-- The Development Standards Lead owns this file. If the role is missing or unavailable, the main thread performs the update and records the limitation in the integration summary.
-- Do not create or update `AGENTS.md` when Agent Team is disabled or no role-agent workflow is actually used.
-- If the target project already defines a different agent workflow, preserve it, record the conflict, and ask for explicit direction before replacing it.
+## Issue Ownership And Concurrency
 
-Minimum appended section. Prefer the managed sentinels when Codex needs to write the section manually:
-
-```markdown
-<!-- canvasight-agent-team:start -->
-## Canvasight Agent Team
-
-- Use persistent role agents for Canvasight Agent Team work. Reuse existing role agents in the current thread when possible.
-- Create only the roles needed for the current task. If a later task needs another role, create that missing fixed role and record it in an integration summary.
-- Keep cross-agent handoff in `agent-reports/` using status-bearing issue, solution, and integration summary reports.
-- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
-- The main thread owns integration, conflict handling, final verification, and git delivery.
-<!-- canvasight-agent-team:end -->
-```
-
-Use this order:
-
-1. Read the project's `AGENTS.md` Agent Team lifecycle, or route any missing/incomplete protocol gap to Development Standards Lead and persist the minimum section when Agent Team work is actually used.
-2. Check the latest integration summaries or current thread state for the recorded role-to-agent mapping.
-3. Reuse or resume the existing role agent for the needed role.
-4. Send follow-up work to that same role agent through the current agent tool, and use `agent-reports/` for durable cross-agent handoff.
-5. Create a new role agent only when the role is needed and no reusable role agent exists.
-6. Record created, reused, missing, or replaced role agents in the next integration summary.
-7. Keep fixed role agents open after task completion unless the user explicitly asks to rebuild or stop the team.
-
-"On demand" means call the relevant fixed roles for the current work. It does not mean creating disposable one-task agents.
-
-When tool UIs expose random nicknames, keep the product-facing identity as the role name. Integration summaries may map the role to the actual agent id or nickname, but reports should assign work to the stable role name.
+- A report's scalar `owner` is the only active owner of that issue.
+- Accept an issue only when unassigned by project policy, explicitly handed off, blocker-reassigned, or reassigned by the main thread.
+- Record the expected report version, re-read it just before editing, and write `version + 1` with a fresh RFC 3339 UTC `updated_at`.
+- If either owner, status, or version changed, do not overwrite. Re-read, then hand work to the recorded owner, append a fresh update, formally reassign, or split independent work into a new issue.
+- Update the report first, the affected roster seat second, and the queue last.
 
 ## Core Roles
 
-- Product Agent: use for requirements, goals, scope, user flows, task structure, acceptance criteria, or product tradeoffs.
-- Design Agent: use for UI, interaction, visual polish, responsive layout, screenshots, component language, and user experience review.
-- Design Standards Expert: use when `design.md` should be created, updated, audited, or used as the design baseline.
-- Development Agent: use for implementation, refactors, MCP/API behavior, persistence, data contracts, runtime behavior, and code fixes.
-- Development Standards Lead: use when `AGENTS.md`, commands, repo rules, workflow standards, or collaboration boundaries need updates.
-- Test Supervisor Agent: use for smoke tests, typecheck/build checks, Playwright/browser-visible verification, reproduction steps, and residual-risk review.
-- Customer Support Agent: use for user-facing README, bilingual docs, workflow descriptions, troubleshooting, and release-facing explanations.
-- Project Management Agent: use for git status, staging scope, commit-message quality, version bumps, changelog-style summaries, and delivery hygiene.
-- Skill Expert Agent: use for `SKILL.md`, frontmatter trigger wording, skill splitting, reference design, and skill validation.
-
-## Common Routing
-
-- Product or feature planning: Product Agent; add Design Agent for UI-heavy work; add Development Agent for implementation planning.
-- UI bug or visual fidelity: Design Agent plus Development Agent; add Test Supervisor for browser verification.
-- Code implementation: Development Agent; add Test Supervisor for verification; add Project Management Agent before commit.
-- Documentation change: Customer Support Agent; add Development Standards Lead for `AGENTS.md`, Design Standards Expert for `design.md`, Skill Expert for skills.
-- Plugin, skill, or MCP protocol change: Development Agent, Skill Expert Agent, Test Supervisor Agent, Customer Support Agent, Project Management Agent.
-- Complex cross-cutting feature: Product Agent, Design Agent, Development Agent, Test Supervisor Agent, Customer Support Agent, Project Management Agent; add standards/skill roles only when their owned files or rules are touched.
+- Product Agent: requirements, scope, acceptance criteria, and product tradeoffs.
+- Design Agent: UI, interaction, visual polish, and UX review.
+- Design Standards Expert: `design.md` and design-system standards.
+- Development Agent: implementation, refactors, APIs, persistence, and runtime behavior.
+- Development Standards Lead: `AGENTS.md`, commands, repo rules, and collaboration standards.
+- Test Supervisor Agent: reproducibility, smoke tests, browser checks, and residual-risk review.
+- Customer Support Agent: README, workflow guidance, troubleshooting, and release-facing explanations.
+- Project Management Agent: git scope, release hygiene, versioning, and delivery checks.
+- Skill Expert Agent: `SKILL.md`, trigger wording, reference design, and skill validation.
 
 ## Avoid Over-Routing
 
-Do not call agents for roles whose owned surface is not affected. Do not create duplicate agents for a role that already has a fixed project agent. If a role is only marginally relevant, document the main-thread checklist instead of creating another worker.
+Only call roles whose owned surface is affected. Do not duplicate an active roster seat, assign a second owner to an issue, or turn `QUEUE.md` into a source of state. Record an unavailable specialist as a main-thread checklist item in the integration summary instead of creating an unrelated temporary role.

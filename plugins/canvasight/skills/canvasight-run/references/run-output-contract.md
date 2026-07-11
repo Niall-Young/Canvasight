@@ -18,9 +18,9 @@ For await fallback, normalize every Run to `codexMode: "chat"`. Older documents 
 Then read `structuredContent.agentTeam`.
 
 - If `structuredContent.agentTeam.enabled === true`, use the `canvasight-agent-team` skill before executing the returned Markdown.
-- If Agent Team work is actually used, check whether the target project `AGENTS.md` contains persistent roster and report protocol rules before assigning role agents. Create a missing `AGENTS.md` or append the missing Agent Team section by default so the workflow survives a new Codex thread. If existing project rules explicitly forbid this edit or conflict with Canvasight defaults, create an issue/risk report and ask before changing them.
-- Prefer `structuredContent.agentTeam.agentsMd` when present. `created`, `appended`, `updated`, or `unchanged` confirms the durable rule is ready. `failed` means report the write error before continuing. `skipped` is acceptable only when Agent Team is disabled; if it was skipped by project rule, report that constraint before continuing.
-- Use `structuredContent.agentTeam.recommendedRoles` as suggestions for which fixed roster roles to call. Reuse or resume existing role agents first; create a role only when that required role is missing.
+- Read `ROSTER.md` and the Agent Team schema before assigning or rebuilding a role. A report owns issue state and ownership; the roster owns role-seat runtime mapping; `agent-reports/QUEUE.md` is derived only.
+- Prefer `structuredContent.agentTeam.agentsMd` and `.roster` when present. `created`, `appended`, `updated`, or `unchanged` confirms that bootstrap state is ready. `failed` means report the write error before continuing. `skipped` is acceptable only when Agent Team is disabled or the project explicitly opts out.
+- Use `structuredContent.agentTeam.recommendedRoles` only as role suggestions. Before accepting a report, re-read its scalar owner, status, and version; write report -> roster -> queue with optimistic concurrency and never create a duplicate active owner.
 - Use `structuredContent.agentTeam.reportProtocol` for the report queue shape when a blocker, high-risk issue, or cross-role handoff appears.
 - If `structuredContent.agentTeam.enabled === false`, handle the Run as a normal Canvasight task unless the project `AGENTS.md` imposes its own workflow.
 

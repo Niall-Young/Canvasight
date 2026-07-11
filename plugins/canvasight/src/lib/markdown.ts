@@ -112,7 +112,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "已开启",
     agentTeamInstruction:
-      "先判断这次任务实际需要哪些固定角色。若实际启用 Agent Team 且项目缺少 AGENTS.md，或 AGENTS.md 未记录固定 roster / report 协议，先交给 Development Standards Lead 创建文件或追加最小 Agent Team 段落，让协作规则能跨 Codex thread 保留。不得覆盖已有项目规则；若现有规则明确禁止自动编辑或与 Canvasight 默认规则冲突，先写 issue/risk report 并询问。优先复用或恢复项目已有的同角色 agent；只有缺少必要角色时才创建新的固定角色 agent，不要为一次任务创建临时或重复 agent。跨角色沟通必须通过带状态的 agent report 记录；角色接活、阻塞、解决或转交时都要回写 report 状态和队列。",
+      "先阅读 AGENTS.md、ROSTER.md、schema 与关联报告。报告是 issue owner、状态和验证证据的唯一权威；ROSTER.md 只保存角色席位与 runtime 映射，QUEUE.md 是派生索引。每次写入先重读 report 的 owner、status、version，使用乐观并发更新 report，再同步 roster，最后重建 queue。每个 issue 只能有一个 owner；不要覆盖有冲突的项目协议。",
     agentTeamRecommendedRoles: "建议角色",
     agentTeamReportProtocol: "Report 协议",
     agentTeamSkill: "Skill",
@@ -145,7 +145,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     agentTeam: "Agent Team",
     agentTeamEnabled: "enabled",
     agentTeamInstruction:
-      "Classify the task first. If Agent Team work is actually used and the project lacks AGENTS.md, or AGENTS.md does not define the fixed roster / report protocol, route that gap to Development Standards Lead first and create the file or append the minimum Agent Team section so the workflow survives a new Codex thread. Do not overwrite existing project rules; if existing rules explicitly forbid automated edits or conflict with Canvasight defaults, write an issue/risk report and ask first. Then reuse or resume existing fixed role agents for the project. Create a new fixed role agent only when a needed role is missing, and never create temporary or duplicate one-task agents. Cross-role communication must go through status-bearing agent reports; role agents must update report status and the queue when they accept, block, solve, or hand off work.",
+      "Read AGENTS.md, ROSTER.md, the schema, and linked reports before assigning work. A report is authoritative for issue ownership, state, and verification evidence; ROSTER.md stores only role-seat/runtime mappings, and QUEUE.md is derived. Re-read each issue's owner, status, and version immediately before writing; use optimistic concurrency to update the report first, then synchronize roster state, then regenerate the queue. An issue has exactly one owner. Preserve conflicting project protocols and ask before replacing them.",
     agentTeamRecommendedRoles: "Recommended roles",
     agentTeamReportProtocol: "Report protocol",
     agentTeamSkill: "Skill",
@@ -180,7 +180,9 @@ function markdownText(language: ResolvedLanguage): MarkdownText {
 
 const reportProtocol = {
   root: "agent-reports",
-  statuses: ["open", "assigned", "resolved", "archived"]
+  roster: "ROSTER.md",
+  schema: "references/agent-team-schema.json",
+  statuses: ["open", "assigned", "blocked", "resolved", "archived"]
 } satisfies AgentTeamRunConfig["reportProtocol"];
 
 const agentTeamRoleTexts: Record<ResolvedLanguage, Record<AgentTeamRoleId, { label: string; reason: string }>> = {
@@ -352,8 +354,9 @@ ${text.agentTeamInstruction}
 ${roles}
 
 ### ${text.agentTeamReportProtocol}
-- ${agentTeam.reportProtocol.root}/open -> assigned -> resolved -> archived
-- Use fixed Markdown report templates with frontmatter, owner, created_by, priority, reproduction, impact, related files, expected result, processing result, modified files, verification, and follow-up risks.
+- Read \`${agentTeam.reportProtocol.roster}\` and \`${agentTeam.reportProtocol.schema}\` before rebuilding a role.
+- ${agentTeam.reportProtocol.root}/open -> assigned (or blocked) -> resolved -> archived; write report -> roster -> derived QUEUE.md in that order.
+- Use versioned reports with one scalar owner, RFC 3339 UTC timestamps, verification evidence, and a queue row generated from the report.
 `;
 }
 

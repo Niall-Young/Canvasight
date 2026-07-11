@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "roles": ["Product Agent", "Design Agent", "Design Standards Expert", "Development Agent", "Development Standards Lead", "Test Supervisor Agent", "Customer Support Agent", "Project Management Agent", "Skill Expert Agent"],
+  "reserved_roles": ["Main Thread"],
+  "timestamp": {"format": "RFC 3339 UTC", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"},
+  "roster": {"statuses": ["active", "inactive", "blocked", "rebuilding", "replaced", "missing"], "required_fields": ["role", "status", "agent_id", "thread_id", "created_at", "last_seen", "handoff_source", "last_report", "rebuild_on_new_thread", "replaced_by", "notes"]},
+  "reports": {
+    "required_fields": ["schema_version", "report_id", "report_type", "status", "owner", "created_by", "priority", "version", "agent_id", "thread_id", "created_at", "updated_at", "depends_on", "related_files", "verification_status", "verification_evidence"],
+    "priority": ["low", "medium", "high", "critical"],
+    "verification_status": ["not_started", "passed", "failed", "not_applicable"],
+    "verification_by_status": {"open": ["not_started"], "assigned": ["not_started", "failed"], "blocked": ["not_started", "failed"], "resolved": ["passed", "not_applicable"], "archived": ["passed", "not_applicable"]},
+    "types": {
+      "issue": {"prefix": "issue-", "allowed_statuses": ["open", "assigned", "blocked", "resolved", "archived"], "status_directories": {"open": "open", "assigned": "assigned", "blocked": "assigned", "resolved": "resolved", "archived": "archived"}},
+      "solution": {"prefix": "solution-", "allowed_statuses": ["resolved", "archived"], "status_directories": {"resolved": "resolved", "archived": "archived"}},
+      "integration-summary": {"prefix": "integration-summary-", "allowed_statuses": ["resolved", "archived"], "status_directories": {"resolved": "resolved", "archived": "archived"}}
+    }
+  },
+  "queue": {"active_issue_statuses": ["open", "assigned", "blocked"], "columns": ["report_id", "status", "priority", "owner", "summary", "report", "report_version", "updated_at"]}
+}

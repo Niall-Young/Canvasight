@@ -2846,7 +2846,9 @@ async function main() {
         ],
         reportProtocol: {
           root: "agent-reports",
-          statuses: ["open", "assigned", "resolved", "archived"]
+          roster: "ROSTER.md",
+          schema: "references/agent-team-schema.json",
+          statuses: ["open", "assigned", "blocked", "resolved", "archived"]
         }
       },
       nodeIds: ["node-a"],
@@ -3010,13 +3012,19 @@ async function main() {
       awaited.structuredContent.agentTeam.recommendedRoles.map((role) => role.id),
       ["development-agent", "test-supervisor-agent"]
     );
-    assert.deepEqual(awaited.structuredContent.agentTeam.reportProtocol.statuses, ["open", "assigned", "resolved", "archived"]);
+    assert.deepEqual(awaited.structuredContent.agentTeam.reportProtocol.statuses, ["open", "assigned", "blocked", "resolved", "archived"]);
+    assert.equal(awaited.structuredContent.agentTeam.reportProtocol.roster, "ROSTER.md");
+    assert.equal(awaited.structuredContent.agentTeam.reportProtocol.schema, "references/agent-team-schema.json");
     assert.equal(awaited.structuredContent.agentTeam.agentsMd.status, "unchanged");
+    assert.equal(awaited.structuredContent.agentTeam.roster.status, "created");
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
     const createdAgentsMd = await fsp.readFile(path.join(projectPath, "AGENTS.md"), "utf8");
     assert.match(createdAgentsMd, /<!-- canvasight-agent-team:start -->/);
     assert.match(createdAgentsMd, /## Canvasight Agent Team/);
+    const createdRoster = await fsp.readFile(path.join(projectPath, "ROSTER.md"), "utf8");
+    assert.match(createdRoster, /schema_version: 1/);
+    assert.match(createdRoster, /role: Development Agent/);
 
     const chatNativeLog = await readNativeLog();
     const awaitedRunLog = chatNativeLog.slice(awaitedRunLogOffset);
@@ -3191,6 +3199,7 @@ async function main() {
       })
     });
     assert.equal(appendQueued.agentTeam.agentsMd.status, "appended");
+    assert.equal(appendQueued.agentTeam.roster.status, "created");
     const appendAwaited = await waitForAppendRun;
     assert.equal(appendAwaited.structuredContent.agentTeam.agentsMd.status, "appended");
     const appendedAgentsMd = await fsp.readFile(path.join(appendProjectPath, "AGENTS.md"), "utf8");
@@ -3219,6 +3228,7 @@ async function main() {
       })
     });
     assert.equal(unchangedQueued.agentTeam.agentsMd.status, "unchanged");
+    assert.equal(unchangedQueued.agentTeam.roster.status, "unchanged");
     const unchangedAwaited = await waitForUnchangedRun;
     assert.equal(unchangedAwaited.structuredContent.agentTeam.agentsMd.status, "unchanged");
     const unchangedAgentsMd = await fsp.readFile(path.join(appendProjectPath, "AGENTS.md"), "utf8");
@@ -3249,6 +3259,7 @@ async function main() {
       })
     });
     assert.equal(disabledAgentTeamQueued.agentTeam.agentsMd.status, "skipped");
+    assert.equal(disabledAgentTeamQueued.agentTeam.roster.status, "skipped");
     assert.equal(disabledAgentTeamQueued.agentTeam.agentsMd.reason, "agent_team_disabled");
     const disabledAgentTeamAwaited = await waitForDisabledAgentTeamRun;
     assert.equal(disabledAgentTeamAwaited.structuredContent.agentTeam.enabled, false);

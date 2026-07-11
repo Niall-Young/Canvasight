@@ -190,7 +190,9 @@ export interface AgentTeamRunConfig {
   recommendedRoles: AgentTeamRoleRecommendation[];
   reportProtocol: {
     root: "agent-reports";
-    statuses: ["open", "assigned", "resolved", "archived"];
+    roster: "ROSTER.md";
+    schema: "references/agent-team-schema.json";
+    statuses: ["open", "assigned", "blocked", "resolved", "archived"];
   };
 }
 

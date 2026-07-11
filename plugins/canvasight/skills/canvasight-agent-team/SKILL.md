@@ -1,41 +1,32 @@
 ---
 name: canvasight-agent-team
-description: Follow Canvasight's Agent Team and agent-report protocol. Use when a Canvasight Run payload has structuredContent.agentTeam.enabled true, or when the user explicitly asks to enable, disable, configure, audit, or include Canvasight Agent Team, agent reports, issue reports, solution reports, integration summaries, or the AGENTS.md + agent-reports collaboration workflow. Do not use for normal Canvasight opening, Run payload handling, graph writing, troubleshooting, or ordinary code changes unless this protocol is explicitly involved.
+description: Follow Canvasight's Agent Team, role-registry, and agent-report protocol. Use when a Canvasight Run payload has structuredContent.agentTeam.enabled true, or when the user explicitly asks to enable, disable, configure, audit, or include Canvasight Agent Team, ROSTER.md, agent reports, issue reports, solution reports, integration summaries, or the AGENTS.md + role-registry + agent-reports collaboration workflow. Do not use for normal Canvasight opening, Run payload handling, graph writing, troubleshooting, or ordinary code changes unless this protocol is explicitly involved.
 ---
 
-# Canvasight Agent Team
+# Codex Agent Team Skill
 
-Use this skill when Canvasight asks Codex to run with Agent Team enabled, or when the user explicitly works on the Canvasight Agent Team / agent-report protocol.
+Use this skill when Canvasight asks Codex to run with Agent Team enabled, or when the user explicitly works on the Agent Team report protocol.
 
 ## Workflow
 
-1. Read `structuredContent.agentTeam` from the Canvasight Run payload.
-2. Read the target project `AGENTS.md` first when it exists, especially its Agent Team lifecycle and report protocol.
-3. Check `structuredContent.agentTeam.agentsMd` when present. `created`, `appended`, `updated`, and `unchanged` mean the durable `AGENTS.md` rule is ready. `failed` or `skipped` with a project-rule reason must be reported before role work continues.
-4. If Agent Team work will be used and no `agentsMd` status is available, read `AGENTS.md`; when it is missing or lacks persistent roster / report protocol rules, route that gap to the Development Standards Lead before relying on persistent role agents. Create the missing file or append the missing Agent Team section by default so the workflow survives a new Codex thread.
-5. Classify the task before assigning agents.
-6. Use `references/agent-selection.md` to choose only the roles needed for the current work.
-7. Use `references/report-protocol.md` for cross-agent communication, status tracking, issue reports, solution reports, and integration summaries.
-8. Keep the main thread responsible for integration, conflict handling, verification, and final delivery.
+1. Read `structuredContent.agentTeam`, then the target project's `AGENTS.md` when it exists.
+2. Read `references/agent-team-schema.json`; it is the authoritative contract for role names, field names, statuses, paths, and queue columns.
+3. Read `ROSTER.md` for durable role-seat state, then linked reports and the latest integration summary before rebuilding a role on a new thread.
+4. Before accepting, blocking, solving, or handing off an issue, read its latest `owner`, `status`, and `version`. Do not write against a stale snapshot.
+5. Use `references/agent-selection.md` to select only the roles needed for the current work and `references/report-protocol.md` for write-back rules.
+6. Keep the main thread responsible for integration, conflict handling, validation, and final delivery.
 
-Do not create every role by default. Small, self-contained tasks may only need the main thread plus one specialist check. Complex, cross-cutting tasks should use the relevant persistent role agents and report queue.
+`ROSTER.md` preserves role-seat state, not a thread-local subagent process. Do not create every role by default; recreate only the seats required for the current work.
 
 ## Required Boundaries
 
-- If the project has `AGENTS.md`, follow it first.
-- If the project lacks `AGENTS.md` and Agent Team is actually used, route the gap to the Development Standards Lead. Create one with project context, fixed roster, report protocol, verification, and delivery rules before assigning role agents.
-- If `AGENTS.md` exists but does not define persistent role agents or report state flow, ask the Development Standards Lead to append only the missing Agent Team section. Do not rewrite unrelated project guidance.
-- Do not create or update `AGENTS.md` when Agent Team is disabled or no role-agent workflow is actually used.
-- If existing `AGENTS.md` explicitly forbids automated edits or conflicts with Canvasight defaults, follow the existing project rule first, create an issue report or risk note, and ask before changing it.
-- If the project has an `agent-reports/` protocol, use its folders and templates.
-- Treat Agent Team roles as persistent role seats for the project, not disposable one-shot helpers.
-- Reuse or resume the existing role agent whenever one exists. Only create a new role agent when the needed role is missing.
-- Do not close fixed role agents after one task finishes unless the user explicitly asks to rebuild or stop the team.
-- When a role agent is created, reused, unavailable, or replaced, record that in an integration summary.
-- This skill does not replace `canvasight-open`, `canvasight-run`, `canvasight-graph-writer`, or `canvasight-troubleshooting`.
-- The Canvasight setting controls whether Run Markdown includes this protocol. It does not delete repo rules, existing reports, or `AGENTS.md`.
-- Require the Canvasight server or the Development Standards Lead bootstrap to persist the managed `AGENTS.md` block before relying on Agent Team rules from a Run payload.
-- If required subagents cannot be created or reused because of tool limits, record that limitation in the integration summary and perform that role's checklist in the main thread.
-- Every blocking, high-risk, or cross-role issue must be written as a Markdown report before solution work continues.
-- Every role agent that accepts, blocks, solves, or hands off work must update the relevant report status and queue entry before the main thread delivers.
-- The Development Standards Lead owns durable `AGENTS.md` updates. If that role is unavailable, the main thread must perform the checklist and record the limitation.
+- Keep `canvasight-agent-team` as the Canvasight compatibility name; it packages the upstream Codex Agent Team protocol.
+- If Agent Team work uses fixed roles, `ROSTER.md` is required. Create or repair it before relying on a persistent role seat.
+- Report files are the source of truth for issue ownership, state, dependencies, and validation evidence. `ROSTER.md` is the source of truth for role-seat runtime mapping. `agent-reports/QUEUE.md` is a derived index only.
+- When an issue and roster disagree about issue ownership, keep the report as authoritative and synchronize the roster after the report write succeeds. When a queue row disagrees with a report, regenerate the queue row from the report.
+- A single issue has exactly one active `owner`. A role may not take it over without an explicit handoff, blocker-driven reassignment, or main-thread reassignment recorded in the issue.
+- Use optimistic concurrency for every report write: re-read the expected `version` immediately before editing, increment it with `updated_at`, and abort/re-read if it changed. `updated_at` is audit metadata, not the write guard.
+- Write in this order: report -> affected roster seat -> derived queue. Never update the queue first.
+- Use stable schema role names in reports. `Main Thread` is the only reserved coordinator that need not have a roster seat.
+- Run `node scripts/validate-agent-team.mjs --root <project-root>` before delivering changes to a project that uses this protocol.
+- If a project already has a conflicting collaboration protocol, preserve it, record the conflict, and ask for direction before replacing it.

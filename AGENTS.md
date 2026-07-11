@@ -148,34 +148,44 @@ After installing, reinstalling, or upgrading `canvasight@canvasight-local`, relo
 <!-- canvasight-agent-team:start -->
 ## Canvasight Agent Team
 
-When Canvasight Agent Team mode is enabled, Codex should use persistent role agents instead of creating one-off agents for each task.
+When Canvasight Agent Team mode is enabled, follow the versioned role-registry and report protocol. This section governs new Agent Team work only: Markdown files directly under `agent-reports/` remain legacy history and must not be moved, renamed, or rewritten merely to migrate them. New protocol reports belong in the status subdirectories below.
 
-### Fixed Roles
+### Role Registry
 
-- Product Agent: keeps work aligned with product goals and scope.
-- Design Agent: checks UI direction, interaction quality, and design consistency.
-- Development Agent: implements code, persistence, runtime, and integration changes.
-- Test Supervisor Agent: verifies builds, smoke tests, regressions, and browser-visible behavior.
-- Customer Support Agent: decides whether user-facing README documentation needs updates.
-- Design Standards Expert: maintains `design.md` when product UI rules change.
-- Development Standards Lead: maintains `AGENTS.md` and project working rules.
-- Project Management Expert: manages git status, staging scope, and conventional Chinese commit messages.
-- Skill Expert Agent: maintains Canvasight and Codex skill instructions when skill behavior changes.
+`ROSTER.md` at the project root is the durable registry for role seats and their runtime mapping. It records the schema role name, seat status, `agent_id`, `thread_id`, timestamps, handoff/replacement data, and the last linked report. It is not an issue tracker and does not make a role process persistent across threads.
 
-### Agent Reports
+Use only these schema role names for roster seats and report ownership: Product Agent, Design Agent, Design Standards Expert, Development Agent, Development Standards Lead, Test Supervisor Agent, Customer Support Agent, Project Management Agent, and Skill Expert Agent. `Main Thread` is the reserved integration coordinator and does not need a roster seat.
 
-Use `agent-reports/` for cross-agent communication when a blocking, high-risk, or cross-role issue appears.
+- Read `ROSTER.md`, the latest relevant integration summary, and linked reports before recreating a role on a new thread.
+- Reuse a live seat when its runtime mapping is still valid. Otherwise mark only the required seat `rebuilding`, rebuild it, and write its new runtime mapping back to the roster.
+- Do not create all roles by default or duplicate an active seat. Create only the roles whose owned surfaces are affected by the current work.
+- Valid seat states are `active`, `inactive`, `blocked`, `rebuilding`, `replaced`, and `missing`.
 
-- Issue reports: `YYYYMMDD-HHMM-<role>-issue-<slug>.md`
-- Solution reports: `YYYYMMDD-HHMM-<role>-solution-<slug>.md`
-- Integration summaries: `YYYYMMDD-HHMM-integration-summary.md`
+### Versioned Reports And Queue
+
+Use `agent-reports/` for versioned cross-agent reports and `agent-reports/QUEUE.md` as the derived index of active issues:
+
+```text
+agent-reports/
+  QUEUE.md        # derived index: open, assigned, and blocked issues only
+  open/           # open issues
+  assigned/       # assigned and blocked issues
+  resolved/       # resolved issues, solutions, and integration summaries
+  archived/       # auditable, verified closed history
+```
+
+- Use `issue-<kebab-slug>.md`, `solution-<kebab-slug>.md`, and `integration-summary-<kebab-slug>.md`; `report_id` is the filename without `.md`.
+- Every new report uses the current schema fields, including `schema_version`, `report_id`, `version`, runtime identity, dependencies, related files, and verification status/evidence. Use RFC 3339 UTC timestamps.
+- The report is authoritative for an issue's owner, status, dependencies, and verification evidence. `ROSTER.md` is authoritative only for role-seat state. `agent-reports/QUEUE.md` is derived from reports and is never a source of truth.
+- A report has exactly one active scalar `owner`. A role may take it only through an explicit handoff, blocker-driven reassignment, or recorded Main Thread reassignment.
+- Use optimistic concurrency for every report write: read the current `owner`, `status`, and `version`; re-read immediately before writing; abort and re-read if they changed; then increment `version` and update `updated_at` atomically. `updated_at` alone is not a write guard.
+- If a report and roster disagree on ownership, keep the report and synchronize the affected roster seat afterwards. If a queue row differs from its report, regenerate the queue row from the report.
 
 ### Operating Rules
 
-- Reuse fixed roles across the project whenever possible.
-- Create only the roles needed for the current task; if a later task needs another role, create that missing fixed role and record it in an integration summary.
-- Do not create duplicate one-off agents for the same role.
-- Preserve existing project rules in this file; target project rules take precedence over Canvasight defaults.
-- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
-- The main thread owns integration, conflict handling, final verification, and git delivery.
+- Write state in this strict order: **report -> affected roster seat -> derived queue**. Never update the queue first.
+- On acceptance, write the issue as `assigned` in `assigned/`. On a blocker, keep it in `assigned/` with status `blocked` and record the blocker and next owner. On resolution, create the linked solution report, update and move the issue to `resolved/`, then write an integration summary that records roster changes, validation, unresolved work, and risks.
+- Archive only verified resolved material after its integration summary records the closure.
+- Preserve existing project rules in this file; record any conflict with this protocol and ask for direction before replacing a conflicting collaboration workflow.
+- The Main Thread owns integration, conflict handling, validation, and final delivery. Run `node plugins/canvasight/skills/canvasight-agent-team/scripts/validate-agent-team.mjs --root /Users/niallyoung/Desktop/Canvasight` before delivering Agent Team protocol changes.
 <!-- canvasight-agent-team:end -->

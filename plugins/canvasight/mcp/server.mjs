@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.8+codex.20260711084000";
+const SERVER_VERSION = "0.3.9+codex.20260711093000";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -47,13 +47,24 @@ const AGENT_TEAM_ROLE_IDS = new Set([
   "project-management-agent",
   "skill-expert-agent"
 ]);
-const AGENT_TEAM_STATUS_FLOW = ["open", "assigned", "resolved", "archived"];
+const AGENT_TEAM_ROLE_NAMES = {
+  "product-agent": "Product Agent",
+  "design-agent": "Design Agent",
+  "design-standards-agent": "Design Standards Expert",
+  "development-agent": "Development Agent",
+  "development-standards-agent": "Development Standards Lead",
+  "test-supervisor-agent": "Test Supervisor Agent",
+  "customer-support-agent": "Customer Support Agent",
+  "project-management-agent": "Project Management Agent",
+  "skill-expert-agent": "Skill Expert Agent"
+};
+const AGENT_TEAM_STATUS_FLOW = ["open", "assigned", "blocked", "resolved", "archived"];
 const AGENT_TEAM_AGENTS_MD_START = "<!-- canvasight-agent-team:start -->";
 const AGENT_TEAM_AGENTS_MD_END = "<!-- canvasight-agent-team:end -->";
 const AGENT_TEAM_AGENTS_MD_BLOCK = `${AGENT_TEAM_AGENTS_MD_START}
 ## Canvasight Agent Team
 
-When Canvasight Agent Team mode is enabled, Codex should use persistent role agents instead of creating one-off agents for each task.
+When Canvasight Agent Team mode is enabled, Codex should use role seats that survive thread recreation without treating a transient subagent process as durable state.
 
 ### Fixed Roles
 
@@ -64,24 +75,23 @@ When Canvasight Agent Team mode is enabled, Codex should use persistent role age
 - Customer Support Agent: decides whether user-facing README documentation needs updates.
 - Design Standards Expert: maintains \`design.md\` when product UI rules change.
 - Development Standards Lead: maintains \`AGENTS.md\` and project working rules.
-- Project Management Expert: manages git status, staging scope, and conventional Chinese commit messages.
+- Project Management Agent: manages git status, staging scope, and conventional Chinese commit messages.
 - Skill Expert Agent: maintains Canvasight and Codex skill instructions when skill behavior changes.
 
 ### Agent Reports
 
-Use \`agent-reports/\` for cross-agent communication when a blocking, high-risk, or cross-role issue appears.
+Read \`ROSTER.md\` before restoring a role. Report files are authoritative for issue ownership, state, dependencies, and validation evidence; the roster is authoritative only for role-seat/runtime mapping; \`agent-reports/QUEUE.md\` is a derived index.
 
-- Issue reports: \`YYYYMMDD-HHMM-<role>-issue-<slug>.md\`
-- Solution reports: \`YYYYMMDD-HHMM-<role>-solution-<slug>.md\`
-- Integration summaries: \`YYYYMMDD-HHMM-integration-summary.md\`
+- Use versioned report filenames: \`issue-<kebab-slug>.md\`, \`solution-<kebab-slug>.md\`, and \`integration-summary-<kebab-slug>.md\`.
+- Each issue has one scalar owner. Re-read its owner, status, and version before write; write report -> roster -> queue, with RFC 3339 UTC timestamps and verification evidence.
+- Use the packaged \`canvasight-agent-team/references/agent-team-schema.json\` contract and run its validator before delivery.
 
 ### Operating Rules
 
-- Reuse fixed roles across the project whenever possible.
-- Create only the roles needed for the current task; if a later task needs another role, create that missing fixed role and record it in an integration summary.
-- Do not create duplicate one-off agents for the same role.
+- Reuse a current runtime role only when it matches the roster mapping; otherwise mark the needed seat rebuilding and recreate only that seat.
+- Create only the roles needed for the current task. Do not create duplicate seats or use ad hoc role names.
 - Preserve existing project rules in this file; target project rules take precedence over Canvasight defaults.
-- Role agents must update report status and queue entries when they accept work, find a blocker, solve a task, or hand work to another role.
+- Resolve a report/roster conflict in favor of the report, then regenerate the queue from the report.
 - The main thread owns integration, conflict handling, final verification, and git delivery.
 ${AGENT_TEAM_AGENTS_MD_END}`;
 const SOFTWARE_PRODUCT_GUIDANCE_FILES = [
@@ -2397,6 +2407,8 @@ function normalizeAgentTeamPayload(value) {
     recommendedRoles: enabled ? recommendedRoles : [],
     reportProtocol: {
       root: "agent-reports",
+      roster: "ROSTER.md",
+      schema: "references/agent-team-schema.json",
       statuses: AGENT_TEAM_STATUS_FLOW
     }
   };
@@ -2408,6 +2420,51 @@ function disabledAgentTeamAgentsMdResult(projectPath, reason) {
     reason,
     path: projectPath ? path.join(projectPath, "AGENTS.md") : null
   };
+}
+
+function agentTeamTimestamp() {
+  return nowIso().replace(/\.\d{3}Z$/, "Z");
+}
+
+function initialAgentTeamRoster(agentTeam) {
+  const timestamp = agentTeamTimestamp();
+  const roleNames = Array.from(
+    new Set(agentTeam.recommendedRoles.map((role) => AGENT_TEAM_ROLE_NAMES[role.id]).filter(Boolean))
+  );
+  const roles = (roleNames.length ? roleNames : ["Product Agent"]).map((role) => [
+    `  - role: ${role}`,
+    "    status: missing",
+    "    agent_id: null",
+    "    thread_id: null",
+    `    created_at: ${timestamp}`,
+    `    last_seen: ${timestamp}`,
+    "    handoff_source: AGENTS.md",
+    "    last_report: AGENTS.md",
+    "    rebuild_on_new_thread: true",
+    "    replaced_by: null",
+    "    notes: Created by Canvasight; assign only when this role is needed."
+  ].join("\n"));
+  return `# Canvasight Agent Team Roster\n\nThis registry stores role-seat runtime mappings. Issue reports remain authoritative for issue ownership.\n\n\`\`\`yaml\nschema_version: 1\nroles:\n${roles.join("\n")}\n\`\`\`\n`;
+}
+
+async function ensureAgentTeamRoster(projectPath, agentTeam, agentsMd) {
+  const rosterPath = path.join(projectPath, "ROSTER.md");
+  if (!agentTeam.enabled) return { status: "skipped", reason: "agent_team_disabled", path: rosterPath };
+  if (agentsMd.status === "skipped" || agentsMd.status === "failed") {
+    return { status: "skipped", reason: "agents_md_unavailable", path: rosterPath };
+  }
+  try {
+    await fsp.access(rosterPath);
+    return { status: "unchanged", reason: "existing_roster", path: rosterPath };
+  } catch (error) {
+    if (error?.code !== "ENOENT") return { status: "failed", reason: "read_failed", path: rosterPath, error: error?.message || String(error) };
+  }
+  try {
+    await fsp.writeFile(rosterPath, initialAgentTeamRoster(agentTeam), "utf8");
+    return { status: "created", reason: "missing_roster", path: rosterPath };
+  } catch (error) {
+    return { status: "failed", reason: "write_failed", path: rosterPath, error: error?.message || String(error) };
+  }
 }
 
 async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
@@ -2575,6 +2632,7 @@ function timeoutRunPayload(sessionIdValue, projectPath = null, threadId = null) 
 async function enqueueRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
   normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
+  normalized.agentTeam.roster = await ensureAgentTeamRoster(normalized.projectPath, normalized.agentTeam, normalized.agentTeam.agentsMd);
   const sessionWaiterIndex = session.waiters.findIndex((candidate) => waiterMatches(candidate, session, normalized));
   const sessionWaiter = sessionWaiterIndex >= 0 ? session.waiters.splice(sessionWaiterIndex, 1)[0] : null;
   const waiter = sessionWaiter || globalRunWaiters.find((candidate) => waiterMatches(candidate, session, normalized));
@@ -2615,6 +2673,7 @@ async function enqueueRun(session, payload) {
 async function prepareWidgetRun(session, payload) {
   const normalized = normalizeRunPayload(session, payload);
   normalized.agentTeam.agentsMd = await ensureAgentTeamAgentsMd(normalized.projectPath, normalized.agentTeam);
+  normalized.agentTeam.roster = await ensureAgentTeamRoster(normalized.projectPath, normalized.agentTeam, normalized.agentTeam.agentsMd);
   normalized.codexNative = await applyWidgetCodexMode(session, normalized);
   normalized.codexTurn = {
     status: "skipped",

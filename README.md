@@ -19,7 +19,7 @@ Canvasight 是一个 repo-local Codex 插件，用可编辑画布组织任务、
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
-- 可选地在 Run Markdown 中加入 Agent Team 协作协议。
+- 可选地在 Run Markdown 中加入 Agent Team 协作协议：以 `ROSTER.md` 恢复角色席位、以版本化报告维护唯一 owner 与验证证据，并从报告派生 `agent-reports/QUEUE.md`。
 
 ### 基础用法
 
@@ -110,7 +110,7 @@ fallback 与会话：
 - `canvasight-open`：原生打开、最近项目和显式 browser fallback。
 - `canvasight-run`：native Chat Run 与 fallback 队列处理。
 - `canvasight-graph-writer`：用 AI 创建或更新 Page、节点和连线。
-- `canvasight-agent-team`：处理可选的 Agent Team / agent-report 协作协议。
+- `canvasight-agent-team`：处理可选的 Agent Team 角色注册表与 agent-report 协作协议；报告优先于 roster，队列为派生索引。
 - `canvasight-troubleshooting`：处理插件、MCP transport、daemon、widget 和 fallback 故障。
 - `canvasight`：跨多个 Canvasight 工作流时使用的薄索引。
 
@@ -223,7 +223,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
 - Reopen recent Canvasight projects from a new Codex task.
-- Optionally include the Agent Team protocol in generated Run Markdown.
+- Optionally include the Agent Team protocol in generated Run Markdown: `ROSTER.md` restores role seats, versioned reports hold the single owner and verification evidence, and `agent-reports/QUEUE.md` is derived from reports.
 
 ### Basic Usage
 
@@ -314,7 +314,7 @@ It returns `status` (`ready`, `timeout`, or `failed`), `verified`, `openAttemptI
 - `canvasight-open`: native open, recent projects, and explicit browser fallback.
 - `canvasight-run`: native Chat Run and fallback queues.
 - `canvasight-graph-writer`: AI-created or AI-updated Pages, nodes, and edges.
-- `canvasight-agent-team`: optional Agent Team and agent-report protocol.
+- `canvasight-agent-team`: optional Agent Team role-registry and agent-report protocol; reports are authoritative and the queue is derived.
 - `canvasight-troubleshooting`: plugin, MCP transport, daemon, widget, and fallback failures.
 - `canvasight`: thin index for work spanning multiple Canvasight workflows.
 
