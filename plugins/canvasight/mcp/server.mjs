@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.7+codex.20260710222500";
+const SERVER_VERSION = "0.3.8+codex.20260711084000";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;

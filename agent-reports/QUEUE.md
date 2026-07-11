@@ -17,6 +17,12 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260711-0838-integration-summary-remove-retired-settings-and-diagnostics.md` - removed the retired Codex current-model setting and manual workspace Diagnostics UI; Chat Run and startup failure recovery diagnostics remain.
+- `agent-reports/resolved/20260711-0836-project-management-solution-remove-retired-ui-hygiene.md` - scope and git-hygiene review passed: no staged files, no diff whitespace errors, retired model/Diagnostics UI removal remains focused, and no commit was created.
+- `agent-reports/resolved/20260711-0834-test-solution-remove-current-model-and-workspace-diagnostics.md` - typecheck/build and source regression scans pass: retired current-model settings and manual workspace Diagnostics are removed; StartupFailurePanel diagnostic copy remains. Native widget visual acceptance is unverified because no bound Codex project/session was available.
+- `agent-reports/resolved/20260711-0831-development-solution-remove-codex-model-setting.md` - removed the retired current-model setting from shared settings, localStorage migration, Settings UI, Run payload, and frontend result synchronization while retaining Chat-only Run delivery.
+- `agent-reports/resolved/20260711-0830-design-standards-solution-remove-codex-model-setting.md` - updated the design baseline: Chat-only Run has no Plan/Goal selector; Settings has no retired current-model field; the workspace has no manual Diagnostics entry, while startup-failure recovery keeps Copy diagnostics.
+- `agent-reports/resolved/20260711-0830-customer-support-solution-remove-current-model-setting-docs.md` - confirmed the bilingual README already documents the Chat-only Run contract and contains no user-visible current-model setting; no README edit is needed for the retired UI control.
 - `agent-reports/resolved/20260710-2230-integration-summary-chat-only-node-run.md` - removed Plan/Goal from nodes and all Run contracts; legacy fields are stripped and sent via Chat, with version 0.3.7 installed.
 - `agent-reports/resolved/20260710-2214-test-solution-chat-only-run-contract.md` - Chat-only Run 测试契约：旧 Plan/Goal 数据仅作为兼容输入，移除废弃字段后按 Chat-only 语义运行；Markdown 与 MCP smoke 已通过。
 - `agent-reports/resolved/20260710-2215-development-solution-chat-only-node-run.md` - resolved node Plan/Goal removal: UI, persisted legacy normalization, Markdown and native Run are Chat-only.

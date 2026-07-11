@@ -30,7 +30,6 @@ export interface SessionInfo {
 export interface RunPayload {
   attachments: Attachment[];
   agentTeam: AgentTeamRunConfig;
-  codexModel: string;
   effort: string;
   imagePaths: string[];
   markdown: string;
@@ -55,7 +54,6 @@ export interface RunResponse {
     status: "applied" | "applied_chat" | "disabled" | "failed" | "not_applicable" | "pending" | "preflight_degraded_chat" | "skipped";
     action?: string;
     collaborationMode?: string;
-    codexModel?: string;
     error?: string;
     errorCode?:
       | "desktop_runtime_unavailable"

@@ -40,7 +40,6 @@ import {
 } from "../shared/types";
 import {
   canvasightApi,
-  getCanvasightBridgeDiagnostics,
   getCanvasightStartupIdentity,
   isNativeWidgetShell,
   isStaleDocumentError,
@@ -49,9 +48,7 @@ import {
   projectPathFromUrl,
   setCanvasightStartupStage,
   threadIdFromUrl,
-  type CanvasightBridgeDiagnostics,
-  type CanvasightStartupStage,
-  type RunResponse
+  type CanvasightStartupStage
 } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
@@ -132,70 +129,8 @@ type CanvasClipboardPayload = {
 };
 type CanvasightWorkspaceProps = {
   agentTeamEnabled: boolean;
-  codexModel: string;
-  onCodexModelDetected: (model: string) => void;
   onOpenSettings: () => void;
 };
-
-type DiagnosticsPanelProps = {
-  diagnostics: CanvasightBridgeDiagnostics;
-  lastRun: RunResponse | null;
-  onClose: () => void;
-};
-
-function DiagnosticsRow({ label, value }: { label: string; value: string }): ReactElement {
-  return (
-    <div className="canvas-diagnostics-row">
-      <span>{label}</span>
-      <code>{value}</code>
-    </div>
-  );
-}
-
-function CanvasightDiagnosticsPanel({ diagnostics, lastRun, onClose }: DiagnosticsPanelProps): ReactElement {
-  const { t } = useI18n();
-  const boolValue = (value: boolean) => t(value ? "diagnostics.yes" : "diagnostics.no");
-  const delivery = lastRun?.delivery;
-  const codexTurn = lastRun?.codexTurn || delivery?.codexTurn;
-  const codexNative = lastRun?.codexNative || delivery?.codexNative;
-
-  return (
-    <section className="canvas-diagnostics-panel" aria-label={t("diagnostics.title")}>
-      <header className="canvas-diagnostics-header">
-        <span>{t("diagnostics.title")}</span>
-        <button className="canvas-diagnostics-close" type="button" aria-label={t("diagnostics.close")} onClick={onClose}>
-          <Icon name="x" size={16} />
-        </button>
-      </header>
-      <div className="canvas-diagnostics-body">
-        <DiagnosticsRow label={t("diagnostics.currentUrl")} value={diagnostics.href} />
-        <DiagnosticsRow label={t("diagnostics.inIframe")} value={boolValue(diagnostics.inIframe)} />
-        <DiagnosticsRow label={t("diagnostics.canvasightHost")} value={diagnostics.canvasightHost || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.nativeWidget")} value={boolValue(diagnostics.canvasightHost === "widget")} />
-        <DiagnosticsRow label={t("diagnostics.windowOpenAI")} value={boolValue(diagnostics.hasWindowOpenAI)} />
-        <DiagnosticsRow label={t("diagnostics.canvasightMcp")} value={boolValue(diagnostics.hasCanvasightMcp)} />
-        <DiagnosticsRow label={t("diagnostics.canSendFollowUp")} value={boolValue(diagnostics.canSendFollowUpMessage)} />
-        <DiagnosticsRow label={t("diagnostics.bridgeTransport")} value={diagnostics.bridgeTransport || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.bridgeReason")} value={diagnostics.bridgeReason || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.mcpInitialized")} value={boolValue(diagnostics.mcpInitialized)} />
-        <DiagnosticsRow label={t("diagnostics.hostMessage")} value={boolValue(diagnostics.hostCapabilitiesMessage)} />
-        <DiagnosticsRow label={t("diagnostics.openaiFollowUp")} value={boolValue(diagnostics.openaiFollowUpAvailable)} />
-        <DiagnosticsRow label={t("diagnostics.session")} value={diagnostics.sessionId || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.thread")} value={diagnostics.threadId || t("diagnostics.none")} />
-        <div className="canvas-diagnostics-divider" />
-        <DiagnosticsRow label={t("diagnostics.lastRun")} value={lastRun?.status || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.delivery")} value={delivery?.status || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.via")} value={delivery?.via || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.reason")} value={delivery?.reason || codexTurn?.reason || codexNative?.reason || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.codexNative")} value={codexNative?.status || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.codexTurn")} value={codexTurn?.status || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.confirmed")} value={codexTurn?.confirmed === undefined ? t("diagnostics.none") : boolValue(Boolean(codexTurn.confirmed))} />
-        <DiagnosticsRow label={t("diagnostics.turnId")} value={codexTurn?.turnId || t("diagnostics.none")} />
-        <DiagnosticsRow label={t("diagnostics.error")} value={codexTurn?.error || codexNative?.error || diagnostics.lastBridgeError || t("diagnostics.none")} />
-      </div>
-    </section>
-  );
-}
 
 function connectionLineStartX(x: number, position: Position): number {
   const offset = nodeConnectButtonSize / 2;
@@ -456,8 +391,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
 function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {
   return {
     ...webDefaultAppSettings,
-    ...(value ?? {}),
-    codexModel: typeof value?.codexModel === "string" && value.codexModel.trim() ? value.codexModel.trim() : webDefaultAppSettings.codexModel,
+    themePreference: value?.themePreference ?? webDefaultAppSettings.themePreference,
+    language: value?.language ?? webDefaultAppSettings.language,
+    assistantProvider: value?.assistantProvider ?? webDefaultAppSettings.assistantProvider,
+    assistantProviderOnboardingCompleted:
+      value?.assistantProviderOnboardingCompleted ?? webDefaultAppSettings.assistantProviderOnboardingCompleted,
     agentTeamEnabled: value?.agentTeamEnabled ?? webDefaultAppSettings.agentTeamEnabled,
     translucentBackground: false
   };
@@ -467,7 +405,6 @@ function settingsEqual(left: AppSettings | null | undefined, right: AppSettings)
   return Boolean(
     left &&
       left.themePreference === right.themePreference &&
-      left.codexModel === right.codexModel &&
       left.language === right.language &&
       left.translucentBackground === right.translucentBackground &&
       left.assistantProvider === right.assistantProvider &&
@@ -480,8 +417,10 @@ function loadStoredAppSettings(): AppSettings | null {
   try {
     const raw = window.localStorage.getItem(appSettingsStorageKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return normalizeAppSettings(parsed);
+    const parsed = JSON.parse(raw) as Partial<AppSettings> & { codexModel?: unknown };
+    const normalized = normalizeAppSettings(parsed);
+    if ("codexModel" in parsed) saveStoredAppSettings(normalized);
+    return normalized;
   } catch {
     return null;
   }
@@ -807,7 +746,7 @@ function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | nul
   }
 }
 
-function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetected, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
+function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
   const { language, t } = useI18n();
   const {
     appendAttachments,
@@ -861,9 +800,6 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
   const [runFeedback, setRunFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [lastRunResult, setLastRunResult] = useState<RunResponse | null>(null);
-  const [bridgeDiagnosticRevision, setBridgeDiagnosticRevision] = useState(0);
   const hydratedRef = useRef(false);
   const documentRevisionRef = useRef<number | null>(null);
   const skipNextSaveRef = useRef(false);
@@ -916,7 +852,6 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
   const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
   const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
-  const bridgeDiagnostics = useMemo(() => getCanvasightBridgeDiagnostics(), [bridgeDiagnosticRevision, diagnosticsOpen, lastRunResult, runFeedback]);
   const canDeletePage = pages.length > 1;
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
@@ -1771,7 +1706,6 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
       const runPayload = {
         attachments: result.attachments,
         agentTeam: result.agentTeam,
-        codexModel,
         effort: node.data.effort || "xhigh",
         imagePaths: result.imagePaths,
         markdown: result.markdown,
@@ -1783,11 +1717,7 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
       };
       setRunStatus(t("status.sendingAssistant"), "loading");
       try {
-        const runResult = await canvasightApi.runCanvasightNode(runPayload);
-        setLastRunResult(runResult);
-        if (runResult.codexNative?.path === "resume_retry" && runResult.codexNative.codexModel) {
-          onCodexModelDetected(runResult.codexNative.codexModel);
-        }
+        await canvasightApi.runCanvasightNode(runPayload);
         markNodeRun(nodeId, mode);
         setSelectedRunMode(mode);
         setRunStatus(t("status.sentAssistant"), "positive");
@@ -1799,7 +1729,7 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
         setRunStatus(actionableMessage, "negative");
       }
     },
-    [agentTeamEnabled, codexModel, edges, language, markNodeRun, nodes, onCodexModelDetected, project, setRunStatus, t]
+    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
   );
 
   useEffect(() => {
@@ -1818,12 +1748,6 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
   }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
-
-  useEffect(() => {
-    const handleBridgeState = () => setBridgeDiagnosticRevision((revision) => revision + 1);
-    window.addEventListener("canvasight:bridge-state", handleBridgeState);
-    return () => window.removeEventListener("canvasight:bridge-state", handleBridgeState);
-  }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -2456,19 +2380,7 @@ function CanvasightWorkspace({ agentTeamEnabled, codexModel, onCodexModelDetecte
                 <TooltipAnchor label={t("sidebar.settings")} side="right">
                   <IconButton className="canvas-tool-button" filled={false} icon="settings-cog" size="lg" aria-label={t("sidebar.settings")} onClick={onOpenSettings} />
                 </TooltipAnchor>
-                <TooltipAnchor label={t("diagnostics.open")} side="right">
-                  <IconButton
-                    className={`canvas-tool-button ${diagnosticsOpen ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="terminal-lg"
-                    size="lg"
-                    aria-label={t("diagnostics.open")}
-                    aria-pressed={diagnosticsOpen}
-                    onClick={() => setDiagnosticsOpen((open) => !open)}
-                  />
-                </TooltipAnchor>
               </div>
-              {diagnosticsOpen ? <CanvasightDiagnosticsPanel diagnostics={bridgeDiagnostics} lastRun={lastRunResult} onClose={() => setDiagnosticsOpen(false)} /> : null}
               <div className="canvas-toolbar" aria-label={t("canvas.tools")}>
                 <TooltipAnchor label={t("canvas.addNode")} shortcut={shortcuts.addNode}>
                   <IconButton className="canvas-toolbar-button" filled={false} icon="plus-lg" size="lg" aria-label={t("canvas.addNode")} onClick={addNode} />
@@ -2676,17 +2588,6 @@ export default function App(): ReactElement {
     saveStoredAppSettings(next);
   }, []);
 
-  const syncCodexModel = useCallback((model: string) => {
-    const normalized = model.trim();
-    if (!normalized) return;
-    setSavedSettings((current) => {
-      if (current.codexModel === normalized) return current;
-      const next = normalizeAppSettings({ ...current, codexModel: normalized });
-      saveStoredAppSettings(next);
-      return next;
-    });
-  }, []);
-
   const handleSettingsOpenChange = useCallback((open: boolean) => {
     setSettingsOpen(open);
     if (!open) setPreviewSettings(null);
@@ -2702,8 +2603,6 @@ export default function App(): ReactElement {
         <ReactFlowProvider>
           <CanvasightWorkspace
             agentTeamEnabled={activeSettings.agentTeamEnabled}
-            codexModel={activeSettings.codexModel}
-            onCodexModelDetected={syncCodexModel}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         </ReactFlowProvider>
@@ -2711,7 +2610,6 @@ export default function App(): ReactElement {
           agentTeamEnabled={activeSettings.agentTeamEnabled}
           assistantProvider={activeSettings.assistantProvider}
           assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
-          codexModel={activeSettings.codexModel}
           language={activeSettings.language}
           open={settingsOpen}
           showTranslucentBackground={false}

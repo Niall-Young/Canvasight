@@ -35,7 +35,7 @@ Avoid scattering core actions across multiple unrelated panels.
 
 The active implementation is a Codex plugin workspace, not a landing page. The first viewport should open directly into the working app:
 
-- Topbar: compact global commands for project/workspace actions, running flows, opening the task list, and accessing settings.
+- Topbar: compact global commands for project/workspace actions, running flows, opening the task list, and accessing settings. Do not add a manual workspace Diagnostics toolbar button or panel.
 - Canvas: the dominant surface, powered by draggable task nodes and visible connections.
 - Task node: the primary editable object, with title, prompt/body content, attachments, connection affordances, run controls, and mode controls.
 - Right drawer: contextual workspace surfaces such as task list, Markdown/run output, and related inspection views.
@@ -59,19 +59,13 @@ Task nodes should feel like compact work objects rather than document cards:
 
 Node controls should stay small and predictable. Do not add large descriptive text inside nodes to explain the app.
 
-## Codex Run Modes
+## Codex Run
 
-Node-level Codex mode controls are part of the core workflow:
-
-- Chat mode uses a chat icon and sends the node as a normal Codex conversation prompt.
-- Plan mode uses a task/planning icon and enters Codex planning behavior.
-- Goal mode uses a target-style icon and starts a goal-oriented Codex run.
-
-These modes should be represented as a segmented control or similarly compact option set. The selected mode must be visually obvious, but the control should not dominate the node.
+Node Run is a single Chat submission action. It uses a play icon and sends the node as a normal Codex conversation prompt; there is no Plan or Goal mode selector.
 
 Run is a submit action, not a Markdown preview action. A successful node Run should report sent only after the native widget host bridge accepts the message. Browser/dev fallback surfaces may report queued output for `await_canvasight_run`, but they must never display a native sent state. Markdown preview remains a separate review command and is not proof that a Run reached Codex.
 
-Normal plugin Run delivery happens through the Codex native widget host bridge. Native open binds the active Codex task before rendering and hosts the Canvasight app directly. Native widget JSON APIs travel through an app-only MCP proxy to the project daemon so startup and editing do not depend on sandboxed localhost fetches; browser/dev surfaces may still call the daemon directly. Local daemon URLs and tokens must not appear as the user-facing open result. Diagnostics should stay compact and distinguish the active transport, session, failure stage, and queued or sent delivery without exposing full Run Markdown.
+Normal plugin Run delivery happens through the Codex native widget host bridge. Native open binds the active Codex task before rendering and hosts the Canvasight app directly. Native widget JSON APIs travel through an app-only MCP proxy to the project daemon so startup and editing do not depend on sandboxed localhost fetches; browser/dev surfaces may still call the daemon directly. Local daemon URLs and tokens must not appear as the user-facing open result. Routine delivery feedback should stay compact and distinguish queued from sent delivery without exposing full Run Markdown; it must not become a manual diagnostics workspace surface.
 
 ## Native Widget Startup
 
@@ -103,7 +97,6 @@ Browser and bare-dev fallback surfaces are clearly labeled diagnostic or fallbac
 Canvasight uses app-local SVG icons through the shared icon registry. Icons should map to the object or command they actually represent:
 
 - Task list drawer: list icon, not a generic task or checkbox icon.
-- Goal mode: target-style icon, not a generic flag.
 - Run: play icon.
 - New workspace or project: folder-plus or equivalent add-container icon.
 - Sidebar and drawer controls: directional panel icons that match the panel being opened.
@@ -236,6 +229,10 @@ Canvasight can include an Agent Team / agent-report protocol section in generate
 - The label should describe the action clearly, such as "开启 Agent Team" in Chinese and "Agent Team" in English.
 - Turning it off should remove the Agent Team protocol from generated Run Markdown, while leaving normal canvas editing, Page behavior, templates, and Run submission unchanged.
 - When enabled, the protocol should stay concise and should recommend only task-relevant roles. Do not expose a large role dashboard or make users manage reports manually from the app UI.
+
+## Settings Scope
+
+Settings contains only active user-configurable Canvasight workflow preferences, such as the Agent Team switch. Do not show a Codex current-model row or editable model field: model selection was supporting the retired Plan and Goal paths, while Chat Run uses the current Codex task context. Do not move manual workspace Diagnostics into Settings; startup-failure recovery retains its dedicated persistent diagnostics actions.
 
 ## Canvas File Protocol
 

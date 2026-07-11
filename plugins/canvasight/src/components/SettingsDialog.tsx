@@ -72,7 +72,6 @@ export function SettingsDialog({
   agentTeamEnabled,
   assistantProvider,
   assistantProviderOnboardingCompleted,
-  codexModel,
   language,
   onOpenChange,
   onPreview,
@@ -84,7 +83,6 @@ export function SettingsDialog({
 }: SettingsDialogProps): ReactElement {
   const { t } = useI18n();
   const [draftAgentTeamEnabled, setDraftAgentTeamEnabled] = useState(agentTeamEnabled);
-  const [draftCodexModel, setDraftCodexModel] = useState(codexModel);
   const [draftThemePreference, setDraftThemePreference] = useState(themePreference);
   const [draftLanguage, setDraftLanguage] = useState(language);
   const [draftTranslucentBackground, setDraftTranslucentBackground] = useState(translucentBackground);
@@ -102,16 +100,14 @@ export function SettingsDialog({
 
   useEffect(() => {
     setDraftAgentTeamEnabled(agentTeamEnabled);
-    setDraftCodexModel(codexModel);
     setDraftThemePreference(themePreference);
     setDraftLanguage(language);
     setDraftTranslucentBackground(translucentBackground);
     setSaveError(null);
-  }, [agentTeamEnabled, codexModel, language, themePreference, translucentBackground]);
+  }, [agentTeamEnabled, language, themePreference, translucentBackground]);
 
   const saveValues = useMemo(
     () => ({
-      codexModel: draftCodexModel.trim() || defaultAppSettings.codexModel,
       themePreference: draftThemePreference,
       language: draftLanguage,
       translucentBackground: draftTranslucentBackground,
@@ -119,7 +115,7 @@ export function SettingsDialog({
       assistantProviderOnboardingCompleted,
       agentTeamEnabled: draftAgentTeamEnabled
     }),
-    [assistantProvider, assistantProviderOnboardingCompleted, draftAgentTeamEnabled, draftCodexModel, draftLanguage, draftThemePreference, draftTranslucentBackground]
+    [assistantProvider, assistantProviderOnboardingCompleted, draftAgentTeamEnabled, draftLanguage, draftThemePreference, draftTranslucentBackground]
   );
 
   useEffect(() => {
@@ -165,15 +161,6 @@ export function SettingsDialog({
               <span className="settings-dialog-row-label">{t("settings.language")}</span>
               <SettingsSelect ariaLabel={t("settings.language")} options={languageOptions} value={draftLanguage} onChange={setDraftLanguage} />
             </div>
-            <label className="settings-dialog-row">
-              <span className="settings-dialog-row-label">{t("settings.codexModel")}</span>
-              <input
-                className="settings-dialog-input"
-                aria-label={t("settings.codexModel")}
-                value={draftCodexModel}
-                onChange={(event) => setDraftCodexModel(event.target.value)}
-              />
-            </label>
             <div className="settings-dialog-row">
               <span className="settings-dialog-row-label">{t("settings.agentTeam")}</span>
               <Switch checked={draftAgentTeamEnabled} onCheckedChange={setDraftAgentTeamEnabled} />
@@ -195,7 +182,6 @@ export function SettingsDialog({
                 disabled={isSaving}
                 onClick={() => {
                   setDraftAgentTeamEnabled(defaultAppSettings.agentTeamEnabled);
-                  setDraftCodexModel(defaultAppSettings.codexModel);
                   setDraftThemePreference(defaultAppSettings.themePreference);
                   setDraftLanguage(defaultAppSettings.language);
                   setDraftTranslucentBackground(defaultAppSettings.translucentBackground);
