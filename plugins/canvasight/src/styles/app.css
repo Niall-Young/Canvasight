@@ -3846,6 +3846,7 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .task-sidebar {
+  min-width: 0;
   padding: 16px;
   box-sizing: border-box;
 }
@@ -3918,13 +3919,19 @@ button.achievement-card.is-unlocked:focus-visible {
 .task-list {
   display: flex;
   min-height: 0;
+  min-width: 0;
   flex: 1 1 0;
   flex-direction: column;
   gap: 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .task-list .kit-task-item {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .task-list .kit-task-item.is-active {
