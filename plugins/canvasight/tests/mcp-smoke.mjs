@@ -1428,6 +1428,241 @@ async function assertGraphContextMergeAndValidationContracts() {
   assert.deepEqual(afterLegacyAppendContext.structuredContent.activePage.nodes.map((node) => node.id), ["legacy-appended-node"]);
 }
 
+function softwareProductMergeManifest(nodeId, overrides = {}) {
+  const coverageKeys = [
+    "product.goal", "product.users", "product.value", "product.capabilities", "product.scope", "product.journey",
+    "product.informationArchitecture", "product.rules", "product.design", "product.success", "product.risks",
+    "product.technicalConstraints", "product.testingRelease", "product.deliverables",
+    "maturity.deliver.steps", "maturity.deliver.deliverables", "maturity.deliver.acceptance", "maturity.deliver.risks",
+    "maturity.deliver.ownership", "maturity.deliver.handoff"
+  ];
+  return {
+    intent: "execute",
+    primaryDomain: "software-product",
+    secondaryDomains: [],
+    maturity: "deliver",
+    output: "execution-plan",
+    coverage: Object.fromEntries(coverageKeys.map((key) => [key, [nodeId]])),
+    semanticStructure: {
+      [nodeId]: {
+        responsibility: "Maintain the accepted product delivery record.",
+        inseparableReason: "The product constraints and acceptance state qualify the same delivery record."
+      }
+    },
+    ...overrides
+  };
+}
+
+async function createMergeGuidanceFixture(request, projectPath, rootId = "guidance-root") {
+  await fsp.mkdir(projectPath, { recursive: true });
+  const initial = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      pageName: "Guidance merge fixture",
+      layoutPolicy: "preserve-explicit",
+      nodes: [
+        {
+          id: rootId,
+          title: "Product delivery",
+          body: "Define and verify a concrete product delivery without changing unrelated canvas content.",
+          position: { x: 120, y: 160 }
+        }
+      ]
+    }
+  });
+  assert.equal(initial.structuredContent.status, "written");
+  return request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+}
+
+async function assertSoftwareProductMergeGuidanceContracts() {
+  const projectPath = path.join(tempRoot, "merge-project-guidance-project");
+  const rootId = "guidance-root";
+  const initialContext = await createMergeGuidanceFixture(request, projectPath, rootId);
+  const scatterPath = path.join(projectPath, ".scatter", "scatter.json");
+  const initialScatter = await fsp.readFile(scatterPath, "utf8");
+
+  const stale = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      expectedRevision: initialContext.structuredContent.documentRevision - 1,
+      frameworkManifest: softwareProductMergeManifest(rootId),
+      operations: [{ op: "update-node", nodeId: rootId, changes: { title: "Stale product delivery" } }]
+    }
+  });
+  assert.equal(stale.structuredContent.status, "validation_failed");
+  assert.equal(stale.structuredContent.validation.violations.some((item) => item.code === "stale_document"), true);
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), initialScatter);
+
+  const incompleteManifest = softwareProductMergeManifest(rootId, {
+    coverage: { "product.goal": [rootId] }
+  });
+  const rejected = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      expectedRevision: initialContext.structuredContent.documentRevision,
+      frameworkManifest: incompleteManifest,
+      operations: [{ op: "update-node", nodeId: rootId, changes: { title: "Rejected product delivery" } }]
+    }
+  });
+  assert.equal(rejected.structuredContent.status, "validation_failed");
+  assert.equal(rejected.structuredContent.written, false);
+  assert.equal(rejected.structuredContent.validation.violations.some((item) => item.code === "missing_coverage"), true);
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), initialScatter, "a rejected merge must not persist auto guidance nodes");
+  const afterRejected = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+  assert.equal(afterRejected.structuredContent.documentRevision, initialContext.structuredContent.documentRevision);
+  assert.deepEqual(afterRejected.structuredContent.activePage.nodes.map((node) => node.id), [rootId]);
+
+  const written = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      expectedRevision: initialContext.structuredContent.documentRevision,
+      frameworkManifest: softwareProductMergeManifest(rootId),
+      operations: [{ op: "update-node", nodeId: rootId, changes: { title: "Accepted product delivery" } }]
+    }
+  });
+  assert.equal(written.structuredContent.status, "written");
+  assert.equal(written.structuredContent.written, true);
+  assert.equal(written.structuredContent.validation.passed, true);
+  assert.equal(written.structuredContent.documentRevision, initialContext.structuredContent.documentRevision + 1);
+  assert.deepEqual(
+    written.structuredContent.projectGuidanceNodes.map((node) => node.fileName),
+    ["AGENTS.md", "design.md"]
+  );
+  assert.deepEqual(written.structuredContent.mutationSummary.addedNodeIds, ["project-guidance-agents-md", "project-guidance-design-md"]);
+  assert.equal(written.structuredContent.mutationSummary.addedEdgeIds.length, 2);
+  assert.equal(written.structuredContent.mutationSummary.relayoutApplied, false);
+
+  const writtenScatter = JSON.parse(await fsp.readFile(scatterPath, "utf8"));
+  assert.deepEqual(
+    writtenScatter.nodes.map((node) => node.id),
+    [rootId, "project-guidance-agents-md", "project-guidance-design-md"]
+  );
+  assert.equal(writtenScatter.edges.length, 2);
+  assert.equal(writtenScatter.edges.every((edge) => edge.source === rootId), true);
+  assert.deepEqual(
+    writtenScatter.edges.map((edge) => edge.target),
+    ["project-guidance-agents-md", "project-guidance-design-md"]
+  );
+  assert.deepEqual(writtenScatter.nodes.find((node) => node.id === rootId).position, { x: 120, y: 160 });
+  assertNoNodeBoundsOverlap(writtenScatter.nodes, "Manifest-only guidance merge");
+  assertHorizontalEdgeDirection(writtenScatter.nodes, writtenScatter.edges, "Manifest-only guidance merge");
+
+  const deduplicated = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      expectedRevision: written.structuredContent.documentRevision,
+      frameworkManifest: softwareProductMergeManifest(rootId),
+      operations: [{ op: "update-node", nodeId: rootId, changes: { body: "The accepted product delivery remains ready for implementation and verification." } }]
+    }
+  });
+  assert.equal(deduplicated.structuredContent.status, "written");
+  assert.equal(deduplicated.structuredContent.documentRevision, written.structuredContent.documentRevision + 1);
+  assert.deepEqual(deduplicated.structuredContent.projectGuidanceNodes, []);
+  assert.deepEqual(deduplicated.structuredContent.mutationSummary.addedNodeIds, []);
+  assert.deepEqual(deduplicated.structuredContent.mutationSummary.addedEdgeIds, []);
+  const deduplicatedScatter = JSON.parse(await fsp.readFile(scatterPath, "utf8"));
+  assert.equal(deduplicatedScatter.nodes.filter((node) => node.data?.projectGuidanceFile === "AGENTS.md").length, 1);
+  assert.equal(deduplicatedScatter.nodes.filter((node) => node.data?.projectGuidanceFile === "design.md").length, 1);
+
+  const partialProjectPath = path.join(tempRoot, "merge-partial-project-guidance-project");
+  const partialRootId = "partial-guidance-root";
+  const partialContext = await createMergeGuidanceFixture(request, partialProjectPath, partialRootId);
+  await fsp.writeFile(path.join(partialProjectPath, "AGENTS.md"), "# Existing agent rules\n", "utf8");
+  const partial = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: partialProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: partialContext.structuredContent.documentRevision,
+      frameworkManifest: softwareProductMergeManifest(partialRootId),
+      operations: [{ op: "update-node", nodeId: partialRootId, changes: { title: "Partially guided delivery" } }]
+    }
+  });
+  assert.equal(partial.structuredContent.status, "written");
+  assert.equal(partial.structuredContent.documentRevision, partialContext.structuredContent.documentRevision + 1);
+  assert.deepEqual(partial.structuredContent.projectGuidanceNodes.map((node) => node.fileName), ["design.md"]);
+  assert.deepEqual(partial.structuredContent.mutationSummary.addedNodeIds, ["project-guidance-design-md"]);
+
+  const articleProjectPath = path.join(tempRoot, "merge-article-graph-type-guidance-project");
+  const articleRootId = "article-guidance-root";
+  const articleContext = await createMergeGuidanceFixture(request, articleProjectPath, articleRootId);
+  const article = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: articleProjectPath,
+      mode: "merge-active-page",
+      graphType: "software-product",
+      expectedRevision: articleContext.structuredContent.documentRevision,
+      frameworkManifest: {
+        intent: "refine",
+        primaryDomain: "article",
+        secondaryDomains: [],
+        maturity: "deliver",
+        output: "structured-outline",
+        coverage: {
+          "article.purpose": [articleRootId],
+          "maturity.deliver.acceptance": [articleRootId]
+        },
+        semanticStructure: {
+          [articleRootId]: {
+            responsibility: "Refine the article purpose and acceptance record.",
+            inseparableReason: "Acceptance qualifies the same article purpose record."
+          }
+        }
+      },
+      operations: [{ op: "update-node", nodeId: articleRootId, changes: { title: "Refined article delivery" } }]
+    }
+  });
+  assert.equal(article.structuredContent.status, "written");
+  assert.equal(article.structuredContent.documentRevision, articleContext.structuredContent.documentRevision + 1);
+  assert.deepEqual(article.structuredContent.projectGuidanceNodes, []);
+  assert.deepEqual(article.structuredContent.mutationSummary.addedNodeIds, []);
+  const articleScatter = JSON.parse(await fsp.readFile(path.join(articleProjectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.deepEqual(articleScatter.nodes.map((node) => node.id), [articleRootId]);
+
+  const refineProjectPath = path.join(tempRoot, "merge-refine-project-guidance-project");
+  const refineRootId = "refine-guidance-root";
+  const refineContext = await createMergeGuidanceFixture(request, refineProjectPath, refineRootId);
+  const refine = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: refineProjectPath,
+      mode: "merge-active-page",
+      graphType: "software-product",
+      expectedRevision: refineContext.structuredContent.documentRevision,
+      frameworkManifest: softwareProductMergeManifest(refineRootId, {
+        intent: "refine",
+        coverage: {
+          "product.goal": [refineRootId],
+          "maturity.deliver.acceptance": [refineRootId]
+        }
+      }),
+      operations: [{ op: "update-node", nodeId: refineRootId, changes: { title: "Refined delivery" } }]
+    }
+  });
+  assert.equal(refine.structuredContent.status, "written");
+  assert.equal(refine.structuredContent.documentRevision, refineContext.structuredContent.documentRevision + 1);
+  assert.deepEqual(refine.structuredContent.projectGuidanceNodes, []);
+  assert.deepEqual(refine.structuredContent.mutationSummary.addedNodeIds, []);
+  const refineScatter = JSON.parse(await fsp.readFile(path.join(refineProjectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.deepEqual(refineScatter.nodes.map((node) => node.id), [refineRootId]);
+}
+
 function createMcpClient(label, envOverrides = {}) {
   let clientNextId = 1;
   let clientStdoutBuffer = "";
@@ -2617,6 +2852,7 @@ async function main() {
     assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
 
     await assertGraphContextMergeAndValidationContracts();
+    await assertSoftwareProductMergeGuidanceContracts();
 
     const graphWritten = await request("tools/call", {
       name: "write_canvasight_graph",

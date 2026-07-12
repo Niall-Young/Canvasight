@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.4+codex.20260712135359";
+const SERVER_VERSION = "0.4.5+codex.20260712141103";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -1697,8 +1697,16 @@ function guidanceInputNodeIds(rawNodes) {
   return usedIds;
 }
 
-function softwareProductGuidanceNodes(projectPath, graphType, pageIndex, rawNodes) {
-  if (graphType !== "software-product" || pageIndex !== 0 || !projectPath) return [];
+function requiresSoftwareProductGuidance(args) {
+  if (Object.prototype.hasOwnProperty.call(args || {}, "frameworkManifest")) {
+    const manifest = isObject(args?.frameworkManifest) ? args.frameworkManifest : null;
+    return manifest?.primaryDomain === "software-product" && manifest.intent !== "refine";
+  }
+  return normalizeGraphType(args?.graphType) === "software-product";
+}
+
+function softwareProductGuidanceNodes(projectPath, args, pageIndex, rawNodes) {
+  if (!requiresSoftwareProductGuidance(args) || pageIndex !== 0 || !projectPath) return [];
   const usedIds = guidanceInputNodeIds(rawNodes);
   return SOFTWARE_PRODUCT_GUIDANCE_FILES.filter((guidanceFile) => !projectHasGuidanceFile(projectPath, guidanceFile))
     .filter((guidanceFile) => !graphHasGuidanceNode(rawNodes, guidanceFile))
@@ -2064,7 +2072,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
   const layoutPolicy = normalizeGraphLayoutPolicy(page.layoutPolicy || args?.layoutPolicy);
   const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
   if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
-  const guidanceNodes = softwareProductGuidanceNodes(projectPath, graphType, index, rawNodes);
+  const guidanceNodes = softwareProductGuidanceNodes(projectPath, args, index, rawNodes);
   const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = new Set();
   const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
@@ -2210,15 +2218,21 @@ function mergeGraphEdgeChanges(edge, changes) {
   };
 }
 
-function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds) {
+function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds, layout = "horizontal") {
   if (explicitPositionIds.has(nodeId)) return null;
   const incoming = page.edges.find((edge) => edge.target === nodeId);
   const parent = incoming ? page.nodes.find((node) => node.id === incoming.source) : null;
   const occupied = page.nodes.filter((node) => node.id !== nodeId).map((node) => node.position || { x: 0, y: 0 });
+  const vertical = layout === "vertical";
   const maxX = occupied.length ? Math.max(...occupied.map((position) => toNumber(position.x, 0))) : 0;
+  const maxY = occupied.length ? Math.max(...occupied.map((position) => toNumber(position.y, 0))) : 0;
   const base = parent?.position
-    ? { x: toNumber(parent.position.x, 0) + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: toNumber(parent.position.y, 0) }
-    : { x: maxX + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: 0 };
+    ? vertical
+      ? { x: toNumber(parent.position.x, 0), y: toNumber(parent.position.y, 0) + GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP }
+      : { x: toNumber(parent.position.x, 0) + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: toNumber(parent.position.y, 0) }
+    : vertical
+      ? { x: 0, y: maxY + GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP }
+      : { x: maxX + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: 0 };
   let candidate = base;
   let row = 0;
   const collides = (position) =>
@@ -2229,7 +2243,9 @@ function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds)
     );
   while (collides(candidate)) {
     row += 1;
-    candidate = { x: base.x, y: base.y + row * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP) };
+    candidate = vertical
+      ? { x: base.x + row * (GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP), y: base.y }
+      : { x: base.x, y: base.y + row * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP) };
   }
   addedNodeIds.delete(nodeId);
   return candidate;
@@ -2372,7 +2388,7 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
 
   page.nodes = page.nodes.map((node) => {
     if (!addedNodeIds.has(node.id)) return node;
-    const position = nextMergedNodePosition(page, node.id, addedNodeIds, explicitPositionIds);
+    const position = nextMergedNodePosition(page, node.id, addedNodeIds, explicitPositionIds, normalizeGraphLayout(args?.layout));
     return position ? { ...node, position } : node;
   });
   if (relayoutRequested) {
@@ -2383,6 +2399,52 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
   }
   page.updatedAt = nowIso();
   return { page, violations, summary };
+}
+
+function mergeMutationSummaries(primary, secondary) {
+  return {
+    addedNodeIds: [...primary.addedNodeIds, ...secondary.addedNodeIds],
+    updatedNodeIds: [...primary.updatedNodeIds, ...secondary.updatedNodeIds],
+    removedNodeIds: [...primary.removedNodeIds, ...secondary.removedNodeIds],
+    addedEdgeIds: [...primary.addedEdgeIds, ...secondary.addedEdgeIds],
+    updatedEdgeIds: [...primary.updatedEdgeIds, ...secondary.updatedEdgeIds],
+    removedEdgeIds: [...primary.removedEdgeIds, ...secondary.removedEdgeIds],
+    relayoutApplied: primary.relayoutApplied || secondary.relayoutApplied
+  };
+}
+
+function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates, reusedTemplates) {
+  const guidanceNodes = softwareProductGuidanceNodes(projectPath, args, 0, page.nodes);
+  if (guidanceNodes.length === 0) return { page, violations: [], summary: null, projectGuidanceNodes: [] };
+
+  const usedEdgeIds = new Set(page.edges.map((edge) => edge.id));
+  const sourceNode = page.nodes[0];
+  const operations = [];
+  guidanceNodes.forEach((node, index) => {
+    operations.push({ op: "add-node", node });
+    if (sourceNode) {
+      operations.push({
+        op: "add-edge",
+        edge: {
+          id: projectGuidanceEdgeId(index, usedEdgeIds),
+          source: sourceNode.id,
+          target: node.id
+        }
+      });
+    }
+  });
+  if (Array.isArray(args?.operations) && args.operations.some((operation) => operation?.op === "relayout-page")) {
+    operations.push({ op: "relayout-page" });
+  }
+  const merged = applyMergeOperations(page, { ...args, operations }, templates, reusedTemplates);
+  return {
+    ...merged,
+    projectGuidanceNodes: guidanceNodes.map((node) => ({
+      pageIndex: 0,
+      nodeId: node.id,
+      fileName: node.data.projectGuidanceFile
+    }))
+  };
 }
 
 function graphNodeBounds(node) {
@@ -2620,11 +2682,15 @@ async function writeScatterGraph(projectPath, args) {
       const currentPage = activeScatterPage(existingDocument);
       const merged = applyMergeOperations(currentPage, args, templates, reusedTemplates);
       if (merged.violations.length > 0) return validationFailure(currentRevision, merged.violations);
-      const validation = validateGraphCandidate(merged.page, args, projectPath);
+      const guided = ensureMergedSoftwareProductGuidance(merged.page, args, projectPath, templates, reusedTemplates);
+      if (guided.violations.length > 0) return validationFailure(currentRevision, guided.violations);
+      projectGuidanceNodes.push(...guided.projectGuidanceNodes);
+      const candidatePage = guided.page;
+      const validation = validateGraphCandidate(candidatePage, args, projectPath);
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
-      pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? merged.page : page));
+      pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? candidatePage : page));
       activePageId = currentPage.id;
-      mutationSummary = merged.summary;
+      mutationSummary = guided.summary ? mergeMutationSummaries(merged.summary, guided.summary) : merged.summary;
     } else {
       const incomingPages = graphPageInputs(args).map((page, index) =>
         buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)

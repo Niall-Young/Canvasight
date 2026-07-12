@@ -6,14 +6,14 @@ roles:
   - role: Product Agent
     status: active
     agent_id: /root/product_agent
-    thread_id: 019f5424-366d-72b3-9ada-094f3d1eec7e
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T03:25:19Z
-    handoff_source: issue-intent-framework-forward-test
-    last_report: solution-intent-framework-forward-test
+    last_seen: 2026-07-12T13:58:53Z
+    handoff_source: issue-software-product-guidance-merge-autofill
+    last_report: integration-summary-software-product-guidance-merge-autofill
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Forward-tested routing and identified the resolved scoped-refine conflict
+    notes: Approved manifest-first guidance semantics and refine compatibility
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -70,16 +70,16 @@ roles:
     replaced_by: null
     notes: Covered reused bindings, stale metadata, async isolation, private metadata, and timeout defaults
   - role: Customer Support Agent
-    status: missing
-    agent_id: null
+    status: active
+    agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-11T11:08:45Z
-    handoff_source: null
-    last_report: integration-summary-markdown-export-bundle
+    last_seen: 2026-07-12T13:58:53Z
+    handoff_source: issue-software-product-guidance-merge-autofill
+    last_report: integration-summary-software-product-guidance-merge-autofill
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: README review by Main Thread: no existing user documentation mentions this drawer control
+    notes: Synchronized bilingual README guidance for deterministic project guidance nodes
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
