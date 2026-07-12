@@ -24,9 +24,9 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
    - explicitly reset the entire document -> `replace-document`.
    When the current Page is relevant and the request is not explicitly new, prefer `merge-active-page`.
 5. Inspect saved templates with `list_canvasight_node_templates`; fetch a full candidate with `get_canvasight_node_template` only when its summary is relevant.
-6. Build `frameworkManifest` and `coverage`. For `create`, `analyze`, `organize`, `decide`, and `execute`, include every canonical key from the primary-domain and maturity references. For `refine`, include at least one primary-domain key and one maturity key that describe the touched content; validate the complete Page structure, but do not add or rewrite unrelated content merely to manufacture full-contract coverage. A secondary domain adds only relevant keys from that domain, at least one; it never creates a duplicate parallel framework.
-7. Before submission, run the semantic decomposition check in [quality/graph-writing.md](references/quality/graph-writing.md). Give each node one clearly named primary responsibility. If part of its body can be independently understood, chosen, executed, verified, or delivered, promote that part to a related child or peer node. Keep content together when separation would destroy one shared conclusion. Record the responsibility of every compound node and why its remaining content is inseparable in `frameworkManifest.semanticStructure`; this is call-time validation metadata, not canvas content.
-8. Call `write_canvasight_graph`. Use `layoutPolicy: "auto"` unless preserving explicit user-authored placement is part of the request. Product, codebase, research, and execution graphs should use horizontal dependency layout; reading-order article outlines remain vertical. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required content operations; request whole-Page relayout when the changed topology makes the existing placement invalid.
+6. Build `frameworkManifest`, `coverage`, and `semanticRelationships`. For `create`, `analyze`, `organize`, `decide`, and `execute`, include every canonical key from the primary-domain and maturity references. For `refine`, include at least one primary-domain key and one maturity key that describe the touched content; validate the complete Page structure, but do not add or rewrite unrelated content merely to manufacture full-contract coverage. A secondary domain adds only relevant keys from that domain, at least one; it never creates a duplicate parallel framework.
+7. Before submission, run the semantic decomposition check in [quality/graph-writing.md](references/quality/graph-writing.md). Give each node one clearly named primary responsibility. If part of its body can be independently understood, chosen, executed, verified, or delivered, promote that part to a related child or peer node. Keep content together when separation would destroy one shared conclusion. Record compound-node responsibilities in `frameworkManifest.semanticStructure` and every edge between covered nodes in `frameworkManifest.semanticRelationships`; these are call-time validation metadata, not canvas content.
+8. Call `write_canvasight_graph`. Every AI-authored graph uses a left-to-right horizontal topology, regardless of domain, output, or `graphType`; reading order and task sequence never create a vertical-layout exception. Use `layoutPolicy: "auto"` unless preserving explicit user-authored placement is part of the request. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required content operations; request whole-Page relayout when the changed topology makes the existing placement invalid.
 9. If validation rejects the candidate, treat violations as internal repair instructions. Preserve passing content, fix only failed requirements, and resubmit. Stop after three total validation attempts. Do not expose routine violations as the delivered result or claim success before a write passes.
 10. Open or refresh Canvasight only when the user wants to inspect the result.
 
@@ -56,11 +56,17 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
       "responsibility": "Define the shared product boundary",
       "inseparableReason": "Included constraints jointly define one boundary decision"
     }
+  },
+  "semanticRelationships": {
+    "edge-goal-to-users": {
+      "type": "evidence",
+      "rationale": "The identified users substantiate whose problem the product goal resolves"
+    }
   }
 }
 ```
 
-`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. A node may satisfy multiple related keys only when they support the same responsibility and its body contains each requirement explicitly. Use `semanticStructure` to state that responsibility and why any compound content must stay together; do not game coverage by pointing every key at a generic or overloaded node.
+`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. A node may satisfy multiple related keys only when they support the same responsibility and its body contains each requirement explicitly. Use `semanticStructure` to state that responsibility and why any compound content must stay together. Key `semanticRelationships` by final edge ID with `type` set to `dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`, plus a concrete `rationale`; describe every edge whose endpoints are covered nodes.
 
 ## Boundaries
 

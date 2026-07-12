@@ -9,6 +9,7 @@ Validation is a pre-write quality gate, not a user-facing report. `write_canvasi
 - For each secondary domain, include at least one relevant canonical key; do not import its entire contract unless the request truly requires it.
 - Coverage values contain final node IDs. Every referenced node must exist and substantively contain the promised content.
 - One node may satisfy multiple related keys only when they support one named responsibility and `semanticStructure` explains why the content belongs together. A generic root, placeholder, or overloaded prose node cannot satisfy an entire contract.
+- `semanticRelationships` uses final edge IDs. Every edge connecting covered nodes must declare an allowed relationship type and a source-target-specific rationale.
 
 ## Required repair loop
 
@@ -27,6 +28,8 @@ After a passing write, tell the user what was created or changed, not the intern
 ## Content rejection signals
 
 Reject coverage backed only by empty bodies, headings repeated as body text, placeholders, or vague claims such as “keep it simple” and “ensure quality.” Analysis must distinguish confirmed fact, inference, and question. Product/UX graphs must keep definition, flow, and design as the main structure; implementation and QA remain supporting branches.
+
+Reject an AI-authored candidate that requests vertical flow, uses dependency progress in a direction other than left to right, omits a covered-node edge from `semanticRelationships`, or turns reading order, numbering, or loosely ordered work into an unsupported full-chain topology. `exploration-map`, `decision-map`, and `structured-outline` never permit a covered-node full chain; `execution-plan` permits one only with `dependency`/`sequence` edges, and `system-map` only with `dependency`/`flow`/`navigation` edges. Repair the relationship metadata and topology together, preserving a consecutive edge only when its declared rationale is genuine.
 
 Treat `mixed_responsibilities`, `hidden_submodules`, `parent_duplicates_children`, and `relationship_missing` as semantic repair instructions. Split independently actionable or verifiable content, move repeated detail out of the parent, and connect the resulting relationship. If combined content truly expresses one inseparable conclusion, keep it together and make the responsibility and reason explicit in `semanticStructure`.
 

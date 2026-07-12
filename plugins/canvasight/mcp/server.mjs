@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.5+codex.20260712141103";
+const SERVER_VERSION = "0.4.5+codex.20260712223248";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -27,6 +27,7 @@ const VALID_RUN_MODES = new Set(["flow", "node"]);
 const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "merge-active-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
 const VALID_GRAPH_LAYOUT_POLICIES = new Set(["auto", "preserve-explicit"]);
+const VALID_SEMANTIC_RELATIONSHIP_TYPES = new Set(["dependency", "sequence", "containment", "evidence", "decision", "navigation", "flow"]);
 const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codebase-structure", "task-plan", "general"]);
 const VALID_FRAMEWORK_INTENTS = new Set(["create", "analyze", "organize", "refine", "decide", "execute"]);
 const VALID_FRAMEWORK_DOMAINS = new Set(["software-product", "ux-design", "codebase", "article", "research", "task-execution"]);
@@ -313,7 +314,7 @@ function normalizeGraphWriteMode(value) {
 }
 
 function normalizeGraphLayout(value) {
-  return VALID_GRAPH_LAYOUTS.has(value) ? value : "horizontal";
+  return "horizontal";
 }
 
 function normalizeGraphLayoutPolicy(value) {
@@ -325,8 +326,23 @@ function normalizeGraphType(value) {
 }
 
 function defaultGraphLayoutForType(graphType) {
-  if (graphType === "article-outline") return "vertical";
   return "horizontal";
+}
+
+function deprecatedGraphLayoutAdvisories(args) {
+  const requested = [
+    { path: "layout", value: args?.layout },
+    ...(Array.isArray(args?.pages)
+      ? args.pages.map((page, index) => ({ path: `pages[${index}].layout`, value: page?.layout }))
+      : [])
+  ];
+  return requested
+    .filter(({ value }) => value === "vertical" || value === "grid")
+    .map(({ path, value }) => ({
+      code: "deprecated_graph_layout",
+      path,
+      message: `Graph layout ${value} is deprecated for AI writes and was normalized to horizontal.`
+    }));
 }
 
 function normalizeCodexMode() {
@@ -2606,6 +2622,7 @@ function validateFrameworkManifest(page, manifest, projectPath) {
     if (!known) advisories.push({ code: "unknown_coverage_key", path: `frameworkManifest.coverage.${key}`, message: `Coverage key is not part of the current framework contracts: ${key}` });
   });
   const semanticStructure = isObject(manifest.semanticStructure) ? manifest.semanticStructure : null;
+  const semanticRelationships = isObject(manifest.semanticRelationships) ? manifest.semanticRelationships : null;
   const coveredNodeIds = new Set(Object.values(coverage).flatMap((ids) => (Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : [])));
   if (!semanticStructure) {
     violations.push(
@@ -2638,6 +2655,82 @@ function validateFrameworkManifest(page, manifest, projectPath) {
         violations.push(graphViolation("parent_duplicates_children", `nodes.${edge.source}.body`, `Parent ${edge.source} duplicates the full body of child ${edge.target}.`, "Keep the parent as a summary and move detailed content to the child."));
       }
     });
+  }
+  if (!semanticRelationships) {
+    violations.push(
+      graphViolation(
+        "semantic_relationships_required",
+        "frameworkManifest.semanticRelationships",
+        "Semantic relationship review is required for framework graph writes.",
+        "Describe each relationship between covered responsibilities by final edge id, type, and rationale."
+      )
+    );
+  } else {
+    const edgeById = new Map(page.edges.map((edge) => [edge.id, edge]));
+    Object.entries(semanticRelationships).forEach(([edgeId, assessment]) => {
+      if (!edgeById.has(edgeId)) {
+        violations.push(graphViolation("semantic_relationship_edge_not_found", `frameworkManifest.semanticRelationships.${edgeId}`, `Semantic relationship references a missing edge: ${edgeId}.`, "Use a final candidate edge id or remove the stale relationship review."));
+        return;
+      }
+      if (!isObject(assessment) || !VALID_SEMANTIC_RELATIONSHIP_TYPES.has(assessment.type)) {
+        violations.push(graphViolation("invalid_semantic_relationship_type", `frameworkManifest.semanticRelationships.${edgeId}.type`, `Semantic relationship has an unsupported type: ${assessment?.type || "(empty)"}.`, "Use dependency, sequence, containment, evidence, decision, navigation, or flow."));
+      }
+      if (!isObject(assessment) || typeof assessment.rationale !== "string" || !assessment.rationale.trim()) {
+        violations.push(graphViolation("semantic_relationship_rationale_required", `frameworkManifest.semanticRelationships.${edgeId}.rationale`, `Semantic relationship lacks a rationale: ${edgeId}.`, "Explain why these two responsibilities have this relationship, or remove the edge."));
+      }
+    });
+    const coveredEdges = page.edges.filter((edge) => coveredNodeIds.has(edge.source) && coveredNodeIds.has(edge.target));
+    coveredEdges.forEach((edge) => {
+      if (!isObject(semanticRelationships[edge.id])) {
+        violations.push(graphViolation("semantic_relationship_missing", `frameworkManifest.semanticRelationships.${edge.id}`, `Covered responsibilities have an unreviewed relationship: ${edge.source} -> ${edge.target}.`, "Add the final edge id with a semantic type and rationale, or repair the graph topology."));
+      }
+    });
+
+    const indegree = new Map([...coveredNodeIds].map((id) => [id, 0]));
+    const outdegree = new Map([...coveredNodeIds].map((id) => [id, 0]));
+    const undirected = new Map([...coveredNodeIds].map((id) => [id, []]));
+    coveredEdges.forEach((edge) => {
+      indegree.set(edge.target, (indegree.get(edge.target) || 0) + 1);
+      outdegree.set(edge.source, (outdegree.get(edge.source) || 0) + 1);
+      undirected.get(edge.source)?.push(edge.target);
+      undirected.get(edge.target)?.push(edge.source);
+    });
+    const connected = new Set();
+    const firstCovered = coveredNodeIds.values().next().value;
+    if (firstCovered) {
+      const pending = [firstCovered];
+      while (pending.length) {
+        const nodeId = pending.pop();
+        if (connected.has(nodeId)) continue;
+        connected.add(nodeId);
+        pending.push(...(undirected.get(nodeId) || []));
+      }
+    }
+    const isSinglePath =
+      coveredEdges.length > 0 &&
+      connected.size === coveredNodeIds.size &&
+      coveredEdges.length === coveredNodeIds.size - 1 &&
+      [...coveredNodeIds].every((id) => (indegree.get(id) || 0) <= 1 && (outdegree.get(id) || 0) <= 1);
+    if (isSinglePath) {
+      const relationshipTypes = coveredEdges.map((edge) => semanticRelationships[edge.id]?.type);
+      const allowedTypes =
+        manifest.output === "execution-plan"
+          ? new Set(["dependency", "sequence"])
+          : manifest.output === "system-map"
+            ? new Set(["dependency", "flow", "navigation"])
+            : null;
+      const pathIsSemanticallyAllowed = allowedTypes && relationshipTypes.every((type) => allowedTypes.has(type));
+      if (!pathIsSemanticallyAllowed) {
+        violations.push(
+          graphViolation(
+            "mechanical_single_path",
+            "edges",
+            `The ${manifest.output || "selected"} output collapses all covered responsibilities into one mechanical path.`,
+            "Group peer responsibilities under a meaningful parent or create evidence, decision, containment, or parallel branches that match the semantic relationship review."
+          )
+        );
+      }
+    }
   }
   if (manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
     SOFTWARE_PRODUCT_GUIDANCE_FILES.forEach((guidanceFile) => {
@@ -2672,6 +2765,7 @@ async function writeScatterGraph(projectPath, args) {
     let pages;
     let activePageId;
     let mutationSummary = null;
+    const validationAdvisories = deprecatedGraphLayoutAdvisories(args);
 
     if (mode === "merge-active-page") {
       if (typeof args?.expectedRevision !== "number" || !Number.isFinite(args.expectedRevision) || args.expectedRevision !== currentRevision) {
@@ -2688,6 +2782,7 @@ async function writeScatterGraph(projectPath, args) {
       const candidatePage = guided.page;
       const validation = validateGraphCandidate(candidatePage, args, projectPath);
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
+      validationAdvisories.push(...validation.advisories);
       pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? candidatePage : page));
       activePageId = currentPage.id;
       mutationSummary = guided.summary ? mergeMutationSummaries(merged.summary, guided.summary) : merged.summary;
@@ -2698,6 +2793,7 @@ async function writeScatterGraph(projectPath, args) {
       for (let index = 0; index < incomingPages.length; index += 1) {
         const validation = validateGraphCandidate(incomingPages[index], args, projectPath);
         if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
+        validationAdvisories.push(...validation.advisories);
       }
 
       if (mode === "replace-document") {
@@ -2750,7 +2846,7 @@ async function writeScatterGraph(projectPath, args) {
       validation: {
         passed: true,
         violations: [],
-        advisories: []
+        advisories: validationAdvisories
       }
     };
   });
@@ -5878,8 +5974,8 @@ const tools = [
         },
         layout: {
           type: "string",
-          enum: ["horizontal", "vertical", "grid"],
-          description: "Preferred fallback orientation for nodes without explicit x/y or position. When omitted, Canvasight chooses a default from graphType and uses edge-aware dependency layers when edges exist."
+          enum: ["horizontal"],
+          description: "Horizontal dependency layout for AI writes. Legacy vertical and grid requests are accepted at runtime, normalized to horizontal, and reported as deprecated advisories."
         },
         layoutPolicy: {
           type: "string",
@@ -5952,9 +6048,22 @@ const tools = [
                 required: ["responsibility", "inseparableReason"],
                 additionalProperties: false
               }
+            },
+            semanticRelationships: {
+              type: "object",
+              description: "Semantic review keyed by final edge id for relationships between covered responsibilities.",
+              additionalProperties: {
+                type: "object",
+                properties: {
+                  type: { type: "string", enum: ["dependency", "sequence", "containment", "evidence", "decision", "navigation", "flow"] },
+                  rationale: { type: "string" }
+                },
+                required: ["type", "rationale"],
+                additionalProperties: false
+              }
             }
           },
-          required: ["intent", "primaryDomain", "maturity", "output", "coverage", "semanticStructure"],
+          required: ["intent", "primaryDomain", "maturity", "output", "coverage", "semanticStructure", "semanticRelationships"],
           additionalProperties: false
         },
         nodes: {
@@ -5976,7 +6085,7 @@ const tools = [
             properties: {
               id: { type: "string" },
               name: { type: "string" },
-              layout: { type: "string", enum: ["horizontal", "vertical", "grid"] },
+              layout: { type: "string", enum: ["horizontal"] },
               viewport: { type: "object", additionalProperties: true },
               nodes: { type: "array", items: { type: "object", additionalProperties: true } },
               edges: { type: "array", items: { type: "object", additionalProperties: true } }

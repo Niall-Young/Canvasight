@@ -1088,6 +1088,157 @@ function assertHorizontalEdgeDirection(nodes, edges, label) {
   });
 }
 
+function minimalRefineManifest(output, nodeIds, edges, relationshipType = "containment") {
+  return {
+    intent: "refine",
+    primaryDomain: "task-execution",
+    secondaryDomains: [],
+    maturity: "deliver",
+    output,
+    coverage: {
+      "task.currentEvidence": nodeIds,
+      "maturity.deliver.acceptance": nodeIds
+    },
+    semanticStructure: Object.fromEntries(
+      nodeIds.map((nodeId) => [
+        nodeId,
+        {
+          responsibility: `Own the distinct ${nodeId} responsibility.`,
+          inseparableReason: `The content recorded by ${nodeId} produces one coherent result.`
+        }
+      ])
+    ),
+    semanticRelationships: Object.fromEntries(
+      edges.map((edge) => [
+        edge.id,
+        {
+          type: relationshipType,
+          rationale: `${edge.source} organizes the distinct responsibility owned by ${edge.target}.`
+        }
+      ])
+    )
+  };
+}
+
+async function assertUniversalHorizontalAndBlueprintTopologyContracts() {
+  const frameworkCases = [
+    ["software-product", "exploration-map"],
+    ["article-outline", "structured-outline"],
+    ["codebase-structure", "system-map"],
+    ["task-plan", "decision-map"],
+    ["general", "execution-plan"]
+  ];
+  for (const [graphType, output] of frameworkCases) {
+    const projectPath = path.join(tempRoot, `horizontal-${graphType}-${output}`);
+    const nodeIds = [`${graphType}-root`, `${graphType}-left`, `${graphType}-right`];
+    const edges = [
+      { id: `${graphType}-root-left`, source: nodeIds[0], target: nodeIds[1] },
+      { id: `${graphType}-root-right`, source: nodeIds[0], target: nodeIds[2] }
+    ];
+    const written = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        graphType,
+        pageName: `${graphType} ${output}`,
+        frameworkManifest: minimalRefineManifest(output, nodeIds, edges),
+        nodes: nodeIds.map((id) => ({ id, title: id, body: `Substantive canvas responsibility for ${id}.` })),
+        edges
+      }
+    });
+    assert.equal(written.structuredContent.status, "written", `${graphType}/${output} should write`);
+    const nodes = written.structuredContent.document.nodes;
+    assertUniqueNodePositions(nodes, `${graphType}/${output}`);
+    assertNoNodeBoundsOverlap(nodes, `${graphType}/${output}`);
+    assertHorizontalEdgeDirection(nodes, written.structuredContent.document.edges, `${graphType}/${output}`);
+  }
+
+  const blueprintTitles = [
+    "品牌定位", "目标用户", "品牌价值", "视觉语言", "体验原则", "信息架构",
+    "首页叙事", "商品列表", "商品筛选", "商品详情", "尺码与库存", "购物袋",
+    "结账流程", "支付恢复", "响应式体验", "无障碍标准", "验收标准", "交付计划"
+  ];
+  const blueprintNodes = blueprintTitles.map((title, index) => ({
+    id: `blueprint-${index + 1}`,
+    title,
+    body: `${title}负责服装品牌网站中可独立评审和交付的一项产品或体验决策。`
+  }));
+  const chainEdges = blueprintNodes.slice(1).map((node, index) => ({
+    id: `blueprint-chain-${index + 1}`,
+    source: blueprintNodes[index].id,
+    target: node.id
+  }));
+  const blueprintManifest = (edges) => ({
+    intent: "refine",
+    primaryDomain: "ux-design",
+    secondaryDomains: ["software-product"],
+    maturity: "define",
+    output: "exploration-map",
+    coverage: {
+      "ux.goal": blueprintNodes.map((node) => node.id),
+      "product.goal": [blueprintNodes[0].id],
+      "maturity.define.boundaries": blueprintNodes.map((node) => node.id)
+    },
+    semanticStructure: Object.fromEntries(
+      blueprintNodes.map((node) => [
+        node.id,
+        {
+          responsibility: `Define ${node.data?.title || node.title} as one independently reviewable blueprint responsibility.`,
+          inseparableReason: "The statements inside this node jointly define one product or experience decision."
+        }
+      ])
+    ),
+    semanticRelationships: Object.fromEntries(
+      edges.map((edge) => [
+        edge.id,
+        {
+          type: "containment",
+          rationale: `${edge.source} groups the distinct blueprint responsibility ${edge.target}.`
+        }
+      ])
+    )
+  });
+  const chainProjectPath = path.join(tempRoot, "product-ux-blueprint-chain-regression");
+  const rejectedChain = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: chainProjectPath,
+      graphType: "software-product",
+      pageName: "Mechanical 18-node blueprint",
+      frameworkManifest: blueprintManifest(chainEdges),
+      nodes: blueprintNodes,
+      edges: chainEdges
+    }
+  });
+  assert.equal(rejectedChain.structuredContent.status, "validation_failed");
+  assert.equal(rejectedChain.structuredContent.validation.violations.some((item) => item.code === "mechanical_single_path"), true);
+
+  const branchParents = [null, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6];
+  const branchEdges = blueprintNodes.slice(1).map((node, index) => ({
+    id: `blueprint-branch-${index + 1}`,
+    source: blueprintNodes[branchParents[index + 1]].id,
+    target: node.id
+  }));
+  const writtenBranches = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: chainProjectPath,
+      graphType: "software-product",
+      pageName: "Branched 18-node blueprint",
+      frameworkManifest: blueprintManifest(branchEdges),
+      nodes: blueprintNodes,
+      edges: branchEdges
+    }
+  });
+  assert.equal(writtenBranches.structuredContent.status, "written");
+  assertNoNodeBoundsOverlap(writtenBranches.structuredContent.document.nodes, "Branched 18-node blueprint");
+  assertHorizontalEdgeDirection(
+    writtenBranches.structuredContent.document.nodes,
+    writtenBranches.structuredContent.document.edges,
+    "Branched 18-node blueprint"
+  );
+}
+
 async function assertGraphContextMergeAndValidationContracts() {
   const mergeProjectPath = path.join(tempRoot, "graph-merge-validation-project");
   await fsp.mkdir(mergeProjectPath, { recursive: true });
@@ -1188,7 +1339,8 @@ async function assertGraphContextMergeAndValidationContracts() {
     },
     semanticStructure: {
       "merge-root": { responsibility: "Define the accepted execution outcome.", inseparableReason: "The goal and done condition describe the same outcome." }
-    }
+    },
+    semanticRelationships: {}
   };
   const incompleteMerge = await request("tools/call", {
     name: "write_canvasight_graph",
@@ -1247,6 +1399,91 @@ async function assertGraphContextMergeAndValidationContracts() {
   assert.equal(missingSemanticReview.structuredContent.validation.violations.some((item) => item.code === "mixed_responsibilities"), true);
   assert.equal(await fsp.readFile(scatterPath, "utf8"), beforeRejectedWrite);
 
+  const mechanicalSinglePath = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      pageName: "Rejected mechanical outline",
+      frameworkManifest: {
+        intent: "refine",
+        primaryDomain: "task-execution",
+        secondaryDomains: [],
+        maturity: "deliver",
+        output: "exploration-map",
+        coverage: {
+          "task.currentEvidence": ["path-a", "path-b", "path-c"],
+          "maturity.deliver.acceptance": ["path-a", "path-b", "path-c"]
+        },
+        semanticStructure: {
+          "path-a": { responsibility: "Frame the product question.", inseparableReason: "The framing is one decision boundary." },
+          "path-b": { responsibility: "Compare the experience options.", inseparableReason: "The comparison produces one choice." },
+          "path-c": { responsibility: "Record acceptance evidence.", inseparableReason: "The evidence qualifies one accepted result." }
+        },
+        semanticRelationships: {
+          "path-a-b": { type: "decision", rationale: "The framing informs the option comparison." },
+          "path-b-c": { type: "evidence", rationale: "The selected option requires acceptance evidence." }
+        }
+      },
+      nodes: [
+        { id: "path-a", title: "Frame question", body: "Define the product question and its decision boundary." },
+        { id: "path-b", title: "Compare options", body: "Compare distinct experience directions against the boundary." },
+        { id: "path-c", title: "Acceptance evidence", body: "Record the evidence needed to accept the selected direction." }
+      ],
+      edges: [
+        { id: "path-a-b", source: "path-a", target: "path-b" },
+        { id: "path-b-c", source: "path-b", target: "path-c" }
+      ]
+    }
+  });
+  assert.equal(mechanicalSinglePath.structuredContent.status, "validation_failed");
+  assert.equal(mechanicalSinglePath.structuredContent.validation.violations.some((item) => item.code === "mechanical_single_path"), true);
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), beforeRejectedWrite);
+
+  const sequenceProjectPath = path.join(tempRoot, "semantic-sequence-project");
+  const allowedExecutionSequence = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: sequenceProjectPath,
+      pageName: "Accepted execution sequence",
+      frameworkManifest: {
+        intent: "refine",
+        primaryDomain: "task-execution",
+        secondaryDomains: [],
+        maturity: "deliver",
+        output: "execution-plan",
+        coverage: {
+          "task.currentEvidence": ["sequence-a", "sequence-b", "sequence-c"],
+          "maturity.deliver.acceptance": ["sequence-a", "sequence-b", "sequence-c"]
+        },
+        semanticStructure: {
+          "sequence-a": { responsibility: "Prepare the delivery input.", inseparableReason: "Preparation produces one ready input." },
+          "sequence-b": { responsibility: "Execute the delivery step.", inseparableReason: "Execution produces one deliverable." },
+          "sequence-c": { responsibility: "Verify the delivered result.", inseparableReason: "Verification produces one acceptance result." }
+        },
+        semanticRelationships: {
+          "sequence-a-b": { type: "sequence", rationale: "Execution starts after its input is prepared." },
+          "sequence-b-c": { type: "dependency", rationale: "Acceptance evidence depends on the delivered result." }
+        }
+      },
+      nodes: [
+        { id: "sequence-a", title: "Prepare", body: "Prepare the accepted delivery input." },
+        { id: "sequence-b", title: "Execute", body: "Execute the delivery against the accepted input." },
+        { id: "sequence-c", title: "Verify", body: "Verify the delivered result against acceptance." }
+      ],
+      edges: [
+        { id: "sequence-a-b", source: "sequence-a", target: "sequence-b" },
+        { id: "sequence-b-c", source: "sequence-b", target: "sequence-c" }
+      ]
+    }
+  });
+  assert.equal(allowedExecutionSequence.structuredContent.status, "written");
+  assert.equal(allowedExecutionSequence.structuredContent.validation.passed, true);
+  assertHorizontalEdgeDirection(
+    allowedExecutionSequence.structuredContent.document.nodes,
+    allowedExecutionSequence.structuredContent.document.edges,
+    "Accepted execution sequence"
+  );
+
   const repairedFramework = {
     ...incompleteFramework,
     coverage: {
@@ -1271,6 +1508,10 @@ async function assertGraphContextMergeAndValidationContracts() {
       "merge-keep": { responsibility: "Preserve verified current evidence.", inseparableReason: "The evidence and its verification state are one record." },
       "merge-detach": { responsibility: "Record independent delivery risk and recovery evidence.", inseparableReason: "The recovery note directly qualifies the same risk." },
       "merge-new": { responsibility: "Deliver and verify the remaining work.", inseparableReason: "Implementation and its focused verification form one accepted delivery stage." }
+    },
+    semanticRelationships: {
+      "merge-root-keep": { type: "evidence", rationale: "Current evidence verifies the accepted execution outcome." },
+      "merge-root-new": { type: "dependency", rationale: "The remaining delivery depends on the accepted execution boundary." }
     }
   };
   const repairedMerge = await request("tools/call", {
@@ -1350,7 +1591,8 @@ async function assertGraphContextMergeAndValidationContracts() {
         },
         semanticStructure: {
           "merge-keep": { responsibility: "Refine the accepted evidence record.", inseparableReason: "Acceptance is the state of this evidence, not a separate module." }
-        }
+        },
+        semanticRelationships: {}
       },
       operations: [
         {
@@ -1449,6 +1691,7 @@ function softwareProductMergeManifest(nodeId, overrides = {}) {
         inseparableReason: "The product constraints and acceptance state qualify the same delivery record."
       }
     },
+    semanticRelationships: {},
     ...overrides
   };
 }
@@ -1623,7 +1866,8 @@ async function assertSoftwareProductMergeGuidanceContracts() {
             responsibility: "Refine the article purpose and acceptance record.",
             inseparableReason: "Acceptance qualifies the same article purpose record."
           }
-        }
+        },
+        semanticRelationships: {}
       },
       operations: [{ op: "update-node", nodeId: articleRootId, changes: { title: "Refined article delivery" } }]
     }
@@ -2246,6 +2490,9 @@ async function main() {
     assert.equal(writeGraphTool.inputSchema.properties.expectedRevision.type, "integer");
     assert.equal(writeGraphTool.inputSchema.properties.operations.type, "array");
     assert.deepEqual(writeGraphTool.inputSchema.properties.layoutPolicy.enum, ["auto", "preserve-explicit"]);
+    assert.deepEqual(writeGraphTool.inputSchema.properties.layout.enum, ["horizontal"]);
+    assert.deepEqual(writeGraphTool.inputSchema.properties.pages.items.properties.layout.enum, ["horizontal"]);
+    assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.required.includes("semanticRelationships"), true);
     assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.op.enum.includes("relayout-page"), true);
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.type, "object");
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.semanticStructure.type, "object");
@@ -2852,6 +3099,7 @@ async function main() {
     assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
 
     await assertGraphContextMergeAndValidationContracts();
+    await assertUniversalHorizontalAndBlueprintTopologyContracts();
     await assertSoftwareProductMergeGuidanceContracts();
 
     const graphWritten = await request("tools/call", {
@@ -2964,6 +3212,7 @@ async function main() {
         projectPath,
         mode: "replace-active-page",
         graphType: "article-outline",
+        layout: "vertical",
         pageName: "Article Outline",
         nodes: [
           { id: "thesis", title: "Thesis", body: "Capture the article's central claim." },
@@ -2974,13 +3223,15 @@ async function main() {
     });
     assert.equal(articleReplace.structuredContent.status, "written");
     assert.equal(articleReplace.structuredContent.graphType, "article-outline");
+    assert.equal(articleReplace.structuredContent.validation.advisories.some((item) => item.code === "deprecated_graph_layout" && item.path === "layout"), true);
     assert.equal(articleReplace.structuredContent.activePageId, graphWritten.structuredContent.activePageId);
     const articleScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(articleScatterJson.pages.length, 2);
     assert.equal(articleScatterJson.activePageId, graphWritten.structuredContent.activePageId);
     assert.equal(articleScatterJson.nodes.length, 2);
-    assert.equal(articleScatterJson.nodes[0].position.y, 0);
-    assert.equal(articleScatterJson.nodes[1].position.y, 380);
+    assert.equal(articleScatterJson.nodes[0].position.x, 0);
+    assert.equal(articleScatterJson.nodes[1].position.x, 680);
+    assert.equal(articleScatterJson.nodes[1].position.y, 0);
 
     const fanOutGraph = await request("tools/call", {
       name: "write_canvasight_graph",
@@ -3004,6 +3255,12 @@ async function main() {
     });
     assert.equal(fanOutGraph.structuredContent.status, "written");
     assert.equal(fanOutGraph.structuredContent.graphType, "task-plan");
+    assert.equal(
+      fanOutGraph.structuredContent.validation.advisories.some(
+        (item) => item.code === "deprecated_graph_layout" && item.path === "layout"
+      ),
+      true
+    );
     assert.equal(fanOutGraph.structuredContent.activePageName, "Fan-out Requirements");
     assert.deepEqual(fanOutGraph.structuredContent.nodeIds, ["root", "research", "design", "build"]);
     assert.deepEqual(fanOutGraph.structuredContent.edgeIds, ["root-research", "root-design", "root-build"]);
@@ -3030,12 +3287,52 @@ async function main() {
       ]
     );
 
+    const pageLayoutGraph = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        graphType: "general",
+        pages: [
+          {
+            id: "legacy-vertical-page",
+            name: "Legacy page layout",
+            layout: "vertical",
+            nodes: [
+              { id: "page-layout-root", title: "Page root", body: "Define the page-level layout compatibility input." },
+              { id: "page-layout-child", title: "Page child", body: "Verify the normalized horizontal result." }
+            ],
+            edges: [{ id: "page-layout-edge", source: "page-layout-root", target: "page-layout-child" }]
+          }
+        ]
+      }
+    });
+    assert.equal(pageLayoutGraph.structuredContent.status, "written");
+    assert.equal(
+      pageLayoutGraph.structuredContent.validation.advisories.some(
+        (item) => item.code === "deprecated_graph_layout" && item.path === "pages[0].layout"
+      ),
+      true
+    );
+    assertHorizontalEdgeDirection(
+      pageLayoutGraph.structuredContent.document.nodes,
+      pageLayoutGraph.structuredContent.document.edges,
+      "Legacy page-level vertical layout"
+    );
+    assert.deepEqual(
+      pageLayoutGraph.structuredContent.document.nodes.map((node) => [node.id, node.position.x, node.position.y]),
+      [
+        ["page-layout-root", 0, 0],
+        ["page-layout-child", 680, 0]
+      ]
+    );
+
     const explicitPositionGraph = await request("tools/call", {
       name: "write_canvasight_graph",
       arguments: {
         projectPath,
         graphType: "task-plan",
         pageName: "Explicit Position Preservation",
+        layout: "vertical",
         layoutPolicy: "preserve-explicit",
         nodes: [
           { id: "fixed-root", title: "Fixed root", body: "Keep both explicit coordinates.", position: { x: 111, y: 222 } },
@@ -3049,6 +3346,7 @@ async function main() {
       }
     });
     assert.equal(explicitPositionGraph.structuredContent.status, "written");
+    assert.equal(explicitPositionGraph.structuredContent.validation.advisories.some((item) => item.code === "deprecated_graph_layout"), true);
     const explicitPositionScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assertUniqueNodePositions(explicitPositionScatterJson.nodes, "Explicit position graph");
     assert.deepEqual(
@@ -3105,7 +3403,7 @@ async function main() {
       ["AGENTS.md", "design.md"]
     );
     const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
-    assert.equal(productScatterJson.pages.length, 5);
+    assert.equal(productScatterJson.pages.length, 6);
     assertUniqueNodePositions(productScatterJson.nodes, "Software product graph");
     assertNoNodeBoundsOverlap(productScatterJson.nodes, "Software product graph");
     assertHorizontalEdgeDirection(productScatterJson.nodes, productScatterJson.edges, "Software product graph");
