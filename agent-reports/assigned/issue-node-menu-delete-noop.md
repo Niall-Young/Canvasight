@@ -6,21 +6,22 @@ status: assigned
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 3
+version: 4
 agent_id: null
-thread_id: 019f567f-9be8-73b0-ba98-47bf33f6d956
+thread_id: 019f5691-8d32-7c93-b74a-d5dc86c1c474
 created_at: 2026-07-12T13:26:30Z
-updated_at: 2026-07-12T13:34:30Z
+updated_at: 2026-07-12T13:51:06Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/components/TaskNode.tsx
   - plugins/canvasight/src/App.tsx
 verification_status: failed
 verification_evidence:
-  - typecheck and build passed for source version 0.4.2+codex.20260712132520
-  - isolated browser menu delete changed nodes from 4 to 3 and edges from 3 to 0
-  - undo restored nodes and edges to 4 and 3; Backspace regression changed them to 3 and 0
-  - real Codex native widget acceptance is unavailable while a concurrent task owns the source version upgrade and TaskNode.tsx
+  - version 0.4.2 reproduced the failure as edges 3 to 0 while nodes remained 4
+  - version 0.4.3 isolated browser menu delete remained at nodes 3 and edges 0 after one second
+  - one Undo restored nodes and edges to 4 and 3; one Redo removed them again to 3 and 0
+  - reload preserved nodes 3 and edges 0
+  - real Codex native widget acceptance requires a restarted Codex Desktop host and a newly tagged task
 ---
 
 # 节点菜单删除点击无响应
@@ -31,22 +32,18 @@ verification_evidence:
 
 ## 问题描述
 
-节点菜单把删除动作绑定在 `RadixDropdownMenu.Item asChild` 内部按钮的 `onClick`，而键盘路径直接调用画布删除逻辑。Radix 菜单选择和关闭生命周期下，子按钮点击事件在当前运行表面不可靠。
+删除动作与 React Flow 的选择回调都捕获渲染期 `nodes`。菜单关闭和焦点恢复触发迟到的选择事件后，旧节点快照会覆盖删除结果，表现为关联边已删除但节点被写回。上一轮增加 `requestAnimationFrame` 只改变时序，并未消除旧快照竞态。
 
 ## 复现方式
 
 1. 打开含节点的 Canvasight Page。
 2. 点击节点右上角三点菜单。
-3. 点击“删除”，观察节点未被删除。
+3. 点击“删除”，观察节点未被删除但关联边消失。
 4. 选中同一节点后按 Backspace/Delete，节点可正常删除。
-
-## 影响范围
-
-节点操作菜单的删除入口；底层节点、关联边、撤销历史和持久化删除逻辑未发现缺陷。
 
 ## 初步归因
 
-菜单删除使用子按钮 `onClick`，没有使用 Radix Dropdown Menu 的菜单项 `onSelect` 动作语义。
+菜单删除、节点选择和 `onNodesChange` 没有在提交时读取 Zustand 最新节点状态；此外同版本插件缓存会让已打开的 Codex host 继续使用旧 bundle。
 
 ## 期望结果
 
@@ -54,11 +51,12 @@ verification_evidence:
 
 ## Closure Criteria
 
-- [x] 菜单删除绑定到可靠的菜单项选择事件
+- [x] 菜单删除绑定到可靠的 pointer 与 keyboard 激活事件
 - [x] 节点与关联边同步删除
-- [x] Backspace/Delete 路径无回归
-- [x] typecheck、build 和浏览器可见验证通过
-- [ ] 方案、修改文件、验证和残余风险已记录
+- [x] 一次 Undo / Redo 对应一次删除历史
+- [x] typecheck、build、延迟与 reload 浏览器验证通过
+- [x] 方案、修改文件、验证和残余风险已记录
+- [ ] 重启 Codex Desktop 后完成真实 fullscreen native Widget 删除验收
 
 ## 当前状态
 
@@ -66,18 +64,20 @@ assigned
 
 ## 处理结果
 
-已实施菜单项 `onSelect` 绑定，并延迟到菜单关闭/回焦后的下一帧提交删除，避免 React Flow 用旧节点快照覆盖删除结果。因未完成真实原生 Widget host acceptance，问题保持 assigned。
+删除、选择和 XYFlow change 回调改为在提交时读取 Zustand 最新节点；菜单 pointer 与 keyboard 激活均调用幂等删除动作。已升级并安装 `0.4.3+codex.20260712134902`，浏览器持久化回归通过。因未重启当前 Codex Desktop 完成真实原生 Widget host acceptance，问题保持 assigned。
 
 ## 修改文件
 
 - `plugins/canvasight/src/components/TaskNode.tsx`
+- `plugins/canvasight/src/App.tsx`
+- 插件版本与 `dist/` 构建产物
 
 ## 验证方式
 
 - `npm run typecheck`
 - `npm run build`
-- 隔离项目浏览器可见菜单删除、Undo、Backspace 回归
+- 隔离项目浏览器可见菜单删除、1 秒稳定性、Undo、Redo 与 reload 回归
 
 ## 后续风险
 
-浏览器 fallback 已验证交互与撤销，但不能替代 native widget host acceptance。并发任务同时修改 `TaskNode.tsx` 和插件版本，当前不安全安装或提交。
+浏览器 session 已验证交互、撤销与持久化，但不能替代 native widget host acceptance。Codex Desktop 必须重启后在新建且重新标记的任务中验证精确 `0.4.3` 版本。

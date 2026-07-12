@@ -1,6 +1,6 @@
 {
   "name": "canvasight",
-  "version": "0.4.2+codex.20260712132520",
+  "version": "0.4.3+codex.20260712134902",
   "description": "A local canvas workspace that turns connected task nodes and attachments into structured Codex prompts.",
   "author": {
     "name": "Niall Young"

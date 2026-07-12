@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-node-menu-delete-noop` | assigned | high | Main Thread | 节点菜单删除点击无响应 | `agent-reports/assigned/issue-node-menu-delete-noop.md` | 3 | 2026-07-12T13:34:30Z
+- `issue-node-menu-delete-noop` | assigned | high | Main Thread | 节点菜单删除点击无响应 | `agent-reports/assigned/issue-node-menu-delete-noop.md` | 4 | 2026-07-12T13:51:06Z
 - `issue-native-widget-attachment-relative-url` | assigned | high | Development Agent | 原生 Widget 附件图片相对地址导致破图 | `agent-reports/assigned/issue-native-widget-attachment-relative-url.md` | 2 | 2026-07-12T13:30:23Z
 - `agent-reports/assigned/20260710-1506-test-issue-open-attempt-regression-gates.md` - automated event-ordering, instance-isolation, and composed production-widget gates pass; remains assigned pending real Codex native-host acceptance.
 - `agent-reports/assigned/20260710-1506-design-issue-native-startup-states.md` - Design UI/components and baseline completed in `resolved/20260710-1513-design-solution-native-startup-states.md`; awaiting App/runtime integration and native-host acceptance, remains assigned/unverified.

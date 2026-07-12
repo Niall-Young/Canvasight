@@ -938,16 +938,18 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const selectNode = useCallback(
     (nodeId: string | null, mode: RunMode = "flow") => {
+      const currentNodes = useScatterStore.getState().nodes;
+      const nextNodeId = nodeId && currentNodes.some((node) => node.id === nodeId) ? nodeId : null;
       setSelectedRunMode(mode);
-      setSelectedNodeId(nodeId);
+      setSelectedNodeId(nextNodeId);
       replaceCanvasLive({
-        nodes: nodes.map((node) => ({
+        nodes: currentNodes.map((node) => ({
           ...node,
-          selected: node.id === nodeId
+          selected: node.id === nextNodeId
         }))
       });
     },
-    [nodes, replaceCanvasLive, setSelectedNodeId]
+    [replaceCanvasLive, setSelectedNodeId]
   );
 
   const locateNode = useCallback(
@@ -1356,13 +1358,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const deleteNode = useCallback(
     (nodeId: string) => {
+      const current = useScatterStore.getState();
+      if (!current.nodes.some((node) => node.id === nodeId)) return;
       commitCanvasChange({
-        nodes: nodes.filter((node) => node.id !== nodeId),
-        edges: edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+        nodes: current.nodes.filter((node) => node.id !== nodeId),
+        edges: current.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
       });
-      if (selectedNodeId === nodeId) setSelectedNodeId(null);
+      if (current.selectedNodeId === nodeId) setSelectedNodeId(null);
     },
-    [commitCanvasChange, edges, nodes, selectedNodeId, setSelectedNodeId]
+    [commitCanvasChange, setSelectedNodeId]
   );
 
   const deleteSelectedNodes = useCallback(() => {
@@ -1728,12 +1732,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const nextNodes = applyNodeChanges(changes, nodes as Node[]) as ScatterNode[];
+      const currentNodes = useScatterStore.getState().nodes;
+      const nextNodes = applyNodeChanges(changes, currentNodes as Node[]) as ScatterNode[];
       commitCanvasChange({ nodes: nextNodes });
       const selected = nextNodes.find((node) => node.selected)?.id ?? null;
       if (selected !== selectedNodeId) setSelectedNodeId(selected);
     },
-    [commitCanvasChange, nodes, selectedNodeId, setSelectedNodeId]
+    [commitCanvasChange, selectedNodeId, setSelectedNodeId]
   );
 
   const onEdgesChange = useCallback(

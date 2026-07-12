@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:25:20Z
+    last_seen: 2026-07-12T13:51:06Z
     handoff_source: null
-    last_report: solution-native-widget-attachment-relative-url
+    last_report: integration-summary-node-menu-delete-stale-snapshot
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Attachment image UX reviewed; no design baseline update required
+    notes: Node delete interaction reviewed; existing immediate Undo design rule remains sufficient
   - role: Design Standards Expert
     status: missing
     agent_id: null
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:25:20Z
+    last_seen: 2026-07-12T13:51:06Z
     handoff_source: issue-native-widget-attachment-relative-url
-    last_report: solution-native-widget-attachment-relative-url
+    last_report: solution-node-menu-delete-stale-snapshot
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented runtime attachment asset URL resolution; native host acceptance remains pending
+    notes: Diagnosed stale node snapshot resurrection; native host acceptance remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:25:20Z
+    last_seen: 2026-07-12T13:51:06Z
     handoff_source: issue-graph-merge-validation-tests
-    last_report: solution-native-widget-attachment-relative-url
+    last_report: integration-summary-node-menu-delete-stale-snapshot
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Supporting checks and browser image verification passed; native host acceptance remains pending
+    notes: Browser delete, Undo, Redo, and reload checks passed; native host acceptance remains pending
   - role: Customer Support Agent
     status: missing
     agent_id: null
