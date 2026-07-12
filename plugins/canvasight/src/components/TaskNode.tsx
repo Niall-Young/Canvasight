@@ -3,6 +3,7 @@ import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } f
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
+import { resolveCanvasightAssetUrl } from "../lib/canvasightApi";
 import { shortcuts } from "../lib/shortcuts";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
@@ -446,7 +447,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
                 className="nodrag"
                 fileName={attachment.originalName}
                 imageAlt={attachment.originalName}
-                imageSrc={attachment.kind === "image" ? attachment.fileUrl : undefined}
+                imageSrc={attachment.kind === "image" ? resolveCanvasightAssetUrl(attachment.fileUrl) : undefined}
                 kind={attachment.kind}
                 title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
                 onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}

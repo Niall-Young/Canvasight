@@ -15,16 +15,16 @@ roles:
     replaced_by: null
     notes: Forward-tested routing and identified the resolved scoped-refine conflict
   - role: Design Agent
-    status: missing
-    agent_id: null
-    thread_id: null
+    status: active
+    agent_id: /root/design_agent
+    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-11T11:08:45Z
+    last_seen: 2026-07-12T13:25:20Z
     handoff_source: null
-    last_report: integration-summary-markdown-export-bundle
+    last_report: solution-native-widget-attachment-relative-url
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed drawer export interaction
+    notes: Attachment image UX reviewed; no design baseline update required
   - role: Design Standards Expert
     status: missing
     agent_id: null
@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f5424-366d-72b3-9ada-094f3d1eec7e
+    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T03:25:19Z
-    handoff_source: issue-graph-merge-validation-runtime
-    last_report: solution-graph-merge-validation-runtime
+    last_seen: 2026-07-12T13:25:20Z
+    handoff_source: issue-native-widget-attachment-relative-url
+    last_report: solution-native-widget-attachment-relative-url
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented graph context, merge operations, revision protection, and pre-write validation
+    notes: Implemented runtime attachment asset URL resolution; native host acceptance remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f5424-366d-72b3-9ada-094f3d1eec7e
+    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T03:25:19Z
+    last_seen: 2026-07-12T13:25:20Z
     handoff_source: issue-graph-merge-validation-tests
-    last_report: solution-graph-merge-validation-tests
+    last_report: solution-native-widget-attachment-relative-url
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified merge, context, validation, scoped refine, and compatibility contracts
+    notes: Supporting checks and browser image verification passed; native host acceptance remains pending
   - role: Customer Support Agent
     status: missing
     agent_id: null

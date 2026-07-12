@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.4.1+codex.20260712040742",
+  "version": "0.4.2+codex.20260712132520",
   "private": true,
   "license": "MIT",
   "type": "module",

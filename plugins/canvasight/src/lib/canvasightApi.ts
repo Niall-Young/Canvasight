@@ -293,6 +293,16 @@ function apiUrl(path: string): string {
   return new URL(path, baseUrl).toString();
 }
 
+export function resolveCanvasightAssetUrl(fileUrl: string): string {
+  if (!fileUrl) return "";
+  if (/^(?:data|blob):/i.test(fileUrl)) return fileUrl;
+  try {
+    return apiUrl(fileUrl);
+  } catch {
+    return fileUrl;
+  }
+}
+
 function sessionIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("sessionId") || widgetRuntimeData().sessionId || "local";
 }

@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.1+codex.20260712040742";
+const SERVER_VERSION = "0.4.2+codex.20260712132520";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
