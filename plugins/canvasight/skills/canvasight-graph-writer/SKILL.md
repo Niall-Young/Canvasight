@@ -25,9 +25,10 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
    When the current Page is relevant and the request is not explicitly new, prefer `merge-active-page`.
 5. Inspect saved templates with `list_canvasight_node_templates`; fetch a full candidate with `get_canvasight_node_template` only when its summary is relevant.
 6. Build `frameworkManifest` and `coverage`. For `create`, `analyze`, `organize`, `decide`, and `execute`, include every canonical key from the primary-domain and maturity references. For `refine`, include at least one primary-domain key and one maturity key that describe the touched content; validate the complete Page structure, but do not add or rewrite unrelated content merely to manufacture full-contract coverage. A secondary domain adds only relevant keys from that domain, at least one; it never creates a duplicate parallel framework.
-7. Call `write_canvasight_graph`. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required operations.
-8. If validation rejects the candidate, treat violations as internal repair instructions. Preserve passing content, fix only failed requirements, and resubmit. Stop after three total validation attempts. Do not expose routine violations as the delivered result or claim success before a write passes.
-9. Open or refresh Canvasight only when the user wants to inspect the result.
+7. Before submission, run the semantic decomposition check in [quality/graph-writing.md](references/quality/graph-writing.md). Give each node one clearly named primary responsibility. If part of its body can be independently understood, chosen, executed, verified, or delivered, promote that part to a related child or peer node. Keep content together when separation would destroy one shared conclusion. Record the responsibility of every compound node and why its remaining content is inseparable in `frameworkManifest.semanticStructure`; this is call-time validation metadata, not canvas content.
+8. Call `write_canvasight_graph`. Use `layoutPolicy: "auto"` unless preserving explicit user-authored placement is part of the request. Product, codebase, research, and execution graphs should use horizontal dependency layout; reading-order article outlines remain vertical. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required content operations; request whole-Page relayout when the changed topology makes the existing placement invalid.
+9. If validation rejects the candidate, treat violations as internal repair instructions. Preserve passing content, fix only failed requirements, and resubmit. Stop after three total validation attempts. Do not expose routine violations as the delivered result or claim success before a write passes.
+10. Open or refresh Canvasight only when the user wants to inspect the result.
 
 ## Routing index
 
@@ -49,11 +50,17 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
     "product.goal": ["product-goal"],
     "product.users": ["target-users"],
     "maturity.define.boundaries": ["scope-and-boundaries"]
+  },
+  "semanticStructure": {
+    "scope-and-boundaries": {
+      "responsibility": "Define the shared product boundary",
+      "inseparableReason": "Included constraints jointly define one boundary decision"
+    }
   }
 }
 ```
 
-`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. A node may satisfy multiple keys only when its body contains each requirement explicitly; do not game coverage by pointing every key at a generic node.
+`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. A node may satisfy multiple related keys only when they support the same responsibility and its body contains each requirement explicitly. Use `semanticStructure` to state that responsibility and why any compound content must stay together; do not game coverage by pointing every key at a generic or overloaded node.
 
 ## Boundaries
 

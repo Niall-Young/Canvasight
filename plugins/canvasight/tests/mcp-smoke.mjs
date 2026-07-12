@@ -1005,6 +1005,32 @@ function assertUniqueNodePositions(nodes, label) {
   }
 }
 
+function assertNoNodeBoundsOverlap(nodes, label) {
+  nodes.forEach((node, index) => {
+    const width = node.width || 400;
+    const height = node.height || 220;
+    const left = node.position.x;
+    const top = node.position.y;
+    nodes.slice(index + 1).forEach((other) => {
+      const separated =
+        left + width <= other.position.x ||
+        other.position.x + (other.width || 400) <= left ||
+        top + height <= other.position.y ||
+        other.position.y + (other.height || 220) <= top;
+      assert.equal(separated, true, `${label} has overlapping bounds: ${node.id} and ${other.id}`);
+    });
+  });
+}
+
+function assertHorizontalEdgeDirection(nodes, edges, label) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  edges.forEach((edge) => {
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    assert.equal(target.position.x >= source.position.x + (source.width || 400), true, `${label} has a non-forward edge: ${edge.source} -> ${edge.target}`);
+  });
+}
+
 async function assertGraphContextMergeAndValidationContracts() {
   const mergeProjectPath = path.join(tempRoot, "graph-merge-validation-project");
   await fsp.mkdir(mergeProjectPath, { recursive: true });
@@ -1014,6 +1040,7 @@ async function assertGraphContextMergeAndValidationContracts() {
     arguments: {
       projectPath: mergeProjectPath,
       pageName: "Editable current page",
+      layoutPolicy: "preserve-explicit",
       nodes: [
         {
           id: "merge-root",
@@ -1101,6 +1128,9 @@ async function assertGraphContextMergeAndValidationContracts() {
     output: "execution-plan",
     coverage: {
       "task.goalDone": ["merge-root"]
+    },
+    semanticStructure: {
+      "merge-root": { responsibility: "Define the accepted execution outcome.", inseparableReason: "The goal and done condition describe the same outcome." }
     }
   };
   const incompleteMerge = await request("tools/call", {
@@ -1137,6 +1167,29 @@ async function assertGraphContextMergeAndValidationContracts() {
   assert.equal(contextAfterRejectedWrites.structuredContent.documentRevision, context.structuredContent.documentRevision);
   assert.equal(contextAfterRejectedWrites.structuredContent.activePage.nodes[1].bodyPreview.includes("incomplete candidate"), false);
 
+  const missingSemanticReview = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: context.structuredContent.documentRevision,
+      frameworkManifest: {
+        intent: "refine",
+        primaryDomain: "task-execution",
+        maturity: "deliver",
+        output: "execution-plan",
+        coverage: {
+          "task.currentEvidence": ["merge-keep"],
+          "maturity.deliver.acceptance": ["merge-keep"]
+        }
+      },
+      operations: [{ op: "update-node", nodeId: "merge-keep", changes: { title: "Unreviewed semantic change" } }]
+    }
+  });
+  assert.equal(missingSemanticReview.structuredContent.status, "validation_failed");
+  assert.equal(missingSemanticReview.structuredContent.validation.violations.some((item) => item.code === "mixed_responsibilities"), true);
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), beforeRejectedWrite);
+
   const repairedFramework = {
     ...incompleteFramework,
     coverage: {
@@ -1155,6 +1208,12 @@ async function assertGraphContextMergeAndValidationContracts() {
       "maturity.deliver.risks": ["merge-detach"],
       "maturity.deliver.ownership": ["merge-root"],
       "maturity.deliver.handoff": ["merge-new"]
+    },
+    semanticStructure: {
+      "merge-root": { responsibility: "Define the execution outcome and acceptance boundary.", inseparableReason: "The boundary qualifies the same outcome rather than a separate deliverable." },
+      "merge-keep": { responsibility: "Preserve verified current evidence.", inseparableReason: "The evidence and its verification state are one record." },
+      "merge-detach": { responsibility: "Record independent delivery risk and recovery evidence.", inseparableReason: "The recovery note directly qualifies the same risk." },
+      "merge-new": { responsibility: "Deliver and verify the remaining work.", inseparableReason: "Implementation and its focused verification form one accepted delivery stage." }
     }
   };
   const repairedMerge = await request("tools/call", {
@@ -1231,6 +1290,9 @@ async function assertGraphContextMergeAndValidationContracts() {
         coverage: {
           "task.currentEvidence": ["merge-keep"],
           "maturity.deliver.acceptance": ["merge-keep"]
+        },
+        semanticStructure: {
+          "merge-keep": { responsibility: "Refine the accepted evidence record.", inseparableReason: "Acceptance is the state of this evidence, not a separate module." }
         }
       },
       operations: [
@@ -1264,7 +1326,27 @@ async function assertGraphContextMergeAndValidationContracts() {
   }
   assert.deepEqual(refinedContext.structuredContent.activePage.edges, repairedContext.structuredContent.activePage.edges);
 
-  const pagesBeforeLegacyAppend = refinedContext.structuredContent.pages.length;
+  const relayoutMerge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: refinedContext.structuredContent.documentRevision,
+      layout: "horizontal",
+      operations: [{ op: "relayout-page" }]
+    }
+  });
+  assert.equal(relayoutMerge.structuredContent.status, "written");
+  assert.equal(relayoutMerge.structuredContent.mutationSummary.relayoutApplied, true);
+  const relayoutContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(relayoutContext.structuredContent.documentRevision, refinedContext.structuredContent.documentRevision + 1);
+  assertNoNodeBoundsOverlap(relayoutContext.structuredContent.activePage.nodes, "Relayout merge");
+  assertHorizontalEdgeDirection(relayoutContext.structuredContent.activePage.nodes, relayoutContext.structuredContent.activePage.edges, "Relayout merge");
+
+  const pagesBeforeLegacyAppend = relayoutContext.structuredContent.pages.length;
   const secondLegacyAppend = await request("tools/call", {
     name: "write_canvasight_graph",
     arguments: {
@@ -1871,7 +1953,10 @@ async function main() {
     assert.equal(writeGraphTool.inputSchema.properties.mode.enum.includes("merge-active-page"), true);
     assert.equal(writeGraphTool.inputSchema.properties.expectedRevision.type, "integer");
     assert.equal(writeGraphTool.inputSchema.properties.operations.type, "array");
+    assert.deepEqual(writeGraphTool.inputSchema.properties.layoutPolicy.enum, ["auto", "preserve-explicit"]);
+    assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.op.enum.includes("relayout-page"), true);
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.type, "object");
+    assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.semanticStructure.type, "object");
     const graphContextTool = listed.tools.find((tool) => tool.name === "get_canvasight_graph_context");
     assert.match(graphContextTool.description, /active(?: Canvasight)? page|current page/i);
     assert.equal(graphContextTool.inputSchema.properties.projectPath.type, "string");
@@ -2632,6 +2717,8 @@ async function main() {
     assert.equal(fanOutScatterJson.nodes.length, 4);
     assert.equal(fanOutScatterJson.edges.length, 3);
     assertUniqueNodePositions(fanOutScatterJson.nodes, "Fan-out graph");
+    assertNoNodeBoundsOverlap(fanOutScatterJson.nodes, "Fan-out graph");
+    assertHorizontalEdgeDirection(fanOutScatterJson.nodes, fanOutScatterJson.edges, "Fan-out graph");
     assert.equal(fanOutScatterJson.edges.every((edge) => edge.source === "root"), true);
     assert.deepEqual(
       fanOutScatterJson.edges.map((edge) => edge.target),
@@ -2653,6 +2740,7 @@ async function main() {
         projectPath,
         graphType: "task-plan",
         pageName: "Explicit Position Preservation",
+        layoutPolicy: "preserve-explicit",
         nodes: [
           { id: "fixed-root", title: "Fixed root", body: "Keep both explicit coordinates.", position: { x: 111, y: 222 } },
           { id: "auto-child", title: "Auto child", body: "Receive edge-aware automatic coordinates." },
@@ -2723,6 +2811,8 @@ async function main() {
     const productScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
     assert.equal(productScatterJson.pages.length, 5);
     assertUniqueNodePositions(productScatterJson.nodes, "Software product graph");
+    assertNoNodeBoundsOverlap(productScatterJson.nodes, "Software product graph");
+    assertHorizontalEdgeDirection(productScatterJson.nodes, productScatterJson.edges, "Software product graph");
     assert.equal(productScatterJson.nodes[0].position.x, 0);
     assert.equal(productScatterJson.nodes[0].position.y, 950);
     assert.equal(productScatterJson.nodes[2].position.x, 680);
@@ -2802,13 +2892,15 @@ async function main() {
     assert.equal(isolatedLayoutGraph.structuredContent.status, "written");
     const isolatedLayoutScatterJson = JSON.parse(await fsp.readFile(path.join(isolatedLayoutProjectPath, ".scatter", "scatter.json"), "utf8"));
     assertUniqueNodePositions(isolatedLayoutScatterJson.nodes, "Isolated node graph");
+    assertNoNodeBoundsOverlap(isolatedLayoutScatterJson.nodes, "Isolated node graph");
+    assertHorizontalEdgeDirection(isolatedLayoutScatterJson.nodes, isolatedLayoutScatterJson.edges, "Isolated node graph");
     assert.deepEqual(
       isolatedLayoutScatterJson.nodes.map((node) => [node.id, node.position.x, node.position.y]),
       [
         ["connected-root", 0, 0],
         ["connected-child", 680, 0],
         ["loose-note", 0, 380],
-        ["loose-reference", 680, 380]
+        ["loose-reference", 0, 760]
       ]
     );
 

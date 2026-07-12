@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.0+codex.20260712031116";
+const SERVER_VERSION = "0.4.1+codex.20260712040742";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -26,6 +26,7 @@ const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
 const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "merge-active-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
+const VALID_GRAPH_LAYOUT_POLICIES = new Set(["auto", "preserve-explicit"]);
 const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codebase-structure", "task-plan", "general"]);
 const VALID_FRAMEWORK_INTENTS = new Set(["create", "analyze", "organize", "refine", "decide", "execute"]);
 const VALID_FRAMEWORK_DOMAINS = new Set(["software-product", "ux-design", "codebase", "article", "research", "task-execution"]);
@@ -315,13 +316,16 @@ function normalizeGraphLayout(value) {
   return VALID_GRAPH_LAYOUTS.has(value) ? value : "horizontal";
 }
 
+function normalizeGraphLayoutPolicy(value) {
+  return VALID_GRAPH_LAYOUT_POLICIES.has(value) ? value : "auto";
+}
+
 function normalizeGraphType(value) {
   return VALID_GRAPH_TYPES.has(value) ? value : "general";
 }
 
 function defaultGraphLayoutForType(graphType) {
   if (graphType === "article-outline") return "vertical";
-  if (graphType === "software-product" || graphType === "codebase-structure") return "grid";
   return "horizontal";
 }
 
@@ -1812,52 +1816,94 @@ function graphLayoutLayers(nodes, edges) {
 function edgeAwareGraphNodePositions(nodes, edges, layout) {
   if (!edges.length) return new Map(nodes.map((node, index) => [node.id, fallbackGraphNodePosition(index, layout)]));
 
-  const stepX = GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP;
-  const stepY = GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP;
   const connectedIds = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
   const connectedNodes = nodes.filter((node) => connectedIds.has(node.id));
   const isolatedNodes = nodes.filter((node) => !connectedIds.has(node.id));
-  const layers = graphLayoutLayers(connectedNodes.length ? connectedNodes : nodes, edges);
+  const nodeIndex = new Map(nodes.map((node, index) => [node.id, index]));
+  const children = new Map(connectedNodes.map((node) => [node.id, []]));
+  const parentIds = new Set();
+  edges.forEach((edge) => {
+    if (!children.has(edge.source) || !children.has(edge.target)) return;
+    children.get(edge.source).push(edge.target);
+    parentIds.add(edge.target);
+  });
+  children.forEach((ids) => ids.sort((a, b) => (nodeIndex.get(a) || 0) - (nodeIndex.get(b) || 0)));
+  const roots = connectedNodes.filter((node) => !parentIds.has(node.id));
   const positions = new Map();
-
-  layers.forEach((group, layerIndex) => {
-    group.forEach((node, rowIndex) => {
-      const offset = rowIndex - (group.length - 1) / 2;
-      positions.set(
-        node.id,
-        layout === "vertical"
-          ? {
-              x: offset * stepX,
-              y: layerIndex * stepY
-            }
-          : {
-              x: layerIndex * stepX,
-              y: offset * stepY
-            }
-      );
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const vertical = layout === "vertical";
+  const crossGap = vertical ? GRAPH_LAYER_GAP : GRAPH_ROW_GAP;
+  const mainGap = vertical ? GRAPH_ROW_GAP : GRAPH_LAYER_GAP;
+  const crossSize = (nodeId) => {
+    const node = nodeById.get(nodeId);
+    return vertical ? optionalDimension(node?.width) || GRAPH_NODE_WIDTH : optionalDimension(node?.height) || GRAPH_NODE_HEIGHT;
+  };
+  const mainSize = (nodeId) => {
+    const node = nodeById.get(nodeId);
+    return vertical ? optionalDimension(node?.height) || GRAPH_NODE_HEIGHT : optionalDimension(node?.width) || GRAPH_NODE_WIDTH;
+  };
+  const spans = new Map();
+  const measuring = new Set();
+  const measure = (nodeId) => {
+    if (spans.has(nodeId)) return spans.get(nodeId);
+    if (measuring.has(nodeId)) return crossSize(nodeId);
+    measuring.add(nodeId);
+    const childSpans = (children.get(nodeId) || []).map(measure);
+    const childrenSpan = childSpans.length ? childSpans.reduce((sum, span) => sum + span, 0) + crossGap * (childSpans.length - 1) : 0;
+    const span = Math.max(crossSize(nodeId), childrenSpan);
+    measuring.delete(nodeId);
+    spans.set(nodeId, span);
+    return span;
+  };
+  const depths = new Map();
+  const placed = new Set();
+  const place = (nodeId, depth, start) => {
+    if (placed.has(nodeId)) return;
+    placed.add(nodeId);
+    depths.set(nodeId, depth);
+    const span = measure(nodeId);
+    const size = crossSize(nodeId);
+    const crossPosition = start + (span - size) / 2;
+    positions.set(nodeId, vertical ? { x: crossPosition, y: 0 } : { x: 0, y: crossPosition });
+    const childIds = children.get(nodeId) || [];
+    const childTotal = childIds.length
+      ? childIds.reduce((sum, childId) => sum + measure(childId), 0) + crossGap * (childIds.length - 1)
+      : 0;
+    let childStart = start + (span - childTotal) / 2;
+    childIds.forEach((childId) => {
+      place(childId, depth + 1, childStart);
+      childStart += measure(childId) + crossGap;
     });
+  };
+  let forestStart = 0;
+  [...roots, ...connectedNodes.filter((node) => !roots.includes(node))].forEach((node) => {
+    if (placed.has(node.id)) return;
+    place(node.id, 0, forestStart);
+    forestStart += measure(node.id) + crossGap;
+  });
+  const layerSizes = new Map();
+  depths.forEach((depth, nodeId) => layerSizes.set(depth, Math.max(layerSizes.get(depth) || 0, mainSize(nodeId))));
+  const layerOffsets = new Map();
+  let mainOffset = 0;
+  [...layerSizes.keys()].sort((a, b) => a - b).forEach((depth) => {
+    layerOffsets.set(depth, mainOffset);
+    mainOffset += layerSizes.get(depth) + mainGap;
+  });
+  positions.forEach((position, nodeId) => {
+    const mainPosition = layerOffsets.get(depths.get(nodeId)) || 0;
+    positions.set(nodeId, vertical ? { ...position, y: mainPosition } : { ...position, x: mainPosition });
   });
 
-  const values = [...positions.values()];
-  const minX = Math.min(...values.map((position) => position.x));
-  const minY = Math.min(...values.map((position) => position.y));
-  if (minX < 0 || minY < 0) {
-    positions.forEach((position, id) => {
-      positions.set(id, {
-        x: position.x - Math.min(0, minX),
-        y: position.y - Math.min(0, minY)
-      });
-    });
-  }
-
   if (isolatedNodes.length) {
-    const currentPositions = [...positions.values()];
-    const isolatedStartY = currentPositions.length ? Math.max(...currentPositions.map((position) => position.y)) + stepY : 0;
-    isolatedNodes.forEach((node, index) => {
-      positions.set(node.id, {
-        x: (index % GRAPH_GRID_COLUMNS) * stepX,
-        y: isolatedStartY + Math.floor(index / GRAPH_GRID_COLUMNS) * stepY
-      });
+    const positionedNodes = [...positions.keys()].map((nodeId) => ({ node: nodeById.get(nodeId), position: positions.get(nodeId) }));
+    const isolatedStart = positionedNodes.length
+      ? Math.max(...positionedNodes.map(({ node, position }) => (vertical ? position.x + (optionalDimension(node?.width) || GRAPH_NODE_WIDTH) : position.y + (optionalDimension(node?.height) || GRAPH_NODE_HEIGHT)))) + crossGap
+      : 0;
+    let isolatedCursor = isolatedStart;
+    isolatedNodes.forEach((node) => {
+      const size = vertical ? optionalDimension(node.width) || GRAPH_NODE_WIDTH : optionalDimension(node.height) || GRAPH_NODE_HEIGHT;
+      positions.set(node.id, vertical ? { x: isolatedCursor, y: 0 } : { x: 0, y: isolatedCursor });
+      isolatedCursor += size + crossGap;
     });
   }
 
@@ -1878,6 +1924,15 @@ function applyGraphAutoLayout(nodes, edges, layout, positionAxesByNodeId) {
       }
     };
   });
+}
+
+function relayoutGraphPage(page, layout, layoutPolicy = "auto") {
+  const preserveExplicit = normalizeGraphLayoutPolicy(layoutPolicy) === "preserve-explicit";
+  const positionAxes = new Map(page.nodes.map((node) => [node.id, preserveExplicit ? { x: true, y: true } : { x: false, y: false }]));
+  return {
+    ...page,
+    nodes: applyGraphAutoLayout(page.nodes, page.edges, layout, positionAxes)
+  };
 }
 
 function graphNodeTemplateRequest(value, data) {
@@ -2006,13 +2061,19 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
   const now = nowIso();
   const graphType = normalizeGraphType(args?.graphType);
   const layout = normalizeGraphLayout(page.layout || args?.layout || defaultGraphLayoutForType(graphType));
+  const layoutPolicy = normalizeGraphLayoutPolicy(page.layoutPolicy || args?.layoutPolicy);
   const rawNodes = Array.isArray(page.nodes) ? page.nodes : [];
   if (rawNodes.length === 0) throw new HttpError(400, `pages[${index}].nodes must contain at least one node`);
   const guidanceNodes = softwareProductGuidanceNodes(projectPath, graphType, index, rawNodes);
   const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = new Set();
   const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
-  const positionAxesByNodeId = new Map(nodes.map((node, nodeIndex) => [node.id, graphNodePositionAxes(rawNodeInputs[nodeIndex])]));
+  const positionAxesByNodeId = new Map(
+    nodes.map((node, nodeIndex) => [
+      node.id,
+      layoutPolicy === "preserve-explicit" ? graphNodePositionAxes(rawNodeInputs[nodeIndex]) : { x: false, y: false }
+    ])
+  );
   const nodeIds = new Set(nodes.map((node) => node.id));
   const usedEdgeIds = new Set();
   const usedTargetIds = new Set();
@@ -2182,13 +2243,15 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
   const explicitPositionIds = new Set();
   const removedNodeIds = [];
   const removedEdgeIds = [];
+  let relayoutRequested = false;
   const summary = {
     addedNodeIds: [],
     updatedNodeIds: [],
     removedNodeIds,
     addedEdgeIds: [],
     updatedEdgeIds: [],
-    removedEdgeIds
+    removedEdgeIds,
+    relayoutApplied: false
   };
 
   if (operations.length === 0) {
@@ -2205,6 +2268,10 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
     const nodeIndex = typeof operation.nodeId === "string" ? page.nodes.findIndex((node) => node.id === operation.nodeId.trim()) : -1;
     const edgeIndex = typeof operation.edgeId === "string" ? page.edges.findIndex((edge) => edge.id === operation.edgeId.trim()) : -1;
     try {
+      if (operation.op === "relayout-page") {
+        relayoutRequested = true;
+        return;
+      }
       if (operation.op === "add-node") {
         if (!isObject(operation.node)) {
           violations.push(graphViolation("node_required", `${opPath}.node`, "add-node requires a node object.", "Provide the node to add."));
@@ -2308,11 +2375,25 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
     const position = nextMergedNodePosition(page, node.id, addedNodeIds, explicitPositionIds);
     return position ? { ...node, position } : node;
   });
+  if (relayoutRequested) {
+    const layout = normalizeGraphLayout(args?.layout || "horizontal");
+    const relayouted = relayoutGraphPage(page, layout, args?.layoutPolicy);
+    page.nodes = relayouted.nodes;
+    summary.relayoutApplied = true;
+  }
   page.updatedAt = nowIso();
   return { page, violations, summary };
 }
 
-function validateGraphStructure(page) {
+function graphNodeBounds(node) {
+  const x = toNumber(node?.position?.x, 0);
+  const y = toNumber(node?.position?.y, 0);
+  const width = optionalDimension(node?.width) || GRAPH_NODE_WIDTH;
+  const height = optionalDimension(node?.height) || GRAPH_NODE_HEIGHT;
+  return { x, y, width, height, right: x + width, bottom: y + height };
+}
+
+function validateGraphStructure(page, layout = "horizontal") {
   const violations = [];
   const nodeIds = new Set();
   page.nodes.forEach((node, index) => {
@@ -2324,6 +2405,7 @@ function validateGraphStructure(page) {
   const edgeIds = new Set();
   const pairs = new Set();
   const parentTargets = new Set();
+  const adjacency = new Map(page.nodes.map((node) => [node.id, []]));
   page.edges.forEach((edge, index) => {
     if (!edge.id || edgeIds.has(edge.id)) violations.push(graphViolation("duplicate_edge_id", `edges[${index}].id`, `Duplicate or empty edge id: ${edge.id || "(empty)"}`, "Assign every edge a unique non-empty id."));
     edgeIds.add(edge.id);
@@ -2335,6 +2417,43 @@ function validateGraphStructure(page) {
     pairs.add(pair);
     if (parentTargets.has(edge.target)) violations.push(graphViolation("multiple_parents", `edges[${index}].target`, `Node already has a parent edge: ${edge.target}`, "Keep one parent edge for each node."));
     parentTargets.add(edge.target);
+    adjacency.get(edge.source)?.push(edge.target);
+  });
+  const visiting = new Set();
+  const visited = new Set();
+  const visit = (nodeId) => {
+    if (visiting.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+    visiting.add(nodeId);
+    if ((adjacency.get(nodeId) || []).some(visit)) return true;
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+    return false;
+  };
+  if (page.nodes.some((node) => visit(node.id))) {
+    violations.push(graphViolation("cycle_detected", "edges", "Graph dependencies contain a cycle.", "Remove or reverse an edge so every dependency has a forward direction."));
+  }
+  page.nodes.forEach((node, index) => {
+    const bounds = graphNodeBounds(node);
+    page.nodes.slice(index + 1).forEach((other) => {
+      const otherBounds = graphNodeBounds(other);
+      const overlaps = bounds.x < otherBounds.right && bounds.right > otherBounds.x && bounds.y < otherBounds.bottom && bounds.bottom > otherBounds.y;
+      if (overlaps) {
+        violations.push(graphViolation("node_bounds_overlap", `nodes.${node.id}`, `Node bounds overlap: ${node.id} and ${other.id}.`, "Use automatic layout or move the nodes so their full rectangles do not intersect."));
+      }
+    });
+  });
+  const vertical = normalizeGraphLayout(layout) === "vertical";
+  page.edges.forEach((edge, index) => {
+    const source = page.nodes.find((node) => node.id === edge.source);
+    const target = page.nodes.find((node) => node.id === edge.target);
+    if (!source || !target) return;
+    const sourceBounds = graphNodeBounds(source);
+    const targetBounds = graphNodeBounds(target);
+    const forward = vertical ? targetBounds.y >= sourceBounds.bottom : targetBounds.x >= sourceBounds.right;
+    if (!forward) {
+      violations.push(graphViolation("layout_direction_invalid", `edges[${index}]`, `Dependency is not ${vertical ? "top-to-bottom" : "left-to-right"}: ${edge.source} -> ${edge.target}.`, "Use automatic layout or move the target after its source along the selected layout direction."));
+    }
   });
   return violations;
 }
@@ -2424,6 +2543,40 @@ function validateFrameworkManifest(page, manifest, projectPath) {
     const known = Object.values(FRAMEWORK_DOMAIN_COVERAGE).some((keys) => keys.includes(key)) || Object.values(FRAMEWORK_MATURITY_COVERAGE).some((keys) => keys.includes(key));
     if (!known) advisories.push({ code: "unknown_coverage_key", path: `frameworkManifest.coverage.${key}`, message: `Coverage key is not part of the current framework contracts: ${key}` });
   });
+  const semanticStructure = isObject(manifest.semanticStructure) ? manifest.semanticStructure : null;
+  const coveredNodeIds = new Set(Object.values(coverage).flatMap((ids) => (Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : [])));
+  if (!semanticStructure) {
+    violations.push(
+      graphViolation(
+        "mixed_responsibilities",
+        "frameworkManifest.semanticStructure",
+        "Semantic responsibility review is required for framework graph writes.",
+        "Describe each covered node's single responsibility and why its content is inseparable without using quantity-based thresholds."
+      )
+    );
+  } else {
+    coveredNodeIds.forEach((nodeId) => {
+      const assessment = semanticStructure[nodeId];
+      if (!isObject(assessment) || typeof assessment.responsibility !== "string" || !assessment.responsibility.trim()) {
+        violations.push(graphViolation("mixed_responsibilities", `frameworkManifest.semanticStructure.${nodeId}.responsibility`, `Covered node lacks one clear responsibility: ${nodeId}.`, "State one responsibility, or split independently executable, decidable, verifiable, or deliverable content into child nodes."));
+      }
+      if (!isObject(assessment) || typeof assessment.inseparableReason !== "string" || !assessment.inseparableReason.trim()) {
+        violations.push(graphViolation("hidden_submodules", `frameworkManifest.semanticStructure.${nodeId}.inseparableReason`, `Covered node has no semantic cohesion explanation: ${nodeId}.`, "Explain why the node's content must remain together, or expose independent content as related child nodes."));
+      }
+    });
+    Object.keys(semanticStructure).forEach((nodeId) => {
+      if (!nodeById.has(nodeId)) {
+        violations.push(graphViolation("relationship_missing", `frameworkManifest.semanticStructure.${nodeId}`, `Semantic structure references a missing node: ${nodeId}.`, "Use a final candidate node id and connect split modules with explicit edges."));
+      }
+    });
+    page.edges.forEach((edge) => {
+      const parentBody = String(nodeById.get(edge.source)?.data?.body || "").trim();
+      const childBody = String(nodeById.get(edge.target)?.data?.body || "").trim();
+      if (parentBody && childBody && parentBody !== childBody && parentBody.includes(childBody)) {
+        violations.push(graphViolation("parent_duplicates_children", `nodes.${edge.source}.body`, `Parent ${edge.source} duplicates the full body of child ${edge.target}.`, "Keep the parent as a summary and move detailed content to the child."));
+      }
+    });
+  }
   if (manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
     SOFTWARE_PRODUCT_GUIDANCE_FILES.forEach((guidanceFile) => {
       if (!projectHasGuidanceFile(projectPath, guidanceFile) && !graphHasGuidanceNode(page.nodes, guidanceFile)) {
@@ -2435,7 +2588,8 @@ function validateFrameworkManifest(page, manifest, projectPath) {
 }
 
 function validateGraphCandidate(page, args, projectPath) {
-  const structureViolations = validateGraphStructure(page);
+  const layout = normalizeGraphLayout(args?.layout || defaultGraphLayoutForType(normalizeGraphType(args?.graphType)));
+  const structureViolations = validateGraphStructure(page, layout);
   const framework = validateFrameworkManifest(page, args?.frameworkManifest, projectPath);
   return {
     passed: structureViolations.length === 0 && framework.violations.length === 0,
@@ -5647,6 +5801,11 @@ const tools = [
           enum: ["horizontal", "vertical", "grid"],
           description: "Preferred fallback orientation for nodes without explicit x/y or position. When omitted, Canvasight chooses a default from graphType and uses edge-aware dependency layers when edges exist."
         },
+        layoutPolicy: {
+          type: "string",
+          enum: ["auto", "preserve-explicit"],
+          description: "Coordinate policy for AI writes. auto is the default and recomputes the whole graph from topology; preserve-explicit keeps caller-provided axes for compatibility."
+        },
         viewport: {
           type: "object",
           description: "Optional viewport for generated pages.",
@@ -5663,13 +5822,13 @@ const tools = [
         },
         operations: {
           type: "array",
-          description: "Explicit incremental operations for merge-active-page: add/update/remove-node and add/update/remove-edge.",
+          description: "Explicit incremental operations for merge-active-page: add/update/remove-node, add/update/remove-edge, and relayout-page.",
           items: {
             type: "object",
             properties: {
               op: {
                 type: "string",
-                enum: ["add-node", "update-node", "remove-node", "add-edge", "update-edge", "remove-edge"]
+                enum: ["add-node", "update-node", "remove-node", "add-edge", "update-edge", "remove-edge", "relayout-page"]
               },
               node: { type: "object", additionalProperties: true },
               nodeId: { type: "string" },
@@ -5700,9 +5859,22 @@ const tools = [
                 items: { type: "string" },
                 minItems: 1
               }
+            },
+            semanticStructure: {
+              type: "object",
+              description: "Non-persisted semantic cohesion review keyed by final node id. Use meaning and responsibility, never counts or text length, to decide decomposition.",
+              additionalProperties: {
+                type: "object",
+                properties: {
+                  responsibility: { type: "string" },
+                  inseparableReason: { type: "string" }
+                },
+                required: ["responsibility", "inseparableReason"],
+                additionalProperties: false
+              }
             }
           },
-          required: ["intent", "primaryDomain", "maturity", "output", "coverage"],
+          required: ["intent", "primaryDomain", "maturity", "output", "coverage", "semanticStructure"],
           additionalProperties: false
         },
         nodes: {

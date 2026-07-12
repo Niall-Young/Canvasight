@@ -8,7 +8,7 @@ Validation is a pre-write quality gate, not a user-facing report. `write_canvasi
 - For `refine`, include at least one relevant primary-domain key and one relevant maturity key for the touched content. Validate the final Page's complete structure while leaving unrelated content unchanged.
 - For each secondary domain, include at least one relevant canonical key; do not import its entire contract unless the request truly requires it.
 - Coverage values contain final node IDs. Every referenced node must exist and substantively contain the promised content.
-- One node may satisfy multiple related keys, but a generic root or placeholder cannot satisfy an entire contract.
+- One node may satisfy multiple related keys only when they support one named responsibility and `semanticStructure` explains why the content belongs together. A generic root, placeholder, or overloaded prose node cannot satisfy an entire contract.
 
 ## Required repair loop
 
@@ -27,3 +27,7 @@ After a passing write, tell the user what was created or changed, not the intern
 ## Content rejection signals
 
 Reject coverage backed only by empty bodies, headings repeated as body text, placeholders, or vague claims such as “keep it simple” and “ensure quality.” Analysis must distinguish confirmed fact, inference, and question. Product/UX graphs must keep definition, flow, and design as the main structure; implementation and QA remain supporting branches.
+
+Treat `mixed_responsibilities`, `hidden_submodules`, `parent_duplicates_children`, and `relationship_missing` as semantic repair instructions. Split independently actionable or verifiable content, move repeated detail out of the parent, and connect the resulting relationship. If combined content truly expresses one inseparable conclusion, keep it together and make the responsibility and reason explicit in `semanticStructure`.
+
+Do not repair semantic violations by padding, mechanically splitting prose, forcing a fixed depth, or targeting node, branch, coverage, or character counts. Repair the responsibility boundaries and relationships instead.

@@ -66,6 +66,8 @@ Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatt
 
 生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
 
+正常 AI 写入默认使用 `layoutPolicy: auto`：Canvasight 根据最终节点关系从左到右分层、按完整子树居中并避让节点矩形；文章提纲等阅读顺序内容保持纵向。只有需要保留用户手工坐标时才使用 `preserve-explicit`。内容拆分依据职责与关系，而不是节点数、正文长度或固定层级；`frameworkManifest.semanticStructure` 记录每个覆盖节点的主要职责和内容必须保持在一起的原因。拓扑变化较大的增量编辑可提交 `relayout-page`。
+
 AI 写图前可以先用 `list_canvasight_node_templates` 扫描模板摘要，再用 `get_canvasight_node_template` 读取选中模板的完整内容。外部 AI 写入与网页自动保存通过 document revision 协调，过期会话不能静默覆盖较新的画布。
 
 ### 插件安装
@@ -278,6 +280,8 @@ Codex should use `write_canvasight_graph` instead of manually assembling the ful
 When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page and its `documentRevision`, then submit minimal node/edge operations with `merge-active-page`. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits preserve untouched content and positions.
 
 Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
+
+Normal AI writes use `layoutPolicy: auto`: Canvasight layers the final topology left to right, centers parents over complete subtrees, and separates full node bounds; reading-order outlines remain vertical. Use `preserve-explicit` only when user-authored coordinates must stay fixed. Decomposition follows responsibility and relationships rather than node counts, body length, or fixed depth; `frameworkManifest.semanticStructure` records each covered node's responsibility and why its content is inseparable. Broad incremental topology changes can include `relayout-page`.
 
 Before graph writing, AI can scan template summaries with `list_canvasight_node_templates`, then fetch one selected template with `get_canvasight_node_template`. External AI writes and web autosave coordinate through document revisions so a stale session cannot silently overwrite a newer canvas.
 

@@ -165,10 +165,11 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI-created nodes must use the same visual language, spacing, handles, attachments, and mode controls as manually created nodes.
 - AI-created edges must use the same connection rules and relationship highlighting as user-created edges.
 - AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction. When edges are present, generated nodes should be arranged by dependency layers rather than by simple index grid.
-- Explicit node coordinates from the user or AI should be preserved; automatic layout should only fill missing coordinates.
+- Normal AI writes use service-owned automatic placement: dependency graphs flow left to right, reading-order outlines flow top to bottom, parents center over complete subtrees, and full node bounds must not overlap. Preserve explicit coordinates only when the caller deliberately selects the compatibility policy because user-authored placement is itself part of the requested result.
 - AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
 - An active Page is a continuing thinking space, not disposable AI output. When the user refers to the current canvas, an existing node, or asks to continue, refine, expand, or remove content, AI should inspect that Page and apply a minimal merge instead of creating another Page or replacing unrelated content.
 - AI canvas generation should combine intent, domain, maturity, and output structure. Domain contracts define content completeness; output structure controls topology only and must not flatten product, design, technical, and verification content into an undifferentiated branch.
+- AI decomposition follows semantic responsibility rather than node counts, body length, coverage count, branch count, or fixed depth. A node owns one clearly named responsibility; independently executable, decidable, verifiable, or deliverable content becomes related nodes, while inseparable content may remain together with an explicit cohesion reason.
 - Candidate AI writes must pass structural and framework coverage validation before becoming visible canvas state. Validation feedback is an internal repair signal for the AI; users should receive the corrected editable result rather than a raw checklist of generation defects.
 - AI-generated content must remain fully editable by the user.
 - External AI writes and browser autosave must coordinate through a document revision contract. When AI writes a graph through the daemon, open browser sessions should reload the newer document automatically; stale browser saves must be rejected and reload the latest `.scatter/scatter.json` instead of overwriting externally generated Pages.
@@ -206,7 +207,7 @@ Pages are independent canvas workspaces inside a project. A Page is a user-contr
 
 - Users may create Pages for separate workflows, experiments, versions, branches, topics, or temporary drafts.
 - AI may create, select, or update Pages only when the write mode or explicit user request calls for it.
-- Incremental AI edits must preserve untouched nodes, edges, coordinates, and Page identity. Newly added nodes may use local dependency-aware placement, but must not trigger a full relayout of existing work.
+- Incremental AI edits preserve untouched nodes, edges, coordinates, and Page identity by default. When a split or relationship change invalidates the existing geometry, an explicit whole-Page relayout may reposition nodes while preserving their IDs, content, edges, and Page identity.
 - One Page may contain multiple task scenarios when the user's workflow calls for it.
 - One task scenario may span multiple Pages when the user intentionally separates it.
 - Page names should describe the user's workspace intent, not automatically mirror hidden AI classification.
