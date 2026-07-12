@@ -44,6 +44,12 @@ Every report carries the fields required by the schema. A report needs `schema_v
 - After an integration round, write an `integration-summary` report that depends on the relevant issue and solution reports and records roster changes, validation, unresolved work, and risks.
 - Archive only verified resolved material after its integration summary records the closure.
 
+## Git Delivery Evidence
+
+The Main Thread owns integration and declares the verified commit-ready scope. The Project Management Agent owns selective staging and commit for that scope; if the seat is unavailable, the Main Thread performs the same checklist from `agent-selection.md`.
+
+The integration summary must record the baseline HEAD, approved task-owned paths, verification result, planned commit subject, final worktree state, and either the created implementation commit hash or the exact allowed exception that prevented a commit. A report cannot reliably contain the hash of the same commit that introduces it; when necessary, persist the implementation commit hash in a later report commit or provide it as final delivery evidence. Do not leave a completed delivery recorded only as `pending`.
+
 ## Queue Rules
 
 When `QUEUE.md` exists, it contains exactly one row for each `open`, `assigned`, or `blocked` issue and no row for resolved or archived reports. Its columns and values must match the linked report exactly. The `summary` is the source report's level-one title; `report_version` is the report's `version`, not an independent queue version.

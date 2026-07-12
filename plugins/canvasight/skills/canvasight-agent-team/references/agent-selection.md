@@ -41,8 +41,21 @@ Do not add aliases such as `current_agent_id` or ad hoc role names. Use the sche
 - Development Standards Lead: `AGENTS.md`, commands, repo rules, and collaboration standards.
 - Test Supervisor Agent: reproducibility, smoke tests, browser checks, and residual-risk review.
 - Customer Support Agent: README, workflow guidance, troubleshooting, and release-facing explanations.
-- Project Management Agent: git scope, release hygiene, versioning, and delivery checks.
+- Project Management Agent: git scope, release hygiene, versioning, and delivery closure. Record the baseline HEAD and worktree state at task start. After the Main Thread freezes a verified commit-ready scope, inspect the task-owned diff, selectively stage only approved paths or hunks, recheck the staged scope, and create the project's conventional commit. Never use broad staging such as `git add -A` when unrelated or pre-existing changes may exist. If safe closure is impossible, leave ambiguous changes unstaged and record the exact exception.
 - Skill Expert Agent: `SKILL.md`, trigger wording, reference design, and skill validation.
+
+## Git Delivery Closure
+
+When the Project Management Agent is selected, use this order:
+
+1. At task start, record the branch, baseline HEAD, and worktree status so pre-existing changes remain identifiable.
+2. Receive the commit-ready file or hunk manifest from the Main Thread only after required verification passes and relevant issues are resolved or explicitly recorded as residual risks.
+3. Review the scoped diff and reject secrets, conflicts, unrelated files, generated noise, or changes whose ownership cannot be separated safely.
+4. Stage with explicit pathspecs or proven task-owned hunks. Do not use `git add -A`, `git add .`, or equivalent broad staging in a dirty shared worktree.
+5. Inspect `git diff --cached --name-only`, `git diff --cached --stat`, and `git diff --cached --check`. The staged paths must exactly match the approved manifest. Any edit after staging invalidates approval and requires a fresh review.
+6. If the staged diff is non-empty, create a small commit using the project's commit convention, then re-read `git status --short` and report the commit subject and hash to the Main Thread.
+
+Skipping the commit is allowed only when the user explicitly requests no commit, no task-owned diff exists, required verification failed or remains incomplete, a relevant issue is unresolved without an accepted risk, the task-owned scope cannot be separated from pre-existing or concurrent work, the repository is conflicted, or staging/commit hooks fail. Record the exact reason and remaining paths in the integration summary; do not use `commit: pending` as a substitute for Git closure.
 
 ## Avoid Over-Routing
 

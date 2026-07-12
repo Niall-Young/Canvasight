@@ -48,16 +48,16 @@ roles:
     replaced_by: null
     notes: Implemented graph context, merge operations, revision protection, and pre-write validation
   - role: Development Standards Lead
-    status: missing
-    agent_id: null
-    thread_id: null
+    status: active
+    agent_id: /root/development_standards_lead
+    thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-11T11:08:45Z
-    handoff_source: null
-    last_report: integration-summary-markdown-export-bundle
+    last_seen: 2026-07-12T04:07:10Z
+    handoff_source: issue-project-management-git-closure
+    last_report: integration-summary-project-management-git-closure
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: No durable workflow change required
+    notes: Reviewed durable Project Management delivery closure rules
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
@@ -81,25 +81,25 @@ roles:
     replaced_by: null
     notes: README review by Main Thread: no existing user documentation mentions this drawer control
   - role: Project Management Agent
-    status: missing
-    agent_id: null
-    thread_id: null
+    status: active
+    agent_id: /root/project_management_agent
+    thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-11T11:08:45Z
-    handoff_source: null
-    last_report: integration-summary-markdown-export-bundle
+    last_seen: 2026-07-12T04:07:10Z
+    handoff_source: issue-project-management-git-closure
+    last_report: solution-project-management-git-closure
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Main Thread verified scope and worktree state
+    notes: Defined baseline-aware selective staging and commit closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
-    thread_id: 019f5424-366d-72b3-9ada-094f3d1eec7e
+    thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T03:25:19Z
-    handoff_source: issue-intent-framework-skill
-    last_report: solution-intent-framework-skill
+    last_seen: 2026-07-12T04:07:10Z
+    handoff_source: issue-project-management-git-closure
+    last_report: integration-summary-project-management-git-closure
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Delivered composable graph-writer routing and 23 framework references
+    notes: Reviewed Agent Team Git closure instruction design and exceptions
 ```

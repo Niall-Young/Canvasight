@@ -14,7 +14,7 @@ Use this skill when Canvasight asks Codex to run with Agent Team enabled, or whe
 3. Read `ROSTER.md` for durable role-seat state, then linked reports and the latest integration summary before rebuilding a role on a new thread.
 4. Before accepting, blocking, solving, or handing off an issue, read its latest `owner`, `status`, and `version`. Do not write against a stale snapshot.
 5. Use `references/agent-selection.md` to select only the roles needed for the current work and `references/report-protocol.md` for write-back rules.
-6. Keep the main thread responsible for integration, conflict handling, validation, and final delivery.
+6. Keep the main thread responsible for integration, conflict handling, validation, and final delivery. After it freezes a verified commit-ready scope, have the Project Management Agent perform the scoped Git closure defined in the references; if that seat is unavailable, the main thread must perform the same closure.
 
 `ROSTER.md` preserves role-seat state, not a thread-local subagent process. Do not create every role by default; recreate only the seats required for the current work.
 
@@ -29,4 +29,5 @@ Use this skill when Canvasight asks Codex to run with Agent Team enabled, or whe
 - Write in this order: report -> affected roster seat -> derived queue. Never update the queue first.
 - Use stable schema role names in reports. `Main Thread` is the only reserved coordinator that need not have a roster seat.
 - Run `node scripts/validate-agent-team.mjs --root <project-root>` before delivering changes to a project that uses this protocol.
+- Do not leave verified task-owned changes at `commit: pending` merely because the main thread owns final delivery. Finish selective staging and commit unless a documented Git-closure exception applies.
 - If a project already has a conflicting collaboration protocol, preserve it, record the conflict, and ask for direction before replacing it.
