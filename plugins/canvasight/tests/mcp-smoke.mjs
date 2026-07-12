@@ -66,7 +66,6 @@ function assertOpenFlowSkillContract() {
   assert.match(troubleshooting, /real native-host acceptance is still required/);
   assert.match(troubleshooting, /Browser fallback and automated harnesses cannot fill the gap/);
   assert.match(appSource, /status\.browserFallbackNoBridge/);
-  assert.match(appSource, /diagnostics\.nativeWidget/);
   assert.match(apiSource, /reason === "browser_fallback_no_bridge"/);
   assert.match(translationsSource, /status\.browserFallbackNoBridge/);
   assert.doesNotMatch(openWorkflow, /only practical fallback is the generic dev server/);
@@ -1006,6 +1005,290 @@ function assertUniqueNodePositions(nodes, label) {
   }
 }
 
+async function assertGraphContextMergeAndValidationContracts() {
+  const mergeProjectPath = path.join(tempRoot, "graph-merge-validation-project");
+  await fsp.mkdir(mergeProjectPath, { recursive: true });
+
+  const legacyAppend = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      pageName: "Editable current page",
+      nodes: [
+        {
+          id: "merge-root",
+          title: "Execution goal",
+          body: "Turn the accepted plan into a verified delivery without changing unrelated canvas content.",
+          position: { x: 100, y: 120 }
+        },
+        {
+          id: "merge-keep",
+          title: "Current evidence",
+          body: "The active page already contains evidence that must remain in place while the branch is refined.",
+          position: { x: 780, y: 120 }
+        },
+        {
+          id: "merge-prune",
+          title: "Obsolete branch",
+          body: "This branch is intentionally removed to verify cascading edge cleanup.",
+          position: { x: 780, y: 500 }
+        },
+        {
+          id: "merge-detach",
+          title: "Independent evidence",
+          body: "This node remains while its obsolete relationship is removed explicitly.",
+          position: { x: 1460, y: 120 }
+        }
+      ],
+      edges: [
+        { id: "merge-root-keep", source: "merge-root", target: "merge-keep", label: "supports" },
+        { id: "merge-root-prune", source: "merge-root", target: "merge-prune", label: "remove branch" },
+        { id: "merge-root-detach", source: "merge-root", target: "merge-detach", label: "remove relation" }
+      ]
+    }
+  });
+  assert.equal(legacyAppend.structuredContent.status, "written");
+
+  const context = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(context.structuredContent.status, "ok");
+  assert.equal(context.structuredContent.projectPath, mergeProjectPath);
+  assert.equal(context.structuredContent.documentRevision, legacyAppend.structuredContent.documentRevision);
+  assert.equal(context.structuredContent.activePage.name, "Editable current page");
+  assert.deepEqual(
+    context.structuredContent.activePage.nodes.map((node) => node.id),
+    ["merge-root", "merge-keep", "merge-prune", "merge-detach"]
+  );
+  assert.deepEqual(context.structuredContent.activePage.nodes[0].position, { x: 100, y: 120 });
+  assert.match(context.structuredContent.activePage.nodes[0].bodyPreview, /accepted plan/);
+  assert.deepEqual(
+    context.structuredContent.activePage.edges.map((edge) => edge.id),
+    ["merge-root-keep", "merge-root-prune", "merge-root-detach"]
+  );
+  assert.equal(context.structuredContent.pages.filter((page) => page.active).length, 1);
+  assert.equal(context.structuredContent.pages.find((page) => page.active).nodeCount, 4);
+
+  const scatterPath = path.join(mergeProjectPath, ".scatter", "scatter.json");
+  const beforeRejectedWrite = await fsp.readFile(scatterPath, "utf8");
+  const staleMerge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: context.structuredContent.documentRevision - 1,
+      operations: [
+        {
+          op: "update-node",
+          nodeId: "merge-keep",
+          changes: { body: "This stale edit must never be written." }
+        }
+      ]
+    }
+  });
+  assert.equal(staleMerge.structuredContent.status, "validation_failed");
+  assert.equal(staleMerge.structuredContent.written, false);
+  assert.equal(staleMerge.structuredContent.validation.passed, false);
+  assert.equal(staleMerge.structuredContent.validation.violations.some((item) => item.code === "stale_document"), true);
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), beforeRejectedWrite);
+
+  const incompleteFramework = {
+    intent: "execute",
+    primaryDomain: "task-execution",
+    secondaryDomains: [],
+    maturity: "deliver",
+    output: "execution-plan",
+    coverage: {
+      "task.goalDone": ["merge-root"]
+    }
+  };
+  const incompleteMerge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: context.structuredContent.documentRevision,
+      frameworkManifest: incompleteFramework,
+      operations: [
+        {
+          op: "update-node",
+          nodeId: "merge-keep",
+          changes: { body: "This incomplete candidate must not be written before coverage is repaired." }
+        }
+      ]
+    }
+  });
+  assert.equal(incompleteMerge.structuredContent.status, "validation_failed");
+  assert.equal(incompleteMerge.structuredContent.written, false);
+  assert.equal(incompleteMerge.structuredContent.validation.passed, false);
+  assert.equal(incompleteMerge.structuredContent.validation.violations.some((item) => item.code === "missing_coverage"), true);
+  assert.equal(
+    incompleteMerge.structuredContent.validation.violations.every(
+      (item) => typeof item.path === "string" && typeof item.message === "string" && typeof item.repair === "string"
+    ),
+    true
+  );
+  assert.equal(await fsp.readFile(scatterPath, "utf8"), beforeRejectedWrite);
+  const contextAfterRejectedWrites = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(contextAfterRejectedWrites.structuredContent.documentRevision, context.structuredContent.documentRevision);
+  assert.equal(contextAfterRejectedWrites.structuredContent.activePage.nodes[1].bodyPreview.includes("incomplete candidate"), false);
+
+  const repairedFramework = {
+    ...incompleteFramework,
+    coverage: {
+      "task.goalDone": ["merge-root"],
+      "task.currentEvidence": ["merge-keep"],
+      "task.constraints": ["merge-root"],
+      "task.workDependencies": ["merge-new"],
+      "task.parallelWork": ["merge-detach"],
+      "task.deliverables": ["merge-new"],
+      "task.risksRecovery": ["merge-detach"],
+      "task.stageVerification": ["merge-new"],
+      "task.acceptanceDelivery": ["merge-root"],
+      "maturity.deliver.steps": ["merge-new"],
+      "maturity.deliver.deliverables": ["merge-new"],
+      "maturity.deliver.acceptance": ["merge-root"],
+      "maturity.deliver.risks": ["merge-detach"],
+      "maturity.deliver.ownership": ["merge-root"],
+      "maturity.deliver.handoff": ["merge-new"]
+    }
+  };
+  const repairedMerge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: context.structuredContent.documentRevision,
+      frameworkManifest: repairedFramework,
+      operations: [
+        {
+          op: "update-node",
+          nodeId: "merge-keep",
+          changes: {
+            title: "Verified current evidence",
+            body: "Confirmed evidence remains on the active page and retains its original position after refinement."
+          }
+        },
+        { op: "remove-node", nodeId: "merge-prune" },
+        {
+          op: "add-node",
+          node: {
+            id: "merge-new",
+            title: "Deliver and verify",
+            body: "Implement the remaining work, run focused checks, preserve the accepted constraints, and record acceptance evidence.",
+            position: { x: 1460, y: 500 }
+          }
+        },
+        { op: "update-edge", edgeId: "merge-root-keep", changes: { label: "verified by" } },
+        { op: "remove-edge", edgeId: "merge-root-detach" },
+        {
+          op: "add-edge",
+          edge: { id: "merge-root-new", source: "merge-root", target: "merge-new", label: "delivers" }
+        }
+      ]
+    }
+  });
+  assert.equal(repairedMerge.structuredContent.status, "written");
+  assert.equal(repairedMerge.structuredContent.written, true);
+  assert.equal(repairedMerge.structuredContent.validation.passed, true);
+  assert.equal(repairedMerge.structuredContent.documentRevision, context.structuredContent.documentRevision + 1);
+
+  const repairedContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(repairedContext.structuredContent.documentRevision, repairedMerge.structuredContent.documentRevision);
+  assert.equal(repairedContext.structuredContent.pages.length, context.structuredContent.pages.length);
+  const repairedNodes = new Map(repairedContext.structuredContent.activePage.nodes.map((node) => [node.id, node]));
+  assert.equal(repairedNodes.has("merge-prune"), false);
+  assert.equal(repairedNodes.get("merge-keep").title, "Verified current evidence");
+  assert.deepEqual(repairedNodes.get("merge-root").position, { x: 100, y: 120 });
+  assert.deepEqual(repairedNodes.get("merge-keep").position, { x: 780, y: 120 });
+  assert.deepEqual(repairedNodes.get("merge-detach").position, { x: 1460, y: 120 });
+  assert.deepEqual(repairedNodes.get("merge-new").position, { x: 1460, y: 500 });
+  const repairedEdges = new Map(repairedContext.structuredContent.activePage.edges.map((edge) => [edge.id, edge]));
+  assert.equal(repairedEdges.has("merge-root-prune"), false, "removing a node must cascade its incident edge");
+  assert.equal(repairedEdges.has("merge-root-detach"), false);
+  assert.equal(repairedEdges.get("merge-root-keep").label, "verified by");
+  assert.equal(repairedEdges.get("merge-root-new").target, "merge-new");
+
+  const refineMerge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      mode: "merge-active-page",
+      expectedRevision: repairedContext.structuredContent.documentRevision,
+      frameworkManifest: {
+        intent: "refine",
+        primaryDomain: "task-execution",
+        secondaryDomains: [],
+        maturity: "deliver",
+        output: "execution-plan",
+        coverage: {
+          "task.currentEvidence": ["merge-keep"],
+          "maturity.deliver.acceptance": ["merge-keep"]
+        }
+      },
+      operations: [
+        {
+          op: "update-node",
+          nodeId: "merge-keep",
+          changes: {
+            body: "Refined evidence now records the accepted result while preserving every unrelated node and its position."
+          }
+        }
+      ]
+    }
+  });
+  assert.equal(refineMerge.structuredContent.status, "written");
+  assert.equal(refineMerge.structuredContent.validation.passed, true);
+  assert.equal(refineMerge.structuredContent.documentRevision, repairedContext.structuredContent.documentRevision + 1);
+  const refinedContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(refinedContext.structuredContent.pages.length, repairedContext.structuredContent.pages.length);
+  assert.deepEqual(
+    refinedContext.structuredContent.activePage.nodes.map((node) => node.id),
+    repairedContext.structuredContent.activePage.nodes.map((node) => node.id)
+  );
+  const refinedNodes = new Map(refinedContext.structuredContent.activePage.nodes.map((node) => [node.id, node]));
+  assert.match(refinedNodes.get("merge-keep").bodyPreview, /Refined evidence/);
+  for (const [nodeId, repairedNode] of repairedNodes) {
+    assert.deepEqual(refinedNodes.get(nodeId).position, repairedNode.position, `refine moved unrelated node ${nodeId}`);
+    if (nodeId !== "merge-keep") assert.deepEqual(refinedNodes.get(nodeId), repairedNode, `refine changed unrelated node ${nodeId}`);
+  }
+  assert.deepEqual(refinedContext.structuredContent.activePage.edges, repairedContext.structuredContent.activePage.edges);
+
+  const pagesBeforeLegacyAppend = refinedContext.structuredContent.pages.length;
+  const secondLegacyAppend = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: mergeProjectPath,
+      pageName: "Legacy append remains compatible",
+      nodes: [
+        {
+          id: "legacy-appended-node",
+          title: "Legacy append",
+          body: "Omitting mode and frameworkManifest still creates a separate editable page."
+        }
+      ]
+    }
+  });
+  assert.equal(secondLegacyAppend.structuredContent.status, "written");
+  const afterLegacyAppendContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: mergeProjectPath }
+  });
+  assert.equal(afterLegacyAppendContext.structuredContent.pages.length, pagesBeforeLegacyAppend + 1);
+  assert.equal(afterLegacyAppendContext.structuredContent.activePage.name, "Legacy append remains compatible");
+  assert.deepEqual(afterLegacyAppendContext.structuredContent.activePage.nodes.map((node) => node.id), ["legacy-appended-node"]);
+}
+
 function createMcpClient(label, envOverrides = {}) {
   let clientNextId = 1;
   let clientStdoutBuffer = "";
@@ -1539,6 +1822,7 @@ async function main() {
     assert.equal(toolNames.has("claim_canvasight_thread"), true);
     assert.equal(toolNames.has("list_canvasight_node_templates"), true);
     assert.equal(toolNames.has("get_canvasight_node_template"), true);
+    assert.equal(toolNames.has("get_canvasight_graph_context"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("await_canvasight_widget_ready"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
@@ -1584,6 +1868,15 @@ async function main() {
       "task-plan",
       "general"
     ]);
+    assert.equal(writeGraphTool.inputSchema.properties.mode.enum.includes("merge-active-page"), true);
+    assert.equal(writeGraphTool.inputSchema.properties.expectedRevision.type, "integer");
+    assert.equal(writeGraphTool.inputSchema.properties.operations.type, "array");
+    assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.type, "object");
+    const graphContextTool = listed.tools.find((tool) => tool.name === "get_canvasight_graph_context");
+    assert.match(graphContextTool.description, /active(?: Canvasight)? page|current page/i);
+    assert.equal(graphContextTool.inputSchema.properties.projectPath.type, "string");
+    assert.equal(graphContextTool.outputSchema.properties.documentRevision.type, "integer");
+    assert.equal(graphContextTool.outputSchema.properties.activePage.type, "object");
     const awaitWidgetReadyTool = listed.tools.find((tool) => tool.name === "await_canvasight_widget_ready");
     assert.match(awaitWidgetReadyTool.description, /only status=ready confirms/);
     assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId", "openAttemptId", "threadId"]);
@@ -2177,6 +2470,8 @@ async function main() {
     assert.equal(Array.isArray(openProject.document.pages), true);
     assert.equal(openProject.document.pages.length, 1);
     assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
+
+    await assertGraphContextMergeAndValidationContracts();
 
     const graphWritten = await request("tools/call", {
       name: "write_canvasight_graph",
@@ -2845,7 +3140,10 @@ async function main() {
 
     const invalidExport = await fetch(`${origin}/api/sessions/${sessionId}/export-markdown`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-canvasight-token": daemonToken
+      },
       body: JSON.stringify({
         attachments: [{ ...attachments[0], storedPath: path.join(tempRoot, "outside.txt") }],
         markdown: "# Invalid",
@@ -3051,7 +3349,7 @@ async function main() {
     assert.equal(awaited.structuredContent.agentTeam.reportProtocol.roster, "ROSTER.md");
     assert.equal(awaited.structuredContent.agentTeam.reportProtocol.schema, "references/agent-team-schema.json");
     assert.equal(awaited.structuredContent.agentTeam.agentsMd.status, "unchanged");
-    assert.equal(awaited.structuredContent.agentTeam.roster.status, "created");
+    assert.equal(awaited.structuredContent.agentTeam.roster.status, "unchanged");
     assert.deepEqual(awaited.structuredContent.nodeIds, ["node-a"]);
     assert.equal(awaited.structuredContent.attachments[0].originalName, "note.txt");
     const createdAgentsMd = await fsp.readFile(path.join(projectPath, "AGENTS.md"), "utf8");

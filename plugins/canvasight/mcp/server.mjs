@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.3.9+codex.20260711114500";
+const SERVER_VERSION = "0.4.0+codex.20260712031116";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -24,9 +24,47 @@ const TEMPLATE_BODY_PREVIEW_CHARS = 240;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
 const VALID_RUN_MODES = new Set(["flow", "node"]);
-const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "replace-active-page", "replace-document"]);
+const VALID_GRAPH_WRITE_MODES = new Set(["append-page", "merge-active-page", "replace-active-page", "replace-document"]);
 const VALID_GRAPH_LAYOUTS = new Set(["horizontal", "vertical", "grid"]);
 const VALID_GRAPH_TYPES = new Set(["software-product", "article-outline", "codebase-structure", "task-plan", "general"]);
+const VALID_FRAMEWORK_INTENTS = new Set(["create", "analyze", "organize", "refine", "decide", "execute"]);
+const VALID_FRAMEWORK_DOMAINS = new Set(["software-product", "ux-design", "codebase", "article", "research", "task-execution"]);
+const VALID_FRAMEWORK_MATURITY = new Set(["explore", "define", "decide", "deliver"]);
+const VALID_FRAMEWORK_OUTPUTS = new Set(["exploration-map", "structured-outline", "system-map", "decision-map", "execution-plan"]);
+const FRAMEWORK_DOMAIN_COVERAGE = {
+  "software-product": [
+    "product.goal", "product.users", "product.value", "product.capabilities", "product.scope", "product.journey",
+    "product.informationArchitecture", "product.rules", "product.design", "product.success", "product.risks",
+    "product.technicalConstraints", "product.testingRelease", "product.deliverables"
+  ],
+  "ux-design": [
+    "ux.goal", "ux.context", "ux.taskFlow", "ux.informationArchitecture", "ux.pageHierarchy", "ux.components",
+    "ux.states", "ux.feedbackRecovery", "ux.visualDirection", "ux.accessibilityResponsive", "ux.acceptance"
+  ],
+  codebase: [
+    "codebase.purposeEntry", "codebase.directories", "codebase.modulesEvidence", "codebase.executionFlow", "codebase.dataState",
+    "codebase.dependenciesInterfaces", "codebase.tooling", "codebase.extensionPoints", "codebase.risksDebt",
+    "codebase.epistemicStatus", "codebase.relevantFiles"
+  ],
+  article: [
+    "article.purpose", "article.audience", "article.thesis", "article.narrative", "article.sections", "article.evidence",
+    "article.objections", "article.openingClosing", "article.gaps"
+  ],
+  research: [
+    "research.question", "research.scope", "research.factsSources", "research.dimensions", "research.hypotheses",
+    "research.evidenceCounterevidence", "research.uncertainty", "research.patterns", "research.conclusions", "research.implications"
+  ],
+  "task-execution": [
+    "task.goalDone", "task.currentEvidence", "task.constraints", "task.workDependencies", "task.parallelWork",
+    "task.deliverables", "task.risksRecovery", "task.stageVerification", "task.acceptanceDelivery"
+  ]
+};
+const FRAMEWORK_MATURITY_COVERAGE = {
+  explore: ["maturity.explore.boundary", "maturity.explore.knownUnknown", "maturity.explore.directions", "maturity.explore.nextQuestions"],
+  define: ["maturity.define.definitions", "maturity.define.rules", "maturity.define.flows", "maturity.define.boundaries", "maturity.define.acceptance"],
+  decide: ["maturity.decide.question", "maturity.decide.criteria", "maturity.decide.options", "maturity.decide.tradeoffs", "maturity.decide.result", "maturity.decide.rejected"],
+  deliver: ["maturity.deliver.steps", "maturity.deliver.deliverables", "maturity.deliver.acceptance", "maturity.deliver.risks", "maturity.deliver.ownership", "maturity.deliver.handoff"]
+};
 const GRAPH_NODE_WIDTH = 400;
 const GRAPH_NODE_HEIGHT = 220;
 const GRAPH_LAYER_GAP = 280;
@@ -2029,32 +2067,432 @@ function replaceActivePage(existingDocument, incomingPage) {
   );
 }
 
+function graphViolation(code, pathValue, message, repair) {
+  return {
+    code,
+    path: pathValue,
+    message,
+    repair
+  };
+}
+
+function validationFailure(documentRevision, violations, advisories = []) {
+  return {
+    status: "validation_failed",
+    written: false,
+    documentRevision,
+    validation: {
+      passed: false,
+      violations,
+      advisories
+    }
+  };
+}
+
+function activeScatterPage(document) {
+  return document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function mergeGraphNodeChanges(node, changes) {
+  const rawChanges = isObject(changes) ? changes : {};
+  const {
+    id: _id,
+    title,
+    body,
+    attachments,
+    effort,
+    runMode,
+    codexMode: _codexMode,
+    data: rawData,
+    position: rawPosition,
+    ...nodeChanges
+  } = rawChanges;
+  const dataChanges = isObject(rawData) ? rawData : {};
+  const { codexMode: _dataCodexMode, planMode: _planMode, ...safeDataChanges } = dataChanges;
+  return {
+    ...node,
+    ...nodeChanges,
+    ...(isObject(rawPosition)
+      ? {
+          position: {
+            ...node.position,
+            ...(hasGraphCoordinate(rawPosition.x) ? { x: Number(rawPosition.x) } : {}),
+            ...(hasGraphCoordinate(rawPosition.y) ? { y: Number(rawPosition.y) } : {})
+          }
+        }
+      : {}),
+    data: {
+      ...node.data,
+      ...safeDataChanges,
+      ...(typeof title === "string" ? { title: title.trim() } : {}),
+      ...(typeof body === "string" ? { body } : {}),
+      ...(Array.isArray(attachments) ? { attachments: attachments.map(normalizeAttachment) } : {}),
+      ...(effort !== undefined ? { effort: normalizeEffort(effort) } : {}),
+      ...(runMode !== undefined ? { runMode: normalizeRunMode(runMode) } : {})
+    }
+  };
+}
+
+function mergeGraphEdgeChanges(edge, changes) {
+  const rawChanges = isObject(changes) ? changes : {};
+  const { id: _id, ...safeChanges } = rawChanges;
+  return {
+    ...edge,
+    ...safeChanges,
+    ...(typeof safeChanges.source === "string" ? { source: safeChanges.source.trim() } : {}),
+    ...(typeof safeChanges.target === "string" ? { target: safeChanges.target.trim() } : {}),
+    ...(typeof safeChanges.label === "string" ? { label: safeChanges.label.trim() } : {})
+  };
+}
+
+function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds) {
+  if (explicitPositionIds.has(nodeId)) return null;
+  const incoming = page.edges.find((edge) => edge.target === nodeId);
+  const parent = incoming ? page.nodes.find((node) => node.id === incoming.source) : null;
+  const occupied = page.nodes.filter((node) => node.id !== nodeId).map((node) => node.position || { x: 0, y: 0 });
+  const maxX = occupied.length ? Math.max(...occupied.map((position) => toNumber(position.x, 0))) : 0;
+  const base = parent?.position
+    ? { x: toNumber(parent.position.x, 0) + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: toNumber(parent.position.y, 0) }
+    : { x: maxX + GRAPH_NODE_WIDTH + GRAPH_LAYER_GAP, y: 0 };
+  let candidate = base;
+  let row = 0;
+  const collides = (position) =>
+    occupied.some(
+      (other) =>
+        Math.abs(toNumber(other.x, 0) - position.x) < GRAPH_NODE_WIDTH &&
+        Math.abs(toNumber(other.y, 0) - position.y) < GRAPH_NODE_HEIGHT
+    );
+  while (collides(candidate)) {
+    row += 1;
+    candidate = { x: base.x, y: base.y + row * (GRAPH_NODE_HEIGHT + GRAPH_ROW_GAP) };
+  }
+  addedNodeIds.delete(nodeId);
+  return candidate;
+}
+
+function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
+  const page = cloneJson(existingPage);
+  const operations = Array.isArray(args?.operations) ? args.operations : [];
+  const violations = [];
+  const addedNodeIds = new Set();
+  const explicitPositionIds = new Set();
+  const removedNodeIds = [];
+  const removedEdgeIds = [];
+  const summary = {
+    addedNodeIds: [],
+    updatedNodeIds: [],
+    removedNodeIds,
+    addedEdgeIds: [],
+    updatedEdgeIds: [],
+    removedEdgeIds
+  };
+
+  if (operations.length === 0) {
+    violations.push(graphViolation("operations_required", "operations", "merge-active-page requires at least one operation.", "Add explicit node or edge operations."));
+    return { page, violations, summary };
+  }
+
+  operations.forEach((operation, index) => {
+    const opPath = `operations[${index}]`;
+    if (!isObject(operation) || typeof operation.op !== "string") {
+      violations.push(graphViolation("invalid_operation", opPath, "Operation must be an object with an op field.", "Use add/update/remove node or edge operations."));
+      return;
+    }
+    const nodeIndex = typeof operation.nodeId === "string" ? page.nodes.findIndex((node) => node.id === operation.nodeId.trim()) : -1;
+    const edgeIndex = typeof operation.edgeId === "string" ? page.edges.findIndex((edge) => edge.id === operation.edgeId.trim()) : -1;
+    try {
+      if (operation.op === "add-node") {
+        if (!isObject(operation.node)) {
+          violations.push(graphViolation("node_required", `${opPath}.node`, "add-node requires a node object.", "Provide the node to add."));
+          return;
+        }
+        const usedIds = new Set(page.nodes.map((node) => node.id));
+        const node = normalizeGraphNode(operation.node, page.nodes.length, normalizeGraphLayout(args?.layout), usedIds, templates, reusedTemplates);
+        page.nodes.push(node);
+        addedNodeIds.add(node.id);
+        if (graphNodePositionAxes(operation.node).x && graphNodePositionAxes(operation.node).y) explicitPositionIds.add(node.id);
+        summary.addedNodeIds.push(node.id);
+        return;
+      }
+      if (operation.op === "update-node") {
+        if (typeof operation.nodeId !== "string" || nodeIndex < 0) {
+          violations.push(graphViolation("node_not_found", `${opPath}.nodeId`, "update-node target does not exist.", "Re-read graph context and use an existing node id."));
+          return;
+        }
+        if (!isObject(operation.changes)) {
+          violations.push(graphViolation("changes_required", `${opPath}.changes`, "update-node requires a changes object.", "Provide the node fields to update."));
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(operation.changes, "id")) {
+          violations.push(graphViolation("immutable_id", `${opPath}.changes.id`, "Node ids cannot be changed.", "Remove id from changes and target the node with nodeId."));
+          return;
+        }
+        page.nodes[nodeIndex] = mergeGraphNodeChanges(page.nodes[nodeIndex], operation.changes);
+        summary.updatedNodeIds.push(page.nodes[nodeIndex].id);
+        return;
+      }
+      if (operation.op === "remove-node") {
+        if (typeof operation.nodeId !== "string" || nodeIndex < 0) {
+          violations.push(graphViolation("node_not_found", `${opPath}.nodeId`, "remove-node target does not exist.", "Re-read graph context and use an existing node id."));
+          return;
+        }
+        const [removed] = page.nodes.splice(nodeIndex, 1);
+        removedNodeIds.push(removed.id);
+        page.edges = page.edges.filter((edge) => {
+          if (edge.source !== removed.id && edge.target !== removed.id) return true;
+          removedEdgeIds.push(edge.id);
+          return false;
+        });
+        return;
+      }
+      if (operation.op === "add-edge") {
+        if (!isObject(operation.edge)) {
+          violations.push(graphViolation("edge_required", `${opPath}.edge`, "add-edge requires an edge object.", "Provide the edge to add."));
+          return;
+        }
+        const edge = {
+          ...operation.edge,
+          id:
+            typeof operation.edge.id === "string" && operation.edge.id.trim()
+              ? operation.edge.id.trim()
+              : generatedGraphId("edge", page.edges.length, new Set(page.edges.map((item) => item.id))),
+          source: typeof operation.edge.source === "string" ? operation.edge.source.trim() : "",
+          target: typeof operation.edge.target === "string" ? operation.edge.target.trim() : ""
+        };
+        if (page.edges.some((item) => item.id === edge.id)) {
+          violations.push(graphViolation("duplicate_edge_id", `${opPath}.edge.id`, `Duplicate edge id: ${edge.id}`, "Choose a unique edge id."));
+          return;
+        }
+        page.edges.push(edge);
+        summary.addedEdgeIds.push(edge.id);
+        return;
+      }
+      if (operation.op === "update-edge") {
+        if (typeof operation.edgeId !== "string" || edgeIndex < 0) {
+          violations.push(graphViolation("edge_not_found", `${opPath}.edgeId`, "update-edge target does not exist.", "Re-read graph context and use an existing edge id."));
+          return;
+        }
+        if (!isObject(operation.changes)) {
+          violations.push(graphViolation("changes_required", `${opPath}.changes`, "update-edge requires a changes object.", "Provide the edge fields to update."));
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(operation.changes, "id")) {
+          violations.push(graphViolation("immutable_id", `${opPath}.changes.id`, "Edge ids cannot be changed.", "Remove id from changes and target the edge with edgeId."));
+          return;
+        }
+        page.edges[edgeIndex] = mergeGraphEdgeChanges(page.edges[edgeIndex], operation.changes);
+        summary.updatedEdgeIds.push(page.edges[edgeIndex].id);
+        return;
+      }
+      if (operation.op === "remove-edge") {
+        if (typeof operation.edgeId !== "string" || edgeIndex < 0) {
+          violations.push(graphViolation("edge_not_found", `${opPath}.edgeId`, "remove-edge target does not exist.", "Re-read graph context and use an existing edge id."));
+          return;
+        }
+        const [removed] = page.edges.splice(edgeIndex, 1);
+        removedEdgeIds.push(removed.id);
+        return;
+      }
+      violations.push(graphViolation("unsupported_operation", `${opPath}.op`, `Unsupported operation: ${operation.op}`, "Use add/update/remove node or edge operations."));
+    } catch (error) {
+      violations.push(graphViolation("invalid_operation", opPath, error?.message || "Invalid graph operation.", "Correct this operation using the latest graph context."));
+    }
+  });
+
+  page.nodes = page.nodes.map((node) => {
+    if (!addedNodeIds.has(node.id)) return node;
+    const position = nextMergedNodePosition(page, node.id, addedNodeIds, explicitPositionIds);
+    return position ? { ...node, position } : node;
+  });
+  page.updatedAt = nowIso();
+  return { page, violations, summary };
+}
+
+function validateGraphStructure(page) {
+  const violations = [];
+  const nodeIds = new Set();
+  page.nodes.forEach((node, index) => {
+    if (!node.id || nodeIds.has(node.id)) {
+      violations.push(graphViolation("duplicate_node_id", `nodes[${index}].id`, `Duplicate or empty node id: ${node.id || "(empty)"}`, "Assign every node a unique non-empty id."));
+    }
+    nodeIds.add(node.id);
+  });
+  const edgeIds = new Set();
+  const pairs = new Set();
+  const parentTargets = new Set();
+  page.edges.forEach((edge, index) => {
+    if (!edge.id || edgeIds.has(edge.id)) violations.push(graphViolation("duplicate_edge_id", `edges[${index}].id`, `Duplicate or empty edge id: ${edge.id || "(empty)"}`, "Assign every edge a unique non-empty id."));
+    edgeIds.add(edge.id);
+    if (!nodeIds.has(edge.source)) violations.push(graphViolation("missing_edge_source", `edges[${index}].source`, `Edge source does not exist: ${edge.source}`, "Use an existing node id."));
+    if (!nodeIds.has(edge.target)) violations.push(graphViolation("missing_edge_target", `edges[${index}].target`, `Edge target does not exist: ${edge.target}`, "Use an existing node id."));
+    if (edge.source === edge.target) violations.push(graphViolation("self_edge", `edges[${index}]`, "An edge cannot connect a node to itself.", "Connect two different nodes or remove the edge."));
+    const pair = `${edge.source}\u0000${edge.target}`;
+    if (pairs.has(pair)) violations.push(graphViolation("duplicate_connection", `edges[${index}]`, `Duplicate connection: ${edge.source} -> ${edge.target}`, "Keep only one edge for this source-target pair."));
+    pairs.add(pair);
+    if (parentTargets.has(edge.target)) violations.push(graphViolation("multiple_parents", `edges[${index}].target`, `Node already has a parent edge: ${edge.target}`, "Keep one parent edge for each node."));
+    parentTargets.add(edge.target);
+  });
+  return violations;
+}
+
+function meaningfulFrameworkNode(node) {
+  const title = typeof node?.data?.title === "string" ? node.data.title.trim() : "";
+  const body = typeof node?.data?.body === "string" ? node.data.body.trim() : "";
+  const combined = `${title} ${body}`.trim().toLowerCase();
+  if (!title || !body) return false;
+  return !/^(todo|tbd|待补充|待完善|占位|placeholder|保持一致|简洁现代)[。.!！\s]*$/i.test(combined);
+}
+
+function validateFrameworkManifest(page, manifest, projectPath) {
+  if (manifest === undefined || manifest === null) return { violations: [], advisories: [] };
+  const violations = [];
+  const advisories = [];
+  if (!isObject(manifest)) {
+    return {
+      violations: [graphViolation("invalid_framework_manifest", "frameworkManifest", "frameworkManifest must be an object.", "Provide intent, primaryDomain, maturity, output, and coverage.")],
+      advisories
+    };
+  }
+  if (!VALID_FRAMEWORK_INTENTS.has(manifest.intent)) violations.push(graphViolation("invalid_framework_intent", "frameworkManifest.intent", `Unsupported intent: ${manifest.intent || "(empty)"}`, "Use a supported intent reference."));
+  if (!VALID_FRAMEWORK_DOMAINS.has(manifest.primaryDomain)) violations.push(graphViolation("invalid_primary_domain", "frameworkManifest.primaryDomain", `Unsupported primary domain: ${manifest.primaryDomain || "(empty)"}`, "Use a supported primary domain reference."));
+  if (!VALID_FRAMEWORK_MATURITY.has(manifest.maturity)) violations.push(graphViolation("invalid_framework_maturity", "frameworkManifest.maturity", `Unsupported maturity: ${manifest.maturity || "(empty)"}`, "Use explore, define, decide, or deliver."));
+  if (!VALID_FRAMEWORK_OUTPUTS.has(manifest.output)) violations.push(graphViolation("invalid_framework_output", "frameworkManifest.output", `Unsupported output: ${manifest.output || "(empty)"}`, "Use a supported output topology."));
+  const secondaryDomains = Array.isArray(manifest.secondaryDomains) ? manifest.secondaryDomains : [];
+  secondaryDomains.forEach((domain, index) => {
+    if (!VALID_FRAMEWORK_DOMAINS.has(domain) || domain === manifest.primaryDomain) {
+      violations.push(graphViolation("invalid_secondary_domain", `frameworkManifest.secondaryDomains[${index}]`, `Invalid secondary domain: ${domain}`, "Use a supported domain different from primaryDomain."));
+    }
+  });
+  const coverage = isObject(manifest.coverage) ? manifest.coverage : {};
+  if (!isObject(manifest.coverage)) violations.push(graphViolation("coverage_required", "frameworkManifest.coverage", "frameworkManifest.coverage must map contract keys to node id arrays.", "Add coverage for every primary-domain and maturity contract key."));
+  const nodeById = new Map(page.nodes.map((node) => [node.id, node]));
+  const validateCoverageKey = (key, required = true) => {
+    const ids = coverage[key];
+    if (!Array.isArray(ids) || ids.length === 0) {
+      if (required) violations.push(graphViolation("missing_coverage", `frameworkManifest.coverage.${key}`, `Required coverage is missing: ${key}`, `Add or update a node that satisfies ${key}, then map its id here.`));
+      return false;
+    }
+    ids.forEach((nodeId, index) => {
+      const node = typeof nodeId === "string" ? nodeById.get(nodeId) : null;
+      if (!node) {
+        violations.push(graphViolation("coverage_node_not_found", `frameworkManifest.coverage.${key}[${index}]`, `Coverage references a missing node: ${String(nodeId)}`, "Use a node id from the final candidate page."));
+      } else if (!meaningfulFrameworkNode(node)) {
+        violations.push(graphViolation("coverage_content_incomplete", `frameworkManifest.coverage.${key}[${index}]`, `Coverage node is empty or placeholder-only: ${node.id}`, `Give ${node.id} a specific title and substantive body before retrying.`));
+      }
+    });
+    return true;
+  };
+  const primaryDomainKeys = FRAMEWORK_DOMAIN_COVERAGE[manifest.primaryDomain] || [];
+  const maturityKeys = FRAMEWORK_MATURITY_COVERAGE[manifest.maturity] || [];
+  if (manifest.intent === "refine") {
+    const suppliedPrimaryKeys = primaryDomainKeys.filter((key) => Array.isArray(coverage[key]) && coverage[key].length > 0);
+    const suppliedMaturityKeys = maturityKeys.filter((key) => Array.isArray(coverage[key]) && coverage[key].length > 0);
+    if (suppliedPrimaryKeys.length === 0) {
+      violations.push(graphViolation("missing_coverage", "frameworkManifest.coverage", `Refine requires at least one ${manifest.primaryDomain} coverage key.`, `Map the refined content to one canonical ${manifest.primaryDomain} contract key.`));
+    }
+    if (suppliedMaturityKeys.length === 0) {
+      violations.push(graphViolation("missing_coverage", "frameworkManifest.coverage", `Refine requires at least one ${manifest.maturity} maturity coverage key.`, `Map the refined content to one canonical ${manifest.maturity} maturity key.`));
+    }
+    const knownCoverageKeys = new Set([
+      ...Object.values(FRAMEWORK_DOMAIN_COVERAGE).flat(),
+      ...Object.values(FRAMEWORK_MATURITY_COVERAGE).flat()
+    ]);
+    Object.keys(coverage).forEach((key) => {
+      if (knownCoverageKeys.has(key)) validateCoverageKey(key, false);
+    });
+    primaryDomainKeys.filter((key) => !suppliedPrimaryKeys.includes(key)).forEach((key) => {
+      advisories.push({ code: "refine_contract_omitted", path: `frameworkManifest.coverage.${key}`, message: `Refine did not touch primary-domain contract key: ${key}` });
+    });
+    maturityKeys.filter((key) => !suppliedMaturityKeys.includes(key)).forEach((key) => {
+      advisories.push({ code: "refine_contract_omitted", path: `frameworkManifest.coverage.${key}`, message: `Refine did not touch maturity contract key: ${key}` });
+    });
+  } else {
+    primaryDomainKeys.forEach((key) => validateCoverageKey(key));
+    maturityKeys.forEach((key) => validateCoverageKey(key));
+  }
+  secondaryDomains.forEach((domain) => {
+    const keys = FRAMEWORK_DOMAIN_COVERAGE[domain] || [];
+    if (!keys.some((key) => Array.isArray(coverage[key]) && coverage[key].length > 0)) {
+      violations.push(graphViolation("secondary_domain_coverage_missing", "frameworkManifest.coverage", `Secondary domain has no relevant coverage: ${domain}`, `Map at least one ${domain} contract key to a substantive node.`));
+    }
+  });
+  Object.entries(coverage).forEach(([key]) => {
+    const known = Object.values(FRAMEWORK_DOMAIN_COVERAGE).some((keys) => keys.includes(key)) || Object.values(FRAMEWORK_MATURITY_COVERAGE).some((keys) => keys.includes(key));
+    if (!known) advisories.push({ code: "unknown_coverage_key", path: `frameworkManifest.coverage.${key}`, message: `Coverage key is not part of the current framework contracts: ${key}` });
+  });
+  if (manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
+    SOFTWARE_PRODUCT_GUIDANCE_FILES.forEach((guidanceFile) => {
+      if (!projectHasGuidanceFile(projectPath, guidanceFile) && !graphHasGuidanceNode(page.nodes, guidanceFile)) {
+        violations.push(graphViolation("project_guidance_missing", "frameworkManifest.coverage.product.deliverables", `Project requires a delivery node for missing ${guidanceFile.canonicalName}.`, `Add a node that explicitly creates ${guidanceFile.canonicalName}.`));
+      }
+    });
+  }
+  return { violations, advisories };
+}
+
+function validateGraphCandidate(page, args, projectPath) {
+  const structureViolations = validateGraphStructure(page);
+  const framework = validateFrameworkManifest(page, args?.frameworkManifest, projectPath);
+  return {
+    passed: structureViolations.length === 0 && framework.violations.length === 0,
+    violations: [...structureViolations, ...framework.violations],
+    advisories: framework.advisories
+  };
+}
+
 async function writeScatterGraph(projectPath, args) {
   return withProjectWriteLock(projectPath, async () => {
     const mode = normalizeGraphWriteMode(args?.mode);
     const existingDocument = await readScatterDocument(projectPath);
+    const currentRevision = projectDocumentRevision(projectPath);
     const reusedTemplates = [];
     const projectGuidanceNodes = [];
     const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
-    const incomingPages = graphPageInputs(args).map((page, index) =>
-      buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
-    );
     const now = nowIso();
     let pages;
     let activePageId;
+    let mutationSummary = null;
 
-    if (mode === "replace-document") {
-      pages = incomingPages;
-      activePageId =
-        typeof args?.activePageId === "string" && incomingPages.some((page) => page.id === args.activePageId)
-          ? args.activePageId
-          : incomingPages[0].id;
-    } else if (mode === "replace-active-page") {
-      pages = replaceActivePage(existingDocument, incomingPages[0]);
-      activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
+    if (mode === "merge-active-page") {
+      if (typeof args?.expectedRevision !== "number" || !Number.isFinite(args.expectedRevision) || args.expectedRevision !== currentRevision) {
+        return validationFailure(currentRevision, [
+          graphViolation("stale_document", "expectedRevision", "Canvasight document revision is missing or stale.", "Call get_canvasight_graph_context again and rebuild the patch against its documentRevision.")
+        ]);
+      }
+      const currentPage = activeScatterPage(existingDocument);
+      const merged = applyMergeOperations(currentPage, args, templates, reusedTemplates);
+      if (merged.violations.length > 0) return validationFailure(currentRevision, merged.violations);
+      const validation = validateGraphCandidate(merged.page, args, projectPath);
+      if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
+      pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? merged.page : page));
+      activePageId = currentPage.id;
+      mutationSummary = merged.summary;
     } else {
-      pages = [...existingDocument.pages, ...incomingPages];
-      activePageId = incomingPages[incomingPages.length - 1].id;
+      const incomingPages = graphPageInputs(args).map((page, index) =>
+        buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
+      );
+      for (let index = 0; index < incomingPages.length; index += 1) {
+        const validation = validateGraphCandidate(incomingPages[index], args, projectPath);
+        if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
+      }
+
+      if (mode === "replace-document") {
+        pages = incomingPages;
+        activePageId =
+          typeof args?.activePageId === "string" && incomingPages.some((page) => page.id === args.activePageId)
+            ? args.activePageId
+            : incomingPages[0].id;
+      } else if (mode === "replace-active-page") {
+        pages = replaceActivePage(existingDocument, incomingPages[0]);
+        activePageId = existingDocument.activePageId && pages.some((page) => page.id === existingDocument.activePageId) ? existingDocument.activePageId : pages[0].id;
+      } else {
+        pages = [...existingDocument.pages, ...incomingPages];
+        activePageId = incomingPages[incomingPages.length - 1].id;
+      }
     }
 
     const activePage = pages.find((page) => page.id === activePageId) || pages[0];
@@ -2081,7 +2519,20 @@ async function writeScatterGraph(projectPath, args) {
       updatedAt: document.updatedAt
     });
 
-    return { document, documentRevision, reusedTemplates, projectGuidanceNodes };
+    return {
+      status: "written",
+      written: true,
+      document,
+      documentRevision,
+      reusedTemplates,
+      projectGuidanceNodes,
+      mutationSummary,
+      validation: {
+        passed: true,
+        violations: [],
+        advisories: []
+      }
+    };
   });
 }
 
@@ -2094,6 +2545,52 @@ async function openProject(projectPath) {
       updatedAt: document.updatedAt
     },
     document
+  };
+}
+
+function summarizeGraphContextNode(node) {
+  const body = typeof node?.data?.body === "string" ? node.data.body : "";
+  return {
+    id: node.id,
+    title: typeof node?.data?.title === "string" ? node.data.title : "",
+    bodyPreview: body.length > TEMPLATE_BODY_PREVIEW_CHARS ? `${body.slice(0, TEMPLATE_BODY_PREVIEW_CHARS - 1)}…` : body,
+    position: {
+      x: toNumber(node?.position?.x, 0),
+      y: toNumber(node?.position?.y, 0)
+    }
+  };
+}
+
+function graphContext(projectPath, document) {
+  const activePage = activeScatterPage(document);
+  const nodes = activePage.nodes.map(summarizeGraphContextNode);
+  const edges = activePage.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    ...(typeof edge.label === "string" && edge.label ? { label: edge.label } : {})
+  }));
+  return {
+    status: "ok",
+    projectPath,
+    scatterPath: scatterPath(projectPath),
+    documentRevision: projectDocumentRevision(projectPath),
+    activePage: {
+      id: activePage.id,
+      name: activePage.name,
+      viewport: activePage.viewport,
+      nodes,
+      edges
+    },
+    nodes,
+    edges,
+    pages: document.pages.map((page) => ({
+      id: page.id,
+      name: page.name,
+      nodeCount: page.nodes.length,
+      edgeCount: page.edges.length,
+      active: page.id === activePage.id
+    }))
   };
 }
 
@@ -4047,19 +4544,24 @@ async function handleHttp(req, res) {
       throw new HttpError(405, "Expected GET or POST");
     }
 
+    if (url.pathname === "/api/graphs/context") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const threadId = optionalThreadId(body?.threadId);
+      const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+      const document = await readScatterDocument(projectPath);
+      sendJson(res, 200, graphContext(projectPath, document));
+      return;
+    }
+
     if (url.pathname === "/api/graphs/write") {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
       const body = await readJsonBody(req);
       const threadId = optionalThreadId(body?.threadId) || optionalThreadId(body?.args?.threadId);
       const projectPath = await resolveSessionProjectPath(body.projectPath || body?.args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
-      const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await writeScatterGraph(projectPath, body.args || body);
-      sendJson(res, 200, {
-        document,
-        documentRevision,
-        reusedTemplates,
-        projectGuidanceNodes
-      });
+      sendJson(res, 200, await writeScatterGraph(projectPath, body.args || body));
       return;
     }
 
@@ -4420,6 +4922,32 @@ const looseObjectOutputSchema = {
   additionalProperties: true
 };
 
+const canvasightGraphContextOutputSchema = {
+  type: "object",
+  properties: {
+    status: { type: "string" },
+    projectPath: { type: "string" },
+    scatterPath: { type: "string" },
+    documentRevision: { type: "integer" },
+    activePage: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        viewport: { type: "object", additionalProperties: true },
+        nodes: { type: "array", items: { type: "object", additionalProperties: true } },
+        edges: { type: "array", items: { type: "object", additionalProperties: true } }
+      },
+      additionalProperties: true
+    },
+    nodes: { type: "array", items: { type: "object", additionalProperties: true } },
+    edges: { type: "array", items: { type: "object", additionalProperties: true } },
+    pages: { type: "array", items: { type: "object", additionalProperties: true } }
+  },
+  required: ["status", "projectPath", "documentRevision", "activePage", "nodes", "edges", "pages"],
+  additionalProperties: true
+};
+
 function publicWidgetOpenResult(widgetData) {
   return {
     status: widgetData.status,
@@ -4610,11 +5138,25 @@ async function toolGetCanvasightNodeTemplate(args) {
   );
 }
 
+async function toolGetCanvasightGraphContext(args) {
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+  const daemon = await ensureDaemonServer();
+  const context = await daemonJson(daemon, "/api/graphs/context", {
+    method: "POST",
+    body: JSON.stringify({ projectPath, threadId })
+  });
+  return toolResult(
+    context,
+    `Canvasight graph context: ${context.activePage.name} (${context.nodes.length} nodes, revision ${context.documentRevision})`
+  );
+}
+
 async function toolWriteCanvasightGraph(args) {
   const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
   const daemon = await ensureDaemonServer();
-  const { document, documentRevision, reusedTemplates, projectGuidanceNodes } = await daemonJson(daemon, "/api/graphs/write", {
+  const result = await daemonJson(daemon, "/api/graphs/write", {
     method: "POST",
     body: JSON.stringify({
       projectPath,
@@ -4624,6 +5166,19 @@ async function toolWriteCanvasightGraph(args) {
       }
     })
   });
+  if (result?.status === "validation_failed") {
+    return toolResult(
+      {
+        ...result,
+        projectPath,
+        scatterPath: scatterPath(projectPath),
+        mode: normalizeGraphWriteMode(args?.mode),
+        graphType: normalizeGraphType(args?.graphType)
+      },
+      "Canvasight candidate was not written. Repair the returned validation violations and retry against the latest document revision."
+    );
+  }
+  const { document, documentRevision, reusedTemplates, projectGuidanceNodes, mutationSummary, validation, written } = result;
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
@@ -4641,6 +5196,7 @@ async function toolWriteCanvasightGraph(args) {
   return toolResult(
     {
       status: "written",
+      written: written === true,
       projectPath,
       scatterPath: scatterPath(projectPath),
       mode: normalizeGraphWriteMode(args?.mode),
@@ -4652,6 +5208,8 @@ async function toolWriteCanvasightGraph(args) {
       edgeIds,
       reusedTemplates,
       projectGuidanceNodes,
+      mutationSummary,
+      validation,
       document
     },
     summary
@@ -5023,6 +5581,26 @@ const tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "get_canvasight_graph_context",
+    description:
+      "Read the active Canvasight page and current document revision before deciding whether to append, replace, or incrementally edit the graph. Use the returned ids and revision for merge-active-page operations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Optional local project path. Defaults to the current Canvasight project."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional current Codex thread id used to resolve its project."
+        }
+      },
+      additionalProperties: false
+    },
+    outputSchema: canvasightGraphContextOutputSchema
+  },
+  {
     name: "write_canvasight_graph",
     description:
       "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Can reuse saved global node templates through templateId or templateQuery.",
@@ -5039,8 +5617,12 @@ const tools = [
         },
         mode: {
           type: "string",
-          enum: ["append-page", "replace-active-page", "replace-document"],
-          description: "Write behavior. Defaults to append-page so AI output does not overwrite existing pages."
+          enum: ["append-page", "merge-active-page", "replace-active-page", "replace-document"],
+          description: "Write behavior. Use merge-active-page with expectedRevision and operations to preserve and edit the active page."
+        },
+        expectedRevision: {
+          type: "integer",
+          description: "Revision returned by get_canvasight_graph_context. Required for merge-active-page stale-write protection."
         },
         graphType: {
           type: "string",
@@ -5078,6 +5660,50 @@ const tools = [
         reuseTemplates: {
           type: "boolean",
           description: "Whether to allow saved global node templates to be reused. Defaults to true."
+        },
+        operations: {
+          type: "array",
+          description: "Explicit incremental operations for merge-active-page: add/update/remove-node and add/update/remove-edge.",
+          items: {
+            type: "object",
+            properties: {
+              op: {
+                type: "string",
+                enum: ["add-node", "update-node", "remove-node", "add-edge", "update-edge", "remove-edge"]
+              },
+              node: { type: "object", additionalProperties: true },
+              nodeId: { type: "string" },
+              edge: { type: "object", additionalProperties: true },
+              edgeId: { type: "string" },
+              changes: { type: "object", additionalProperties: true }
+            },
+            required: ["op"],
+            additionalProperties: false
+          }
+        },
+        frameworkManifest: {
+          type: "object",
+          description: "Non-persisted framework selection and final-page coverage used for closed-loop validation before writing.",
+          properties: {
+            intent: { type: "string", enum: ["create", "analyze", "organize", "refine", "decide", "execute"] },
+            primaryDomain: { type: "string", enum: ["software-product", "ux-design", "codebase", "article", "research", "task-execution"] },
+            secondaryDomains: {
+              type: "array",
+              items: { type: "string", enum: ["software-product", "ux-design", "codebase", "article", "research", "task-execution"] }
+            },
+            maturity: { type: "string", enum: ["explore", "define", "decide", "deliver"] },
+            output: { type: "string", enum: ["exploration-map", "structured-outline", "system-map", "decision-map", "execution-plan"] },
+            coverage: {
+              type: "object",
+              additionalProperties: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 1
+              }
+            }
+          },
+          required: ["intent", "primaryDomain", "maturity", "output", "coverage"],
+          additionalProperties: false
         },
         nodes: {
           type: "array",
@@ -5222,6 +5848,7 @@ async function callTool(name, args) {
   if (name === "claim_canvasight_thread") return toolClaimCanvasightThread(args || {});
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
+  if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});

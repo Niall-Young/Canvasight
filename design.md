@@ -167,6 +167,9 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI-generated layouts should avoid overlapping nodes by default and should preserve a readable flow direction. When edges are present, generated nodes should be arranged by dependency layers rather than by simple index grid.
 - Explicit node coordinates from the user or AI should be preserved; automatic layout should only fill missing coordinates.
 - AI output should use the requested write mode to decide whether to append, replace the active Page, or replace the document. Task classification must not silently change Page behavior.
+- An active Page is a continuing thinking space, not disposable AI output. When the user refers to the current canvas, an existing node, or asks to continue, refine, expand, or remove content, AI should inspect that Page and apply a minimal merge instead of creating another Page or replacing unrelated content.
+- AI canvas generation should combine intent, domain, maturity, and output structure. Domain contracts define content completeness; output structure controls topology only and must not flatten product, design, technical, and verification content into an undifferentiated branch.
+- Candidate AI writes must pass structural and framework coverage validation before becoming visible canvas state. Validation feedback is an internal repair signal for the AI; users should receive the corrected editable result rather than a raw checklist of generation defects.
 - AI-generated content must remain fully editable by the user.
 - External AI writes and browser autosave must coordinate through a document revision contract. When AI writes a graph through the daemon, open browser sessions should reload the newer document automatically; stale browser saves must be rejected and reload the latest `.scatter/scatter.json` instead of overwriting externally generated Pages.
 
@@ -203,6 +206,7 @@ Pages are independent canvas workspaces inside a project. A Page is a user-contr
 
 - Users may create Pages for separate workflows, experiments, versions, branches, topics, or temporary drafts.
 - AI may create, select, or update Pages only when the write mode or explicit user request calls for it.
+- Incremental AI edits must preserve untouched nodes, edges, coordinates, and Page identity. Newly added nodes may use local dependency-aware placement, but must not trigger a full relayout of existing work.
 - One Page may contain multiple task scenarios when the user's workflow calls for it.
 - One task scenario may span multiple Pages when the user intentionally separates it.
 - Page names should describe the user's workspace intent, not automatically mirror hidden AI classification.

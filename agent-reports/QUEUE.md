@@ -17,6 +17,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-intent-framework-graph-merge.md` - integrated composable thinking frameworks, current-Page merge operations, closed-loop validation, regression coverage, docs, and version 0.4.0 installation; native-host acceptance remains unverified until Codex restarts.
 - `agent-reports/resolved/20260711-0907-integration-summary-agent-team-role-registry-sync.md` - integrated the Agent Team role-registry sync, validation results, compatibility boundary, installation, and follow-up risks.
 - `agent-reports/resolved/20260711-0905-skill-expert-solution-agent-team-role-registry-sync.md` - reviewed the upstream role-registry sync and recorded the narrower packaged validator coverage.
 - `agent-reports/resolved/20260711-0854-skill-expert-issue-upstream-agent-team-role-registry.md` - Canvasight Agent Team role-registry protocol synchronized with retained compatibility name and schema/ref path audit; local validator/test coverage remains explicitly narrower than upstream.

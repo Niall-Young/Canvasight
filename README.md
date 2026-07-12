@@ -62,6 +62,10 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatter.json`。默认 `mode` 是 `append-page`，只有用户明确要求覆盖时才使用 `replace-active-page` 或 `replace-document`。`graphType` 只决定节点组织策略，不决定 Page 的写入方式。
 
+当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page 和 `documentRevision`，再用 `merge-active-page` 提交最小的节点/连线 operations。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改会保留未涉及的内容和位置。
+
+生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
+
 AI 写图前可以先用 `list_canvasight_node_templates` 扫描模板摘要，再用 `get_canvasight_node_template` 读取选中模板的完整内容。外部 AI 写入与网页自动保存通过 document revision 协调，过期会话不能静默覆盖较新的画布。
 
 ### 插件安装
@@ -88,6 +92,7 @@ codex plugin list
 
 画布和模板：
 
+- `get_canvasight_graph_context`
 - `write_canvasight_graph`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
@@ -270,6 +275,10 @@ You can ask Codex to turn product requirements, article structure, code architec
 
 Codex should use `write_canvasight_graph` instead of manually assembling the full `.scatter/scatter.json`. The default `mode` is `append-page`; use `replace-active-page` or `replace-document` only when replacement is explicit. `graphType` controls node organization, not Page write behavior.
 
+When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page and its `documentRevision`, then submit minimal node/edge operations with `merge-active-page`. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits preserve untouched content and positions.
+
+Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
+
 Before graph writing, AI can scan template summaries with `list_canvasight_node_templates`, then fetch one selected template with `get_canvasight_node_template`. External AI writes and web autosave coordinate through document revisions so a stale session cannot silently overwrite a newer canvas.
 
 ### Plugin Installation
@@ -296,6 +305,7 @@ Native open and confirmation:
 
 Canvas and templates:
 
+- `get_canvasight_graph_context`
 - `write_canvasight_graph`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
