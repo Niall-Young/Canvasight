@@ -404,8 +404,13 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
                     }}
                   />
                 </RadixDropdownMenu.Item>
-                <RadixDropdownMenu.Item asChild>
-                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
+                <RadixDropdownMenu.Item
+                  asChild
+                  onSelect={() => {
+                    requestAnimationFrame(() => taskNodeActions?.deleteNode(id));
+                  }}
+                >
+                  <ActionMenuItem icon="trash" label={t("task.delete")} />
                 </RadixDropdownMenu.Item>
               </RadixDropdownMenu.Content>
             </RadixDropdownMenu.Portal>
