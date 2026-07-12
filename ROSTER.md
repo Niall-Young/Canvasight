@@ -17,14 +17,14 @@ roles:
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
-    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
+    thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:51:06Z
-    handoff_source: null
-    last_report: integration-summary-node-menu-delete-stale-snapshot
+    last_seen: 2026-07-12T14:04:28Z
+    handoff_source: 20260710-1506-development-issue-native-open-attempt-refactor
+    last_report: integration-summary-native-widget-binding-reuse-timeout
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Node delete interaction reviewed; existing immediate Undo design rule remains sufficient
+    notes: Reviewed reused-widget startup UX and synchronized design and bilingual documentation
   - role: Design Standards Expert
     status: missing
     agent_id: null
@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
+    thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:51:06Z
-    handoff_source: issue-native-widget-attachment-relative-url
-    last_report: solution-node-menu-delete-stale-snapshot
+    last_seen: 2026-07-12T14:04:28Z
+    handoff_source: 20260710-1506-development-issue-native-open-attempt-refactor
+    last_report: solution-native-widget-binding-reuse-timeout
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Diagnosed stale node snapshot resurrection; native host acceptance remains pending
+    notes: Implemented binding generations, widget rebind, stale async guards, timeout diagnostics, and version bump
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f567f-454e-75a3-ac0e-b7c6e4cd8ab3
+    thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:51:06Z
-    handoff_source: issue-graph-merge-validation-tests
-    last_report: integration-summary-node-menu-delete-stale-snapshot
+    last_seen: 2026-07-12T14:04:28Z
+    handoff_source: 20260710-1506-test-issue-open-attempt-regression-gates
+    last_report: integration-summary-native-widget-binding-reuse-timeout
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Browser delete, Undo, Redo, and reload checks passed; native host acceptance remains pending
+    notes: Covered reused bindings, stale metadata, async isolation, private metadata, and timeout defaults
   - role: Customer Support Agent
     status: missing
     agent_id: null
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
+    thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T04:07:10Z
-    handoff_source: issue-project-management-git-closure
-    last_report: solution-project-management-git-closure
+    last_seen: 2026-07-12T14:04:28Z
+    handoff_source: 20260710-1506-development-issue-native-open-attempt-refactor
+    last_report: integration-summary-native-widget-binding-reuse-timeout
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined baseline-aware selective staging and commit closure
+    notes: Audited mixed worktree ownership and required selective hunk staging for the timeout delivery
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

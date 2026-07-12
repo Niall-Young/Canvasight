@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.3+codex.20260712134902";
+const SERVER_VERSION = "0.4.4+codex.20260712135359";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -2756,6 +2756,13 @@ function openAttemptId() {
   return `open-${Date.now().toString(36)}-${crypto.randomBytes(6).toString("hex")}`;
 }
 
+let lastWidgetBindingIssuedAt = 0;
+
+function nextWidgetBindingIssuedAt() {
+  lastWidgetBindingIssuedAt = Math.max(Date.now(), lastWidgetBindingIssuedAt + 1);
+  return lastWidgetBindingIssuedAt;
+}
+
 const STARTUP_STAGE_RANK = new Map([
   ["starting", 0],
   ["connecting_bridge", 1],
@@ -2777,6 +2784,7 @@ function newOpenAttempt(session, targetDisplayMode = "fullscreen") {
     targetDisplayMode,
     status: "opening",
     stage: "starting",
+    bindingIssuedAt: nextWidgetBindingIssuedAt(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
     instances: new Map(),
@@ -2829,6 +2837,7 @@ function summarizeOpenAttempt(attempt) {
     targetDisplayMode: attempt.targetDisplayMode,
     status: attempt.status,
     stage: attempt.stage,
+    bindingIssuedAt: attempt.bindingIssuedAt,
     createdAt: attempt.createdAt,
     updatedAt: attempt.updatedAt,
     instances: Array.from(attempt.instances.values()).map((instance) => ({ ...instance }))
@@ -2853,6 +2862,7 @@ function openAttemptResult(session, attempt, instance, value = {}) {
     status,
     verified: status === "ready",
     openAttemptId: attempt?.id || value.openAttemptId || "",
+    bindingIssuedAt: attempt?.bindingIssuedAt || value.bindingIssuedAt || null,
     sessionId: session.id,
     threadId: attempt?.threadId || session.codexThreadId || null,
     projectPath: session.projectPath,
@@ -3014,13 +3024,16 @@ function waitForOpenAttemptReady(sessionIdValue, openAttemptIdValue, timeoutMs, 
     return Promise.resolve(openAttemptResult(session, attempt, failedInstance, { status: "failed", error: failedInstance?.error || "Canvasight fullscreen instance failed." }));
   }
 
-  const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 15_000), 300_000));
+  const timeout = Math.max(1, Math.min(toNumber(timeoutMs, 30_000), 300_000));
   return new Promise((resolve) => {
     const waiter = {
       resolve,
       timer: setTimeout(() => {
         detachOpenAttemptWaiter(attempt, waiter);
-        resolve(openAttemptResult(session, attempt, null, { status: "timeout", stage: attempt.stage, error: `Canvasight fullscreen widget did not report ready within ${timeout}ms.` }));
+        const lastInstance = Array.from(attempt.instances.values())
+          .filter((instance) => instance.displayMode === "fullscreen")
+          .sort((left, right) => String(right.reportedAt).localeCompare(String(left.reportedAt)))[0] || null;
+        resolve(openAttemptResult(session, attempt, lastInstance, { status: "timeout", stage: lastInstance?.stage || attempt.stage, error: `Canvasight fullscreen widget did not report ready within ${timeout}ms.` }));
       }, timeout)
     };
     if (options.abortSignal) {
@@ -5136,6 +5149,7 @@ async function toolRenderCanvasightCanvasWidget(args) {
     widget: "canvasight-canvas-widget",
     sessionId: session.sessionId,
     openAttemptId: session.openAttempt?.openAttemptId,
+    bindingIssuedAt: session.openAttempt?.bindingIssuedAt,
     targetDisplayMode: "fullscreen",
     apiBaseUrl: daemon.origin,
     canvasightHost: "widget",
@@ -5960,7 +5974,7 @@ const tools = [
           type: "number",
           minimum: 1,
           maximum: 300000,
-          description: "Maximum wait in milliseconds. Defaults to 15000."
+          description: "Maximum wait in milliseconds. Defaults to 30000."
         }
       },
       required: ["sessionId", "openAttemptId", "threadId"],

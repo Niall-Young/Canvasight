@@ -156,6 +156,7 @@ interface CanvasightWidgetRuntimeData {
   codexThreadId?: string | null;
   origin?: string;
   openAttemptId?: string;
+  bindingIssuedAt?: number;
   projectPath?: string | null;
   sessionId?: string;
   threadId?: string | null;
@@ -183,6 +184,19 @@ type CanvasightWindow = Window &
 
 function widgetRuntimeData(): CanvasightWidgetRuntimeData {
   return ((window as CanvasightWindow).__CANVASIGHT_WIDGET_DATA__ ?? {}) as CanvasightWidgetRuntimeData;
+}
+
+export function getCanvasightBindingKey(): string {
+  const runtime = widgetRuntimeData();
+  return `${runtime.sessionId || ""}:${runtime.openAttemptId || ""}:${runtime.bindingIssuedAt || 0}`;
+}
+
+export function isCanvasightBindingCurrent(bindingKey: string): boolean {
+  return bindingKey === getCanvasightBindingKey();
+}
+
+function assertCanvasightBindingCurrent(bindingKey: string): void {
+  if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed while the request was in flight.");
 }
 
 const defaultWidgetRuntimeTimeoutMs = 10_000;
@@ -475,6 +489,7 @@ function shouldUseLocalTemplateStore(error: unknown): boolean {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   await waitForCanvasightRuntimeData();
+  const requestBindingKey = getCanvasightBindingKey();
   const bridgeWindow = window as CanvasightWindow;
   const callServerTool = bridgeWindow.canvasightMcp?.callServerTool;
   if (isNativeWidgetShell() && typeof callServerTool === "function") {
@@ -511,6 +526,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         status?: number;
       };
     };
+    assertCanvasightBindingCurrent(requestBindingKey);
     const envelope = result?.structuredContent;
     if (result?.isError || !envelope || envelope.ok !== true) {
       const status = typeof envelope?.status === "number" ? envelope.status : 502;
@@ -552,7 +568,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new CanvasightApiError(message, response.status, payload);
   }
-  return response.json() as Promise<T>;
+  const value = await response.json() as T;
+  if (isNativeWidgetShell()) assertCanvasightBindingCurrent(requestBindingKey);
+  return value;
 }
 
 async function requestSessionJson<T>(suffix = "", init?: RequestInit): Promise<T> {
@@ -723,6 +741,7 @@ export const canvasightApi = {
     canvasHeight: number;
   }): Promise<void> {
     if (!isNativeWidgetShell()) return;
+    const bindingKey = getCanvasightBindingKey();
     setCanvasightStartupStage("hydrating_project");
     const identity = getCanvasightStartupIdentity();
     const response = await requestSessionJson<{ status: "ready"; verified?: boolean }>("/widget-ready", {
@@ -742,14 +761,16 @@ export const canvasightApi = {
     if (response.status !== "ready" || response.verified !== true) {
       throw new Error("Canvasight daemon did not verify the fullscreen widget ready acknowledgement.");
     }
+    assertCanvasightBindingCurrent(bindingKey);
     setCanvasightStartupStage("ready");
-    window.dispatchEvent(new CustomEvent("canvasight:app-ready", { detail: response }));
+    window.dispatchEvent(new CustomEvent("canvasight:app-ready", { detail: { ...response, bindingKey } }));
   },
 
   async reportWidgetFailure(error: unknown, stage = "session"): Promise<void> {
     const message = error instanceof Error ? error.message : String(error || "Canvasight failed to start.");
+    const bindingKey = getCanvasightBindingKey();
     setCanvasightStartupStage("failed");
-    window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage } }));
+    window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { bindingKey, error: message, stage } }));
     if (!isNativeWidgetShell() || !widgetRuntimeReady()) return;
     try {
       await requestSessionJson("/widget-ready", {

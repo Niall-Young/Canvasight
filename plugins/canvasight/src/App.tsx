@@ -40,8 +40,10 @@ import {
 } from "../shared/types";
 import {
   canvasightApi,
+  getCanvasightBindingKey,
   getCanvasightStartupIdentity,
   isNativeWidgetShell,
+  isCanvasightBindingCurrent,
   isStaleDocumentError,
   isTemplateLimitError,
   isThreadOnlyFallbackUrl,
@@ -1058,9 +1060,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     };
 
     const initialize = async (): Promise<void> => {
+      let startupBindingKey = getCanvasightBindingKey();
       try {
         if (nativeWidget) advanceStartupStage("connecting_session");
         const session = await canvasightApi.getSession();
+        startupBindingKey = getCanvasightBindingKey();
         const isThreadOnlyFallback = isThreadOnlyFallbackUrl();
         const urlProjectPath = projectPathFromUrl();
         const isBareLocalFallback = canvasightApi.sessionId === "local" && !threadIdFromUrl() && !urlProjectPath;
@@ -1092,10 +1096,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             canvasWidth: rect.width,
             canvasHeight: rect.height
           });
+          if (!isCanvasightBindingCurrent(startupBindingKey)) return;
           advanceStartupStage("ready");
         }
       } catch (error) {
         if (nativeWidget) {
+          if (startupBindingKey && !isCanvasightBindingCurrent(startupBindingKey)) return;
           failStartup(error, getCanvasightStartupIdentity().stage === "hydrating_project" ? "project" : "session");
           return;
         }

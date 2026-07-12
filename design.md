@@ -81,6 +81,8 @@ The React application shell owns startup feedback and must render on the widget 
 
 Use one monotonic startup state machine: `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`. A repeated or late host event may confirm the current stage but must never move the visible UI backward.
 
+When Codex reuses an existing Canvasight widget for a newer open request, that newer binding starts a fresh startup sequence in the same workspace frame. The previously bound canvas must stop accepting input immediately and must not remain visible as if it belonged to the new task. Duplicate metadata for the current binding may confirm progress; metadata from an older binding is ignored and must not replace or regress the active workspace.
+
 - `starting`: the widget resource is active and the React shell is committing. Show the workspace skeleton immediately; do not leave a standalone static fallback covering React.
 - `connecting_bridge`: the React shell is mounted and is establishing the MCP Apps bridge plus fullscreen host context.
 - `connecting_session`: attempt, session, thread, and fullscreen widget instance are bound; the app-only MCP API proxy and initial session health check are pending.

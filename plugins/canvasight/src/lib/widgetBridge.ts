@@ -45,6 +45,7 @@ type CanvasightWidgetData = Record<string, unknown> & {
   canvasightHost?: string;
   origin?: string;
   openAttemptId?: string;
+  bindingIssuedAt?: number;
   sessionId?: string;
   targetDisplayMode?: string;
   threadId?: string | null;
@@ -164,6 +165,7 @@ function normalizedWidgetData(payload: Record<string, unknown>): CanvasightWidge
     ...payload,
     apiBaseUrl: typeof payload.apiBaseUrl === "string" ? payload.apiBaseUrl : typeof payload.origin === "string" ? payload.origin : url.origin,
     canvasightHost: "widget",
+    bindingIssuedAt: typeof payload.bindingIssuedAt === "number" ? payload.bindingIssuedAt : 0,
     sessionId: typeof payload.sessionId === "string" ? payload.sessionId : url.searchParams.get("sessionId") || "",
     token: url.searchParams.get("token") || (typeof payload.token === "string" ? payload.token : ""),
     url: url.toString(),
@@ -249,18 +251,36 @@ export function startCanvasightWidgetBridge(): void {
     try {
       const widgetData = normalizedWidgetData(payload);
       if (!widgetData.openAttemptId) throw new Error("Canvasight tool result did not include openAttemptId.");
+      const current = window.__CANVASIGHT_WIDGET_DATA__;
+      const sameBinding = current?.sessionId === widgetData.sessionId && current?.openAttemptId === widgetData.openAttemptId;
+      const currentIssuedAt = Number(current?.bindingIssuedAt || 0);
+      const incomingIssuedAt = Number(widgetData.bindingIssuedAt || 0);
+      if (current?.sessionId && !sameBinding && incomingIssuedAt <= currentIssuedAt) return;
+      const isRebind = Boolean(current?.sessionId && !sameBinding);
+      const previousBinding = current ? { ...current } : null;
       metadataReceived = true;
-      const currentSessionId = window.__CANVASIGHT_WIDGET_DATA__?.sessionId;
-      const currentAttemptId = window.__CANVASIGHT_WIDGET_DATA__?.openAttemptId;
-      if (currentSessionId && (currentSessionId !== widgetData.sessionId || currentAttemptId !== widgetData.openAttemptId)) return;
       const runtimeData = { ...widgetData, widgetInstanceId };
       toolOutput = runtimeData;
       window.__CANVASIGHT_WIDGET_DATA__ = runtimeData;
-      setStartupStage(bridgeState.mcpInitialized ? "connecting_session" : "connecting_bridge");
+      if (isRebind) {
+        reactMounted = false;
+        updateBridgeState({
+          lastBridgeError: null,
+          reason: bridgeState.mcpInitialized ? "native_bridge_ready" : "mcp_initialize_pending",
+          startupStage: bridgeState.mcpInitialized ? "connecting_session" : "connecting_bridge"
+        });
+      } else {
+        setStartupStage(bridgeState.mcpInitialized ? "connecting_session" : "connecting_bridge");
+      }
       if (!reactMounted && bridgeState.startupStage !== "ready" && bridgeState.startupStage !== "failed") {
         setStatus("Connecting Canvasight session...", "muted");
       }
       window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: runtimeData }));
+      if (isRebind) {
+        window.dispatchEvent(new CustomEvent("canvasight:widget-rebind", {
+          detail: { previous: previousBinding, current: runtimeData }
+        }));
+      }
     } catch (error) {
       const message = errorMessage(error, "Canvasight widget metadata is invalid.");
       updateBridgeState({ lastBridgeError: message, reason: "widget_metadata_invalid" });
@@ -386,12 +406,19 @@ export function startCanvasightWidgetBridge(): void {
     const stage = (event as CustomEvent<{ stage?: CanvasightStartupStage }>).detail?.stage;
     if (stage && stage in STARTUP_STAGE_RANK) setStartupStage(stage);
   });
-  window.addEventListener("canvasight:app-ready", () => {
+  window.addEventListener("canvasight:app-ready", (event) => {
+    const detail = (event as CustomEvent<{ bindingKey?: string }>).detail;
+    const runtime = window.__CANVASIGHT_WIDGET_DATA__;
+    const currentBindingKey = `${runtime?.sessionId || ""}:${runtime?.openAttemptId || ""}:${runtime?.bindingIssuedAt || 0}`;
+    if (detail?.bindingKey && detail.bindingKey !== currentBindingKey) return;
     setStartupStage("ready");
     if (bridgeState.startupStage === "ready") setStatus("", "ok");
   });
   window.addEventListener("canvasight:app-error", (event) => {
-    const detail = (event as CustomEvent<{ error?: string }>).detail;
+    const detail = (event as CustomEvent<{ bindingKey?: string; error?: string }>).detail;
+    const runtime = window.__CANVASIGHT_WIDGET_DATA__;
+    const currentBindingKey = `${runtime?.sessionId || ""}:${runtime?.openAttemptId || ""}:${runtime?.bindingIssuedAt || 0}`;
+    if (detail?.bindingKey && detail.bindingKey !== currentBindingKey) return;
     updateBridgeState({ startupStage: "failed" });
     setStatus(detail?.error || "Canvasight failed to start.", "error");
   });

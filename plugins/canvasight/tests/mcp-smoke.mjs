@@ -840,6 +840,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     assert.equal(standard.records.appMessages.some((message) => message.method === "ui/initialize"), true);
     standard.sendToolResult({
       status: "opened",
+      bindingIssuedAt: 1_000,
       openAttemptId: "open-postmessage",
       sessionId: "session-postmessage",
       token: "token-postmessage",
@@ -850,6 +851,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
       "ui/notifications/tool-result widget data"
     );
     assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.token, "token-postmessage");
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.bindingIssuedAt, 1_000);
     assert.match(standard.statusEl.textContent, /Connecting Canvasight session/);
     standard.window.dispatchEvent({ type: "load" });
     assert.match(standard.statusEl.textContent, /Connecting Canvasight session/);
@@ -858,6 +860,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready");
     standard.sendToolResult({
       status: "opened",
+      bindingIssuedAt: 1_000,
       openAttemptId: "open-postmessage",
       sessionId: "session-postmessage",
       token: "token-postmessage",
@@ -867,6 +870,7 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
       toolResponseMetadata: {
         widgetData: {
           status: "opened",
+          bindingIssuedAt: 1_000,
           openAttemptId: "open-postmessage",
           sessionId: "session-postmessage",
           token: "token-postmessage",
@@ -876,14 +880,67 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     });
     assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready", "late metadata cannot regress ready");
     assert.equal(standard.statusEl.textContent, "", "late metadata cannot restore the Connecting overlay");
+
+    const rebindEvents = [];
+    standard.window.addEventListener("canvasight:widget-rebind", (event) => rebindEvents.push(event.detail));
     standard.sendToolResult({
       status: "opened",
-      openAttemptId: "open-other",
-      sessionId: "session-other",
-      token: "token-other",
-      url: "http://127.0.0.1:54321/?sessionId=session-other&token=token-other"
+      bindingIssuedAt: 999,
+      openAttemptId: "open-stale",
+      sessionId: "session-stale",
+      token: "token-stale",
+      url: "http://127.0.0.1:54321/?sessionId=session-stale&token=token-stale"
     });
-    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.sessionId, "session-postmessage", "a mounted instance cannot switch sessions from a late event");
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.sessionId, "session-postmessage", "an older binding cannot replace the active widget session");
+    assert.equal(rebindEvents.length, 0, "an older binding cannot trigger a React rebind");
+
+    standard.sendToolResult({
+      status: "opened",
+      bindingIssuedAt: 2_000,
+      openAttemptId: "open-rebound",
+      sessionId: "session-rebound",
+      token: "token-rebound",
+      url: "http://127.0.0.1:54321/?sessionId=session-rebound&token=token-rebound"
+    });
+    await waitForCondition(
+      () => standard.window.__CANVASIGHT_WIDGET_DATA__?.sessionId === "session-rebound",
+      "mounted widget accepting a newer binding"
+    );
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.openAttemptId, "open-rebound");
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.widgetInstanceId, standard.window.canvasightMcp.getBridgeState().widgetInstanceId);
+    assert.equal(rebindEvents.length, 1, "a newer binding triggers exactly one React rebind");
+    assert.equal(rebindEvents[0].previous.openAttemptId, "open-postmessage");
+    assert.equal(rebindEvents[0].current.openAttemptId, "open-rebound");
+    assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "connecting_session", "a newer binding starts a fresh monotonic startup lifecycle");
+
+    standard.sendToolResult({
+      status: "opened",
+      bindingIssuedAt: 2_000,
+      openAttemptId: "open-rebound",
+      sessionId: "session-rebound",
+      token: "token-rebound-duplicate",
+      url: "http://127.0.0.1:54321/?sessionId=session-rebound&token=token-rebound-duplicate"
+    });
+    await waitForCondition(
+      () => standard.window.__CANVASIGHT_WIDGET_DATA__?.token === "token-rebound-duplicate",
+      "duplicate active binding metadata merge"
+    );
+    assert.equal(rebindEvents.length, 1, "duplicate metadata for the active binding does not remount React");
+    assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "connecting_session");
+    assert.equal(standard.window.__CANVASIGHT_WIDGET_DATA__.token, "token-rebound-duplicate", "duplicate metadata may merge refreshed private session data");
+
+    standard.window.dispatchEvent(new standard.TestCustomEvent("canvasight:app-ready", {
+      detail: { bindingKey: "session-postmessage:open-postmessage:1000" }
+    }));
+    assert.equal(
+      standard.window.canvasightMcp.getBridgeState().startupStage,
+      "connecting_session",
+      "an old App async completion cannot mark the newer binding ready"
+    );
+    standard.window.dispatchEvent(new standard.TestCustomEvent("canvasight:app-ready", {
+      detail: { bindingKey: "session-rebound:open-rebound:2000" }
+    }));
+    assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready", "the active binding can complete startup");
     await closeWidgetBridgeEnvironment(standard);
     restore();
 
@@ -1965,6 +2022,7 @@ async function main() {
     const awaitWidgetReadyTool = listed.tools.find((tool) => tool.name === "await_canvasight_widget_ready");
     assert.match(awaitWidgetReadyTool.description, /only status=ready confirms/);
     assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId", "openAttemptId", "threadId"]);
+    assert.match(awaitWidgetReadyTool.inputSchema.properties.timeoutMs.description, /Defaults to 30000/);
 
     const lifecycleClient = createMcpClient("lifecycle", {
       CODEX_THREAD_ID: "thread-lifecycle"
@@ -2128,6 +2186,8 @@ async function main() {
     });
     const widgetOpenedData = widgetDataFor(widgetOpened);
     assert.equal(widgetOpenedData.openAttemptId, widgetOpened.structuredContent.openAttemptId);
+    assert.equal(Number.isFinite(widgetOpenedData.bindingIssuedAt), true, "private widget metadata includes an ordered binding generation");
+    assert.equal(widgetOpened.structuredContent.bindingIssuedAt, undefined, "binding generation remains private widget metadata");
     const fullscreenInstanceId = "widget-fullscreen-smoke";
     const inlineInstanceId = "widget-inline-smoke";
     const widgetIdentity = (overrides = {}) => ({
@@ -2187,7 +2247,7 @@ async function main() {
       }
     });
     assert.equal(widgetReadyBeforeAck.structuredContent.status, "timeout");
-    assert.equal(widgetReadyBeforeAck.structuredContent.reactMounted, false);
+    assert.equal(widgetReadyBeforeAck.structuredContent.verified, false, "an early bridge-stage report is not ready evidence");
     const inlineReadyAckProxy = await request("tools/call", {
       name: "canvasight_widget_api",
       arguments: {
