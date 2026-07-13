@@ -2,15 +2,15 @@
 schema_version: 1
 report_id: issue-stable-release-self-update
 report_type: issue
-status: assigned
+status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 4
+version: 5
 agent_id: /root/development_agent
 thread_id: null
 created_at: 2026-07-13T12:04:53Z
-updated_at: 2026-07-13T12:30:11Z
+updated_at: 2026-07-13T12:35:00Z
 depends_on: []
 related_files:
   - plugins/canvasight/skills/canvasight-update/SKILL.md
@@ -20,11 +20,11 @@ related_files:
   - README.md
   - AGENTS.md
 solution_report: agent-reports/resolved/solution-stable-release-self-update.md
-verification_status: failed
+verification_status: passed
 verification_evidence:
   - Local macOS updater, build, MCP, distribution, plugin, and Skill gates pass.
   - First v0.4.11 matrix run 29249743724 safely blocked publication before Release or stable changes.
-  - Retry is required after deterministic web-build and Windows CRLF validation fixes.
+  - Retry run 29250218606 passed Windows, macOS, Linux, published the full Release, and fast-forwarded stable.
 ---
 
 # Canvasight 缺少正式 Release 与自然语言自更新链路
@@ -101,19 +101,19 @@ Development Agent
 ## Closure Criteria
 
 - [x] 更新 Skill、主 Skill 路由和脚本完成
-- [ ] Release 准备脚本、三系统验证、Release 与 `stable` 推进完成
+- [x] Release 准备脚本、三系统验证、Release 与 `stable` 推进完成
 - [x] 最新版零修改、成功升级、来源保护与失败回滚测试通过
 - [x] 用户数据与本地 checkout 不被访问或修改
 - [x] 中英文 README 与工程规范同步
-- [ ] 完整 `v0.4.11` 插件已发布
+- [x] 完整 `v0.4.11` 插件已发布
 
 ## 当前状态
 
-assigned
+resolved
 
 ## 处理结果
 
-首轮三系统门禁安全失败，Release 与 `stable` 均未创建；修复已完成并等待重新打 tag 验证。
+完整 `v0.4.11` Release 已发布，Windows、macOS、Linux 门禁通过，`stable` 与 tag/main 指向同一 commit。
 
 ## 修改文件
 
@@ -124,7 +124,8 @@ assigned
 - `npm run test:update`：15/15。
 - build、MCP smoke、clean distribution、plugin validation、Skill validation：通过。
 - GitHub Actions run `29249743724`：失败，定位到构建路径非确定性和 Windows CRLF frontmatter 校验。
+- GitHub Actions run `29250218606`：全部通过并完成发布。
 
 ## 后续风险
 
-首轮失败没有推进 Release/stable。重试必须确认三系统生成同一 web snapshot，且 Windows Skill 校验通过。
+首轮失败已被门禁安全拦截；第二轮验证和发布成功。未来发布继续沿用相同保护顺序。

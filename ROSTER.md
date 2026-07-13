@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
+    last_seen: 2026-07-13T12:35:00Z
     handoff_source: issue-stable-release-self-update
-    last_report: solution-stable-release-self-update
+    last_report: issue-stable-release-self-update
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented the stable release and full-plugin self-update path
+    notes: Delivered v0.4.11 stable release and full-plugin self-update path
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
+    last_seen: 2026-07-13T12:35:00Z
     handoff_source: issue-stable-release-self-update
-    last_report: solution-stable-release-self-update
+    last_report: issue-stable-release-self-update
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: First matrix safely caught deterministic web-build and Windows CRLF release-gate defects before publication
+    notes: Approved the successful Windows, macOS, and Linux v0.4.11 release matrix
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
+    last_seen: 2026-07-13T12:35:00Z
     handoff_source: issue-stable-release-self-update
-    last_report: integration-summary-stable-release-self-update-pre-release
+    last_report: integration-summary-stable-release-self-update
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Closed the initial feature commit and is reviewing the scoped release-gate correction
+    notes: Closed implementation and release-gate commits; reviewing final report-only closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
