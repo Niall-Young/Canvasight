@@ -1,12 +1,14 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.4.10+codex.20260713151335",
+  "version": "0.4.11",
   "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {
     "build:mcp": "node scripts/build-mcp.mjs",
     "check:mcp-bundle": "node scripts/build-mcp.mjs --check",
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "release:verify": "node scripts/prepare-release.mjs --check",
     "dev": "node scripts/dev-server.mjs start",
     "dev:stop": "node scripts/dev-server.mjs stop",
     "dev:status": "node scripts/dev-server.mjs status",
@@ -20,6 +22,7 @@
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:markdown-export": "node tests/markdown-export-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs",
+    "test:update": "node --test tests/update-canvasight-smoke.mjs",
     "test:plugin-distribution": "node tests/plugin-distribution-smoke.mjs",
     "diagnose:mcp": "node tests/mcp-registration-probe.mjs",
     "test:widget-runtime": "node tests/widget-runtime-smoke.mjs"

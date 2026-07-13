@@ -1,0 +1,184 @@
+name: Canvasight release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: canvasight-stable-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify ${{ matrix.os }} / Node 20.19
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+          - ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/canvasight
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: plugins/canvasight/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release version
+        shell: bash
+        run: npm run release:verify -- "${GITHUB_REF_NAME#v}"
+
+      - name: Check committed MCP bundle
+        run: npm run check:mcp-bundle
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build complete plugin snapshot
+        run: npm run build
+
+      - name: Verify committed build artifacts
+        shell: bash
+        run: git diff --exit-code -- mcp/server.mjs dist
+
+      - name: Test updater state and recovery rules
+        run: npm run test:update
+
+      - name: Test clean plugin distribution
+        run: npm run test:plugin-distribution
+
+      - name: Probe MCP registration
+        run: npm run diagnose:mcp
+
+      - name: Test MCP runtime
+        run: npm run test:mcp
+
+  publish:
+    name: Publish Release, then advance stable
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: plugins/canvasight/package-lock.json
+
+      - name: Require tag commit to be current main HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Rebuild and package the complete plugin snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd plugins/canvasight
+          npm ci
+          npm run build
+          npm run release:verify -- "${GITHUB_REF_NAME#v}"
+          git diff --exit-code -- mcp/server.mjs dist
+          cd ..
+          zip -qr "../canvasight-${GITHUB_REF_NAME}.zip" canvasight \
+            -x "canvasight/node_modules/*" "canvasight/.vite/*"
+          cd ..
+          sha256sum "canvasight-${GITHUB_REF_NAME}.zip" > "canvasight-${GITHUB_REF_NAME}.zip.sha256"
+
+      - name: Publish verified Release, then fast-forward stable
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          NEW_STABLE="${GITHUB_SHA}"
+          OLD_STABLE="$(git ls-remote origin refs/heads/stable | awk '{print $1}')"
+
+          if [ -n "${OLD_STABLE}" ]; then
+            git merge-base --is-ancestor "${OLD_STABLE}" "${NEW_STABLE}"
+          fi
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "::error::Release ${TAG} already exists."
+            exit 1
+          fi
+
+          CREATED_RELEASE=false
+          remove_failed_release() {
+            ORIGINAL_STATUS="$1"
+            trap - ERR
+            set +e
+
+            CURRENT_STABLE="$(git ls-remote origin refs/heads/stable | awk '{print $1}')"
+            if [ "${CURRENT_STABLE}" = "${NEW_STABLE}" ]; then
+              # The push may have reached GitHub even if the client lost its
+              # response. Release and stable are already consistent.
+              exit 0
+            fi
+            if [ "${CURRENT_STABLE}" != "${OLD_STABLE}" ]; then
+              echo "::error::Stable changed concurrently from ${OLD_STABLE:-absent} to ${CURRENT_STABLE:-absent}."
+              exit 1
+            fi
+
+            RELEASE_STATUS=0
+            if [ "${CREATED_RELEASE}" = "true" ]; then
+              gh release delete "${TAG}" --yes
+              RELEASE_STATUS=$?
+            fi
+
+            if [ "${RELEASE_STATUS}" -ne 0 ]; then
+              echo "::error::Stable was not advanced, but the failed Release could not be deleted."
+              exit 1
+            fi
+            exit "${ORIGINAL_STATUS}"
+          }
+          trap 'remove_failed_release $?' ERR
+
+          gh release create "${TAG}" \
+            "canvasight-${TAG}.zip" \
+            "canvasight-${TAG}.zip.sha256" \
+            --verify-tag \
+            --generate-notes \
+            --latest \
+            --title "Canvasight ${TAG}"
+          CREATED_RELEASE=true
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)" = "${NEW_STABLE}"
+          test "$(gh release view "${TAG}" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease')" = "false"
+
+          # This is deliberately the final fallible operation. A normal push can
+          # only create or fast-forward stable; protected branches are never
+          # force-pushed, deleted, or rolled back by the workflow.
+          git push origin "${NEW_STABLE}:refs/heads/stable"
+
+          trap - ERR

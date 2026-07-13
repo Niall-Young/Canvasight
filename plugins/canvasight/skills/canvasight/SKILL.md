@@ -13,6 +13,7 @@ Use this skill as the narrow index for Canvasight-specific work that does not cl
 - Use `canvasight-run` for Chat-only native widget bridge Run delivery, `claim_canvasight_thread`, `await_canvasight_run` fallback, and legacy Plan/Goal-to-Chat normalization.
 - Use `canvasight-agent-team` when a Canvasight Run payload enables Agent Team or the user asks for role-registry or agent-report coordination.
 - Use `canvasight-graph-writer` for creating or updating Canvasight nodes and edges from AI analysis, including active-canvas medium or complex requests that should be decomposed before direct execution.
+- Use `canvasight-update` when the user asks to check for or install an official Canvasight update. Keep check-only requests read-only, and delegate installation and rollback entirely to its bundled updater.
 - Use `canvasight-troubleshooting` for install, daemon, MCP cache, browser URL, or connection failures.
 
 ## Shared Boundaries
