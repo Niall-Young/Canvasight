@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: null
+    thread_id: 019f5bbf-d635-7f83-8d8e-b8476a72c37d
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T13:31:00Z
-    handoff_source: issue-skill-composition-node-assignment
-    last_report: solution-skill-composition-node-assignment
+    last_seen: 2026-07-13T13:57:26Z
+    handoff_source: issue-duplicate-native-canvas-open
+    last_report: issue-duplicate-native-canvas-open
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Delivered Skill discovery, preferences, graph validation, and MCP runtime contracts for 0.4.12
+    notes: Owns duplicate native instance supersession and unchanged-autosave protection
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: null
+    thread_id: 019f5bba-8c7e-7152-b3a3-0fbc17041ed6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:35:00Z
-    handoff_source: issue-stable-release-self-update
-    last_report: integration-summary-stable-release-self-update
+    last_seen: 2026-07-13T13:56:01Z
+    handoff_source: issue-duplicate-native-canvas-open
+    last_report: issue-duplicate-native-canvas-open
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Closed implementation and release-gate commits; reviewing final report-only closure
+    notes: Recorded clean baseline c2c15c4 and owns scoped Git closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
