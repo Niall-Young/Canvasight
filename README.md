@@ -30,7 +30,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 1. **安装插件。** 在终端复制并运行：
 
    ```bash
-   codex plugin marketplace add Niall-Young/Canvasight
+   codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git
    codex plugin add canvasight@canvasight-local
    codex plugin list
    ```
@@ -300,7 +300,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 1. **Install the plugin.** Copy and run this in a terminal:
 
    ```bash
-   codex plugin marketplace add Niall-Young/Canvasight
+   codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git
    codex plugin add canvasight@canvasight-local
    codex plugin list
    ```

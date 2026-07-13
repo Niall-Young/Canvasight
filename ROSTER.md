@@ -74,23 +74,23 @@ roles:
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T05:03:30Z
-    handoff_source: issue-readme-copyable-quickstart
-    last_report: integration-summary-readme-copyable-quickstart
+    last_seen: 2026-07-13T05:13:49Z
+    handoff_source: issue-readme-git-https-install-source
+    last_report: integration-summary-readme-git-https-install-source
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Synchronized bilingual README with install-first and copyable Canvasight prompts
+    notes: Synchronized bilingual README to the explicit Git HTTPS installation source
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T05:03:30Z
-    handoff_source: issue-readme-copyable-quickstart
-    last_report: integration-summary-readme-copyable-quickstart
+    last_seen: 2026-07-13T05:13:49Z
+    handoff_source: issue-readme-git-https-install-source
+    last_report: integration-summary-readme-git-https-install-source
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline and owns selective closure for the frozen README delivery scope
+    notes: Recorded clean baseline and owns selective closure for the Git HTTPS documentation scope
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
