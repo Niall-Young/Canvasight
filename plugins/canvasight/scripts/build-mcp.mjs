@@ -36,6 +36,10 @@ if (!output) {
   throw new Error(`esbuild did not produce ${outputPath}`);
 }
 
+function normalizeLineEndings(contents) {
+  return Buffer.from(Buffer.from(contents).toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+}
+
 if (checkOnly) {
   let committed;
   try {
@@ -49,7 +53,7 @@ if (checkOnly) {
     throw error;
   }
 
-  if (!committed.equals(output.contents)) {
+  if (!normalizeLineEndings(committed).equals(normalizeLineEndings(output.contents))) {
     process.stderr.write("mcp/server.mjs is stale; run npm run build:mcp and commit the result\n");
     process.exitCode = 1;
     process.exit();

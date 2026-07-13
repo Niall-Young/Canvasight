@@ -2349,6 +2349,18 @@ async function assertConcurrentDaemonSingleFlight() {
         })
       )
     );
+  } catch (error) {
+    let lifecycleTail = "<lifecycle log unavailable>";
+    try {
+      const lifecycleLog = await fsp.readFile(path.join(home, "mcp-lifecycle.log"), "utf8");
+      lifecycleTail = lifecycleLog.split(/\r?\n/).filter(Boolean).slice(-80).join("\n");
+    } catch (logError) {
+      lifecycleTail = `<failed to read lifecycle log: ${logError?.message || String(logError)}>`;
+    }
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nConcurrent daemon lifecycle tail:\n${lifecycleTail}`,
+      { cause: error }
+    );
   } finally {
     clients.forEach((client) => client.stop());
     await stopDaemon(home);

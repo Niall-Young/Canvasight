@@ -11,12 +11,13 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.10+codex.20260713145428";
+const SERVER_VERSION = "0.4.10+codex.20260713151335";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 const DAEMON_START_LOCK_STALE_MS = 15_000;
 const DAEMON_START_LOCK_WAIT_MS = 12_000;
+const DAEMON_START_LOCK_UNREADABLE_STALE_MS = 1_000;
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
@@ -1322,12 +1323,12 @@ async function acquireDaemonStartLock() {
   while (Date.now() < deadline) {
     const token = crypto.randomBytes(12).toString("base64url");
     try {
-      const handle = await fsp.open(canvasightDaemonStartLockPath(), "wx");
-      await handle.writeFile(
+      await fsp.writeFile(
+        canvasightDaemonStartLockPath(),
         `${JSON.stringify({ pid: process.pid, token, serverVersion: SERVER_VERSION, pluginRoot, createdAt: nowIso() })}\n`,
-        "utf8"
+        { encoding: "utf8", flag: "wx" }
       );
-      return { handle, token, existing: null };
+      return { acquired: true, token, existing: null };
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
     }
@@ -1337,10 +1338,19 @@ async function acquireDaemonStartLock() {
 
     const lock = await readDaemonStartLock();
     const createdAt = Date.parse(lock?.createdAt || "");
-    const stale =
-      !lock ||
-      !processIsAlive(Number(lock.pid)) ||
-      (Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS);
+    let unreadableLockAgeMs = null;
+    if (!lock) {
+      try {
+        const stat = await fsp.stat(canvasightDaemonStartLockPath());
+        unreadableLockAgeMs = Math.max(0, Date.now() - stat.mtimeMs);
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+    const stale = lock
+      ? !processIsAlive(Number(lock.pid)) ||
+        (Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS)
+      : unreadableLockAgeMs !== null && unreadableLockAgeMs >= DAEMON_START_LOCK_UNREADABLE_STALE_MS;
     if (stale) {
       await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
       continue;
@@ -1351,13 +1361,9 @@ async function acquireDaemonStartLock() {
 }
 
 async function releaseDaemonStartLock(lock) {
-  if (!lock?.handle) return;
-  try {
-    await lock.handle.close();
-  } finally {
-    const current = await readDaemonStartLock();
-    if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
-  }
+  if (!lock?.acquired) return;
+  const current = await readDaemonStartLock();
+  if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
 }
 
 async function ensureDaemonServer() {

@@ -17309,12 +17309,13 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.10+codex.20260713145428";
+var SERVER_VERSION = "0.4.10+codex.20260713151335";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 var DAEMON_START_LOCK_STALE_MS = 15e3;
 var DAEMON_START_LOCK_WAIT_MS = 12e3;
+var DAEMON_START_LOCK_UNREADABLE_STALE_MS = 1e3;
 var MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 var MAX_RECENT_PROJECTS = 12;
 var MAX_NODE_TEMPLATES = 200;
@@ -18450,12 +18451,12 @@ async function acquireDaemonStartLock() {
   while (Date.now() < deadline) {
     const token = crypto.randomBytes(12).toString("base64url");
     try {
-      const handle = await fsp.open(canvasightDaemonStartLockPath(), "wx");
-      await handle.writeFile(
+      await fsp.writeFile(
+        canvasightDaemonStartLockPath(),
         "".concat(JSON.stringify({ pid: process.pid, token, serverVersion: SERVER_VERSION, pluginRoot, createdAt: nowIso() }), "\n"),
-        "utf8"
+        { encoding: "utf8", flag: "wx" }
       );
-      return { handle, token, existing: null };
+      return { acquired: true, token, existing: null };
     } catch (error51) {
       if (error51?.code !== "EEXIST") throw error51;
     }
@@ -18463,7 +18464,16 @@ async function acquireDaemonStartLock() {
     if (existing) return { handle: null, token: "", existing };
     const lock = await readDaemonStartLock();
     const createdAt = Date.parse(lock?.createdAt || "");
-    const stale = !lock || !processIsAlive(Number(lock.pid)) || Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS;
+    let unreadableLockAgeMs = null;
+    if (!lock) {
+      try {
+        const stat = await fsp.stat(canvasightDaemonStartLockPath());
+        unreadableLockAgeMs = Math.max(0, Date.now() - stat.mtimeMs);
+      } catch (error51) {
+        if (error51?.code !== "ENOENT") throw error51;
+      }
+    }
+    const stale = lock ? !processIsAlive(Number(lock.pid)) || Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS : unreadableLockAgeMs !== null && unreadableLockAgeMs >= DAEMON_START_LOCK_UNREADABLE_STALE_MS;
     if (stale) {
       await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
       continue;
@@ -18473,13 +18483,9 @@ async function acquireDaemonStartLock() {
   throw new Error("Canvasight daemon start lock timed out");
 }
 async function releaseDaemonStartLock(lock) {
-  if (!lock?.handle) return;
-  try {
-    await lock.handle.close();
-  } finally {
-    const current = await readDaemonStartLock();
-    if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
-  }
+  if (!lock?.acquired) return;
+  const current = await readDaemonStartLock();
+  if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
 }
 async function ensureDaemonServer() {
   const initialState = await readDaemonState();

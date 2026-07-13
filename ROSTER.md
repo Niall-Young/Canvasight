@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T07:02:28Z
-    handoff_source: issue-mcp-distribution-missing-dependencies
-    last_report: solution-mcp-distribution-self-contained
+    last_seen: 2026-07-13T07:19:29Z
+    handoff_source: issue-cross-platform-ci-regressions-0-4-10
+    last_report: solution-cross-platform-ci-regressions-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Delivered the self-contained MCP entry and versioned runtime distribution fix
+    notes: Resolved Windows bundle EOL determinism and Linux daemon start-lock publication race
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T07:02:28Z
+    last_seen: 2026-07-13T07:19:29Z
     handoff_source: issue-windows-native-acceptance-0-4-10
     last_report: issue-windows-native-acceptance-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Clean-distribution and OS matrix gates pass locally; owns pending Windows native acceptance
+    notes: Cross-platform regression stress gates pass locally; Windows native acceptance remains pending
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

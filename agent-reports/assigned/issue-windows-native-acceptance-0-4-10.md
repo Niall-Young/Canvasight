@@ -6,11 +6,11 @@ status: assigned
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-07-13T07:02:28Z
-updated_at: 2026-07-13T07:02:28Z
+updated_at: 2026-07-13T07:19:29Z
 depends_on:
   - issue-mcp-distribution-missing-dependencies
 related_files:
@@ -19,7 +19,7 @@ related_files:
   - .github/workflows/canvasight-plugin.yml
 verification_status: not_started
 verification_evidence:
-  - Automated clean-distribution and native supporting smoke pass on macOS.
+  - Automated clean-distribution, 14-tool registration and native supporting smoke pass after the cross-platform startup-race correction.
   - No real Windows Codex fullscreen instance evidence is available in this workspace.
 solution_report: null
 ---
@@ -52,7 +52,7 @@ The prior user session could display browser fallback after manual dependency re
 
 ## 复现方式
 
-1. Upgrade the Git marketplace plugin to exact version `0.4.10+codex.20260713145428`.
+1. Upgrade the Git marketplace plugin to exact version `0.4.10+codex.20260713151335`.
 2. Fully quit and restart Codex Desktop, then create a new task and tag `@Canvasight`.
 3. Run the native open/await contract, use a canvas control, and send one node Run.
 
