@@ -87,7 +87,8 @@ Use `design.md` as the product and UI design baseline when adding user-facing sc
 - Avoid placeholder-only screens for core flows; build the usable workflow first.
 - Keep canvas state, persistence, and MCP contracts explicit. Do not hide run behavior inside presentation components when it can live in store or runtime helpers.
 - Use the existing app icon registry in `src/components/ui/icon.tsx` and SVG assets under `src/assets/icons` before adding another icon path.
-- When MCP runtime behavior changes, bump the plugin version in `.codex-plugin/plugin.json`, `package.json`, `package-lock.json`, and `mcp/server.mjs` `SERVER_VERSION` together. Codex may keep versioned plugin cache entries, so changing runtime code without a version bump can leave users running stale MCP servers.
+- Git-backed plugin installs must be runnable from the installed snapshot without `node_modules`, package-manager lifecycle scripts, or network access. The editable MCP source is `mcp/server.source.mjs`; `mcp/server.mjs` is the generated self-contained installed entry. Rebuild and verify that entry whenever MCP source or bundled dependencies change.
+- When MCP runtime behavior changes, bump the plugin version in `.codex-plugin/plugin.json`, `package.json`, `package-lock.json`, and `mcp/server.source.mjs` `SERVER_VERSION` together, then regenerate `mcp/server.mjs`. Codex may keep versioned plugin cache entries, so changing runtime code without a version bump can leave users running stale MCP servers.
 - MCP list tools that can expose large user-authored content should return lightweight summaries by default and provide a separate by-id read path for full content.
 - Persistent user-asset features with capacity limits must reject or ask for explicit replacement at the limit. Do not silently evict older user data through list slicing or hidden cleanup.
 
@@ -138,11 +139,14 @@ Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasigh
 - `npm run daemon` manually starts the project-level Canvasight daemon for development/debugging.
 - `npm run daemon:stop` manually stops the project-level Canvasight daemon for development/debugging.
 - `npm run typecheck` runs TypeScript checks.
-- `npm run build` builds the web app into `dist/`.
+- `npm run build` regenerates the self-contained MCP entry, runs TypeScript checks, and builds the web app into `dist/`.
+- `npm run build:mcp` regenerates the self-contained installed MCP entry from `mcp/server.source.mjs`.
+- `npm run check:mcp-bundle` rebuilds the MCP entry in memory and fails if the committed `mcp/server.mjs` is stale.
 - `npm run preview` previews the built web app.
 - `npm run test:markdown` verifies node Run Markdown includes the current node plus downstream children in stable order.
 - `npm run test:dev-server` verifies the persistent dev server lifecycle.
 - `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts, concurrent daemon single-flight, stdout-close/EPIPE handling, and newline plus `Content-Length` JSON-RPC transports.
+- `npm run test:plugin-distribution` copies the plugin without `node_modules` and verifies that the installed MCP entry completes registration with all expected tools.
 - `npm run diagnose:mcp` performs an isolated MCP registration probe without opening the canvas or starting the daemon. It reports manifest Node-command resolution, executable/runtime details, `initialize`, `tools/list`, required open tools, and lifecycle-log stages; on Windows it can also be run as `node .\tests\mcp-registration-probe.mjs` to avoid PowerShell script-policy shims.
 
 Plugin validation runs from the repo root:

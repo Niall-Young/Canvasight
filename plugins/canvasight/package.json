@@ -1,23 +1,26 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.4.9+codex.20260713111214",
+  "version": "0.4.10+codex.20260713145428",
   "private": true,
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build:mcp": "node scripts/build-mcp.mjs",
+    "check:mcp-bundle": "node scripts/build-mcp.mjs --check",
     "dev": "node scripts/dev-server.mjs start",
     "dev:stop": "node scripts/dev-server.mjs stop",
     "dev:status": "node scripts/dev-server.mjs status",
     "dev:foreground": "vite --host 127.0.0.1",
     "daemon": "node mcp/server.mjs --daemon",
     "daemon:stop": "node mcp/server.mjs --stop-daemon",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run build:mcp && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --host 127.0.0.1",
     "test:dev-server": "node tests/dev-server-smoke.mjs",
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:markdown-export": "node tests/markdown-export-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs",
+    "test:plugin-distribution": "node tests/plugin-distribution-smoke.mjs",
     "diagnose:mcp": "node tests/mcp-registration-probe.mjs",
     "test:widget-runtime": "node tests/widget-runtime-smoke.mjs"
   },
@@ -40,6 +43,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
+    "esbuild": "^0.28.1",
     "typescript": "^5.9.3"
   }
 }

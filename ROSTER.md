@@ -41,45 +41,45 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T03:40:43Z
-    handoff_source: issue-cmd-zoom-boundary-flash
-    last_report: integration-summary-cmd-zoom-boundary-flash
+    last_seen: 2026-07-13T07:02:28Z
+    handoff_source: issue-mcp-distribution-missing-dependencies
+    last_report: solution-mcp-distribution-self-contained
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented viewport recovery generation guard and latest-store zoom boundary handling
+    notes: Delivered the self-contained MCP entry and versioned runtime distribution fix
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
     thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T04:07:10Z
-    handoff_source: issue-project-management-git-closure
-    last_report: integration-summary-project-management-git-closure
+    last_seen: 2026-07-13T07:02:28Z
+    handoff_source: issue-mcp-distribution-missing-dependencies
+    last_report: integration-summary-mcp-self-contained-distribution
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed durable Project Management delivery closure rules
+    notes: Reviewed the self-contained Git distribution invariant and command accuracy
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T03:40:43Z
-    handoff_source: issue-cmd-zoom-boundary-flash
-    last_report: integration-summary-cmd-zoom-boundary-flash
+    last_seen: 2026-07-13T07:02:28Z
+    handoff_source: issue-windows-native-acceptance-0-4-10
+    last_report: issue-windows-native-acceptance-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified queued recovery race, min and max zoom boundaries, and final viewport persistence
+    notes: Clean-distribution and OS matrix gates pass locally; owns pending Windows native acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T05:23:33Z
-    handoff_source: issue-readme-bilingual-fantuan-illustrations
-    last_report: integration-summary-readme-bilingual-fantuan-illustrations
+    last_seen: 2026-07-13T07:02:28Z
+    handoff_source: issue-mcp-distribution-missing-dependencies
+    last_report: integration-summary-mcp-self-contained-distribution
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Integrated separate Chinese and English illustration sets into README
+    notes: Delivered bilingual upgrade and legacy Windows cache recovery guidance
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent

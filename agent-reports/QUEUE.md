@@ -10,6 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `issue-windows-native-acceptance-0-4-10` | assigned | high | Test Supervisor Agent | Windows 原生宿主验收 0.4.10 | `agent-reports/assigned/issue-windows-native-acceptance-0-4-10.md` | 1 | 2026-07-13T07:02:28Z
 - `issue-ai-graph-universal-horizontal-topology` | assigned | high | Development Agent | AI 画布仍允许纵向布局和机械单链 | `agent-reports/assigned/issue-ai-graph-universal-horizontal-topology.md` | 2 | 2026-07-12T14:44:47Z
 - `issue-node-menu-delete-noop` | assigned | high | Main Thread | 节点菜单删除点击无响应 | `agent-reports/assigned/issue-node-menu-delete-noop.md` | 4 | 2026-07-12T13:51:06Z
 - `issue-native-widget-attachment-relative-url` | assigned | high | Development Agent | 原生 Widget 附件图片相对地址导致破图 | `agent-reports/assigned/issue-native-widget-attachment-relative-url.md` | 2 | 2026-07-12T13:30:23Z
@@ -20,6 +21,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-mcp-self-contained-distribution.md` - shipped the self-contained MCP entry, clean-distribution test, OS matrix workflow, version 0.4.10 and bilingual recovery guidance; real Windows native-host acceptance remains assigned.
 - `agent-reports/resolved/integration-summary-ai-layout-semantic-decomposition.md` - restored service-owned dependency layout, semantic responsibility decomposition, current Page repair, docs, tests, and version 0.4.1 installation; native-host acceptance remains unverified until Codex restarts.
 - `agent-reports/resolved/integration-summary-intent-framework-graph-merge.md` - integrated composable thinking frameworks, current-Page merge operations, closed-loop validation, regression coverage, docs, and version 0.4.0 installation; native-host acceptance remains unverified until Codex restarts.
 - `agent-reports/resolved/20260711-0907-integration-summary-agent-team-role-registry-sync.md` - integrated the Agent Team role-registry sync, validation results, compatibility boundary, installation, and follow-up risks.
