@@ -155,6 +155,7 @@ Canvasight should use a restrained, professional interface:
 - Dialog copy must name the affected object and the consequence. For page deletion, mention that nodes and connections in that page will be deleted.
 - Destructive action buttons should use the destructive visual style; Cancel should remain visually available and safe as the non-destructive escape.
 - Dragging, resizing, zooming, and panning should feel stable and should not conflict with text selection or form input.
+- Zoom limits are stable interaction boundaries. Once the canvas reaches minimum or maximum zoom, continued input in that direction must be a no-op: preserve the rendered viewport, focal point, and zoom indicator without flashing, fitting, or resetting.
 - Inline name or title editing should commit when focus leaves or the user clicks outside the input. `Enter` commits and `Escape` cancels.
 
 ## AI-Generated Canvas

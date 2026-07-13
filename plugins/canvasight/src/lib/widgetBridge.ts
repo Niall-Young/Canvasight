@@ -449,6 +449,12 @@ export function startCanvasightWidgetBridge(): void {
       } catch {
         // Host styling is a progressive enhancement.
       }
+      window.dispatchEvent(new CustomEvent("canvasight:host-context-changed", {
+        detail: {
+          displayMode: context.displayMode ?? bridgeState.displayMode,
+          containerDimensions: context.containerDimensions ?? null
+        }
+      }));
     });
     const ready = withTimeout(app.connect(), BRIDGE_TIMEOUT_MS, "Canvasight MCP Apps bridge initialization timed out.")
       .then(() => {

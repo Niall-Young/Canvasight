@@ -51,6 +51,7 @@ interface ScatterState {
   createPage: () => ScatterPage | null;
   renameActivePage: (name: string) => void;
   deleteActivePage: () => void;
+  setActivePageViewport: (viewport: ScatterPage["viewport"]) => void;
   setNodes: (nodes: ScatterNode[]) => void;
   setEdges: (edges: ScatterEdge[]) => void;
   replaceCanvasLive: (change: CanvasChange) => void;
@@ -398,6 +399,19 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         canUndo: false,
         canRedo: false,
         history: emptyHistory()
+      });
+    },
+    setActivePageViewport: (viewport) => {
+      const state = get();
+      if (!state.activePageId) return;
+      const current = state.pages.find((page) => page.id === state.activePageId)?.viewport;
+      if (current && current.x === viewport.x && current.y === viewport.y && current.zoom === viewport.zoom) return;
+      set({
+        pages: state.pages.map((page) =>
+          page.id === state.activePageId
+            ? { ...page, viewport: { ...viewport }, updatedAt: new Date().toISOString() }
+            : page
+        )
       });
     },
     setNodes: (nodes) => set((state) => ({ nodes, pages: mergeCanvasIntoPages(state, nodes, state.edges) })),

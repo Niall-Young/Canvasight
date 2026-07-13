@@ -79,9 +79,22 @@ function hostHtml(widgetData) {
     name: "Page 1",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    viewport: { x: 0, y: 0, zoom: 1 },
-    nodes: [],
-    edges: []
+    viewport: { x: 80, y: 60, zoom: 0.8 },
+    nodes: [
+      {
+        id: "node-a",
+        type: "task",
+        position: { x: 100, y: 120 },
+        data: { title: "Thread return source", body: "Must remain visible after host restore.", attachments: [], effort: "xhigh", runMode: "flow" }
+      },
+      {
+        id: "node-b",
+        type: "task",
+        position: { x: 680, y: 120 },
+        data: { title: "Thread return target", body: "The edge and viewport must survive.", attachments: [], effort: "xhigh", runMode: "flow" }
+      }
+    ],
+    edges: [{ id: "edge-a-b", source: "node-a", target: "node-b" }]
   };
   const document = {
     version: 1,
@@ -90,8 +103,8 @@ function hostHtml(widgetData) {
     activePageId: page.id,
     pages: [page],
     viewport: page.viewport,
-    nodes: [],
-    edges: []
+    nodes: page.nodes,
+    edges: page.edges
   };
   const session = {
     sessionId: widgetData.sessionId,
@@ -301,6 +314,173 @@ try {
   assert.equal(evidence.ready.body.canvasVisible, true);
   assert.ok(evidence.ready.body.canvasWidth > 0 && evidence.ready.body.canvasHeight > 0);
   assert.deepEqual(evidence.errors, []);
+
+  const restored = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const beforeCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/open-project')).length;
+    const beforeSaveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
+    frame.style.display = 'none';
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    frame.style.display = 'block';
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const doc = frame.contentDocument;
+    const canvas = doc.querySelector('.canvas-shell');
+    const viewport = doc.querySelector('.react-flow__viewport');
+    const nodeEls = Array.from(doc.querySelectorAll('.react-flow__node'));
+    const edgeEls = Array.from(doc.querySelectorAll('.react-flow__edge'));
+    const canvasRect = canvas && canvas.getBoundingClientRect();
+    const visibleNodes = nodeEls.filter((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.right > canvasRect.left && rect.bottom > canvasRect.top && rect.left < canvasRect.right && rect.top < canvasRect.bottom;
+    });
+    const transform = viewport && getComputedStyle(viewport).transform;
+    const afterCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/open-project')).length;
+    const afterSaveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
+    const bridgeStage = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.startupStage;
+    const overlay = Boolean(doc.querySelector('.canvasight-startup-overlay'));
+    return canvasRect && canvasRect.width > 0 && canvasRect.height > 0 && nodeEls.length === 2 && edgeEls.length === 1 && visibleNodes.length > 0 && transform && transform !== 'none'
+      ? { nodeCount: nodeEls.length, edgeCount: edgeEls.length, visibleNodeCount: visibleNodes.length, transform, beforeCalls, afterCalls, beforeSaveCalls, afterSaveCalls, bridgeStage, overlay }
+      : false;
+  })()`, "same-binding canvas after host hide and restore");
+  assert.equal(restored.nodeCount, 2);
+  assert.equal(restored.edgeCount, 1);
+  assert.ok(restored.visibleNodeCount > 0);
+  assert.match(restored.transform, /matrix|translate/);
+  assert.equal(restored.afterCalls, restored.beforeCalls, "same binding recovery must not rehydrate the project");
+  assert.equal(restored.afterSaveCalls, restored.beforeSaveCalls, "programmatic viewport recovery must not overwrite the saved Page viewport");
+  assert.equal(restored.bridgeStage, "ready");
+  assert.equal(restored.overlay, false);
+
+  const zoomRegression = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const canvas = doc.querySelector('.canvas-shell');
+    const pane = doc.querySelector('.react-flow__pane');
+    const viewport = doc.querySelector('.react-flow__viewport');
+    const zoomTrigger = doc.querySelector('.canvas-zoom-trigger');
+    if (!canvas || !pane || !viewport || !zoomTrigger) return false;
+
+    const nextFrame = () => new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const transformZoom = () => {
+      const transform = win.getComputedStyle(viewport).transform;
+      if (!transform || transform === 'none') return 1;
+      return new win.DOMMatrixReadOnly(transform).a;
+    };
+    const zoomLabel = () => Number.parseInt(zoomTrigger.textContent || '', 10);
+    const openZoomMenu = () => {
+      zoomTrigger.dispatchEvent(new win.PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        pointerId: 1,
+        pointerType: 'mouse'
+      }));
+    };
+    const selectZoom = async (label) => {
+      openZoomMenu();
+      await nextFrame();
+      await nextFrame();
+      const item = Array.from(doc.querySelectorAll('[role="menuitemradio"]')).find((candidate) => candidate.textContent.trim() === label);
+      if (!item) throw new Error('Missing zoom menu option: ' + label);
+      item.click();
+    };
+    const wheel = (deltaY) => {
+      pane.dispatchEvent(new win.WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaMode: 0,
+        deltaY,
+        metaKey: true,
+        clientX: 600,
+        clientY: 400
+      }));
+    };
+    const setMetaPressed = (pressed) => {
+      doc.dispatchEvent(new win.KeyboardEvent(pressed ? 'keydown' : 'keyup', {
+        bubbles: true,
+        code: 'MetaLeft',
+        key: 'Meta',
+        metaKey: pressed
+      }));
+    };
+    const sampleFrames = async (count) => {
+      const samples = [];
+      for (let index = 0; index < count; index += 1) {
+        await nextFrame();
+        samples.push({ zoom: transformZoom(), label: zoomLabel() });
+      }
+      return samples;
+    };
+
+    await selectZoom('75%');
+    await sampleFrames(3);
+    openZoomMenu();
+    await nextFrame();
+    await nextFrame();
+    const maxItem = Array.from(doc.querySelectorAll('[role="menuitemradio"]')).find((candidate) => candidate.textContent.trim() === '200%');
+    if (!maxItem) throw new Error('Missing 200% zoom menu option');
+
+    win.dispatchEvent(new win.CustomEvent('canvasight:host-context-changed', {
+      detail: { displayMode: 'fullscreen', containerDimensions: { width: 1200, height: 800 } }
+    }));
+    maxItem.click();
+    const recoveryRaceSamples = await sampleFrames(12);
+
+    setMetaPressed(true);
+    for (let index = 0; index < 16; index += 1) wheel(-240);
+    const maxBoundarySamples = await sampleFrames(12);
+    for (let index = 0; index < 48; index += 1) wheel(240);
+    const minBoundaryArrival = await sampleFrames(12);
+    for (let index = 0; index < 16; index += 1) wheel(240);
+    const minBoundarySamples = await sampleFrames(12);
+    setMetaPressed(false);
+
+    await selectZoom('200%');
+    const finalSamples = await sampleFrames(12);
+    await new Promise((resolve) => win.setTimeout(resolve, 750));
+    const saveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document'));
+    const lastSave = saveCalls.at(-1);
+    const savedPage = lastSave && lastSave.body && lastSave.body.document && lastSave.body.document.pages
+      ? lastSave.body.document.pages.find((page) => page.id === 'page-composed')
+      : null;
+    return {
+      recoveryRaceSamples,
+      maxBoundarySamples,
+      minBoundaryArrival,
+      minBoundarySamples,
+      finalSamples,
+      finalZoom: transformZoom(),
+      finalLabel: zoomLabel(),
+      saveCallCount: saveCalls.length,
+      savedViewport: savedPage && savedPage.viewport,
+      overlay: Boolean(doc.querySelector('.canvasight-startup-overlay')),
+      errors: window.__HOST_RECORDS__.errors
+    };
+  })()`, "viewport recovery and zoom boundary regression");
+  const near = (actual, expected, epsilon = 0.02) => Math.abs(actual - expected) <= epsilon;
+  assert.equal(
+    zoomRegression.recoveryRaceSamples.every((sample) => near(sample.zoom, 2) && sample.label === 200),
+    true,
+    `queued recovery must not overwrite active user zoom: ${JSON.stringify(zoomRegression.recoveryRaceSamples)}`
+  );
+  assert.equal(
+    zoomRegression.maxBoundarySamples.every((sample) => near(sample.zoom, 2) && sample.label === 200),
+    true,
+    `continued Cmd+zoom at max must remain stable: ${JSON.stringify(zoomRegression.maxBoundarySamples)}`
+  );
+  assert.equal(
+    zoomRegression.minBoundarySamples.every((sample) => near(sample.zoom, 0.2) && sample.label === 20),
+    true,
+    `continued Cmd+zoom at min must remain stable: ${JSON.stringify({ arrival: zoomRegression.minBoundaryArrival, boundary: zoomRegression.minBoundarySamples })}`
+  );
+  assert.equal(near(zoomRegression.finalZoom, 2), true);
+  assert.equal(zoomRegression.finalLabel, 200);
+  assert.ok(zoomRegression.saveCallCount > 0, "the final user viewport must schedule document persistence");
+  assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
+  assert.equal(zoomRegression.overlay, false);
+  assert.deepEqual(zoomRegression.errors, []);
   cdp.close();
   console.log("Canvasight composed production widget smoke passed.");
 } finally {

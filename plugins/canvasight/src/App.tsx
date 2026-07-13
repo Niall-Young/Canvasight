@@ -77,6 +77,8 @@ const edgeTypes = { scatter: ScatterFlowEdge } satisfies EdgeTypes;
 const defaultEdgeOptions = { type: "scatter" };
 const proOptions = { hideAttribution: true };
 const saveDebounceMs = 450;
+const canvasMinZoom = 0.2;
+const canvasMaxZoom = 2;
 const taskNodeWidth = 400;
 const taskNodeHeight = 220;
 const taskNodeHorizontalGap = 180;
@@ -754,6 +756,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     renameActivePage,
     selectedNodeId,
     setActivePageId,
+    setActivePageViewport,
     setDrawer,
     setProjectDocument,
     setSaving,
@@ -806,6 +809,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const canvasClipboardRef = useRef<CanvasClipboardPayload | null>(null);
   const clipboardPasteSerialRef = useRef(0);
   const startupInitializedRef = useRef(false);
+  const canvasWasMeasurableRef = useRef(false);
+  const canvasRecoveryFrameRef = useRef<number | null>(null);
+  const canvasRecoveryQueuedRef = useRef(false);
+  const suppressViewportPersistenceRef = useRef(false);
+  const viewportInteractionGenerationRef = useRef(0);
+  const viewportInteractionActiveRef = useRef(false);
 
   const advanceStartupStage = useCallback((stage: CanvasightStartupStage) => {
     setStartupStageState((current) => {
@@ -929,10 +938,117 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     connectionStartRef.current = null;
     connectionSucceededRef.current = false;
     connectionHoverTargetRef.current = null;
-    if (project) {
-      window.requestAnimationFrame(() => flowInstanceRef.current?.fitView({ padding: 0.24 }));
+  }, [activePageId]);
+
+  const restoreCanvasViewport = useCallback(async (): Promise<void> => {
+    if (canvasRecoveryQueuedRef.current || !project || !flowInstanceRef.current) return;
+    const recoveryGeneration = viewportInteractionGenerationRef.current;
+    let suppressingViewportPersistence = false;
+    canvasRecoveryQueuedRef.current = true;
+    try {
+      await new Promise<void>((resolve) => {
+        canvasRecoveryFrameRef.current = window.requestAnimationFrame(() => {
+          canvasRecoveryFrameRef.current = window.requestAnimationFrame(() => resolve());
+        });
+      });
+      if (viewportInteractionActiveRef.current || viewportInteractionGenerationRef.current !== recoveryGeneration) return;
+
+      const canvas = canvasShellRef.current;
+      const instance = flowInstanceRef.current;
+      const rect = canvas?.getBoundingClientRect();
+      if (!canvas || !instance || !rect || rect.width <= 0 || rect.height <= 0) return;
+
+      const latestState = useScatterStore.getState();
+      const latestPage =
+        latestState.pages.find((page) => page.id === latestState.activePageId) ?? latestState.pages[0] ?? null;
+      const viewport = latestPage?.viewport;
+      const latestNodes = latestState.nodes;
+      const validViewport = Boolean(
+        viewport &&
+        Number.isFinite(viewport.x) &&
+        Number.isFinite(viewport.y) &&
+        Number.isFinite(viewport.zoom) &&
+        viewport.zoom >= canvasMinZoom &&
+        viewport.zoom <= canvasMaxZoom
+      );
+      suppressViewportPersistenceRef.current = true;
+      suppressingViewportPersistence = true;
+      if (validViewport && viewport) await instance.setViewport(viewport, { duration: 0 });
+      if (viewportInteractionActiveRef.current || viewportInteractionGenerationRef.current !== recoveryGeneration) return;
+
+      const current = instance.getViewport();
+      const hasVisibleNode = latestNodes.some((node) => {
+        const bounds = nodeBounds(node);
+        const left = node.position.x * current.zoom + current.x;
+        const top = node.position.y * current.zoom + current.y;
+        const right = left + bounds.width * current.zoom;
+        const bottom = top + bounds.height * current.zoom;
+        return right > 0 && bottom > 0 && left < rect.width && top < rect.height;
+      });
+      if (latestNodes.length > 0 && (!validViewport || !hasVisibleNode)) {
+        await instance.fitView({ padding: 0.24, duration: 0 });
+      }
+      setViewportZoom(Math.max(canvasMinZoom, Math.min(canvasMaxZoom, instance.getViewport().zoom)));
+      setStartupFailure((current) => (current?.stage === "canvas_resume" ? null : current));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Canvas recovery failed.";
+      setStartupFailure({ stage: "canvas_resume", reason });
+      setStatus(`Canvas recovery failed: ${reason}`);
+    } finally {
+      if (suppressingViewportPersistence) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            suppressViewportPersistenceRef.current = false;
+          });
+        });
+      }
+      canvasRecoveryQueuedRef.current = false;
+      canvasRecoveryFrameRef.current = null;
     }
-  }, [activePageId, project]);
+  }, [project, setStatus]);
+
+  useEffect(() => {
+    if (!project || !activePageId) return;
+    void restoreCanvasViewport();
+  }, [activePageId, project, restoreCanvasViewport]);
+
+  useEffect(() => {
+    const canvas = canvasShellRef.current;
+    if (!canvas) return;
+
+    const queueRecovery = () => {
+      if (document.visibilityState === "hidden") return;
+      void restoreCanvasViewport();
+    };
+    const handleHostContextChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ displayMode?: string; containerDimensions?: { width?: number; height?: number } | null }>).detail;
+      const dimensions = detail?.containerDimensions;
+      if (detail?.displayMode !== "fullscreen") return;
+      if (dimensions && (!(Number(dimensions.width) > 0) || !(Number(dimensions.height) > 0))) return;
+      queueRecovery();
+    };
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      const measurable = Boolean(rect && rect.width > 0 && rect.height > 0);
+      const restored = measurable && !canvasWasMeasurableRef.current;
+      canvasWasMeasurableRef.current = measurable;
+      if (restored) queueRecovery();
+    });
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") queueRecovery();
+    };
+    observer.observe(canvas);
+    window.addEventListener("canvasight:host-context-changed", handleHostContextChanged);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("canvasight:host-context-changed", handleHostContextChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (canvasRecoveryFrameRef.current !== null) window.cancelAnimationFrame(canvasRecoveryFrameRef.current);
+      canvasRecoveryFrameRef.current = null;
+      canvasRecoveryQueuedRef.current = false;
+    };
+  }, [restoreCanvasViewport]);
 
   const clearConnectionHoverTarget = useCallback(() => {
     updateConnectionHoverTarget(null);
@@ -1904,9 +2020,30 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     flowInstanceRef.current?.fitView({ padding: 0.24 });
   }, []);
 
-  const handleMove = useCallback<OnMove>((_event, viewport) => {
-    setViewportZoom(viewport.zoom);
+  const handleMoveStart = useCallback<OnMove>((event) => {
+    if (!event) return;
+    viewportInteractionGenerationRef.current += 1;
+    viewportInteractionActiveRef.current = true;
   }, []);
+
+  const handleMove = useCallback<OnMove>((_event, viewport) => {
+    if (!Number.isFinite(viewport.zoom)) return;
+    setViewportZoom(Math.max(canvasMinZoom, Math.min(canvasMaxZoom, viewport.zoom)));
+  }, []);
+
+  const handleMoveEnd = useCallback<OnMove>(
+    (event, viewport) => {
+      if (hydratedRef.current && !suppressViewportPersistenceRef.current && [viewport.x, viewport.y, viewport.zoom].every(Number.isFinite)) {
+        setActivePageViewport({
+          x: viewport.x,
+          y: viewport.y,
+          zoom: Math.max(canvasMinZoom, Math.min(canvasMaxZoom, viewport.zoom))
+        });
+      }
+      if (event) viewportInteractionActiveRef.current = false;
+    },
+    [setActivePageViewport]
+  );
 
   const runActiveNode = useCallback(() => {
     if (!selectedNode) return;
@@ -2055,7 +2192,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }}
       onMouseLeave={() => setHoveredNodeId(null)}
     >
-      {nativeWidget && startupStage !== "ready" ? (
+      {nativeWidget && (startupStage !== "ready" || startupFailure) ? (
         <div className="canvasight-startup-overlay">
           {startupFailure ? (
             <StartupFailurePanel
@@ -2075,7 +2212,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             />
           ) : (
             <WorkspaceStartupSkeleton
-              stage={startupStage === "failed" ? "starting" : startupStage}
+              stage={startupStage === "failed" || startupStage === "ready" ? "starting" : startupStage}
               label={
                 startupStage === "starting"
                   ? "Starting Canvasight..."
@@ -2202,9 +2339,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 connectionLineComponent={ScatterConnectionLine}
                 defaultEdgeOptions={defaultEdgeOptions}
                 proOptions={proOptions}
-                fitView
-                minZoom={0.2}
-                maxZoom={2}
+                defaultViewport={activePage?.viewport}
+                minZoom={canvasMinZoom}
+                maxZoom={canvasMaxZoom}
                 connectOnClick={false}
                 deleteKeyCode={null}
                 disableKeyboardA11y
@@ -2228,6 +2365,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                   flowInstanceRef.current = instance;
                 }}
                 onMove={handleMove}
+                onMoveEnd={handleMoveEnd}
+                onMoveStart={handleMoveStart}
                 onNodeClick={(_event, node) => selectNode(node.id, selectedRunMode)}
                 onNodeMouseEnter={handleNodeMouseEnter}
                 onNodeMouseLeave={handleNodeMouseLeave}
@@ -2344,6 +2483,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                                 role="menuitemradio"
                                 aria-checked={Math.abs(viewportZoom - option.value) < 0.01}
                                 onClick={() => {
+                                  viewportInteractionGenerationRef.current += 1;
                                   setViewportZoom(option.value);
                                   void flowInstanceRef.current?.zoomTo(option.value);
                                 }}
