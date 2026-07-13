@@ -2027,6 +2027,109 @@ button.achievement-card.is-unlocked:focus-visible {
   background: transparent;
 }
 
+.task-body-editor {
+  position: relative;
+  z-index: 3;
+}
+
+.skill-picker {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-background-raised);
+  box-shadow: var(--shadow-popover);
+}
+
+.skill-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--color-text-subtle);
+  border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.skill-picker-refresh {
+  padding: 0;
+  color: var(--color-text-link);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.skill-picker-list {
+  display: flex;
+  max-height: 248px;
+  overflow-y: auto;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.skill-picker-option {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px;
+  color: var(--color-text);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-picker-option.is-active,
+.skill-picker-option:hover {
+  background: var(--color-primary-subtle);
+}
+
+.skill-picker-option-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-14);
+  line-height: var(--line-14);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-picker-option-description,
+.skill-picker-message,
+.skill-picker-hint {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--color-text-subtlest);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-picker-message,
+.skill-picker-hint {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.skill-picker-message.is-error {
+  color: var(--color-negative);
+}
+
+.skill-picker-hint {
+  padding-top: 0;
+}
+
 .task-title {
   min-width: 0;
   flex: 1 1 auto;

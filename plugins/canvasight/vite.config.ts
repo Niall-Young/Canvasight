@@ -455,6 +455,23 @@ function canvasightDevApiPlugin() {
             sendJson(res, 200, {});
             return;
           }
+          if (url.pathname === "/api/skills" || url.pathname === "/api/preferences") {
+            const daemon = await ensureDaemonServer();
+            const method = (req.method || "GET").toUpperCase();
+            const body = method === "GET" ? undefined : await readJsonBody(req);
+            const route = url.pathname === "/api/skills"
+              ? `/api/skills?${new URLSearchParams({
+                  ...Object.fromEntries(url.searchParams.entries()),
+                  projectPath: url.searchParams.get("projectPath") || defaultProjectPath
+                }).toString()}`
+              : "/api/preferences";
+            const result = await daemonJson(daemon, route, {
+              method,
+              ...(body === undefined ? {} : { body: JSON.stringify(body) })
+            });
+            sendJson(res, 200, result);
+            return;
+          }
           const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)(?:\/([^/]+))?$/);
           if (!sessionMatch) {
             next();

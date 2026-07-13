@@ -10,6 +10,15 @@ Validation is a pre-write quality gate, not a user-facing report. `write_canvasi
 - Coverage values contain final node IDs. Every referenced node must exist and substantively contain the promised content.
 - One node may satisfy multiple related keys only when they support one named responsibility and `semanticStructure` explains why the content belongs together. A generic root, placeholder, or overloaded prose node cannot satisfy an entire contract.
 - `semanticRelationships` uses final edge IDs. Every edge connecting covered nodes must declare an allowed relationship type and a source-target-specific rationale.
+- In `skill-led` mode, skip canonical Canvasight domain and maturity completeness, but require every node created or updated by the write to appear in responsibility-oriented coverage. Do not repair missing default coverage by injecting generic business content.
+
+## Skill assignment rules
+
+- `skill-led` requires exactly one primary content Skill. Canvas-level conflicts require user direction before writing.
+- Every `skillAssignments` key must be a final candidate node ID, and every assignment name must match a visible `$skill-name` token in that node body.
+- Reject `ai-selected` while `preferences.aiSkillAssignmentEnabled` is false. When it is true, require a concrete rationale grounded in the node responsibility and the discovered Skill description.
+- Always allow `user-explicit` assignments. Never repair a disabled autonomous preference by deleting existing or user-requested `$skill-name` text.
+- When discovery fails, remove only proposed `ai-selected` entries and continue with a recoverable advisory; preserve user-explicit assignments.
 
 ## Required repair loop
 

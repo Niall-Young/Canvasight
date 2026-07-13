@@ -159,6 +159,8 @@ function hostHtml(widgetData) {
       window.__HOST_RECORDS__.toolCalls.push(args);
       let data = null;
       if (args.path === '/api/templates') data = [];
+      else if (args.path === '/api/preferences') data = { aiSkillAssignmentEnabled: false };
+      else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
       else if (args.path && args.path.endsWith('/open-project')) data = opened;
       else if (args.path && args.path.endsWith('/widget-ready')) {
         window.__HOST_RECORDS__.ready = { identity: args, body: args.body };

@@ -180,6 +180,18 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI-generated content must remain fully editable by the user.
 - External AI writes and browser autosave must coordinate through a document revision contract. When AI writes a graph through the daemon, open browser sessions should reload the newer document automatically; stale browser saves must be rejected and reload the latest `.scatter/scatter.json` instead of overwriting externally generated Pages.
 
+## Skill Composition
+
+Canvasight supports three related but distinct Skill paths without turning the canvas into a Skill manager:
+
+- A canvas-level content Skill may lead the professional content framework for one AI write. It contributes content decisions only; Canvasight remains the sole owner of Pages, nodes, edges, revisions, validation, persistence, and left-to-right placement.
+- AI may assign a Skill to one node responsibility only when the global opt-in is enabled and the Skill description clearly matches. The assignment is visible as editable `$skill-name` text in the node body; it is not a hidden node field.
+- A user may always type `$` in an editing node to search enabled Skills, or type `$skill-name` manually when discovery is unavailable. Multiple Skills are allowed and old tokens remain editable even if the catalog later changes.
+
+The `$` picker is anchored to the node body and supports composition input, fuzzy search, Arrow keys, Enter/Tab selection, Escape dismissal, refresh, and an explicit manual-entry fallback. It must not resize the Page layout or replace ordinary textarea editing.
+
+`skill-led` content generation skips Canvasight's default professional content completion, but it never skips responsibility coverage, semantic relationships, revision checks, atomic writes, or horizontal topology. External requests for vertical layout, coordinates, or direct `.scatter` writes are treated only as content advice. Conflicting professional Skills require user resolution before writing.
+
 ## Global Node Templates
 
 Node templates are reusable local assets, not project files. They should feel like a compact library inside the existing drawer system:
@@ -251,7 +263,7 @@ Canvasight can include an Agent Team / agent-report protocol section in generate
 
 ## Settings Scope
 
-Settings contains only active user-configurable Canvasight workflow preferences, such as the Agent Team switch. Do not show a Codex current-model row or editable model field: model selection was supporting the retired Plan and Goal paths, while Chat Run uses the current Codex task context. Do not move manual workspace Diagnostics into Settings; startup-failure recovery retains its dedicated persistent diagnostics actions.
+Settings contains only active user-configurable Canvasight workflow preferences, such as the Agent Team switch and the global "Allow AI to choose Skills for nodes" switch. AI Skill assignment defaults off, persists across projects, and does not affect manual `$Skill` editing. Do not show a Codex current-model row or editable model field: model selection was supporting the retired Plan and Goal paths, while Chat Run uses the current Codex task context. Do not move manual workspace Diagnostics into Settings; startup-failure recovery retains its dedicated persistent diagnostics actions.
 
 ## Canvas File Protocol
 

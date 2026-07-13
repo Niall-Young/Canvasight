@@ -17,6 +17,7 @@ For a merge, pass the latest `expectedRevision` and minimal operations. Preserve
 - For every edge connecting two covered nodes, add its final edge ID to `frameworkManifest.semanticRelationships` with one type (`dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`) and a concrete rationale for that exact source-target relationship.
 - No self-edge, duplicate `source -> target`, missing endpoint, or multiple parent edges into one target.
 - Removing a node may remove its incident edges; account for that in the final topology and coverage.
+- Treat visible `$skill-name` text as part of the node responsibility, not as hidden graph metadata. Keep a node-level Skill scoped to that node unless the user also chose it as a canvas-level content Skill.
 
 ## Semantic decomposition check
 
@@ -38,6 +39,7 @@ Apply output-specific full-chain rules to the covered-node subgraph. `exploratio
 - Use vertical space only to separate parallel branches at the same dependency level. Do not interpret an increasing Y position as graph progress.
 - After a split, relationship change, or broad merge invalidates placement, request whole-Page relayout rather than hand-placing only the new nodes.
 - Treat overlap and backward dependency direction as repair failures. Explicit coordinates are not evidence that a layout is valid.
+- A professional Skill may change the content method, but it cannot replace Canvasight's writer, request vertical flow, or write `.scatter` directly. Translate its conclusions into this graph contract.
 
 ## Templates
 

@@ -87,6 +87,8 @@ interface MarkdownText {
   connectionMap: string;
   executionRequest: string;
   executionRequestBody: string;
+  skillExecutionScope: string;
+  skillMap: string;
   includedNodes: string;
   noConnections: string;
   noPrompt: string;
@@ -122,6 +124,8 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     connectionMap: "连接关系",
     executionRequest: "执行请求",
     executionRequestBody: "请把以下 Canvasight 画布上下文作为事实来源。需要时检查引用文件，并在这个项目中执行请求的工作。",
+    skillExecutionScope: "流程包含节点级 Skill。每个 Skill 只应用于下方映射的节点职责；不要把某个节点的 Skill 扩展到其他节点。",
+    skillMap: "节点—Skill 映射",
     includedNodes: "包含的节点",
     noConnections: "- 当前范围内没有下游连接。",
     noPrompt: "_未提供提示词正文。_",
@@ -155,6 +159,8 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     connectionMap: "Connection Map",
     executionRequest: "Execution Request",
     executionRequestBody: "Use the following Canvasight canvas context as the source of truth. Analyze the task structure, inspect referenced files when needed, and execute the requested work in this project.",
+    skillExecutionScope: "This flow contains node-scoped Skills. Apply each Skill only to the mapped node responsibility; do not extend one node's Skill to other nodes.",
+    skillMap: "Node–Skill Map",
     includedNodes: "Included Nodes",
     noConnections: "- No downstream connections included.",
     noPrompt: "_No prompt text provided._",
@@ -384,6 +390,26 @@ ${body}
 ${attachments}`;
 }
 
+export function extractSkillNames(body: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const pattern = /(?:^|[\s([{])\$([a-z0-9][a-z0-9._:-]*)/gi;
+  for (const match of body.matchAll(pattern)) {
+    const name = match[1];
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function nodeSkillMap(nodes: ScatterNode[]): Array<{ node: ScatterNode; names: string[] }> {
+  return nodes
+    .map((node) => ({ node, names: extractSkillNames(node.data.body || "") }))
+    .filter((entry) => entry.names.length > 0);
+}
+
 export function buildMarkdown(
   allNodes: ScatterNode[],
   allEdges: ScatterEdge[],
@@ -420,6 +446,12 @@ export function buildMarkdown(
         .join("\n")
     : text.noConnections;
   const agentTeam = buildAgentTeamConfig(agentTeamEnabled, orderedNodes, projectName, projectPath, language);
+  const skillMap = nodeSkillMap(orderedNodes);
+  const skillMapSection = skillMap.length
+    ? `\n\n## ${text.skillMap}\n${skillMap
+        .map(({ node, names }, index) => `- ${node.data.title?.trim() || text.untitledTask(index)} (\`${node.id}\`): ${names.join(", ")}`)
+        .join("\n")}`
+    : "";
 
   const markdown = `# ${text.taskTitle}: ${title}
 
@@ -428,7 +460,7 @@ ${text.projectPath}: \`${projectPath}\`
 ${text.runMode}: ${modeLabel}
 ${nodeIds.hasCycle ? text.warningCycle : ""}${agentTeamSection(agentTeam, text)}
 ## ${text.executionRequest}
-${text.executionRequestBody}
+${text.executionRequestBody}${skillMap.length ? `\n\n${text.skillExecutionScope}` : ""}${skillMapSection}
 
 ## ${text.includedNodes}
 ${orderedNodes.map((node, index) => nodeBlock(node, index, text)).join("\n\n")}

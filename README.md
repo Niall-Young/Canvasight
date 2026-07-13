@@ -24,6 +24,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
 - 可选地在 Run Markdown 中加入 Agent Team 协作协议：以 `ROSTER.md` 恢复角色席位、以版本化报告维护唯一 owner 与验证证据，并从报告派生 `agent-reports/QUEUE.md`。
+- 在节点正文输入 `$` 搜索当前项目启用的 Skill；也可让专业 Skill 主导一次画布内容生成，或在显式开启后让 AI 为职责明确的节点选择 Skill。
 
 ### 基础用法
 
@@ -79,7 +80,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
    继续完善当前 Canvasight Page：请保留未提及的节点和位置，只更新与“[在这里写要补充、修改或删除的内容]”有关的节点和连线。
    ```
 
-6. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务。
+6. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。在节点正文输入 `$` 会搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务，并说明每个节点级 Skill 只负责对应节点。
 
    ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
 
@@ -109,6 +110,10 @@ Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatt
 当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page 和 `documentRevision`，再用 `merge-active-page` 提交最小的节点/连线 operations。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改会保留未涉及的内容和位置。
 
 生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
+
+专业内容 Skill 可以通过 Codex description 路由或用户显式 `$Skill` 主导一次写图。此时 `skill-led` 只替换默认专业内容框架：专业 Skill 负责内容，Canvasight 仍是 Page、节点、关系、revision、原子写入和固定水平布局的唯一写入者。多个专业 Skill 无法调和时必须先询问用户，不能静默混合。
+
+节点级 Skill 是另一层能力。用户手动 `$Skill` 始终可用；“允许 AI 为节点选择 Skill”是默认关闭、跨项目生效的全局设置。开启后 AI 只在 Skill description 与节点职责明确匹配时写入 `$skill-name`，并提交来源和理由用于本次写图校验。Canvasight 不给节点增加隐藏 Skill 字段，也不提供 Skill 安装或启用管理。
 
 写入 `software-product` 画布时，如果项目缺少 `AGENTS.md` 或 `design.md`，Canvasight 会自动补充对应的独立交付节点，不需要消耗模型重试次数。
 
@@ -173,6 +178,7 @@ codex plugin add canvasight@canvasight-local
 - `write_canvasight_graph`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
+- `list_canvasight_skills`：按当前项目职责查询已启用 Skill 的脱敏摘要；不返回正文或本地路径。
 
 fallback 与会话：
 
@@ -201,13 +207,14 @@ fallback 与会话：
 - `canvasight-troubleshooting`：处理插件、MCP transport、daemon、widget 和 fallback 故障。
 - `canvasight`：跨多个 Canvasight 工作流时使用的薄索引。
 
-Skills 只负责 Codex 的触发和工作流分工，不改变 Page、节点或画布的用户模型。
+专业 Skills 负责内容判断；Canvasight Skills 负责写入协议和产品工作流。画布级内容 Skill 与节点级 `$Skill` 分配是不同概念，两者都不能直接写 `.scatter` 或改变固定水平布局。
 
 ### 数据存储
 
 - 项目画布：`.scatter/scatter.json`
 - 项目附件：`.scatter/assets/`
 - 最近项目、daemon 状态和生命周期日志：本机 Canvasight 用户状态目录
+- 全局用户偏好：`CANVASIGHT_HOME/preferences.json`，包括默认关闭的 AI 节点 Skill 分配开关
 - 全局节点模板及其资源：本机 Canvasight 用户状态目录，不写入项目文件
 
 `.scatter/scatter.json` 保持 v1 兼容，并通过 `pages` 和 `activePageId` 支持多个 Page。未知字段应尽量保留，非法文件应显示可恢复错误，而不是清空画布。
@@ -341,6 +348,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
 - Reopen recent Canvasight projects from a new Codex task.
 - Optionally include the Agent Team protocol in generated Run Markdown: `ROSTER.md` restores role seats, versioned reports hold the single owner and verification evidence, and `agent-reports/QUEUE.md` is derived from reports.
+- Type `$` in a node body to search enabled project Skills; a professional Skill can also lead one canvas content write, and AI can opt in to choosing Skills for clearly matched node responsibilities.
 
 ### Basic Usage
 
@@ -396,7 +404,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
    Continue refining the current Canvasight Page. Preserve all nodes and positions I did not mention, and only update the nodes and edges related to “[describe what to add, change, or remove here].”
    ```
 
-6. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. When ready, click Run on the node you want to execute. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task.
+6. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. Type `$` in a node body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. When ready, click Run. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task and scopes each node-level Skill to its mapped responsibility.
 
    ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
 
@@ -426,6 +434,10 @@ Codex should use `write_canvasight_graph` instead of manually assembling the ful
 When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page and its `documentRevision`, then submit minimal node/edge operations with `merge-active-page`. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits preserve untouched content and positions.
 
 Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
+
+A professional content Skill can lead one graph write through Codex description routing or an explicit `$Skill`. `skill-led` replaces only Canvasight's default professional content framework: the professional Skill owns content decisions, while Canvasight remains the sole writer for Pages, nodes, relationships, revisions, atomic persistence, and the fixed horizontal layout. Conflicting professional Skills must be resolved with the user before writing.
+
+Node-level Skills are separate. Manual `$Skill` text always works. “Allow AI to choose Skills for nodes” is a global, cross-project opt-in that defaults off. When enabled, AI writes `$skill-name` only for a clear description-to-responsibility match and supplies a source and rationale for write-time validation. Canvasight adds no hidden node Skill field and does not manage Skill installation or enablement.
 
 When writing a `software-product` canvas, Canvasight deterministically adds separate delivery nodes for any missing `AGENTS.md` or `design.md`, without consuming model retry attempts.
 
@@ -490,6 +502,7 @@ Canvas and templates:
 - `write_canvasight_graph`
 - `list_canvasight_node_templates`
 - `get_canvasight_node_template`
+- `list_canvasight_skills`: queries redacted summaries of enabled Skills for the current project; it never returns full Skill bodies or local paths.
 
 Fallback and session tools:
 
@@ -518,13 +531,14 @@ It returns `status` (`ready`, `timeout`, or `failed`), `verified`, `openAttemptI
 - `canvasight-troubleshooting`: plugin, MCP transport, daemon, widget, and fallback failures.
 - `canvasight`: thin index for work spanning multiple Canvasight workflows.
 
-Skills control Codex routing and workflow only. They do not change the user model for Pages, nodes, or the canvas.
+Professional Skills own content judgments; Canvasight Skills own the write protocol and product workflow. Canvas-level content Skills and node-level `$Skill` assignments are separate, and neither may write `.scatter` directly or change the fixed horizontal layout.
 
 ### Data Storage
 
 - Project canvas: `.scatter/scatter.json`
 - Project attachments: `.scatter/assets/`
 - Recent projects, daemon state, and lifecycle logs: local Canvasight user state
+- Global preferences: `CANVASIGHT_HOME/preferences.json`, including the default-off AI node Skill assignment switch
 - Global node templates and their assets: local Canvasight user state, outside project files
 
 `.scatter/scatter.json` remains v1-compatible and supports multiple Pages through `pages` and `activePageId`. Unknown fields should be preserved where possible, and invalid files should produce recoverable errors instead of clearing the canvas.

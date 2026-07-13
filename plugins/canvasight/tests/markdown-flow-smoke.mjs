@@ -32,7 +32,7 @@ vm.runInNewContext(
   { filename: "markdown.cjs" }
 );
 
-const { buildMarkdown } = module.exports;
+const { buildMarkdown, extractSkillNames } = module.exports;
 
 function taskNode(id, title, body, position, legacyMode = null) {
   return {
@@ -86,5 +86,30 @@ assert.doesNotMatch(defaultAgentTeamResult.markdown, /## Agent Team/);
 const enabledAgentTeamResult = buildMarkdown(nodes, edges, "a", "flow", "Smoke Project", "/tmp/canvasight-smoke", "en", true);
 assert.equal(enabledAgentTeamResult.agentTeam.enabled, true, "an explicit user opt-in must remain supported");
 assert.match(enabledAgentTeamResult.markdown, /## Agent Team/);
+
+const skillNodes = [
+  taskNode("skill-root", "Root", "Coordinate the flow", { x: 0, y: 0 }),
+  taskNode("skill-copy", "Copy", "$write-product-promo-article draft the launch copy", { x: 240, y: 0 }),
+  taskNode("skill-design", "Design", "$figma create the visual and keep $figma editable", { x: 240, y: 140 })
+];
+const skillResult = buildMarkdown(
+  skillNodes,
+  [
+    { id: "root-copy", source: "skill-root", target: "skill-copy" },
+    { id: "root-design", source: "skill-root", target: "skill-design" }
+  ],
+  "skill-root",
+  "flow",
+  "Skill Project",
+  "/tmp/canvasight-skill-smoke",
+  "en",
+  false
+);
+assert.deepEqual(Array.from(extractSkillNames("$figma and $figma plus ($imagegen)")), ["figma", "imagegen"]);
+assert.match(skillResult.markdown, /## Node–Skill Map/);
+assert.match(skillResult.markdown, /Copy \(`skill-copy`\): write-product-promo-article/);
+assert.match(skillResult.markdown, /Design \(`skill-design`\): figma/);
+assert.match(skillResult.markdown, /Apply each Skill only to the mapped node responsibility/);
+assert.equal((skillResult.markdown.match(/\$figma/g) || []).length, 2, "mapping must not duplicate raw Skill trigger tokens");
 
 console.log("Markdown flow smoke test passed");

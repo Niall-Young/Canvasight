@@ -83,6 +83,7 @@ const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
 const directModeNotLoadedPath = path.join(tempRoot, "direct-mode-not-loaded-threads.txt");
 const directModeThreadReadFailPath = path.join(tempRoot, "direct-mode-thread-read-fail-threads.txt");
+const skillsFailPath = path.join(tempRoot, "skills-fail.flag");
 const fakeCodexScriptPath = path.join(tempRoot, "fake-codex.mjs");
 const fakeCodexPath = process.platform === "win32" ? process.execPath : fakeCodexScriptPath;
 const fakeCodexAppServerArgs = process.platform === "win32" ? fakeCodexScriptPath : "";
@@ -97,6 +98,7 @@ const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
 const transientResumeFailCountPath = process.env.CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH;
 const directModeNotLoadedPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH;
 const directModeThreadReadFailPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH;
+const skillsFailPath = process.env.CANVASIGHT_FAKE_SKILLS_FAIL_PATH;
 const fakeThreadCwd = process.env.CANVASIGHT_FAKE_THREAD_CWD || process.cwd();
 let buffer = "";
 const loadedThreads = new Set();
@@ -200,6 +202,47 @@ function handle(message) {
     });
     return;
   }
+  if (message.method === "skills/list") {
+    if (skillsFailPath && fs.existsSync(skillsFailPath)) {
+      write({ id: message.id, error: { code: -32603, message: "fake skills/list failure at /private/secret/skills" } });
+      return;
+    }
+    const cwd = Array.isArray(message.params?.cwds) ? message.params.cwds[0] : fakeThreadCwd;
+    write({
+      id: message.id,
+      result: {
+        data: [{
+          cwd,
+          errors: [],
+          skills: [
+            {
+              name: "pdf",
+              description: "Read, create, and verify PDF files where rendering and layout matter.",
+              enabled: true,
+              path: "/private/secret/skills/pdf/SKILL.md",
+              scope: "user",
+              interface: { displayName: "PDF 专家" }
+            },
+            {
+              name: "figma",
+              description: "Translate Figma design context into implementation evidence.",
+              enabled: true,
+              path: "/private/secret/skills/figma/SKILL.md",
+              scope: "repo"
+            },
+            {
+              name: "disabled-secret",
+              description: "Must never be returned.",
+              enabled: false,
+              path: "/private/secret/skills/disabled/SKILL.md",
+              scope: "user"
+            }
+          ]
+        }]
+      }
+    });
+    return;
+  }
   if (["thread/goal/set", "thread/settings/update"].includes(message.method) && listedThread(directModeThreadReadFailPath, message.params?.threadId)) {
     write({ id: message.id, error: { code: -32603, message: "failed to read thread rollout: rollout does not start with session metadata" } });
     return;
@@ -283,6 +326,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH: transientResumeFailCountPath,
     CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH: directModeNotLoadedPath,
     CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH: directModeThreadReadFailPath,
+    CANVASIGHT_FAKE_SKILLS_FAIL_PATH: skillsFailPath,
     CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
     CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
     CANVASIGHT_OPEN_BROWSER: "0",
@@ -1121,6 +1165,206 @@ function minimalRefineManifest(output, nodeIds, edges, relationshipType = "conta
       ])
     )
   };
+}
+
+function nodeSkillManifest(nodeId, assignment) {
+  return {
+    ...minimalRefineManifest("execution-plan", [nodeId], []),
+    skillAssignments: {
+      [nodeId]: [assignment]
+    }
+  };
+}
+
+function skillLedManifest(nodeId) {
+  return {
+    intent: "create",
+    primaryDomain: "software-product",
+    secondaryDomains: [],
+    maturity: "deliver",
+    output: "structured-outline",
+    contentMode: "skill-led",
+    contentSkills: [{ name: "pdf", role: "primary" }],
+    coverage: {
+      "professional.pdf.structure": [nodeId]
+    },
+    semanticStructure: {
+      [nodeId]: {
+        responsibility: "Define the professional PDF content structure.",
+        inseparableReason: "The node produces one coherent professional content outline."
+      }
+    },
+    semanticRelationships: {}
+  };
+}
+
+async function assertSkillAssignmentAndContentModeContracts(origin) {
+  await fetchJson(`${origin}/api/preferences`, {
+    method: "POST",
+    body: JSON.stringify({ aiSkillAssignmentEnabled: false })
+  });
+  const disabledContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: path.join(tempRoot, "skill-context-project") }
+  });
+  assert.deepEqual(disabledContext.structuredContent.preferences, { aiSkillAssignmentEnabled: false });
+
+  const userExplicitProject = path.join(tempRoot, "skill-user-explicit-project");
+  const userExplicit = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: userExplicitProject,
+      graphType: "task-plan",
+      pageName: "User explicit Skill",
+      frameworkManifest: nodeSkillManifest("explicit-node", {
+        name: "pdf",
+        source: "user-explicit"
+      }),
+      nodes: [{ id: "explicit-node", title: "Create PDF", body: "$pdf Create and verify the final PDF layout." }],
+      edges: []
+    }
+  });
+  assert.equal(userExplicit.structuredContent.status, "written");
+
+  const aiDisabled = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-ai-disabled-project"),
+      graphType: "task-plan",
+      pageName: "AI Skill disabled",
+      frameworkManifest: nodeSkillManifest("ai-node", {
+        name: "pdf",
+        source: "ai-selected",
+        rationale: "The node produces a PDF and the Skill description specifically covers PDF creation and rendered verification."
+      }),
+      nodes: [{ id: "ai-node", title: "Create PDF", body: "$pdf Create and verify the final PDF layout." }],
+      edges: []
+    }
+  });
+  assert.equal(aiDisabled.structuredContent.status, "validation_failed");
+  assert.equal(aiDisabled.structuredContent.validation.violations.some((item) => item.code === "ai_skill_assignment_disabled"), true);
+
+  await fetchJson(`${origin}/api/preferences`, {
+    method: "POST",
+    body: JSON.stringify({ aiSkillAssignmentEnabled: true })
+  });
+  const enabledContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: path.join(tempRoot, "another-skill-context-project") }
+  });
+  assert.deepEqual(enabledContext.structuredContent.preferences, { aiSkillAssignmentEnabled: true });
+
+  const missingRationale = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-ai-missing-rationale-project"),
+      frameworkManifest: nodeSkillManifest("missing-rationale", { name: "pdf", source: "ai-selected" }),
+      nodes: [{ id: "missing-rationale", title: "Create PDF", body: "$pdf Create the final PDF." }],
+      edges: []
+    }
+  });
+  assert.equal(missingRationale.structuredContent.status, "validation_failed");
+  assert.equal(missingRationale.structuredContent.validation.violations.some((item) => item.code === "ai_skill_assignment_rationale_required"), true);
+
+  const bodyMismatch = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-ai-body-mismatch-project"),
+      frameworkManifest: nodeSkillManifest("body-mismatch", {
+        name: "pdf",
+        source: "ai-selected",
+        rationale: "The node is responsible for PDF creation and rendered verification."
+      }),
+      nodes: [{ id: "body-mismatch", title: "Create PDF", body: "Create the final PDF without a visible assignment token." }],
+      edges: []
+    }
+  });
+  assert.equal(bodyMismatch.structuredContent.status, "validation_failed");
+  assert.equal(bodyMismatch.structuredContent.validation.violations.some((item) => item.code === "skill_assignment_body_mismatch"), true);
+
+  const missingNode = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-ai-missing-node-project"),
+      frameworkManifest: {
+        ...minimalRefineManifest("execution-plan", ["actual-node"], []),
+        skillAssignments: {
+          "missing-node": [{
+            name: "pdf",
+            source: "ai-selected",
+            rationale: "The missing node would have owned PDF generation."
+          }]
+        }
+      },
+      nodes: [{ id: "actual-node", title: "Actual node", body: "Own the actual executable responsibility." }],
+      edges: []
+    }
+  });
+  assert.equal(missingNode.structuredContent.status, "validation_failed");
+  assert.equal(missingNode.structuredContent.validation.violations.some((item) => item.code === "skill_assignment_node_not_found"), true);
+
+  const aiEnabled = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-ai-enabled-project"),
+      frameworkManifest: nodeSkillManifest("enabled-node", {
+        name: "pdf",
+        source: "ai-selected",
+        rationale: "This node creates and visually verifies a PDF, exactly matching the enabled PDF Skill description."
+      }),
+      nodes: [{ id: "enabled-node", title: "Create PDF", body: "$pdf Create and visually verify the final PDF." }],
+      edges: []
+    }
+  });
+  assert.equal(aiEnabled.structuredContent.status, "written");
+  assert.match(aiEnabled.structuredContent.document.nodes[0].data.body, /^\$pdf /);
+
+  const skillLedProject = path.join(tempRoot, "skill-led-content-project");
+  const skillLed = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: skillLedProject,
+      graphType: "software-product",
+      pageName: "Professional content",
+      frameworkManifest: skillLedManifest("professional-node"),
+      nodes: [{ id: "professional-node", title: "Professional PDF outline", body: "Define the PDF narrative, page structure, and rendered acceptance evidence." }],
+      edges: []
+    }
+  });
+  assert.equal(skillLed.structuredContent.status, "written");
+  assert.deepEqual(skillLed.structuredContent.nodeIds, ["professional-node"]);
+  assert.deepEqual(skillLed.structuredContent.projectGuidanceNodes, []);
+
+  const uncoveredSkillLed = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-led-uncovered-project"),
+      graphType: "software-product",
+      frameworkManifest: {
+        ...skillLedManifest("covered-node"),
+        coverage: { "professional.pdf.structure": ["covered-node"] },
+        semanticStructure: {
+          ...skillLedManifest("covered-node").semanticStructure,
+          "uncovered-node": {
+            responsibility: "Own the uncovered professional content.",
+            inseparableReason: "This is one coherent responsibility."
+          }
+        }
+      },
+      nodes: [
+        { id: "covered-node", title: "Covered", body: "Define the covered PDF content structure." },
+        { id: "uncovered-node", title: "Uncovered", body: "Define another professional content responsibility." }
+      ],
+      edges: []
+    }
+  });
+  assert.equal(uncoveredSkillLed.structuredContent.status, "validation_failed");
+  assert.equal(uncoveredSkillLed.structuredContent.validation.violations.some((item) => item.code === "skill_led_node_coverage_missing"), true);
+
+  await fetchJson(`${origin}/api/preferences`, {
+    method: "POST",
+    body: JSON.stringify({ aiSkillAssignmentEnabled: false })
+  });
 }
 
 async function assertUniversalHorizontalAndBlueprintTopologyContracts() {
@@ -2459,6 +2703,7 @@ async function main() {
     assert.equal(toolNames.has("open_canvasight_recent_project"), true);
     assert.equal(toolNames.has("claim_canvasight_thread"), true);
     assert.equal(toolNames.has("list_canvasight_node_templates"), true);
+    assert.equal(toolNames.has("list_canvasight_skills"), true);
     assert.equal(toolNames.has("get_canvasight_node_template"), true);
     assert.equal(toolNames.has("get_canvasight_graph_context"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
@@ -2516,15 +2761,59 @@ async function main() {
     assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.op.enum.includes("relayout-page"), true);
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.type, "object");
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.semanticStructure.type, "object");
+    assert.deepEqual(writeGraphTool.inputSchema.properties.frameworkManifest.properties.contentMode.enum, ["canvasight-default", "skill-led"]);
+    assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.contentSkills.type, "array");
+    assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.skillAssignments.type, "object");
+    const listSkillsTool = listed.tools.find((tool) => tool.name === "list_canvasight_skills");
+    assert.match(listSkillsTool.description, /enabled Codex Skills/);
+    assert.match(listSkillsTool.description, /never include Skill bodies or local paths/);
+    assert.equal(listSkillsTool.inputSchema.properties.forceReload.type, "boolean");
     const graphContextTool = listed.tools.find((tool) => tool.name === "get_canvasight_graph_context");
     assert.match(graphContextTool.description, /active(?: Canvasight)? page|current page/i);
     assert.equal(graphContextTool.inputSchema.properties.projectPath.type, "string");
     assert.equal(graphContextTool.outputSchema.properties.documentRevision.type, "integer");
+    assert.equal(graphContextTool.outputSchema.properties.preferences.properties.aiSkillAssignmentEnabled.type, "boolean");
     assert.equal(graphContextTool.outputSchema.properties.activePage.type, "object");
     const awaitWidgetReadyTool = listed.tools.find((tool) => tool.name === "await_canvasight_widget_ready");
     assert.match(awaitWidgetReadyTool.description, /only status=ready confirms/);
     assert.deepEqual(awaitWidgetReadyTool.inputSchema.required, ["sessionId", "openAttemptId", "threadId"]);
     assert.match(awaitWidgetReadyTool.inputSchema.properties.timeoutMs.description, /Defaults to 30000/);
+
+    const resolvedSkills = await request("tools/call", {
+      name: "list_canvasight_skills",
+      arguments: {
+        projectPath: defaultProjectPath,
+        query: "PDF",
+        forceReload: true
+      }
+    });
+    assert.equal(resolvedSkills.structuredContent.status, "ok");
+    assert.equal(resolvedSkills.structuredContent.total, 1);
+    assert.deepEqual(resolvedSkills.structuredContent.skills, [
+      {
+        name: "pdf",
+        description: "Read, create, and verify PDF files where rendering and layout matter.",
+        displayName: "PDF 专家",
+        scope: "user"
+      }
+    ]);
+    assert.doesNotMatch(JSON.stringify(resolvedSkills.structuredContent), /\/private\/secret|SKILL\.md|disabled-secret/);
+    const skillRequestLog = (await readNativeLog()).findLast((entry) => entry.method === "skills/list");
+    assert.deepEqual(skillRequestLog.params.cwds, [defaultProjectPath]);
+    assert.equal(skillRequestLog.params.forceReload, true);
+    await fsp.writeFile(skillsFailPath, "fail\n", "utf8");
+    try {
+      const unavailableSkills = await request("tools/call", {
+        name: "list_canvasight_skills",
+        arguments: { projectPath: defaultProjectPath }
+      });
+      assert.equal(unavailableSkills.structuredContent.status, "unavailable");
+      assert.equal(unavailableSkills.structuredContent.advisory.code, "skills_unavailable");
+      assert.match(unavailableSkills.structuredContent.advisory.message, /Manual \$skill-name input remains available/);
+      assert.doesNotMatch(JSON.stringify(unavailableSkills.structuredContent), /\/private\/secret|fake skills\/list failure/);
+    } finally {
+      await fsp.rm(skillsFailPath, { force: true });
+    }
 
     const lifecycleClient = createMcpClient("lifecycle", {
       CODEX_THREAD_ID: "thread-lifecycle"
@@ -2739,6 +3028,48 @@ async function main() {
     assert.equal(widgetSession.codexThreadId, "thread-smoke");
     assert.equal(widgetSession.openAttempt.openAttemptId, widgetOpenedData.openAttemptId);
     assert.equal(widgetSession.openAttempt.status, "opening");
+    const widgetSkillsProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/skills?projectPath=${encodeURIComponent(defaultProjectPath)}&query=figma&forceReload=true`,
+        method: "GET",
+        ...widgetIdentity()
+      }
+    });
+    assert.equal(widgetSkillsProxy.structuredContent.ok, true);
+    assert.deepEqual(widgetSkillsProxy.structuredContent.data.skills.map((skill) => skill.name), ["figma"]);
+    assert.doesNotMatch(JSON.stringify(widgetSkillsProxy.structuredContent.data), /\/private\/secret|SKILL\.md/);
+    const widgetDefaultPreferences = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: "/api/preferences",
+        method: "GET",
+        ...widgetIdentity()
+      }
+    });
+    assert.deepEqual(widgetDefaultPreferences.structuredContent.data, { aiSkillAssignmentEnabled: false });
+    const widgetSavedPreferences = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: "/api/preferences",
+        method: "PUT",
+        body: { aiSkillAssignmentEnabled: true, ignored: "not persisted" },
+        ...widgetIdentity()
+      }
+    });
+    assert.deepEqual(widgetSavedPreferences.structuredContent.data, { aiSkillAssignmentEnabled: true });
+    assert.deepEqual(JSON.parse(await fsp.readFile(path.join(canvasightHome, "preferences.json"), "utf8")), {
+      aiSkillAssignmentEnabled: true
+    });
+    const forbiddenPreferencesQuery = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: "/api/preferences?projectPath=secret",
+        method: "GET",
+        ...widgetIdentity()
+      }
+    }).catch((error) => error);
+    assert.match(forbiddenPreferencesQuery.message, /query parameters are not allowed/);
     const widgetReadyBeforeAck = await request("tools/call", {
       name: "await_canvasight_widget_ready",
       arguments: {
@@ -2915,6 +3246,7 @@ async function main() {
     assert.equal(autoOpened.structuredContent.canvasRouting.preferredTool, "write_canvasight_graph");
     assert.equal(autoOpened.structuredContent.canvasRouting.preferredMode, "append-page");
     assert.equal(autoOpened.structuredContent.canvasRouting.templateDiscoveryTool, "list_canvasight_node_templates");
+    assert.equal(autoOpened.structuredContent.canvasRouting.skillDiscoveryTool, "list_canvasight_skills");
     assert.equal(autoOpened.structuredContent.canvasRouting.fullTemplateTool, "get_canvasight_node_template");
     assert.match(autoOpened.content[0].text, /Canvasight is now active for this project/);
     assert.match(autoOpened.content[0].text, /editable canvas page/);
@@ -3118,6 +3450,7 @@ async function main() {
     assert.equal(openProject.document.pages.length, 1);
     assert.equal(openProject.document.activePageId, openProject.document.pages[0].id);
 
+    await assertSkillAssignmentAndContentModeContracts(origin);
     await assertGraphContextMergeAndValidationContracts();
     await assertUniversalHorizontalAndBlueprintTopologyContracts();
     await assertSoftwareProductMergeGuidanceContracts();

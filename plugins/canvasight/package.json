@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -21,6 +21,7 @@
     "test:dev-server": "node tests/dev-server-smoke.mjs",
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:markdown-export": "node tests/markdown-export-smoke.mjs",
+    "test:skills": "node tests/skills-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs",
     "test:update": "node --test tests/update-canvasight-smoke.mjs",
     "test:plugin-distribution": "node tests/plugin-distribution-smoke.mjs",

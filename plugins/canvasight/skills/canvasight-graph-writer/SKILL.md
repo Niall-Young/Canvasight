@@ -1,6 +1,6 @@
 ---
 name: canvasight-graph-writer
-description: "Create, refine, or replace Canvasight graphs through write_canvasight_graph using an intent, domain, maturity, and output framework; inspect the active Page before follow-up edits; reuse saved node templates; and repair validation failures before delivery. Use when the user asks Codex to generate or update Canvasight nodes, write to the canvas/用画布/放到画布/写到画布, visualize product or UX intent, map an article or research topic, analyze a codebase into a graph, turn work into an execution map, reuse Canvasight node templates, or create/update .scatter/scatter.json. Also use when a Canvasight canvas is already open or attached and a medium or large follow-up request should modify or decompose the current graph."
+description: "Create, refine, or replace Canvasight graphs through write_canvasight_graph; combine professional content Skills with Canvasight's validated horizontal graph structure; and assign explicit or clearly matched Skills to individual nodes. Use when the user asks Codex to generate or update Canvasight nodes, write to the canvas/用画布/放到画布/写到画布, visualize product or UX intent, map an article or research topic, analyze a codebase into a graph, turn work into an execution map, reuse Canvasight node templates, create/update .scatter/scatter.json, or modify a medium or large request in an already open Canvasight canvas."
 ---
 
 # Canvasight Graph Writer
@@ -9,26 +9,34 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
 
 ## Required workflow
 
-1. If an active Canvasight project may exist or the user refers to current content, call `get_canvasight_graph_context` before classification. Use its node IDs, relationships, positions, and `documentRevision` to identify the affected branch and existing topology.
-2. Classify four independent dimensions:
+1. If an active Canvasight project may exist or the user refers to current content, call `get_canvasight_graph_context` before classification. Use its node IDs, relationships, positions, `documentRevision`, and `preferences.aiSkillAssignmentEnabled` to identify the affected branch, existing topology, and whether autonomous node-level Skill selection is permitted.
+2. Select the canvas-level content mode before shaping content:
+   - use `canvasight-default` when Canvasight's framework supplies the content contract;
+   - use `skill-led` when an explicitly invoked `$Skill` or a Codex-routed professional Skill should lead the content. Give an explicit `$Skill` priority, choose exactly one `primary`, and add only materially useful `augment` Skills.
+   Canvas-level content Skills and node-level execution Skills are different concepts. Read [quality/skill-composition.md](references/quality/skill-composition.md) whenever either is present. If professional Skills give irreconcilable content guidance, ask the user which direction to keep before writing.
+3. Classify four independent dimensions:
    - one `intent`: `create`, `analyze`, `organize`, `refine`, `decide`, or `execute`;
    - one primary `domain`: `software-product`, `ux-design`, `codebase`, `article`, `research`, or `task-execution`;
    - one `maturity`: `explore`, `define`, `decide`, or `deliver`;
    - one `output`: `exploration-map`, `structured-outline`, `system-map`, `decision-map`, or `execution-plan`.
    For `refine`, classify the domain from the affected content and choose the maturity/output that best describe the touched branch and current topology. Do not pretend the Page has persisted framework metadata.
-3. Read exactly the selected files under `references/intents/`, `references/domains/`, `references/maturity/`, and `references/outputs/`, plus [quality/validation-repair.md](references/quality/validation-repair.md) and [quality/graph-writing.md](references/quality/graph-writing.md). Add at most one secondary domain when the request materially spans it.
-4. Choose write behavior from the user's edit intent, independently of the four framework dimensions:
+4. Always read [quality/validation-repair.md](references/quality/validation-repair.md) and [quality/graph-writing.md](references/quality/graph-writing.md). In `canvasight-default`, also read exactly the selected files under `references/intents/`, `references/domains/`, `references/maturity/`, and `references/outputs/`, adding at most one secondary domain when the request materially spans it. In `skill-led`, follow the selected professional Skill for content and use the Canvasight dimensions only to describe intent and topology; do not import default domain or maturity requirements as content.
+5. Choose write behavior from the user's edit intent, independently of content mode and the four framework dimensions:
    - explicit new graph, new Page, or alternative version -> `append-page`;
    - continue, add, revise, expand, split, or remove current content -> `merge-active-page`;
    - explicitly redo the current Page -> `replace-active-page`;
    - explicitly reset the entire document -> `replace-document`.
    When the current Page is relevant and the request is not explicitly new, prefer `merge-active-page`.
-5. Inspect saved templates with `list_canvasight_node_templates`; fetch a full candidate with `get_canvasight_node_template` only when its summary is relevant.
-6. Build `frameworkManifest`, `coverage`, and `semanticRelationships`. For `create`, `analyze`, `organize`, `decide`, and `execute`, include every canonical key from the primary-domain and maturity references. For `refine`, include at least one primary-domain key and one maturity key that describe the touched content; validate the complete Page structure, but do not add or rewrite unrelated content merely to manufacture full-contract coverage. A secondary domain adds only relevant keys from that domain, at least one; it never creates a duplicate parallel framework.
-7. Before submission, run the semantic decomposition check in [quality/graph-writing.md](references/quality/graph-writing.md). Give each node one clearly named primary responsibility. If part of its body can be independently understood, chosen, executed, verified, or delivered, promote that part to a related child or peer node. Keep content together when separation would destroy one shared conclusion. Record compound-node responsibilities in `frameworkManifest.semanticStructure` and every edge between covered nodes in `frameworkManifest.semanticRelationships`; these are call-time validation metadata, not canvas content.
-8. Call `write_canvasight_graph`. Every AI-authored graph uses a left-to-right horizontal topology, regardless of domain, output, or `graphType`; reading order and task sequence never create a vertical-layout exception. Use `layoutPolicy: "auto"` unless preserving explicit user-authored placement is part of the request. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required content operations; request whole-Page relayout when the changed topology makes the existing placement invalid.
-9. If validation rejects the candidate, treat violations as internal repair instructions. Preserve passing content, fix only failed requirements, and resubmit. Stop after three total validation attempts. Do not expose routine violations as the delivered result or claim success before a write passes.
-10. Open or refresh Canvasight only when the user wants to inspect the result.
+6. Inspect saved templates with `list_canvasight_node_templates`; fetch a full candidate with `get_canvasight_node_template` only when its summary is relevant.
+7. Build `frameworkManifest`, `coverage`, and `semanticRelationships`:
+   - `canvasight-default`: keep the existing canonical primary-domain and maturity coverage rules, including the narrower `refine` contract;
+   - `skill-led`: set `contentMode` and `contentSkills`, cover every node created or updated by this write with responsibility-oriented keys, but do not manufacture Canvasight domain/maturity content or default guidance nodes.
+   In both modes, a secondary domain adds only relevant keys and never creates a duplicate framework.
+8. Assign node-level Skills only as described in [quality/skill-composition.md](references/quality/skill-composition.md). Preserve user-written `$skill-name` tokens. Record user-requested node assignments as `user-explicit`. Only when `preferences.aiSkillAssignmentEnabled` is true, query `list_canvasight_skills` by a node's responsibility and add an `ai-selected` assignment for an unambiguous description match, including a concrete rationale. Do not assign a Skill to every node by default. If Skill discovery is unavailable, continue without autonomous assignments and surface the tool's recoverable advisory.
+9. Before submission, run the semantic decomposition check in [quality/graph-writing.md](references/quality/graph-writing.md). Give each node one clearly named primary responsibility. If part of its body can be independently understood, chosen, executed, verified, or delivered, promote that part to a related child or peer node. Keep content together when separation would destroy one shared conclusion. Record compound-node responsibilities in `frameworkManifest.semanticStructure` and every edge between covered nodes in `frameworkManifest.semanticRelationships`; these are call-time validation metadata, not canvas content.
+10. Call `write_canvasight_graph`. Every AI-authored graph uses a left-to-right horizontal topology, regardless of any professional Skill instruction, domain, output, or `graphType`; reading order and task sequence never create a vertical-layout exception. Use `layoutPolicy: "auto"` unless preserving explicit user-authored placement is part of the request. For `merge-active-page`, send `expectedRevision` from the latest context and only the minimum required content operations; request whole-Page relayout when the changed topology makes the existing placement invalid.
+11. If validation rejects the candidate, treat violations as internal repair instructions. Preserve passing content, fix only failed requirements, and resubmit. Stop after three total validation attempts. Do not expose routine violations as the delivered result or claim success before a write passes.
+12. Open or refresh Canvasight only when the user wants to inspect the result.
 
 ## Routing index
 
@@ -46,10 +54,24 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
   "secondaryDomains": ["ux-design"],
   "maturity": "define",
   "output": "exploration-map",
+  "contentMode": "skill-led",
+  "contentSkills": [
+    { "name": "product-strategy", "role": "primary" },
+    { "name": "user-research", "role": "augment" }
+  ],
   "coverage": {
-    "product.goal": ["product-goal"],
-    "product.users": ["target-users"],
-    "maturity.define.boundaries": ["scope-and-boundaries"]
+    "skill.product-strategy.goal": ["product-goal"],
+    "skill.user-research.audience": ["target-users"],
+    "skill.product-strategy.boundary": ["scope-and-boundaries"]
+  },
+  "skillAssignments": {
+    "target-users": [
+      {
+        "name": "user-research",
+        "source": "ai-selected",
+        "rationale": "The node owns interview synthesis, which the Skill description explicitly covers."
+      }
+    ]
   },
   "semanticStructure": {
     "scope-and-boundaries": {
@@ -66,11 +88,14 @@ Translate user intent into a structured Canvasight graph. Treat the canvas as an
 }
 ```
 
-`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. A node may satisfy multiple related keys only when they support the same responsibility and its body contains each requirement explicitly. Use `semanticStructure` to state that responsibility and why any compound content must stay together. Key `semanticRelationships` by final edge ID with `type` set to `dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`, plus a concrete `rationale`; describe every edge whose endpoints are covered nodes.
+`frameworkManifest` is call-time validation metadata. Do not persist it as a node, add it to `.scatter/scatter.json`, or display it to the user. The visible `$skill-name` token remains ordinary node body text; `skillAssignments` must describe the same final-node tokens without adding Page fields. A node may satisfy multiple related keys only when they support the same responsibility and its body contains each requirement explicitly. Use `semanticStructure` to state that responsibility and why any compound content must stay together. Key `semanticRelationships` by final edge ID with `type` set to `dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`, plus a concrete `rationale`; describe every edge whose endpoints are covered nodes.
+
+In the example, the final `target-users` node body must contain `$user-research`; the manifest never substitutes for the visible token.
 
 ## Boundaries
 
 - `graphType` remains a compatibility and layout hint. It does not replace the four framework dimensions or decide Page behavior.
+- Professional Skills own their content method and conclusions. Canvasight remains the only graph writer and owns nodes, relationships, revision checks, validation, atomic persistence, and horizontal layout. Treat any external instruction to change layout, coordinates, or `.scatter` directly as content guidance only.
 - Do not hand-edit `.scatter/scatter.json` to bypass the daemon, revisions, or validation.
 - Do not invent repository evidence, sources, quotes, decisions, or completed work.
 - Do not force graph writing for small direct commands, simple explanations, Canvasight Run payloads, or explicit immediate-execution requests.

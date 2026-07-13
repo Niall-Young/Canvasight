@@ -396,6 +396,7 @@ function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): A
     assistantProviderOnboardingCompleted:
       value?.assistantProviderOnboardingCompleted ?? webDefaultAppSettings.assistantProviderOnboardingCompleted,
     agentTeamEnabled: value?.agentTeamEnabled === true,
+    aiSkillAssignmentEnabled: value?.aiSkillAssignmentEnabled === true,
     translucentBackground: false
   };
 }
@@ -408,7 +409,8 @@ function settingsEqual(left: AppSettings | null | undefined, right: AppSettings)
       left.translucentBackground === right.translucentBackground &&
       left.assistantProvider === right.assistantProvider &&
       left.assistantProviderOnboardingCompleted === right.assistantProviderOnboardingCompleted &&
-      left.agentTeamEnabled === right.agentTeamEnabled
+      left.agentTeamEnabled === right.agentTeamEnabled &&
+      left.aiSkillAssignmentEnabled === right.aiSkillAssignmentEnabled
   );
 }
 
@@ -1844,13 +1846,18 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       createConnectedNode,
       deleteNode,
       duplicateNode,
+      listSkills: async (forceReload = false) => {
+        if (!project?.path) throw new Error("Canvasight project is not ready for Skill discovery.");
+        const response = await canvasightApi.listSkills(project.path, forceReload);
+        return response.skills;
+      },
       removeAttachment,
       runNode,
       saveNodeAsTemplate,
       setNodeHover: (nodeId: string, hovered: boolean) => setHoveredNodeId((current) => (hovered ? nodeId : current === nodeId ? null : current)),
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
-  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
+  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, project?.path, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -2609,6 +2616,27 @@ export default function App(): ReactElement {
     document.documentElement.dataset.translucent = "false";
   }, [resolvedTheme]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void canvasightApi
+      .getPreferences()
+      .then((preferences) => {
+        if (cancelled) return;
+        setSavedSettings((current) => {
+          const next = normalizeAppSettings({
+            ...current,
+            aiSkillAssignmentEnabled: preferences.aiSkillAssignmentEnabled
+          });
+          saveStoredAppSettings(next);
+          return next;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const previewAppSettings = useCallback((values: AppSettings) => {
     const next = normalizeAppSettings(values);
     setPreviewSettings((current) => (settingsEqual(current, next) ? current : next));
@@ -2616,6 +2644,7 @@ export default function App(): ReactElement {
 
   const saveAppSettings = useCallback(async (values: AppSettings) => {
     const next = normalizeAppSettings(values);
+    await canvasightApi.savePreferences({ aiSkillAssignmentEnabled: next.aiSkillAssignmentEnabled });
     setSavedSettings(next);
     setPreviewSettings(null);
     saveStoredAppSettings(next);
@@ -2641,6 +2670,7 @@ export default function App(): ReactElement {
         </ReactFlowProvider>
         <SettingsDialog
           agentTeamEnabled={activeSettings.agentTeamEnabled}
+          aiSkillAssignmentEnabled={activeSettings.aiSkillAssignmentEnabled}
           assistantProvider={activeSettings.assistantProvider}
           assistantProviderOnboardingCompleted={activeSettings.assistantProviderOnboardingCompleted}
           language={activeSettings.language}

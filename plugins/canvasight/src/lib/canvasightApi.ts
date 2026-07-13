@@ -124,6 +124,22 @@ export interface MarkdownExportResponse {
   targetPath: string;
 }
 
+export interface SkillSummary {
+  name: string;
+  description: string;
+  displayName: string;
+  scope: string;
+}
+
+export interface SkillListResponse {
+  skills: SkillSummary[];
+  advisory?: { code: string; message: string } | null;
+}
+
+export interface CanvasightPreferences {
+  aiSkillAssignmentEnabled: boolean;
+}
+
 interface WidgetFollowUpMessage {
   content: Array<Record<string, unknown>>;
   prompt: string;
@@ -876,6 +892,23 @@ export const canvasightApi = {
     return requestJson<void>(`/api/reveal`, {
       method: "POST",
       body: JSON.stringify({ targetPath })
+    });
+  },
+
+  listSkills(projectPath: string, forceReload = false): Promise<SkillListResponse> {
+    const params = new URLSearchParams({ projectPath, limit: "200" });
+    if (forceReload) params.set("forceReload", "true");
+    return requestJson<SkillListResponse>(`/api/skills?${params.toString()}`);
+  },
+
+  getPreferences(): Promise<CanvasightPreferences> {
+    return requestJson<CanvasightPreferences>(`/api/preferences`);
+  },
+
+  savePreferences(preferences: CanvasightPreferences): Promise<CanvasightPreferences> {
+    return requestJson<CanvasightPreferences>(`/api/preferences`, {
+      method: "PUT",
+      body: JSON.stringify(preferences)
     });
   },
 

@@ -38,6 +38,7 @@ export interface AppSettings {
   assistantProvider: AssistantProvider;
   assistantProviderOnboardingCompleted: boolean;
   agentTeamEnabled: boolean;
+  aiSkillAssignmentEnabled: boolean;
 }
 
 export const defaultAppSettings = {
@@ -46,7 +47,8 @@ export const defaultAppSettings = {
   translucentBackground: true,
   assistantProvider: "codex",
   assistantProviderOnboardingCompleted: false,
-  agentTeamEnabled: false
+  agentTeamEnabled: false,
+  aiSkillAssignmentEnabled: false
 } satisfies AppSettings;
 
 export interface AchievementState {

@@ -1,10 +1,12 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { resolveCanvasightAssetUrl } from "../lib/canvasightApi";
+import type { SkillSummary } from "../lib/canvasightApi";
 import { shortcuts } from "../lib/shortcuts";
+import { filterSkills, findSkillQuery, insertSkillToken, type SkillQueryRange } from "../lib/skills";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
@@ -39,6 +41,7 @@ interface RuntimeActions {
   deleteNode: (nodeId: string) => void;
   setNodeHover: (nodeId: string, hovered: boolean) => void;
   runNode: (nodeId: string, mode: RunMode) => Promise<void>;
+  listSkills: (forceReload?: boolean) => Promise<SkillSummary[]>;
 }
 
 export let taskNodeActions: RuntimeActions | null = null;
@@ -64,6 +67,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [titleDraft, setTitleDraft] = useState(data.title);
   const [bodyDraft, setBodyDraft] = useState(data.body);
+  const [skillQuery, setSkillQuery] = useState<SkillQueryRange | null>(null);
+  const [skills, setSkills] = useState<SkillSummary[]>([]);
+  const [skillStatus, setSkillStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [activeSkillIndex, setActiveSkillIndex] = useState(0);
 
   const runMode = data.runMode || "flow";
   const hasBody = bodyDraft.trim().length > 0;
@@ -73,6 +80,37 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const hasChild = useScatterStore((state) =>
     state.edges.some((edge) => edge.source === id && state.nodes.some((node) => node.id === edge.target))
   );
+  const visibleSkills = useMemo(() => filterSkills(skills, skillQuery?.query ?? ""), [skillQuery?.query, skills]);
+
+  const loadSkills = useCallback(async (forceReload = false) => {
+    setSkillStatus("loading");
+    try {
+      const nextSkills = await taskNodeActions?.listSkills(forceReload);
+      setSkills(nextSkills ?? []);
+      setSkillStatus("ready");
+    } catch {
+      setSkillStatus("error");
+    }
+  }, []);
+
+  const syncSkillQuery = useCallback((value: string, textarea: HTMLTextAreaElement) => {
+    if (isComposingRef.current) {
+      setSkillQuery(null);
+      return;
+    }
+    const nextQuery = findSkillQuery(value, textarea.selectionStart, textarea.selectionEnd);
+    setSkillQuery(nextQuery);
+    if (nextQuery && skillStatus === "idle") void loadSkills();
+  }, [loadSkills, skillStatus]);
+
+  useEffect(() => {
+    setActiveSkillIndex(0);
+  }, [skillQuery?.query]);
+
+  useEffect(() => {
+    if (activeSkillIndex < visibleSkills.length) return;
+    setActiveSkillIndex(Math.max(0, visibleSkills.length - 1));
+  }, [activeSkillIndex, visibleSkills.length]);
 
   const fitBodyTextarea = useCallback((deferNodeInternalsUpdate = false) => {
     if (fitTextareaHeight(bodyRef.current)) {
@@ -197,6 +235,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const handleCompositionStart = useCallback(() => {
     isComposingRef.current = true;
     pendingFinishAfterCompositionRef.current = false;
+    setSkillQuery(null);
   }, []);
 
   const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -212,6 +251,9 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       if (fitTextareaHeight(event.currentTarget as HTMLTextAreaElement)) {
         pendingNodeInternalsUpdateRef.current = true;
       }
+      window.setTimeout(() => {
+        if (bodyRef.current) syncSkillQuery(bodyRef.current.value, bodyRef.current);
+      }, 0);
     }
 
     isComposingRef.current = false;
@@ -228,7 +270,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       }
       pendingFinishAfterCompositionRef.current = false;
     }, 0);
-  }, [finishEditing, flushDraftToStore, id, isNodeEditableFocused, updateNodeInternals]);
+  }, [finishEditing, flushDraftToStore, id, isNodeEditableFocused, syncSkillQuery, updateNodeInternals]);
 
   const isChangeDuringComposition = useCallback(
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -237,10 +279,41 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   );
 
   const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.currentTarget === bodyRef.current && skillQuery) {
+      if (event.key === "ArrowDown" && visibleSkills.length) {
+        event.preventDefault();
+        setActiveSkillIndex((current) => (current + 1) % visibleSkills.length);
+        return;
+      }
+      if (event.key === "ArrowUp" && visibleSkills.length) {
+        event.preventDefault();
+        setActiveSkillIndex((current) => (current - 1 + visibleSkills.length) % visibleSkills.length);
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && visibleSkills[activeSkillIndex]) {
+        event.preventDefault();
+        const selectedSkill = visibleSkills[activeSkillIndex];
+        const next = insertSkillToken(bodyDraftRef.current, skillQuery, selectedSkill.name);
+        bodyDraftRef.current = next.value;
+        setBodyDraft(next.value);
+        taskNodeActions?.updateNodeData(id, { body: next.value });
+        setSkillQuery(null);
+        window.requestAnimationFrame(() => {
+          bodyRef.current?.focus();
+          bodyRef.current?.setSelectionRange(next.caret, next.caret);
+        });
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSkillQuery(null);
+        return;
+      }
+    }
     if (event.key === "Escape") {
       event.currentTarget.blur();
     }
-  }, []);
+  }, [activeSkillIndex, id, skillQuery, visibleSkills]);
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -273,9 +346,23 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       if (!isComposing && value !== data.body) {
         taskNodeActions?.updateNodeData(id, { body: value });
       }
+      if (!isComposing) syncSkillQuery(value, event.currentTarget);
     },
-    [data.body, id, isChangeDuringComposition, updateNodeInternals]
+    [data.body, id, isChangeDuringComposition, syncSkillQuery, updateNodeInternals]
   );
+
+  const chooseSkill = useCallback((skill: SkillSummary) => {
+    if (!skillQuery) return;
+    const next = insertSkillToken(bodyDraftRef.current, skillQuery, skill.name);
+    bodyDraftRef.current = next.value;
+    setBodyDraft(next.value);
+    taskNodeActions?.updateNodeData(id, { body: next.value });
+    setSkillQuery(null);
+    window.requestAnimationFrame(() => {
+      bodyRef.current?.focus();
+      bodyRef.current?.setSelectionRange(next.caret, next.caret);
+    });
+  }, [id, skillQuery]);
 
   const handleConnectButtonMouseDown = useCallback(
     (side: ConnectedNodeSide) => (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -418,7 +505,8 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       </div>
 
       <div className="task-node-card">
-        <textarea
+        <div className="task-body-editor">
+          <textarea
           ref={bodyRef}
           className={`task-body ${hasBody ? "has-content" : ""} ${editingField === "body" ? "nodrag nowheel is-editing" : "is-readonly"}`}
           value={bodyDraft}
@@ -435,7 +523,47 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           onCompositionStart={handleCompositionStart}
           onCompositionEnd={handleCompositionEnd}
           onChange={handleBodyChange}
-        />
+          />
+
+          {editingField === "body" && skillQuery ? (
+            <div className="skill-picker nodrag nowheel" role="listbox" aria-label={t("task.skillPickerLabel")}>
+            <div className="skill-picker-header">
+              <span>{t("task.skillPickerTitle")}</span>
+              <button
+                type="button"
+                className="skill-picker-refresh"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void loadSkills(true)}
+              >
+                {t("task.skillPickerRefresh")}
+              </button>
+            </div>
+            {skillStatus === "loading" ? <p className="skill-picker-message">{t("task.skillPickerLoading")}</p> : null}
+            {skillStatus !== "loading" && visibleSkills.length ? (
+              <div className="skill-picker-list">
+                {visibleSkills.map((skill, index) => (
+                  <button
+                    key={skill.name}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeSkillIndex}
+                    className={`skill-picker-option ${index === activeSkillIndex ? "is-active" : ""}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveSkillIndex(index)}
+                    onClick={() => chooseSkill(skill)}
+                  >
+                    <span className="skill-picker-option-name">${skill.name}</span>
+                    <span className="skill-picker-option-description">{skill.displayName || skill.description}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {skillStatus === "error" ? <p className="skill-picker-message is-error">{t("task.skillPickerUnavailable")}</p> : null}
+            {skillStatus === "ready" && !visibleSkills.length ? <p className="skill-picker-message">{t("task.skillPickerNoMatch")}</p> : null}
+            {skillStatus !== "loading" && !visibleSkills.length ? <p className="skill-picker-hint">{t("task.skillPickerManualHint")}</p> : null}
+            </div>
+          ) : null}
+        </div>
 
         {data.attachments.length ? (
           <div className="attachment-grid">

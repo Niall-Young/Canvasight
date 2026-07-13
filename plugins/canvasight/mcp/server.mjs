@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.11";
+var SERVER_VERSION = "0.4.12";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -17319,6 +17319,7 @@ var DAEMON_START_LOCK_UNREADABLE_STALE_MS = 1e3;
 var MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 var MAX_RECENT_PROJECTS = 12;
 var MAX_NODE_TEMPLATES = 200;
+var MAX_SKILL_SUMMARIES = 200;
 var TEMPLATE_BODY_PREVIEW_CHARS = 240;
 var VALID_LANGUAGES = /* @__PURE__ */ new Set(["zh", "en"]);
 var VALID_EFFORT = /* @__PURE__ */ new Set(["low", "medium", "high", "xhigh"]);
@@ -17762,6 +17763,9 @@ function canvasightMcpLifecycleLogPath() {
 function canvasightTemplatesPath() {
   return path.join(canvasightHome(), "templates.json");
 }
+function canvasightPreferencesPath() {
+  return path.join(canvasightHome(), "preferences.json");
+}
 function canvasightTemplateAssetsDir() {
   return path.join(canvasightHome(), "template-assets");
 }
@@ -18004,6 +18008,39 @@ async function writeUserState(state) {
   await fsp.mkdir(canvasightHome(), { recursive: true });
   await fsp.writeFile(canvasightStatePath(), "".concat(JSON.stringify(normalizedState, null, 2), "\n"), "utf8");
   return normalizedState;
+}
+function defaultPreferences() {
+  return {
+    aiSkillAssignmentEnabled: false
+  };
+}
+function normalizePreferences(value) {
+  return {
+    aiSkillAssignmentEnabled: value?.aiSkillAssignmentEnabled === true
+  };
+}
+async function readPreferences() {
+  try {
+    const raw = await fsp.readFile(canvasightPreferencesPath(), "utf8");
+    return normalizePreferences(JSON.parse(raw));
+  } catch (error51) {
+    if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return defaultPreferences();
+    throw error51;
+  }
+}
+async function writePreferences(value) {
+  const preferences = normalizePreferences(value);
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  const targetPath = canvasightPreferencesPath();
+  const temporaryPath = "".concat(targetPath, ".").concat(process.pid, ".").concat(crypto.randomBytes(4).toString("hex"), ".tmp");
+  try {
+    await fsp.writeFile(temporaryPath, "".concat(JSON.stringify(preferences, null, 2), "\n"), "utf8");
+    await fsp.rename(temporaryPath, targetPath);
+  } catch (error51) {
+    await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+    throw error51;
+  }
+  return preferences;
 }
 function normalizeNodeTemplate(value) {
   if (!isObject2(value) || typeof value.body !== "string" || !value.body.trim()) return null;
@@ -18792,6 +18829,7 @@ function guidanceInputNodeIds(rawNodes) {
 function requiresSoftwareProductGuidance(args) {
   if (Object.prototype.hasOwnProperty.call(args || {}, "frameworkManifest")) {
     const manifest = isObject2(args?.frameworkManifest) ? args.frameworkManifest : null;
+    if (manifest?.contentMode === "skill-led") return false;
     return manifest?.primaryDomain === "software-product" && manifest.intent !== "refine";
   }
   return normalizeGraphType(args?.graphType) === "software-product";
@@ -19480,7 +19518,15 @@ function meaningfulFrameworkNode(node) {
   if (!title || !body) return false;
   return !/^(todo|tbd|待补充|待完善|占位|placeholder|保持一致|简洁现代)[。.!！\s]*$/i.test(combined);
 }
-function validateFrameworkManifest(page, manifest, projectPath) {
+function escapeRegularExpression(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function nodeBodyHasSkillToken(node, skillName) {
+  const body = typeof node?.data?.body === "string" ? node.data.body : "";
+  if (!body || typeof skillName !== "string" || !skillName) return false;
+  return new RegExp("(^|\\s)\\$".concat(escapeRegularExpression(skillName), "(?=$|\\s|[.,!?;，。！？；])"), "m").test(body);
+}
+function validateFrameworkManifest(page, manifest, projectPath, options = {}) {
   if (manifest === void 0 || manifest === null) return { violations: [], advisories: [] };
   const violations = [];
   const advisories = [];
@@ -19494,6 +19540,32 @@ function validateFrameworkManifest(page, manifest, projectPath) {
   if (!VALID_FRAMEWORK_DOMAINS.has(manifest.primaryDomain)) violations.push(graphViolation("invalid_primary_domain", "frameworkManifest.primaryDomain", "Unsupported primary domain: ".concat(manifest.primaryDomain || "(empty)"), "Use a supported primary domain reference."));
   if (!VALID_FRAMEWORK_MATURITY.has(manifest.maturity)) violations.push(graphViolation("invalid_framework_maturity", "frameworkManifest.maturity", "Unsupported maturity: ".concat(manifest.maturity || "(empty)"), "Use explore, define, decide, or deliver."));
   if (!VALID_FRAMEWORK_OUTPUTS.has(manifest.output)) violations.push(graphViolation("invalid_framework_output", "frameworkManifest.output", "Unsupported output: ".concat(manifest.output || "(empty)"), "Use a supported output topology."));
+  const contentMode = manifest.contentMode === void 0 ? "canvasight-default" : manifest.contentMode;
+  const skillLed = contentMode === "skill-led";
+  if (contentMode !== "canvasight-default" && !skillLed) {
+    violations.push(graphViolation("invalid_content_mode", "frameworkManifest.contentMode", "Unsupported content mode: ".concat(contentMode || "(empty)"), "Use canvasight-default or skill-led."));
+  }
+  const contentSkills = Array.isArray(manifest.contentSkills) ? manifest.contentSkills : [];
+  if (manifest.contentSkills !== void 0 && !Array.isArray(manifest.contentSkills)) {
+    violations.push(graphViolation("invalid_content_skills", "frameworkManifest.contentSkills", "contentSkills must be an array.", "Provide one primary Skill and optional augment Skills."));
+  }
+  const contentSkillNames = /* @__PURE__ */ new Set();
+  contentSkills.forEach((skill, index) => {
+    const skillPath = "frameworkManifest.contentSkills[".concat(index, "]");
+    if (!isObject2(skill) || typeof skill.name !== "string" || !skill.name.trim()) {
+      violations.push(graphViolation("invalid_content_skill", "".concat(skillPath, ".name"), "Content Skill name is required.", "Use an enabled Codex Skill name."));
+    } else if (contentSkillNames.has(skill.name.trim())) {
+      violations.push(graphViolation("duplicate_content_skill", "".concat(skillPath, ".name"), "Content Skill is duplicated: ".concat(skill.name.trim()), "Keep one entry per content Skill."));
+    } else {
+      contentSkillNames.add(skill.name.trim());
+    }
+    if (!isObject2(skill) || skill.role !== "primary" && skill.role !== "augment") {
+      violations.push(graphViolation("invalid_content_skill_role", "".concat(skillPath, ".role"), "Unsupported content Skill role: ".concat(skill?.role || "(empty)"), "Use primary or augment."));
+    }
+  });
+  if (skillLed && contentSkills.filter((skill) => isObject2(skill) && skill.role === "primary").length !== 1) {
+    violations.push(graphViolation("primary_content_skill_required", "frameworkManifest.contentSkills", "skill-led content requires exactly one primary Skill.", "Choose one primary Skill and mark any other compatible Skills as augment."));
+  }
   const secondaryDomains = Array.isArray(manifest.secondaryDomains) ? manifest.secondaryDomains : [];
   secondaryDomains.forEach((domain2, index) => {
     if (!VALID_FRAMEWORK_DOMAINS.has(domain2) || domain2 === manifest.primaryDomain) {
@@ -19503,6 +19575,48 @@ function validateFrameworkManifest(page, manifest, projectPath) {
   const coverage = isObject2(manifest.coverage) ? manifest.coverage : {};
   if (!isObject2(manifest.coverage)) violations.push(graphViolation("coverage_required", "frameworkManifest.coverage", "frameworkManifest.coverage must map contract keys to node id arrays.", "Add coverage for every primary-domain and maturity contract key."));
   const nodeById = new Map(page.nodes.map((node) => [node.id, node]));
+  const skillAssignments = manifest.skillAssignments === void 0 ? {} : manifest.skillAssignments;
+  if (!isObject2(skillAssignments)) {
+    violations.push(graphViolation("invalid_skill_assignments", "frameworkManifest.skillAssignments", "skillAssignments must map final node ids to assignment arrays.", "Key assignments by final candidate node id."));
+  } else {
+    Object.entries(skillAssignments).forEach(([nodeId, assignments]) => {
+      const node = nodeById.get(nodeId);
+      if (!node) {
+        violations.push(graphViolation("skill_assignment_node_not_found", "frameworkManifest.skillAssignments.".concat(nodeId), "Skill assignment references a missing node: ".concat(nodeId), "Use a node id from the final candidate page."));
+        return;
+      }
+      if (!Array.isArray(assignments) || assignments.length === 0) {
+        violations.push(graphViolation("invalid_skill_assignments", "frameworkManifest.skillAssignments.".concat(nodeId), "Node Skill assignments must be a non-empty array.", "Remove the empty mapping or add a valid assignment."));
+        return;
+      }
+      const assignedNames = /* @__PURE__ */ new Set();
+      assignments.forEach((assignment, index) => {
+        const assignmentPath = "frameworkManifest.skillAssignments.".concat(nodeId, "[").concat(index, "]");
+        const name = typeof assignment?.name === "string" ? assignment.name.trim() : "";
+        if (!name) {
+          violations.push(graphViolation("skill_assignment_name_required", "".concat(assignmentPath, ".name"), "Skill assignment name is required.", "Use the exact Codex Skill name."));
+        } else if (assignedNames.has(name)) {
+          violations.push(graphViolation("duplicate_skill_assignment", "".concat(assignmentPath, ".name"), "Skill assignment is duplicated for ".concat(nodeId, ": ").concat(name), "Keep one assignment per Skill on a node."));
+        } else {
+          assignedNames.add(name);
+          if (!nodeBodyHasSkillToken(node, name)) {
+            violations.push(graphViolation("skill_assignment_body_mismatch", "".concat(assignmentPath, ".name"), "Node ".concat(nodeId, " does not contain the visible $").concat(name, " token."), "Add $".concat(name, " to the node body or remove the manifest assignment.")));
+          }
+        }
+        if (assignment?.source !== "user-explicit" && assignment?.source !== "ai-selected") {
+          violations.push(graphViolation("invalid_skill_assignment_source", "".concat(assignmentPath, ".source"), "Unsupported Skill assignment source: ".concat(assignment?.source || "(empty)"), "Use user-explicit or ai-selected."));
+        }
+        if (assignment?.source === "ai-selected") {
+          if (options.preferences?.aiSkillAssignmentEnabled !== true) {
+            violations.push(graphViolation("ai_skill_assignment_disabled", assignmentPath, "AI-selected Skill assignment is disabled for node ".concat(nodeId, "."), "Remove ai-selected assignments or enable the global Canvasight preference."));
+          }
+          if (typeof assignment.rationale !== "string" || !assignment.rationale.trim()) {
+            violations.push(graphViolation("ai_skill_assignment_rationale_required", "".concat(assignmentPath, ".rationale"), "AI-selected Skill assignment lacks a responsibility-to-description rationale for node ".concat(nodeId, "."), "Explain the clear match between this node responsibility and the Skill description."));
+          }
+        }
+      });
+    });
+  }
   const validateCoverageKey = (key, required2 = true) => {
     const ids = coverage[key];
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -19521,7 +19635,16 @@ function validateFrameworkManifest(page, manifest, projectPath) {
   };
   const primaryDomainKeys = FRAMEWORK_DOMAIN_COVERAGE[manifest.primaryDomain] || [];
   const maturityKeys = FRAMEWORK_MATURITY_COVERAGE[manifest.maturity] || [];
-  if (manifest.intent === "refine") {
+  if (skillLed) {
+    Object.keys(coverage).forEach((key) => validateCoverageKey(key, false));
+    const coveredNodeIds2 = new Set(Object.values(coverage).flatMap((ids) => Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []));
+    const requiredCoverageNodeIds = Array.isArray(options.requiredCoverageNodeIds) ? options.requiredCoverageNodeIds : [];
+    requiredCoverageNodeIds.forEach((nodeId) => {
+      if (!coveredNodeIds2.has(nodeId)) {
+        violations.push(graphViolation("skill_led_node_coverage_missing", "frameworkManifest.coverage", "Skill-led graph write does not cover new or updated node: ".concat(nodeId), "Map ".concat(nodeId, " to a professional content responsibility in coverage.")));
+      }
+    });
+  } else if (manifest.intent === "refine") {
     const suppliedPrimaryKeys = primaryDomainKeys.filter((key) => Array.isArray(coverage[key]) && coverage[key].length > 0);
     const suppliedMaturityKeys = maturityKeys.filter((key) => Array.isArray(coverage[key]) && coverage[key].length > 0);
     if (suppliedPrimaryKeys.length === 0) {
@@ -19547,16 +19670,18 @@ function validateFrameworkManifest(page, manifest, projectPath) {
     primaryDomainKeys.forEach((key) => validateCoverageKey(key));
     maturityKeys.forEach((key) => validateCoverageKey(key));
   }
-  secondaryDomains.forEach((domain2) => {
-    const keys = FRAMEWORK_DOMAIN_COVERAGE[domain2] || [];
-    if (!keys.some((key) => Array.isArray(coverage[key]) && coverage[key].length > 0)) {
-      violations.push(graphViolation("secondary_domain_coverage_missing", "frameworkManifest.coverage", "Secondary domain has no relevant coverage: ".concat(domain2), "Map at least one ".concat(domain2, " contract key to a substantive node.")));
-    }
-  });
-  Object.entries(coverage).forEach(([key]) => {
-    const known = Object.values(FRAMEWORK_DOMAIN_COVERAGE).some((keys) => keys.includes(key)) || Object.values(FRAMEWORK_MATURITY_COVERAGE).some((keys) => keys.includes(key));
-    if (!known) advisories.push({ code: "unknown_coverage_key", path: "frameworkManifest.coverage.".concat(key), message: "Coverage key is not part of the current framework contracts: ".concat(key) });
-  });
+  if (!skillLed) {
+    secondaryDomains.forEach((domain2) => {
+      const keys = FRAMEWORK_DOMAIN_COVERAGE[domain2] || [];
+      if (!keys.some((key) => Array.isArray(coverage[key]) && coverage[key].length > 0)) {
+        violations.push(graphViolation("secondary_domain_coverage_missing", "frameworkManifest.coverage", "Secondary domain has no relevant coverage: ".concat(domain2), "Map at least one ".concat(domain2, " contract key to a substantive node.")));
+      }
+    });
+    Object.entries(coverage).forEach(([key]) => {
+      const known = Object.values(FRAMEWORK_DOMAIN_COVERAGE).some((keys) => keys.includes(key)) || Object.values(FRAMEWORK_MATURITY_COVERAGE).some((keys) => keys.includes(key));
+      if (!known) advisories.push({ code: "unknown_coverage_key", path: "frameworkManifest.coverage.".concat(key), message: "Coverage key is not part of the current framework contracts: ".concat(key) });
+    });
+  }
   const semanticStructure = isObject2(manifest.semanticStructure) ? manifest.semanticStructure : null;
   const semanticRelationships = isObject2(manifest.semanticRelationships) ? manifest.semanticRelationships : null;
   const coveredNodeIds = new Set(Object.values(coverage).flatMap((ids) => Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []));
@@ -19658,7 +19783,7 @@ function validateFrameworkManifest(page, manifest, projectPath) {
       }
     }
   }
-  if (manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
+  if (!skillLed && manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
     SOFTWARE_PRODUCT_GUIDANCE_FILES.forEach((guidanceFile) => {
       if (!projectHasGuidanceFile(projectPath, guidanceFile) && !graphHasGuidanceNode(page.nodes, guidanceFile)) {
         violations.push(graphViolation("project_guidance_missing", "frameworkManifest.coverage.product.deliverables", "Project requires a delivery node for missing ".concat(guidanceFile.canonicalName, "."), "Add a node that explicitly creates ".concat(guidanceFile.canonicalName, ".")));
@@ -19667,10 +19792,10 @@ function validateFrameworkManifest(page, manifest, projectPath) {
   }
   return { violations, advisories };
 }
-function validateGraphCandidate(page, args, projectPath) {
+function validateGraphCandidate(page, args, projectPath, options = {}) {
   const layout = normalizeGraphLayout(args?.layout || defaultGraphLayoutForType(normalizeGraphType(args?.graphType)));
   const structureViolations = validateGraphStructure(page, layout);
-  const framework = validateFrameworkManifest(page, args?.frameworkManifest, projectPath);
+  const framework = validateFrameworkManifest(page, args?.frameworkManifest, projectPath, options);
   return {
     passed: structureViolations.length === 0 && framework.violations.length === 0,
     violations: [...structureViolations, ...framework.violations],
@@ -19685,6 +19810,7 @@ async function writeScatterGraph(projectPath, args) {
     const reusedTemplates = [];
     const projectGuidanceNodes = [];
     const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
+    const preferences = await readPreferences();
     const now = nowIso();
     let pages;
     let activePageId;
@@ -19703,18 +19829,25 @@ async function writeScatterGraph(projectPath, args) {
       if (guided.violations.length > 0) return validationFailure(currentRevision, guided.violations);
       projectGuidanceNodes.push(...guided.projectGuidanceNodes);
       const candidatePage = guided.page;
-      const validation = validateGraphCandidate(candidatePage, args, projectPath);
+      const combinedSummary = guided.summary ? mergeMutationSummaries(merged.summary, guided.summary) : merged.summary;
+      const validation = validateGraphCandidate(candidatePage, args, projectPath, {
+        preferences,
+        requiredCoverageNodeIds: [...combinedSummary.addedNodeIds, ...combinedSummary.updatedNodeIds]
+      });
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
       validationAdvisories.push(...validation.advisories);
       pages = existingDocument.pages.map((page) => page.id === currentPage.id ? candidatePage : page);
       activePageId = currentPage.id;
-      mutationSummary = guided.summary ? mergeMutationSummaries(merged.summary, guided.summary) : merged.summary;
+      mutationSummary = combinedSummary;
     } else {
       const incomingPages = graphPageInputs(args).map(
         (page, index) => buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
       );
       for (let index = 0; index < incomingPages.length; index += 1) {
-        const validation = validateGraphCandidate(incomingPages[index], args, projectPath);
+        const validation = validateGraphCandidate(incomingPages[index], args, projectPath, {
+          preferences,
+          requiredCoverageNodeIds: incomingPages[index].nodes.map((node) => node.id)
+        });
         if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
         validationAdvisories.push(...validation.advisories);
       }
@@ -19787,7 +19920,7 @@ function summarizeGraphContextNode(node) {
     }
   };
 }
-function graphContext(projectPath, document2) {
+function graphContext(projectPath, document2, preferences = defaultPreferences()) {
   const activePage = activeScatterPage(document2);
   const nodes = activePage.nodes.map(summarizeGraphContextNode);
   const edges = activePage.edges.map((edge) => ({
@@ -19801,6 +19934,7 @@ function graphContext(projectPath, document2) {
     projectPath,
     scatterPath: scatterPath(projectPath),
     documentRevision: projectDocumentRevision(projectPath),
+    preferences: normalizePreferences(preferences),
     activePage: {
       id: activePage.id,
       name: activePage.name,
@@ -21074,6 +21208,82 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
 function appServerRequest(method, params, { experimentalApi = false } = {}) {
   return appServerRequestSequence([{ method, params }], { experimentalApi }).then((results) => results[0] || {});
 }
+function normalizeSkillListLimit(value) {
+  return Math.max(1, Math.min(Math.floor(toNumber(Number(value), 50)), MAX_SKILL_SUMMARIES));
+}
+function summarizeCodexSkill(value) {
+  if (!isObject2(value) || value.enabled !== true || typeof value.name !== "string" || !value.name.trim()) return null;
+  const interfaceMetadata = isObject2(value.interface) ? value.interface : {};
+  const description = typeof value.description === "string" ? value.description.trim() : "";
+  return {
+    name: value.name.trim(),
+    description,
+    displayName: typeof interfaceMetadata.displayName === "string" && interfaceMetadata.displayName.trim() ? interfaceMetadata.displayName.trim() : value.name.trim(),
+    scope: typeof value.scope === "string" && value.scope.trim() ? value.scope.trim() : "unknown"
+  };
+}
+function skillSummaryMatchesQuery(skill, query) {
+  const normalizedQuery = typeof query === "string" ? query.trim().toLocaleLowerCase() : "";
+  if (!normalizedQuery) return true;
+  return [skill.name, skill.displayName, skill.description, skill.scope].join("\n").toLocaleLowerCase().includes(normalizedQuery);
+}
+async function listResolvedCodexSkills(projectPath, options = {}) {
+  const cwd = normalizeProjectPath(projectPath);
+  const query = typeof options.query === "string" ? options.query.trim() : "";
+  const limit = normalizeSkillListLimit(options.limit);
+  try {
+    const result = await appServerRequest("skills/list", {
+      cwds: [cwd],
+      forceReload: options.forceReload === true
+    });
+    const entries = Array.isArray(result?.data) ? result.data : [];
+    const entry = entries.find((candidate) => optionalProjectPath(candidate?.cwd) === cwd) || (entries.length === 1 ? entries[0] : null);
+    if (!entry) {
+      return {
+        status: "unavailable",
+        query,
+        count: 0,
+        total: 0,
+        skills: [],
+        advisory: {
+          code: "skills_unavailable",
+          message: "Codex did not return the enabled Skill catalog for this project. Manual $skill-name input remains available."
+        }
+      };
+    }
+    const deduplicated = /* @__PURE__ */ new Map();
+    (Array.isArray(entry.skills) ? entry.skills : []).forEach((skill) => {
+      const summary = summarizeCodexSkill(skill);
+      if (summary && !deduplicated.has(summary.name)) deduplicated.set(summary.name, summary);
+    });
+    const matched = [...deduplicated.values()].filter((skill) => skillSummaryMatchesQuery(skill, query)).sort((left, right) => left.name.localeCompare(right.name));
+    return {
+      status: "ok",
+      query,
+      count: Math.min(matched.length, limit),
+      total: matched.length,
+      skills: matched.slice(0, limit),
+      ...Array.isArray(entry.errors) && entry.errors.length > 0 ? {
+        advisory: {
+          code: "skills_partially_available",
+          message: "Some Codex Skills could not be resolved. The available enabled Skills are still listed."
+        }
+      } : {}
+    };
+  } catch {
+    return {
+      status: "unavailable",
+      query,
+      count: 0,
+      total: 0,
+      skills: [],
+      advisory: {
+        code: "skills_unavailable",
+        message: "Codex Skill discovery is temporarily unavailable. Manual $skill-name input remains available, and AI should not select a Skill autonomously."
+      }
+    };
+  }
+}
 function codexCollaborationMode(mode, model) {
   const settings = { model };
   if (mode === "plan") settings.reasoning_effort = "medium";
@@ -21476,6 +21686,47 @@ async function handleHttp(req, res) {
       await serveAsset(req, res, url2);
       return;
     }
+    if (url2.pathname === "/api/skills") {
+      assertDaemonAuthorized(req, url2);
+      let input;
+      if (req.method === "GET") {
+        input = {
+          projectPath: url2.searchParams.get("projectPath"),
+          threadId: url2.searchParams.get("threadId"),
+          query: url2.searchParams.get("query") || "",
+          forceReload: url2.searchParams.get("forceReload") === "true",
+          limit: url2.searchParams.get("limit")
+        };
+      } else if (req.method === "POST") {
+        input = await readJsonBody(req);
+      } else {
+        throw new HttpError(405, "Expected GET or POST");
+      }
+      const threadId = optionalThreadId(input?.threadId);
+      const projectPath = await resolveSessionProjectPath(input?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+      sendJson(
+        res,
+        200,
+        await listResolvedCodexSkills(projectPath, {
+          query: input?.query,
+          forceReload: input?.forceReload === true,
+          limit: input?.limit
+        })
+      );
+      return;
+    }
+    if (url2.pathname === "/api/preferences") {
+      assertDaemonAuthorized(req, url2);
+      if (req.method === "GET") {
+        sendJson(res, 200, await readPreferences());
+        return;
+      }
+      if (req.method === "POST" || req.method === "PUT") {
+        sendJson(res, 200, await writePreferences(await readJsonBody(req)));
+        return;
+      }
+      throw new HttpError(405, "Expected GET, POST, or PUT");
+    }
     if (url2.pathname === "/api/templates" || url2.pathname.startsWith("/api/templates/")) {
       assertDaemonAuthorized(req, url2);
       const templateId = url2.pathname.startsWith("/api/templates/") ? decodeURIComponent(url2.pathname.slice("/api/templates/".length)) : "";
@@ -21511,7 +21762,7 @@ async function handleHttp(req, res) {
       const threadId = optionalThreadId(body?.threadId);
       const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
       const document2 = await readScatterDocument(projectPath);
-      sendJson(res, 200, graphContext(projectPath, document2));
+      sendJson(res, 200, graphContext(projectPath, document2, await readPreferences()));
       return;
     }
     if (url2.pathname === "/api/graphs/write") {
@@ -21757,6 +22008,8 @@ function canvasRoutingContext() {
     templateDiscoveryTool: "list_canvasight_node_templates",
     fullTemplateTool: "get_canvasight_node_template",
     templateLookup: "Call list_canvasight_node_templates with targeted queries before graph writing, then get_canvasight_node_template only for likely matches.",
+    skillDiscoveryTool: "list_canvasight_skills",
+    skillLookup: "Call list_canvasight_skills with the canvas or node responsibility before using skill-led content or an AI-selected node Skill. Manual and user-explicit $skill-name tokens remain available when discovery is unavailable.",
     preferCanvasFor: [
       "medium_or_large_multi_step_requests",
       "product_or_feature_planning",
@@ -21863,6 +22116,14 @@ var canvasightGraphContextOutputSchema = {
     projectPath: { type: "string" },
     scatterPath: { type: "string" },
     documentRevision: { type: "integer" },
+    preferences: {
+      type: "object",
+      properties: {
+        aiSkillAssignmentEnabled: { type: "boolean" }
+      },
+      required: ["aiSkillAssignmentEnabled"],
+      additionalProperties: false
+    },
     activePage: {
       type: "object",
       properties: {
@@ -21878,7 +22139,7 @@ var canvasightGraphContextOutputSchema = {
     edges: { type: "array", items: { type: "object", additionalProperties: true } },
     pages: { type: "array", items: { type: "object", additionalProperties: true } }
   },
-  required: ["status", "projectPath", "documentRevision", "activePage", "nodes", "edges", "pages"],
+  required: ["status", "projectPath", "documentRevision", "preferences", "activePage", "nodes", "edges", "pages"],
   additionalProperties: true
 };
 function publicWidgetOpenResult(widgetData) {
@@ -22057,6 +22318,19 @@ async function toolGetCanvasightNodeTemplate(args) {
     "Canvasight node template: ".concat(template.title)
   );
 }
+async function toolListCanvasightSkills(args) {
+  const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+  const result = await listResolvedCodexSkills(projectPath, {
+    query: args?.query,
+    forceReload: args?.forceReload === true,
+    limit: args?.limit
+  });
+  return toolResult(
+    result,
+    result.status === "ok" ? result.count > 0 ? "Canvasight Skills: ".concat(result.count, "/").concat(result.total) : "No enabled Codex Skills matched this node responsibility." : result.advisory?.message || "Codex Skill discovery is unavailable."
+  );
+}
 async function toolGetCanvasightGraphContext(args) {
   const threadId = optionalThreadId(args?.threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
   const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
@@ -22186,17 +22460,26 @@ function widgetApiRoute(pathValue) {
     throw new Error("Canvasight widget API path must start with /api/.");
   }
   const parsed = new URL(pathValue, "http://canvasight.local");
-  if (parsed.origin !== "http://canvasight.local" || parsed.search || parsed.hash || parsed.pathname.includes("..")) {
+  if (parsed.origin !== "http://canvasight.local" || parsed.hash || parsed.pathname.includes("..")) {
     throw new Error("Canvasight widget API path is invalid.");
   }
-  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/reveal";
+  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/skills" || parsed.pathname === "/api/preferences" || parsed.pathname === "/api/reveal";
   if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
-  return parsed.pathname;
+  if (parsed.search) {
+    if (parsed.pathname !== "/api/skills") throw new Error("Canvasight widget API query parameters are not allowed for this path.");
+    const allowedSkillQueryKeys = /* @__PURE__ */ new Set(["projectPath", "threadId", "query", "forceReload", "limit"]);
+    for (const key of parsed.searchParams.keys()) {
+      if (!allowedSkillQueryKeys.has(key) || parsed.searchParams.getAll(key).length !== 1) {
+        throw new Error("Canvasight widget Skill API query parameters are invalid.");
+      }
+    }
+  }
+  return "".concat(parsed.pathname).concat(parsed.search);
 }
 async function toolCanvasightWidgetApi(args) {
   const route = widgetApiRoute(args?.path);
   const method = typeof args?.method === "string" ? args.method.toUpperCase() : "GET";
-  if (!(/* @__PURE__ */ new Set(["GET", "POST", "DELETE"])).has(method)) {
+  if (!(/* @__PURE__ */ new Set(["GET", "POST", "PUT", "DELETE"])).has(method)) {
     throw new Error("Canvasight widget API method is not allowed: ".concat(method));
   }
   const openAttemptIdValue = typeof args?.openAttemptId === "string" ? args.openAttemptId.trim() : "";
@@ -22460,6 +22743,39 @@ var tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "list_canvasight_skills",
+    description: "List lightweight summaries of enabled Codex Skills resolved for the current project. Query by a canvas or node responsibility before choosing professional content Skills or assigning an AI-selected node Skill. Results never include Skill bodies or local paths.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectPath: {
+          type: "string",
+          description: "Optional project cwd used by Codex Skill resolution. Defaults to the current Canvasight project."
+        },
+        threadId: {
+          type: "string",
+          description: "Optional current Codex thread id used to resolve its project cwd."
+        },
+        query: {
+          type: "string",
+          description: "Optional canvas or node responsibility matched against Skill name, display name, description, and scope."
+        },
+        forceReload: {
+          type: "boolean",
+          description: "Ask Codex to refresh its resolved Skill catalog before searching."
+        },
+        limit: {
+          type: "number",
+          minimum: 1,
+          maximum: 200,
+          description: "Maximum Skill summaries to return. Defaults to 50."
+        }
+      },
+      additionalProperties: false
+    },
+    outputSchema: looseObjectOutputSchema
+  },
+  {
     name: "get_canvasight_node_template",
     description: "Read one saved global Canvasight node template by id, including full prompt body and attachment metadata, after list_canvasight_node_templates identifies a useful match.",
     inputSchema: {
@@ -22580,7 +22896,7 @@ var tools = [
         },
         frameworkManifest: {
           type: "object",
-          description: "Non-persisted framework selection and final-page coverage used for closed-loop validation before writing.",
+          description: "Non-persisted framework, professional content Skill selection, node Skill assignment, and final-page coverage used for closed-loop validation before Canvasight performs the only graph write.",
           properties: {
             intent: { type: "string", enum: ["create", "analyze", "organize", "refine", "decide", "execute"] },
             primaryDomain: { type: "string", enum: ["software-product", "ux-design", "codebase", "article", "research", "task-execution"] },
@@ -22590,6 +22906,42 @@ var tools = [
             },
             maturity: { type: "string", enum: ["explore", "define", "decide", "deliver"] },
             output: { type: "string", enum: ["exploration-map", "structured-outline", "system-map", "decision-map", "execution-plan"] },
+            contentMode: {
+              type: "string",
+              enum: ["canvasight-default", "skill-led"],
+              description: "Defaults to canvasight-default. skill-led lets one primary professional Skill own content coverage while Canvasight keeps graph validation and horizontal layout."
+            },
+            contentSkills: {
+              type: "array",
+              description: "Professional content Skills for the whole canvas. skill-led requires exactly one primary Skill; compatible supporting Skills use augment.",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  role: { type: "string", enum: ["primary", "augment"] }
+                },
+                required: ["name", "role"],
+                additionalProperties: false
+              }
+            },
+            skillAssignments: {
+              type: "object",
+              description: "Non-persisted mapping from final node id to visible $skill-name assignments already present in that node body.",
+              additionalProperties: {
+                type: "array",
+                minItems: 1,
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    source: { type: "string", enum: ["user-explicit", "ai-selected"] },
+                    rationale: { type: "string" }
+                  },
+                  required: ["name", "source"],
+                  additionalProperties: false
+                }
+              }
+            },
             coverage: {
               type: "object",
               additionalProperties: {
@@ -22767,6 +23119,7 @@ async function callTool(name, args) {
   if (name === "open_canvasight_recent_project") return toolOpenCanvasightRecentProject(args || {});
   if (name === "claim_canvasight_thread") return toolClaimCanvasightThread(args || {});
   if (name === "list_canvasight_node_templates") return toolListCanvasightNodeTemplates(args || {});
+  if (name === "list_canvasight_skills") return toolListCanvasightSkills(args || {});
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});

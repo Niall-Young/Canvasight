@@ -8,12 +8,12 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:30:11Z
-    handoff_source: issue-stable-release-self-update
-    last_report: integration-summary-stable-release-self-update-pre-release
+    last_seen: 2026-07-13T13:31:00Z
+    handoff_source: issue-skill-composition-node-assignment
+    last_report: integration-summary-skill-composition-node-assignment
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Approved product boundaries and identified tag/stable identity plus SHA-pinned rollback gates
+    notes: Approved the three-layer Skill product boundaries and retained native acceptance risks
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:35:00Z
-    handoff_source: issue-stable-release-self-update
-    last_report: issue-stable-release-self-update
+    last_seen: 2026-07-13T13:31:00Z
+    handoff_source: issue-skill-composition-node-assignment
+    last_report: solution-skill-composition-node-assignment
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Delivered v0.4.11 stable release and full-plugin self-update path
+    notes: Delivered Skill discovery, preferences, graph validation, and MCP runtime contracts for 0.4.12
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -94,12 +94,12 @@ roles:
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
-    thread_id: 019f547d-edb6-73e3-b69a-27a2e1498e61
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
-    handoff_source: issue-stable-release-self-update
-    last_report: solution-stable-release-self-update
+    last_seen: 2026-07-13T13:31:00Z
+    handoff_source: issue-skill-composition-node-assignment
+    last_report: solution-skill-composition-node-assignment
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Validated updater trigger boundaries, route, status wording, and Skill metadata
+    notes: Validated graph-writer Skill composition, routing, and assignment guidance
 ```

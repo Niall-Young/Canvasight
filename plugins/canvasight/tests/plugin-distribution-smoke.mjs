@@ -82,7 +82,7 @@ try {
   );
   const toolsStage = diagnostic.stages?.find((stage) => stage.stage === "tools_list_ok");
   assert.ok(toolsStage, "installed MCP registration probe did not complete tools/list");
-  assert.equal(toolsStage.toolCount, 14, "installed MCP server must expose exactly 14 tools");
+  assert.equal(toolsStage.toolCount, 15, "installed MCP server must expose exactly 15 tools");
   assert.equal(
     toolsStage.requiredToolsPresent,
     true,

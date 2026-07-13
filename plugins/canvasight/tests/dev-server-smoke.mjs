@@ -60,6 +60,29 @@ function handle(message) {
     write({ id: message.id, result: { userAgent: "fake-codex", codexHome: process.cwd(), platformFamily: "unix", platformOs: "test" } });
     return;
   }
+  if (message.method === "skills/list") {
+    const cwd = Array.isArray(message.params?.cwds) && message.params.cwds[0] ? message.params.cwds[0] : fakeThreadCwd;
+    write({
+      id: message.id,
+      result: {
+        data: [{
+          cwd,
+          errors: [],
+          skills: [
+            {
+              name: "figma",
+              description: "Use Figma for editable design work.",
+              enabled: true,
+              path: "/private/dev-smoke/figma/SKILL.md",
+              scope: "user",
+              interface: { displayName: "Figma" }
+            }
+          ]
+        }]
+      }
+    });
+    return;
+  }
   append(message.method, message.params);
   if (hasNull(message.params)) {
     write({ id: message.id, error: { code: -32602, message: "Invalid request: null values are not accepted" } });
@@ -301,6 +324,26 @@ async function main() {
     const page = await fetchText(origin);
     assert.equal(page.ok, true);
     assert.equal(page.text.includes("<title>Canvasight</title>"), true);
+
+    const skillProjectPath = path.join(tempRoot, "skill-project");
+    const devSkills = await fetchJson(`${origin}/api/skills?projectPath=${encodeURIComponent(skillProjectPath)}&query=figma&forceReload=true`);
+    assert.deepEqual(devSkills.skills, [
+      { name: "figma", description: "Use Figma for editable design work.", displayName: "Figma", scope: "user" }
+    ]);
+    assert.doesNotMatch(JSON.stringify(devSkills), /private\/dev-smoke/);
+    assert.deepEqual(await fetchJson(`${origin}/api/preferences`), { aiSkillAssignmentEnabled: false });
+    assert.deepEqual(
+      await fetchJson(`${origin}/api/preferences`, {
+        method: "PUT",
+        body: JSON.stringify({ aiSkillAssignmentEnabled: true })
+      }),
+      { aiSkillAssignmentEnabled: true }
+    );
+    assert.deepEqual(await fetchJson(`${origin}/api/preferences`), { aiSkillAssignmentEnabled: true });
+    await fetchJson(`${origin}/api/preferences`, {
+      method: "PUT",
+      body: JSON.stringify({ aiSkillAssignmentEnabled: false })
+    });
 
     const threadProjectPath = path.join(tempRoot, "thread-project");
     const resolveLogOffset = (await readNativeLog()).length;
