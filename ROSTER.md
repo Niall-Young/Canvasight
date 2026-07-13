@@ -8,12 +8,12 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T03:03:30Z
-    handoff_source: issue-native-widget-thread-return-blank-canvas
-    last_report: integration-summary-native-widget-thread-return-canvas-recovery
+    last_seen: 2026-07-13T05:03:30Z
+    handoff_source: issue-readme-copyable-quickstart
+    last_report: integration-summary-readme-copyable-quickstart
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Confirmed thread-return recovery contract and no README or design change requirement
+    notes: Approved the install-to-Run first-user sequence and copyable prompt acceptance criteria
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -74,23 +74,23 @@ roles:
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T13:58:53Z
-    handoff_source: issue-software-product-guidance-merge-autofill
-    last_report: integration-summary-software-product-guidance-merge-autofill
+    last_seen: 2026-07-13T05:03:30Z
+    handoff_source: issue-readme-copyable-quickstart
+    last_report: integration-summary-readme-copyable-quickstart
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Synchronized bilingual README guidance for deterministic project guidance nodes
+    notes: Synchronized bilingual README with install-first and copyable Canvasight prompts
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-12T14:04:28Z
-    handoff_source: 20260710-1506-development-issue-native-open-attempt-refactor
-    last_report: integration-summary-native-widget-binding-reuse-timeout
+    last_seen: 2026-07-13T05:03:30Z
+    handoff_source: issue-readme-copyable-quickstart
+    last_report: integration-summary-readme-copyable-quickstart
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Audited mixed worktree ownership and required selective hunk staging for the timeout delivery
+    notes: Recorded clean baseline and owns selective closure for the frozen README delivery scope
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
