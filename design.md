@@ -244,7 +244,7 @@ AI capability information architecture:
 Canvasight can include an Agent Team / agent-report protocol section in generated Run Markdown. This is a workflow capability, not a primary canvas object.
 
 - The setting belongs in the existing Settings dialog as a compact switch.
-- Default state is enabled.
+- Default state is disabled so normal Runs do not incur Agent Team coordination and report overhead unless the user explicitly opts in.
 - The label should describe the action clearly, such as "开启 Agent Team" in Chinese and "Agent Team" in English.
 - Turning it off should remove the Agent Team protocol from generated Run Markdown, while leaving normal canvas editing, Page behavior, templates, and Run submission unchanged.
 - When enabled, the protocol should stay concise and should recommend only task-relevant roles. Do not expose a large role dashboard or make users manage reports manually from the app UI.

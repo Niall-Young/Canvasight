@@ -46,7 +46,7 @@ export const defaultAppSettings = {
   translucentBackground: true,
   assistantProvider: "codex",
   assistantProviderOnboardingCompleted: false,
-  agentTeamEnabled: true
+  agentTeamEnabled: false
 } satisfies AppSettings;
 
 export interface AchievementState {

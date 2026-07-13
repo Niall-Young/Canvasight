@@ -392,7 +392,7 @@ export function buildMarkdown(
   projectName: string,
   projectPath: string,
   language: ResolvedLanguage = "zh",
-  agentTeamEnabled = true
+  agentTeamEnabled = false
 ): MarkdownResult {
   const text = markdownText(language);
   const startNode = startNodeId ? allNodes.find((node) => node.id === startNodeId) : null;

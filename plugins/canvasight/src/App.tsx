@@ -395,7 +395,7 @@ function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): A
     assistantProvider: value?.assistantProvider ?? webDefaultAppSettings.assistantProvider,
     assistantProviderOnboardingCompleted:
       value?.assistantProviderOnboardingCompleted ?? webDefaultAppSettings.assistantProviderOnboardingCompleted,
-    agentTeamEnabled: value?.agentTeamEnabled ?? webDefaultAppSettings.agentTeamEnabled,
+    agentTeamEnabled: value?.agentTeamEnabled === true,
     translucentBackground: false
   };
 }

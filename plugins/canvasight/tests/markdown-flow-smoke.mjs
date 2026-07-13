@@ -79,4 +79,12 @@ assert.doesNotMatch(result.markdown, /Unrelated node/);
 assert.ok(result.markdown.indexOf("Root prompt") < result.markdown.indexOf("First child"));
 assert.ok(result.markdown.indexOf("First child") < result.markdown.indexOf("Second child"));
 
+const defaultAgentTeamResult = buildMarkdown(nodes, edges, "a", "flow", "Smoke Project", "/tmp/canvasight-smoke", "en");
+assert.equal(defaultAgentTeamResult.agentTeam.enabled, false, "Agent Team must be opt-in when no setting is provided");
+assert.doesNotMatch(defaultAgentTeamResult.markdown, /## Agent Team/);
+
+const enabledAgentTeamResult = buildMarkdown(nodes, edges, "a", "flow", "Smoke Project", "/tmp/canvasight-smoke", "en", true);
+assert.equal(enabledAgentTeamResult.agentTeam.enabled, true, "an explicit user opt-in must remain supported");
+assert.match(enabledAgentTeamResult.markdown, /## Agent Team/);
+
 console.log("Markdown flow smoke test passed");
