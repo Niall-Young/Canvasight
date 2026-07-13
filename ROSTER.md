@@ -85,21 +85,21 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f5bba-8c7e-7152-b3a3-0fbc17041ed6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T13:56:01Z
+    last_seen: 2026-07-13T14:06:11Z
     handoff_source: issue-duplicate-native-canvas-open
-    last_report: issue-duplicate-native-canvas-open
+    last_report: integration-summary-single-open-identity-retention
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline c2c15c4 and owns scoped Git closure
+    notes: Recorded clean baseline c2c15c4 and owns scoped 0.4.13 Git closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
-    thread_id: null
+    thread_id: 019f5bba-8c7e-7152-b3a3-0fbc17041ed6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T13:31:00Z
-    handoff_source: issue-skill-composition-node-assignment
-    last_report: solution-skill-composition-node-assignment
+    last_seen: 2026-07-13T14:04:57Z
+    handoff_source: issue-duplicate-native-canvas-open
+    last_report: solution-single-open-identity-retention
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Validated graph-writer Skill composition, routing, and assignment guidance
+    notes: Implemented and validated the single-open identity-retention Skill contract
 ```

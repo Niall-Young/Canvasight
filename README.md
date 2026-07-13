@@ -187,6 +187,8 @@ fallback 与会话：
 - `await_canvasight_run`：领取 fallback 队列中的 Run；不用于证明 native Run 成功。
 - `close_canvasight`：关闭指定 session，不停止项目级 daemon。
 
+一次用户级打开动作必须是一次 `open_canvasight` 加一次 `await_canvasight_widget_ready`。调用方必须保留首次打开返回的完整结果，并使用其中同一组 `sessionId`、`openAttemptId` 和 `threadId` 继续校验；不能因为包装器、转录或局部变量丢失了这些字段而再次调用 `open_canvasight`。身份缺失时，本次打开保持 `unverified` 并进入故障排查，不能静默创建第二个画布。
+
 `await_canvasight_widget_ready` 参数：
 
 - `openAttemptId`：必填，来自 `open_canvasight`。
@@ -510,6 +512,8 @@ Fallback and session tools:
 - `claim_canvasight_thread`: binds an existing fallback session to the current task.
 - `await_canvasight_run`: receives a fallback queued Run; it does not prove native Run success.
 - `close_canvasight`: closes one session without stopping the project daemon.
+
+One user-level open action must consist of one `open_canvasight` call followed by one `await_canvasight_widget_ready` call. The caller must retain the complete first result and continue with the same `sessionId`, `openAttemptId`, and `threadId`. It must not call `open_canvasight` again merely because a wrapper, transcript, or local variable lost those fields. Missing identity leaves the original attempt `unverified` and routes it to troubleshooting instead of silently creating a second canvas.
 
 `await_canvasight_widget_ready` accepts:
 

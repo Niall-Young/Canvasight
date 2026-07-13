@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.12";
+var SERVER_VERSION = "0.4.13";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -22194,7 +22194,15 @@ async function toolRenderCanvasightCanvasWidget(args) {
   return toolResult(
     publicWidgetOpenResult(widgetData),
     [
-      "Canvasight native widget session created for project: ".concat(session.projectPath, ". Await await_canvasight_widget_ready before reporting that the canvas is open."),
+      "Canvasight native widget session created for project: ".concat(session.projectPath, ". This provisional result does not prove that the canvas is open."),
+      "sessionId: ".concat(widgetData.sessionId),
+      "openAttemptId: ".concat(widgetData.openAttemptId),
+      "Next: await_canvasight_widget_ready(".concat(JSON.stringify({
+        sessionId: widgetData.sessionId,
+        openAttemptId: widgetData.openAttemptId,
+        threadId: widgetData.codexThreadId
+      }), ")"),
+      "Use these identifiers from this result. Do not call open_canvasight again to recover them.",
       canvasRouting.userFacingInstruction
     ].join("\n\n"),
     widgetToolMeta(widgetData)

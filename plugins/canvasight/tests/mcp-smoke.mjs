@@ -45,11 +45,17 @@ function assertOpenFlowSkillContract() {
   assert.match(openSkill, /await_canvasight_widget_ready/);
   assert.match(openSkill, /status: "ready"/);
   assert.match(openSkill, /reactMounted.*projectHydrated.*canvasRendered.*canvasVisible.*true/s);
+  assert.match(openSkill, /Do not call `open_canvasight` again/);
+  assert.match(openSkill, /recover.*`sessionId`.*`openAttemptId`/s);
+  assert.match(openSkill, /unverified.*do not reopen/is);
   assert.match(openSkill, /Transport closed/);
   assert.match(openSkill, /canvasight_mcp_transport_closed/);
   assert.match(openWorkflow, /tool_search/);
   assert.match(openWorkflow, /CODEX_THREAD_ID/);
   assert.match(openWorkflow, /current_thread_id_required/);
+  assert.match(openWorkflow, /opened\s*=\s*open_canvasight[\s\S]*await_canvasight_widget_ready/);
+  assert.match(openWorkflow, /Do not call `open_canvasight` again/);
+  assert.match(openWorkflow, /unverified.*do not reopen/is);
   assert.match(openWorkflow, /Do not open a bare `127\.0\.0\.1:5173` page as the normal response/);
   assert.match(openWorkflow, /Transport closed/);
   assert.match(openWorkflow, /canvasight_mcp_transport_closed/);
@@ -450,6 +456,20 @@ function assertNativeWidgetPublicResult(result) {
   assert.doesNotMatch(JSON.stringify(result.structuredContent), /127\.0\.0\.1:\d+/);
   assert.doesNotMatch(result.content[0].text, /127\.0\.0\.1:\d+/);
   assert.equal(typeof result.structuredContent.openAttemptId, "string");
+  assert.equal(typeof result.structuredContent.sessionId, "string");
+  const sessionIdMatch = result.content[0].text.match(/^sessionId: (\S+)$/m);
+  const openAttemptIdMatch = result.content[0].text.match(/^openAttemptId: (\S+)$/m);
+  assert.ok(sessionIdMatch, "native open text must expose the safe sessionId");
+  assert.ok(openAttemptIdMatch, "native open text must expose the safe openAttemptId");
+  assert.equal(sessionIdMatch[1], result.structuredContent.sessionId);
+  assert.equal(openAttemptIdMatch[1], result.structuredContent.openAttemptId);
+  const exactNextStep = `Next: await_canvasight_widget_ready(${JSON.stringify({
+    sessionId: result.structuredContent.sessionId,
+    openAttemptId: result.structuredContent.openAttemptId,
+    threadId: result.structuredContent.codexThreadId
+  })})`;
+  assert.equal(result.content[0].text.includes(exactNextStep), true, "native open text must preserve the exact await identity");
+  assert.doesNotMatch(result.content[0].text, /[?&]token=|apiBaseUrl|browserUrl|origin:/);
   assert.equal(result.structuredContent.targetDisplayMode, "fullscreen");
   assert.deepEqual(Object.keys(result._meta), ["widgetData"]);
   assert.equal(result._meta.widgetData.openAttemptId, result.structuredContent.openAttemptId);
@@ -2969,6 +2989,9 @@ async function main() {
     await assertDynamicWidgetRuntimeApi();
     await assertWidgetBootstrapContracts(widgetHtml);
 
+    const openAttemptEventsBefore = (await readMcpLifecycleLog()).filter(
+      (entry) => entry.event === "canvasight_open_attempt_created"
+    );
     const widgetOpened = await request("tools/call", {
       name: "render_canvasight_canvas_widget",
       arguments: {
@@ -2976,6 +2999,16 @@ async function main() {
       }
     });
     const widgetOpenedData = widgetDataFor(widgetOpened);
+    const openAttemptEventsAfter = (await readMcpLifecycleLog()).filter(
+      (entry) => entry.event === "canvasight_open_attempt_created"
+    );
+    assert.equal(
+      openAttemptEventsAfter.length,
+      openAttemptEventsBefore.length + 1,
+      "one native open tool call must create exactly one OpenAttempt"
+    );
+    assert.equal(openAttemptEventsAfter.at(-1)?.sessionId, widgetOpened.structuredContent.sessionId);
+    assert.equal(openAttemptEventsAfter.at(-1)?.openAttemptId, widgetOpened.structuredContent.openAttemptId);
     assert.equal(widgetOpenedData.openAttemptId, widgetOpened.structuredContent.openAttemptId);
     assert.equal(Number.isFinite(widgetOpenedData.bindingIssuedAt), true, "private widget metadata includes an ordered binding generation");
     assert.equal(widgetOpened.structuredContent.bindingIssuedAt, undefined, "binding generation remains private widget metadata");

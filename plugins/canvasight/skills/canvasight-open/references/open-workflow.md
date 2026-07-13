@@ -2,13 +2,18 @@
 
 ## Native Open Is A Two-Step Contract
 
-Read the active Codex task's `CODEX_THREAD_ID`, then call `open_canvasight` with that exact value as `threadId`. When `projectPath` is omitted, Canvasight resolves the task workspace and creates or opens `.scatter` there. Pass `projectPath` only as an explicit override when it is already known.
+Read the active Codex task's `CODEX_THREAD_ID` and current working directory, require a non-empty task id and absolute project path, then call `open_canvasight` with those exact values as `threadId` and `projectPath`.
 
-The open result prepares an `OpenAttempt` and returns both `sessionId` and `openAttemptId`. It does not prove that Codex loaded the widget resource, mounted React, or reached the session API. Immediately call:
+For one user-level open action, call `open_canvasight` exactly once and retain its complete result. The safe text content and `structuredContent` both carry the same `sessionId` and `openAttemptId`; treat `structuredContent` as the canonical source. The result prepares an `OpenAttempt`; it does not prove that Codex loaded the widget resource, mounted React, or reached the session API.
 
 ```text
-await_canvasight_widget_ready({ sessionId, openAttemptId, threadId })
+opened = open_canvasight({ threadId, projectPath })
+sessionId = opened.structuredContent.sessionId
+openAttemptId = opened.structuredContent.openAttemptId
+ready = await_canvasight_widget_ready({ sessionId, openAttemptId, threadId })
 ```
+
+Do not call `open_canvasight` again, or call its compatibility alias, to recover `sessionId` or `openAttemptId`. If the first result or either id is lost, the original opening is `unverified`: do not reopen, and route diagnosis through `canvasight-troubleshooting`.
 
 The default wait is 15 seconds. `timeoutMs` may be set for a deliberate diagnostic wait, up to 300000 ms; do not use repeated long waits to hide a failed bootstrap.
 
@@ -20,6 +25,7 @@ Interpret the result strictly:
 | `status=timeout` | No positive acknowledgement arrived before the deadline | Report `stage` and `error`; mark native opening `unverified` |
 | `status=failed` | The widget or daemon reported a startup failure, a task/session mismatch, or the wait was cancelled | Report `stage` and `error`; mark native opening failed |
 | `status=ready` with missing identity, fullscreen mode, or render evidence | Invalid or incomplete acknowledgement | Do not claim success; treat it as failed contract validation |
+| First result or `sessionId` / `openAttemptId` was not retained | The original attempt cannot be verified | Mark it `unverified`; do not reopen; hand off to `canvasight-troubleshooting` |
 
 Preserve `openAttemptId`, `sessionId`, `widgetInstanceId`, `threadId`, `projectPath`, `displayMode`, `stage`, render evidence, `error`, and `reportedAt` in diagnostic handoff. Do not expose daemon URLs or tokens.
 
