@@ -8,9 +8,9 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
+    last_seen: 2026-07-13T12:30:11Z
     handoff_source: issue-stable-release-self-update
-    last_report: solution-stable-release-self-update
+    last_report: integration-summary-stable-release-self-update-pre-release
     rebuild_on_new_thread: true
     replaced_by: null
     notes: Approved product boundaries and identified tag/stable identity plus SHA-pinned rollback gates
@@ -68,13 +68,13 @@ roles:
     last_report: solution-stable-release-self-update
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Approved 15 updater cases, build, MCP, distribution, plugin, and Skill gates
+    notes: First matrix safely caught deterministic web-build and Windows CRLF release-gate defects before publication
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T12:18:15Z
+    last_seen: 2026-07-13T12:30:11Z
     handoff_source: issue-stable-release-self-update
     last_report: solution-stable-release-self-update
     rebuild_on_new_thread: true
@@ -87,10 +87,10 @@ roles:
     created_at: 2026-07-11T11:08:45Z
     last_seen: 2026-07-13T12:18:15Z
     handoff_source: issue-stable-release-self-update
-    last_report: issue-stable-release-self-update
+    last_report: integration-summary-stable-release-self-update-pre-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewing the frozen pre-release scope for selective staging and commit closure
+    notes: Closed the initial feature commit and is reviewing the scoped release-gate correction
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

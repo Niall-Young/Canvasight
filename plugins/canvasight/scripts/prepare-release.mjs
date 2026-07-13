@@ -63,7 +63,7 @@ async function verifyPluginSnapshot() {
   if (skillDirectories.length === 0) throw new Error("release contains no Canvasight skills");
   for (const entry of skillDirectories) {
     const skillFile = path.join(skillsRoot, entry.name, "SKILL.md");
-    const skill = await readFile(skillFile, "utf8");
+    const skill = (await readFile(skillFile, "utf8")).replace(/\r\n?/g, "\n");
     const frontmatter = skill.match(/^---\n([\s\S]*?)\n---\n/);
     if (!frontmatter || !/^name:\s*\S+/m.test(frontmatter[1]) || !/^description:\s*\S+/m.test(frontmatter[1])) {
       throw new Error(`${path.relative(pluginRoot, skillFile)} has invalid skill frontmatter`);

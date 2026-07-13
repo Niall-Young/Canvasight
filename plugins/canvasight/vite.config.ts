@@ -9,8 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const defaultProjectPath = path.resolve(process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH || path.resolve(__dirname, "../.."));
-process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH = defaultProjectPath;
+let defaultProjectPath = "";
 const pluginRoot = __dirname;
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8")) as { version?: string };
@@ -587,19 +586,25 @@ function canvasightDevApiPlugin() {
   };
 }
 
-export default defineConfig({
-  plugins: [canvasightDevApiPlugin(), react()],
-  build: {
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true
+export default defineConfig(({ command }) => {
+  defaultProjectPath = command === "serve"
+    ? path.resolve(process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH || path.resolve(__dirname, "../.."))
+    : "";
+  process.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH = defaultProjectPath;
+  return {
+    plugins: [canvasightDevApiPlugin(), react()],
+    build: {
+      rollupOptions: {
+        output: {
+          inlineDynamicImports: true
+        }
       }
+    },
+    server: {
+      host: "127.0.0.1"
+    },
+    preview: {
+      host: "127.0.0.1"
     }
-  },
-  server: {
-    host: "127.0.0.1"
-  },
-  preview: {
-    host: "127.0.0.1"
-  }
+  };
 });

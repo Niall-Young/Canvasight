@@ -6,17 +6,20 @@ status: resolved
 owner: Development Agent
 created_by: Development Agent
 priority: high
-version: 1
+version: 2
 agent_id: /root/development_agent
 thread_id: null
 created_at: 2026-07-13T12:18:15Z
-updated_at: 2026-07-13T12:18:15Z
+updated_at: 2026-07-13T12:30:11Z
 depends_on:
   - issue-stable-release-self-update
 related_issue: issue-stable-release-self-update
 related_files:
+  - .gitattributes
   - plugins/canvasight/scripts/update-canvasight.mjs
   - plugins/canvasight/scripts/prepare-release.mjs
+  - plugins/canvasight/vite.config.ts
+  - plugins/canvasight/dist/index.html
   - plugins/canvasight/tests/update-canvasight-smoke.mjs
   - plugins/canvasight/skills/canvasight-update/SKILL.md
   - .github/workflows/canvasight-release.yml
@@ -70,6 +73,7 @@ Development Agent
 
 - 更新失败按旧 commit SHA 恢复；恢复失败明确返回 `rollback_failed`，绝不报告成功。
 - 发布矩阵通过后先公开并验证 Release，最后只用普通快进推进 `stable`；快进失败会删除本轮 Release，不 force-push、回退或删除受保护的 `stable`。
+- Release build 不嵌入机器绝对项目路径，插件文本统一 LF checkout；Skill frontmatter 校验显式归一 CRLF，保证三系统快照与验证一致。
 - 更新器不访问或修改 `.scatter`、附件、`~/.canvasight`、项目源码和其他插件。
 
 ## 处理结果

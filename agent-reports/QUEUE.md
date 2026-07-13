@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-stable-release-self-update` | assigned | high | Development Agent | Canvasight 缺少正式 Release 与自然语言自更新链路 | `agent-reports/assigned/issue-stable-release-self-update.md` | 3 | 2026-07-13T12:18:15Z
+- `issue-stable-release-self-update` | assigned | high | Development Agent | Canvasight 缺少正式 Release 与自然语言自更新链路 | `agent-reports/assigned/issue-stable-release-self-update.md` | 4 | 2026-07-13T12:30:11Z
 - `issue-windows-native-acceptance-0-4-10` | assigned | high | Test Supervisor Agent | Windows 原生宿主验收 0.4.10 | `agent-reports/assigned/issue-windows-native-acceptance-0-4-10.md` | 3 | 2026-07-13T07:35:33Z
 - `issue-ai-graph-universal-horizontal-topology` | assigned | high | Development Agent | AI 画布仍允许纵向布局和机械单链 | `agent-reports/assigned/issue-ai-graph-universal-horizontal-topology.md` | 2 | 2026-07-12T14:44:47Z
 - `issue-node-menu-delete-noop` | assigned | high | Main Thread | 节点菜单删除点击无响应 | `agent-reports/assigned/issue-node-menu-delete-noop.md` | 4 | 2026-07-12T13:51:06Z

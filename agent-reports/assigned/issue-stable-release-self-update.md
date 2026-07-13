@@ -6,11 +6,11 @@ status: assigned
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 3
+version: 4
 agent_id: /root/development_agent
 thread_id: null
 created_at: 2026-07-13T12:04:53Z
-updated_at: 2026-07-13T12:18:15Z
+updated_at: 2026-07-13T12:30:11Z
 depends_on: []
 related_files:
   - plugins/canvasight/skills/canvasight-update/SKILL.md
@@ -20,10 +20,11 @@ related_files:
   - README.md
   - AGENTS.md
 solution_report: agent-reports/resolved/solution-stable-release-self-update.md
-verification_status: not_started
+verification_status: failed
 verification_evidence:
   - Local macOS updater, build, MCP, distribution, plugin, and Skill gates pass.
-  - Windows, macOS, and Linux release matrix awaits the v0.4.11 tag.
+  - First v0.4.11 matrix run 29249743724 safely blocked publication before Release or stable changes.
+  - Retry is required after deterministic web-build and Windows CRLF validation fixes.
 ---
 
 # Canvasight 缺少正式 Release 与自然语言自更新链路
@@ -112,7 +113,7 @@ assigned
 
 ## 处理结果
 
-实现与本地门禁完成，等待 tag 触发三系统 Release 验证和正式发布。
+首轮三系统门禁安全失败，Release 与 `stable` 均未创建；修复已完成并等待重新打 tag 验证。
 
 ## 修改文件
 
@@ -122,7 +123,8 @@ assigned
 
 - `npm run test:update`：15/15。
 - build、MCP smoke、clean distribution、plugin validation、Skill validation：通过。
+- GitHub Actions run `29249743724`：失败，定位到构建路径非确定性和 Windows CRLF frontmatter 校验。
 
 ## 后续风险
 
-Release 发布和 `stable` 推进必须在全部三系统验证通过后执行；发布前 issue 保持 assigned。
+首轮失败没有推进 Release/stable。重试必须确认三系统生成同一 web snapshot，且 Windows Skill 校验通过。

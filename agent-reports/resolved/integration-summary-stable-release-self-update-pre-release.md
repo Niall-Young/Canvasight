@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-13T12:18:15Z
-updated_at: 2026-07-13T12:18:15Z
+updated_at: 2026-07-13T12:30:11Z
 depends_on:
   - issue-stable-release-self-update
   - solution-stable-release-self-update
@@ -25,7 +25,7 @@ related_files:
 verification_status: passed
 verification_evidence:
   - All local macOS implementation and distribution gates pass.
-  - Cross-platform tag workflow and public v0.4.11 Release remain pending.
+  - First cross-platform run failed safely before publishing; deterministic build and CRLF fixes await retry.
 ---
 
 # Canvasight 完整插件更新预发布集成总结
@@ -69,7 +69,7 @@ verification_evidence:
 
 ## 未解决
 
-- `v0.4.11` tag 尚未触发 Windows、macOS、Linux workflow，Release 与 `stable` 尚未公开。
+- 首轮 `v0.4.11` workflow `29249743724` 在 verify 阶段失败：macOS/Linux 发现 web build 内嵌绝对 checkout 路径导致 hash 漂移，Windows 发现 CRLF frontmatter 校验不兼容。Release 与 `stable` 均未公开。
 
 ## 风险
 

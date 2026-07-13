@@ -1,1 +1,10 @@
 plugins/canvasight/mcp/server.mjs text eol=lf
+plugins/canvasight/**/*.css text eol=lf
+plugins/canvasight/**/*.html text eol=lf
+plugins/canvasight/**/*.js text eol=lf
+plugins/canvasight/**/*.json text eol=lf
+plugins/canvasight/**/*.md text eol=lf
+plugins/canvasight/**/*.mjs text eol=lf
+plugins/canvasight/**/*.svg text eol=lf
+plugins/canvasight/**/*.ts text eol=lf
+plugins/canvasight/**/*.tsx text eol=lf
