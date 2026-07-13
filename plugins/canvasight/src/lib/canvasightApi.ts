@@ -8,6 +8,7 @@ import type {
   NodeTemplateInput,
   OpenProjectResult,
   RunMode,
+  SaveDocumentInput,
   SaveDocumentResult,
   ScatterDocument
 } from "../../shared/types";
@@ -15,6 +16,7 @@ import type {
 export interface SessionInfo {
   codexThreadId?: string | null;
   documentRevision: number;
+  documentVersion?: string | null;
   language: LanguagePreference;
   projectPath: string | null;
   sessionId: string;
@@ -842,10 +844,10 @@ export const canvasightApi = {
     });
   },
 
-  saveDocument(projectPath: string, document: ScatterDocument, expectedRevision: number | null): Promise<SaveDocumentResult> {
+  saveDocument(input: SaveDocumentInput): Promise<SaveDocumentResult> {
     return requestSessionJson<SaveDocumentResult>("/document", {
       method: "POST",
-      body: JSON.stringify({ document, expectedRevision, projectPath })
+      body: JSON.stringify(input)
     });
   },
 

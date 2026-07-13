@@ -179,7 +179,7 @@ Canvasight supports Codex or other AI agents writing `.scatter/scatter.json` to 
 - AI decomposition follows semantic responsibility rather than node counts, body length, coverage count, branch count, or fixed depth. A node owns one clearly named responsibility; independently executable, decidable, verifiable, or deliverable content becomes related nodes, while inseparable content may remain together with an explicit cohesion reason.
 - Candidate AI writes must pass structural and framework coverage validation before becoming visible canvas state. Validation feedback is an internal repair signal for the AI; users should receive the corrected editable result rather than a raw checklist of generation defects.
 - AI-generated content must remain fully editable by the user.
-- External AI writes and browser autosave must coordinate through a document revision contract. When AI writes a graph through the daemon, open browser sessions should reload the newer document automatically; stale browser saves must be rejected and reload the latest `.scatter/scatter.json` instead of overwriting externally generated Pages.
+- External AI writes and task-local autosave coordinate through one document revision contract, but AI writes use a context-bound rebase policy rather than the manual task-to-task policy below. AI captures the target Page and its base snapshot before generation; later Page switching, navigation, or unrelated edits must not retarget or reject the write. Structural and framework validation still runs against the AI candidate before any merge becomes visible.
 
 ## Skill Composition
 
@@ -232,6 +232,39 @@ Pages are independent canvas workspaces inside a project. A Page is a user-contr
 - Page names should describe the user's workspace intent, not automatically mirror hidden AI classification.
 - Switching Pages should preserve each Page's own nodes, edges, viewport, selection, and local editing context.
 
+## Concurrent Editing Across Codex Tasks
+
+The same Canvasight project may be open in multiple Codex tasks without locking an entire Page. Every manual save compares three complete document states: `base`, the last version confirmed to that task; `local`, that task's current edits; and `current`, the latest daemon-backed project state.
+
+- Changes to different Pages or different node and edge IDs merge automatically. Identical changes to the same object coalesce without creating a conflict.
+- Nodes and edges are atomic merge objects. Divergent changes to the same object, divergent Page names, delete-versus-edit, and deleting a node while another task changes one of its incident edges are true conflicts.
+- When one Page has a true conflict, the original Page keeps the complete first-saved `current` version. The later-saving task's complete `local` Page becomes one conflict-copy Page; do not partially merge that task's non-conflicting changes from the conflicted Page into the original. Non-conflicting Pages in the same save may still merge normally.
+- Delete conflicts preserve recoverable content. If `current` deleted a Page that `local` edited, restore the edited local Page as a conflict copy. If `local` deleted a Page that `current` edited, keep the current Page and preserve the local pre-delete snapshot as a conflict copy.
+- A conflict copy preserves all later-task content and topology, uses unique Page, node, and edge IDs, and becomes an ordinary user-controlled Page after creation. It must never be automatically merged, deleted, expired, or silently replaced.
+- Only the later-saving task switches locally to its conflict copy. Other tasks never jump to another Page because of a concurrent save; they may refresh shared document content while keeping their own local navigation context.
+- `activePageId`, viewport, selection, and other task-local orientation state are not content-conflict inputs. Concurrent navigation must not create a conflict, overwrite another task's orientation, or force automatic relayout.
+
+Conflict feedback is persistent until the user explicitly closes it. Do not use an auto-dismissing toast for any of these three outcomes:
+
+- When the original Page still exists: “先保存的版本保留在原页面，你的完整版本已保存为冲突副本”. Include a “查看原页面” action.
+- When another task deleted the original Page while the local task edited it: “原页面已被另一任务删除，你的版本已恢复为冲突副本”. Do not show a view-original action.
+- When the local task deleted a Page that another task edited: “删除未执行；另一任务的版本保留在原页面，删除前内容已保存为冲突副本”. Include a “查看原页面” action.
+
+Tasks that did not create the conflict copy receive only persistent informational feedback that a new conflict copy was discovered. They do not switch Pages. “查看原页面” changes only the current task's local Page selection and must not mutate the shared project's active Page or another task's viewport.
+
+## Concurrent AI And Manual Editing
+
+An AI graph write is bound to the Page and base snapshot returned by its graph context, not to whichever Page happens to be active when generation finishes. Within the project write lock, Canvasight validates the AI candidate against that base and rebases it onto the latest document state.
+
+- Manual Page switching, viewport movement, selection changes, and node dragging do not retarget or reject the AI write. The AI result always returns to the Page captured by its context.
+- Changes to different nodes, edges, or Pages merge automatically. Non-conflicting AI changes remain on the original target Page even when another object on that Page has a conflict.
+- When manual and AI edits diverge on the same node, edge, or Page identity, the latest manual semantic content stays on the original Page. Canvasight also preserves the AI candidate as one complete AI conflict-copy Page with unique Page, node, and edge IDs so no AI content or topology is lost.
+- If the captured target Page was manually deleted, Canvasight must not recreate it in place. The complete validated AI candidate becomes an AI recovery-copy Page.
+- Existing nodes always keep their latest manually arranged positions. AI placement and relayout may position newly added nodes around the latest occupied bounds, but dragging alone is not a semantic conflict and AI relayout must not move existing manual nodes.
+- Context-bound retries are idempotent: a repeated mutation must return its prior result without another revision or another conflict/recovery copy. An expired or unavailable context asks the AI to read fresh context and rebuild; it must not guess a target Page.
+
+AI conflict feedback is persistent until explicitly dismissed: “你正在编辑的版本已保留，AI 结果已保存为冲突副本”. Include a “查看 AI 版本” action. The feedback must not automatically switch Pages; the action changes only the current task's local Page selection and must not mutate another task's orientation. AI recovery copies use equivalent persistent wording that explains the original Page was deleted and the AI result was recovered as a copy.
+
 ## Capability Boundaries
 
 Canvasight separates the user-facing canvas experience from AI/operator capabilities. The visible product remains a canvas workspace, not a skill directory or automation dashboard.
@@ -271,8 +304,9 @@ Settings contains only active user-configurable Canvasight workflow preferences,
 The `.scatter/scatter.json` file is a user-editable and AI-editable canvas protocol.
 
 - External file writes must be validated before becoming visible canvas state.
-- Project document revisions should advance on every daemon-mediated document write, including AI graph writes and browser saves.
-- Browser saves should include the expected document revision. If the expected revision is stale, the app should preserve user orientation as much as possible, reject the stale write, and reload the latest valid document.
+- Project document revisions advance once for each real daemon-mediated document write, including AI graph writes and manual canvas saves. Unchanged saves, failed saves, and idempotent retries do not advance the revision.
+- Modern manual saves include their confirmed `base` document and revision, current `local` document, and a stable mutation ID. A stale base triggers the three-way concurrent-editing contract instead of discarding local input. Legacy clients without that contract remain strict and receive `stale_document`.
+- Context-bound AI graph writes carry the captured Page, base revision, and stable mutation identity. A stale revision triggers the AI/manual rebase contract above; legacy AI calls without a valid context remain strict and receive `stale_document`. Automatic rebasing must never bypass graph or framework validation.
 - Invalid or partially valid canvas files should show a recoverable error instead of blanking the workspace.
 - Unknown fields should be preserved when possible to protect forward compatibility.
 - Missing optional fields should fall back to stable defaults.

@@ -18,6 +18,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 - 创建、拖拽、复制、删除和连接任务节点。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
+- 多个 Codex 任务可以同时编辑同一项目：不同对象自动合并，同一对象冲突时保留完整冲突副本。
 - 给节点添加图片、文件和上下文附件。
 - 节点始终通过 Chat 发送当前节点及其下游节点到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
@@ -84,6 +85,18 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
    ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
 
+### 并发编辑
+
+同一项目可以在多个 Codex 任务中同时打开和编辑。同一 Page 上的保存会以各任务最后确认的版本为基础进行比较：不同节点或连线的修改会自动合并，不需要锁住整个 Page。
+
+如果两个任务修改了同一对象且结果不同，原 Page 保留先保存的结果；后保存任务的完整 Page 会保存为一个新的“冲突副本” Page。删除与修改发生冲突时也会创建冲突副本，不会把任一方的内容静默丢弃。后保存的任务会在本地切换到这个冲突副本并显示提示，其他任务不会被强制切换 Page。冲突副本之后就是普通 Page，可以继续编辑、重命名或删除。
+
+AI 开始修改当前 Page 时，Canvasight 会把这次写入绑定到当时的 Page 和上下文。你可以在 AI 工作期间继续拖动节点、编辑其他内容或切换 Page；不同对象的修改会自动合并，切换 Page 也不会让 AI 写到错误的页面。已有节点保留你最新的手动位置，AI 只为新增节点安排位置。
+
+如果你和 AI 修改了同一个节点、连线或 Page 信息，你的内容和手动位置会保留在原 Page，经过验证的完整 AI 结果则保存为“AI 冲突副本”。如果原 Page 已被删除，Canvasight 会把 AI 结果保存为“AI 恢复副本”，不会擅自恢复已删除的 Page。提示会持续显示“你正在编辑的版本已保留，AI 结果已保存为冲突副本”，并提供“查看 AI 版本”；Canvasight 不会自动切换当前 Page。
+
+图结构和 framework 校验始终在自动重基前完成。支持新并发合同的 AI 写入可以安全合并或保存副本；不带有效上下文的旧客户端继续使用严格的 revision 校验，过期写入仍会返回错误而不会覆盖新内容。
+
 ### 原生 widget 合同
 
 - React shell 在 widget 第一帧立即挂载；启动过程使用单调状态机 `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`。重复或乱序的 `tool-result` / `openai:set_globals` 只能确认当前进度，不能把 Ready 回退为 Connecting，也不能让失败的 attempt 恢复。
@@ -107,7 +120,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatter.json`。默认 `mode` 是 `append-page`，只有用户明确要求覆盖时才使用 `replace-active-page` 或 `replace-document`。`graphType` 只决定节点组织策略，不决定 Page 的写入方式。
 
-当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page 和 `documentRevision`，再用 `merge-active-page` 提交最小的节点/连线 operations。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改会保留未涉及的内容和位置。
+当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page、`contextId`、`documentRevision` 和 `documentVersion`，再用 `merge-active-page` 提交最小的节点/连线 operations，同时传回该上下文的 revision 和可在重试时复用的稳定 mutation ID。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改始终写回上下文捕获的 Page，不会被之后的 Page 切换重新定向。
 
 生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
 
@@ -119,9 +132,9 @@ Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatt
 
 所有 AI 创建、替换、合并和重排默认使用 `layoutPolicy: auto`，并统一采用从左到右的水平拓扑，不因 domain、output、`graphType`、文章阅读顺序或任务先后顺序产生纵向例外。Canvasight 根据最终节点关系分层、按完整子树居中并避让节点矩形；同层兄弟、并行分支和章节顺序只通过 Y 轴排序表达。对外 schema 只公开 `horizontal`；旧调用中的 `vertical` 和 `grid` 仍可作为兼容输入，但运行时会统一归一为 `horizontal` 并返回 deprecated advisory，不会按旧方向写入。
 
-`preserve-explicit` 只用于用户明确要求保留自己手工调整的坐标，不能作为 AI 新建纵向图的入口；现有 `.scatter` Page 不会被自动迁移，只有后续 AI 拓扑修改或显式 `relayout-page` 才会按水平规则重排。内容拆分依据职责和真实关系，而不是节点数、正文长度或固定层级；内容顺序本身不等于依赖边，文章章节、产品页面、能力、验收项和并行任务只有存在真实的依赖、包含、导航、证据或决策关系时才连接。Canvasight 会拒绝把独立职责机械串成一条超长单链；`frameworkManifest.semanticStructure` 记录覆盖节点的职责与凝聚原因，`semanticRelationships` 按最终 edge ID 记录关系类型和理由。
+`preserve-explicit` 只用于用户明确要求保留自己手工调整的坐标，不能作为 AI 新建纵向图的入口；现有 `.scatter` Page 不会被自动迁移，只有后续 AI 拓扑修改或显式 `relayout-page` 才会按水平规则重排。并发重基时，已有节点始终保留最新的手动坐标，AI 布局只作用于新增节点。内容拆分依据职责和真实关系，而不是节点数、正文长度或固定层级；内容顺序本身不等于依赖边，文章章节、产品页面、能力、验收项和并行任务只有存在真实的依赖、包含、导航、证据或决策关系时才连接。Canvasight 会拒绝把独立职责机械串成一条超长单链；`frameworkManifest.semanticStructure` 记录覆盖节点的职责与凝聚原因，`semanticRelationships` 按最终 edge ID 记录关系类型和理由。
 
-AI 写图前可以先用 `list_canvasight_node_templates` 扫描模板摘要，再用 `get_canvasight_node_template` 读取选中模板的完整内容。外部 AI 写入与网页自动保存通过 document revision 协调，过期会话不能静默覆盖较新的画布。
+AI 写图前可以先用 `list_canvasight_node_templates` 扫描模板摘要，再用 `get_canvasight_node_template` 读取选中模板的完整内容。现代 AI 写入通过捕获的上下文与网页自动保存协调：过期 revision 会触发安全重基，不同对象自动合并，同一对象冲突时保留用户原 Page 并保存完整 AI 副本。旧客户端仍执行严格 revision 校验，任何路径都不能静默覆盖较新的画布。
 
 ### 插件安装
 
@@ -344,6 +357,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 - Create, drag, copy, delete, and connect task nodes.
 - Use multiple Pages as isolated canvas workspaces within one project.
+- Edit one project from multiple Codex tasks: different objects merge automatically, while same-object conflicts preserve a complete conflict copy.
 - Add images, files, and contextual attachments to nodes.
 - Nodes always use Chat to send the selected node plus downstream nodes to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
@@ -410,6 +424,18 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
    ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
 
+### Concurrent Editing
+
+The same project can be open and edited in multiple Codex tasks at once. Saves to the same Page are compared from the last version confirmed by each task. Changes to different nodes or edges merge automatically, so Canvasight does not need to lock the entire Page.
+
+If two tasks change the same object to different results, the original Page keeps the first saved result and the later task's complete Page is saved as a new conflict-copy Page. A delete-versus-edit conflict also creates a conflict copy instead of silently discarding either side. The later task switches locally to its conflict copy and shows a notice; other tasks are not forced to switch Pages. A conflict copy is an ordinary Page after creation and can be edited, renamed, or deleted.
+
+When AI starts changing the current Page, Canvasight binds that write to the Page and context captured at the start. You can keep dragging nodes, editing other content, or switching Pages while AI works. Changes to different objects merge automatically, and switching Pages never redirects the AI result to the wrong Page. Existing nodes keep their latest manual positions; AI places only newly added nodes.
+
+If you and AI change the same node, edge, or Page identity, your content and manual positions stay on the original Page, while the complete validated AI result is saved as an AI conflict copy. If the original Page was deleted, Canvasight saves the AI result as an AI recovery copy without recreating the deleted Page. The persistent notice says “Your edited version was preserved. The AI result was saved as a conflict copy” and offers “View AI version”; Canvasight does not switch Pages automatically.
+
+Graph-structure and framework validation is always completed before automatic rebasing. Modern context-aware AI writes can merge safely or preserve a copy. Legacy clients without a valid context remain strict revision-checked clients: stale writes fail instead of overwriting newer content.
+
 ### Native Widget Contract
 
 - The React shell mounts on the widget's first frame. Startup follows the monotonic state machine `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`. Repeated or out-of-order `tool-result` / `openai:set_globals` events may confirm progress but cannot move Ready back to Connecting or revive a failed attempt.
@@ -433,7 +459,7 @@ You can ask Codex to turn product requirements, article structure, code architec
 
 Codex should use `write_canvasight_graph` instead of manually assembling the full `.scatter/scatter.json`. The default `mode` is `append-page`; use `replace-active-page` or `replace-document` only when replacement is explicit. `graphType` controls node organization, not Page write behavior.
 
-When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page and its `documentRevision`, then submit minimal node/edge operations with `merge-active-page`. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits preserve untouched content and positions.
+When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page, `contextId`, `documentRevision`, and `documentVersion`. It then submits minimal node/edge operations with `merge-active-page`, returns that context's revision, and uses a stable mutation ID across retries. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits always return to the Page captured by the context and cannot be redirected by a later Page switch.
 
 Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
 
@@ -445,9 +471,9 @@ When writing a `software-product` canvas, Canvasight deterministically adds sepa
 
 All AI create, replace, merge, and relayout operations use `layoutPolicy: auto` by default and share one left-to-right horizontal topology. There are no vertical exceptions for any domain, output, `graphType`, article reading order, or task sequence. Canvasight layers nodes from their final relationships, centers parents over complete subtrees, and separates full node bounds; Y-axis ordering represents siblings, parallel branches, and chapter order. The public schema exposes only `horizontal`. Legacy `vertical` and `grid` values remain accepted as compatibility inputs, but the runtime normalizes them to `horizontal`, returns a deprecated advisory, and never writes the old direction.
 
-Use `preserve-explicit` only when the user explicitly wants their manually adjusted coordinates preserved; it is not an entry point for AI-created vertical graphs. Existing `.scatter` Pages are not migrated automatically and are horizontally rearranged only after a later AI topology change or an explicit `relayout-page`. Decomposition follows responsibility and real relationships rather than node counts, body length, or fixed depth. Content order alone is not a dependency edge: article sections, product pages, capabilities, acceptance items, and parallel tasks are connected only when a real dependency, containment, navigation, evidence, or decision relationship exists. Canvasight rejects mechanically chaining independent responsibilities into one long path. `frameworkManifest.semanticStructure` records covered-node responsibilities and cohesion, while `semanticRelationships` records each final edge's relationship type and rationale.
+Use `preserve-explicit` only when the user explicitly wants their manually adjusted coordinates preserved; it is not an entry point for AI-created vertical graphs. Existing `.scatter` Pages are not migrated automatically and are horizontally rearranged only after a later AI topology change or an explicit `relayout-page`. During a concurrent rebase, existing nodes always keep their latest manual coordinates and AI layout applies only to new nodes. Decomposition follows responsibility and real relationships rather than node counts, body length, or fixed depth. Content order alone is not a dependency edge: article sections, product pages, capabilities, acceptance items, and parallel tasks are connected only when a real dependency, containment, navigation, evidence, or decision relationship exists. Canvasight rejects mechanically chaining independent responsibilities into one long path. `frameworkManifest.semanticStructure` records covered-node responsibilities and cohesion, while `semanticRelationships` records each final edge's relationship type and rationale.
 
-Before graph writing, AI can scan template summaries with `list_canvasight_node_templates`, then fetch one selected template with `get_canvasight_node_template`. External AI writes and web autosave coordinate through document revisions so a stale session cannot silently overwrite a newer canvas.
+Before graph writing, AI can scan template summaries with `list_canvasight_node_templates`, then fetch one selected template with `get_canvasight_node_template`. Modern AI writes coordinate with web autosave through the captured context: a stale revision triggers a safe rebase, different-object changes merge, and same-object conflicts preserve the user's original Page plus a complete AI copy. Legacy clients remain strict revision-checked, and no path may silently overwrite a newer canvas.
 
 ### Plugin Installation
 

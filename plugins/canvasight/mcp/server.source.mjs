@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.13";
+const SERVER_VERSION = "0.4.14";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -22,6 +22,9 @@ const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
 const MAX_SKILL_SUMMARIES = 200;
+const MAX_DOCUMENT_MUTATION_RECEIPTS = 200;
+const MAX_GRAPH_CONTEXTS_PER_PROJECT = 64;
+const GRAPH_CONTEXT_TTL_MS = 60 * 60 * 1000;
 const TEMPLATE_BODY_PREVIEW_CHARS = 240;
 const VALID_LANGUAGES = new Set(["zh", "en"]);
 const VALID_EFFORT = new Set(["low", "medium", "high", "xhigh"]);
@@ -168,7 +171,9 @@ const isStopDaemonMode = process.argv.includes("--stop-daemon");
 const sessions = new Map();
 const projectThreadClaims = new Map();
 const projectDocumentRevisions = new Map();
+const projectRevisionStates = new Map();
 const projectWriteLocks = new Map();
+const projectGraphContexts = new Map();
 const globalRunWaiters = [];
 let httpState = null;
 let inputBuffer = Buffer.alloc(0);
@@ -202,6 +207,10 @@ function bumpProjectDocumentRevision(projectPath) {
   const revision = (projectDocumentRevisions.get(key) || 0) + 1;
   projectDocumentRevisions.set(key, revision);
   return revision;
+}
+
+function setProjectDocumentRevision(projectPath, revision) {
+  projectDocumentRevisions.set(projectRevisionKey(projectPath), Math.max(0, Math.floor(toNumber(revision, 0))));
 }
 
 async function withProjectWriteLock(projectPath, operation) {
@@ -528,6 +537,10 @@ function scatterDir(projectPath) {
 
 function scatterPath(projectPath) {
   return path.join(scatterDir(projectPath), "scatter.json");
+}
+
+function scatterRevisionStatePath(projectPath) {
+  return path.join(scatterDir(projectPath), "revision-state.json");
 }
 
 function scatterAssetsDir(projectPath) {
@@ -1648,11 +1661,14 @@ async function readScatterDocument(projectPath) {
   const target = scatterPath(projectPath);
   try {
     const raw = await fsp.readFile(target, "utf8");
-    return normalizeScatterDocument(JSON.parse(raw), projectPath);
+    const document = normalizeScatterDocument(JSON.parse(raw), projectPath);
+    await ensureProjectRevisionState(projectPath, document);
+    return document;
   } catch (error) {
     if (error?.code === "ENOENT") {
       const document = defaultScatterDocument(projectPath);
       await writeScatterDocument(projectPath, document);
+      await ensureProjectRevisionState(projectPath, document);
       return document;
     }
     if (error instanceof SyntaxError) {
@@ -1665,8 +1681,449 @@ async function readScatterDocument(projectPath) {
 async function writeScatterDocument(projectPath, document) {
   await ensureScatterLayout(projectPath);
   const normalized = normalizeScatterDocument(document, projectPath);
-  await fsp.writeFile(scatterPath(projectPath), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await writeJsonAtomic(scatterPath(projectPath), normalized);
   return normalized;
+}
+
+function documentFingerprint(document) {
+  return crypto.createHash("sha256").update(JSON.stringify(document)).digest("hex");
+}
+
+async function writeJsonAtomic(targetPath, value) {
+  await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+  const temporaryPath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  try {
+    await fsp.writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await fsp.rename(temporaryPath, targetPath);
+  } catch (error) {
+    await fsp.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+function normalizeRevisionState(value) {
+  const receipts = Array.isArray(value?.receipts)
+    ? value.receipts.filter((receipt) => isObject(receipt) && typeof receipt.clientMutationId === "string").slice(-MAX_DOCUMENT_MUTATION_RECEIPTS)
+    : [];
+  return {
+    version: 1,
+    revision: Math.max(0, Math.floor(toNumber(value?.revision, 0))),
+    documentVersion: typeof value?.documentVersion === "string" ? value.documentVersion : "",
+    history: Array.isArray(value?.history)
+      ? value.history
+          .filter((entry) => isObject(entry) && typeof entry.revision === "number" && typeof entry.documentVersion === "string")
+          .slice(-MAX_DOCUMENT_MUTATION_RECEIPTS)
+      : [],
+    objectWriters: isObject(value?.objectWriters) ? { ...value.objectWriters } : {},
+    lastSource: value?.lastSource === "ai" ? "ai" : "manual",
+    receipts
+  };
+}
+
+async function ensureProjectRevisionState(projectPath, document) {
+  const key = projectRevisionKey(projectPath);
+  const fingerprint = documentFingerprint(document);
+  const cached = projectRevisionStates.get(key);
+  if (cached?.documentVersion === fingerprint) {
+    setProjectDocumentRevision(projectPath, cached.revision);
+    return cached;
+  }
+  let state;
+  try {
+    state = normalizeRevisionState(JSON.parse(await fsp.readFile(scatterRevisionStatePath(projectPath), "utf8")));
+  } catch (error) {
+    if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    state = normalizeRevisionState(null);
+  }
+  if (state.documentVersion && state.documentVersion !== fingerprint) {
+    state.revision += 1;
+    state.receipts = [];
+  }
+  state.documentVersion = fingerprint;
+  if (!state.history.some((entry) => entry.revision === state.revision && entry.documentVersion === fingerprint)) {
+    state.history = [...state.history, { revision: state.revision, documentVersion: fingerprint }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS);
+  }
+  projectRevisionStates.set(key, state);
+  setProjectDocumentRevision(projectPath, state.revision);
+  await writeJsonAtomic(scatterRevisionStatePath(projectPath), state);
+  return state;
+}
+
+async function persistProjectRevisionState(projectPath, state) {
+  const normalized = normalizeRevisionState(state);
+  if (!normalized.history.some((entry) => entry.revision === normalized.revision && entry.documentVersion === normalized.documentVersion)) {
+    normalized.history = [...normalized.history, { revision: normalized.revision, documentVersion: normalized.documentVersion }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS);
+  }
+  projectRevisionStates.set(projectRevisionKey(projectPath), normalized);
+  setProjectDocumentRevision(projectPath, normalized.revision);
+  await writeJsonAtomic(scatterRevisionStatePath(projectPath), normalized);
+  return normalized;
+}
+
+function comparableNode(node) {
+  if (!node) return null;
+  const { selected: _selected, data, ...rest } = node;
+  const { lastRunAt: _lastRunAt, ...dataRest } = isObject(data) ? data : {};
+  return { ...rest, data: dataRest };
+}
+
+function comparableNodeSemantic(node) {
+  if (!node) return null;
+  const { position: _position, ...semantic } = comparableNode(node);
+  return semantic;
+}
+
+function documentObjectWriters(previousWriters, beforeDocument, afterDocument, source) {
+  const writers = { ...(isObject(previousWriters) ? previousWriters : {}) };
+  const beforePages = itemMap(beforeDocument?.pages);
+  const afterPages = itemMap(afterDocument?.pages);
+  for (const pageId of new Set([...beforePages.keys(), ...afterPages.keys()])) {
+    const beforePage = beforePages.get(pageId);
+    const afterPage = afterPages.get(pageId);
+    if (!beforePage || !afterPage || beforePage.name !== afterPage.name) writers[`page:${pageId}`] = source;
+    const beforeNodes = itemMap(beforePage?.nodes);
+    const afterNodes = itemMap(afterPage?.nodes);
+    for (const nodeId of new Set([...beforeNodes.keys(), ...afterNodes.keys()])) {
+      if (!sameValue(comparableNodeSemantic(beforeNodes.get(nodeId)), comparableNodeSemantic(afterNodes.get(nodeId)))) {
+        writers[`node:${pageId}:${nodeId}`] = source;
+      }
+    }
+    const beforeEdges = itemMap(beforePage?.edges);
+    const afterEdges = itemMap(afterPage?.edges);
+    for (const edgeId of new Set([...beforeEdges.keys(), ...afterEdges.keys()])) {
+      if (!sameValue(beforeEdges.get(edgeId), afterEdges.get(edgeId))) writers[`edge:${pageId}:${edgeId}`] = source;
+    }
+  }
+  return writers;
+}
+
+function sameValue(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function changedFromBase(base, value, comparable = (item) => item) {
+  return !sameValue(comparable(base), comparable(value));
+}
+
+function itemMap(items) {
+  return new Map((Array.isArray(items) ? items : []).map((item) => [item.id, item]));
+}
+
+function mergeAtomicItems(baseItems, currentItems, localItems, comparable, kind, reasons, conflictWinner = "none") {
+  const base = itemMap(baseItems);
+  const current = itemMap(currentItems);
+  const local = itemMap(localItems);
+  const result = [];
+  const ids = [...new Set([...base.keys(), ...current.keys(), ...local.keys()])];
+  for (const id of ids) {
+    const baseItem = base.get(id);
+    const currentItem = current.get(id);
+    const localItem = local.get(id);
+    const currentChanged = changedFromBase(baseItem, currentItem, comparable);
+    const localChanged = changedFromBase(baseItem, localItem, comparable);
+    if (currentChanged && localChanged && !sameValue(comparable(currentItem), comparable(localItem))) {
+      reasons.push(`${kind}:${id}`);
+      const winner = conflictWinner === "current" ? currentItem : conflictWinner === "local" ? localItem : null;
+      if (winner) result.push(winner);
+      continue;
+    }
+    const chosen = localChanged ? localItem : currentItem;
+    if (chosen) result.push(chosen);
+  }
+  return result;
+}
+
+function pageContentChanged(basePage, page) {
+  if (!basePage || !page) return basePage !== page;
+  if (basePage.name !== page.name) return true;
+  if (changedFromBase(basePage.nodes, page.nodes, (items) => (items || []).map(comparableNode))) return true;
+  return changedFromBase(basePage.edges, page.edges);
+}
+
+function comparablePage(page) {
+  if (!page) return null;
+  return {
+    id: page.id,
+    name: page.name,
+    createdAt: page.createdAt,
+    nodes: page.nodes.map(comparableNode),
+    edges: page.edges
+  };
+}
+
+function documentsContentEqual(left, right) {
+  if (!left || !right || left.projectName !== right.projectName) return false;
+  return sameValue(left.pages.map(comparablePage), right.pages.map(comparablePage));
+}
+
+function documentWithCurrentNavigation(currentDocument, localDocument, projectPath) {
+  const currentPages = itemMap(currentDocument.pages);
+  const pages = localDocument.pages.map((page) => {
+    const currentPage = currentPages.get(page.id);
+    return currentPage ? { ...page, viewport: currentPage.viewport } : page;
+  });
+  return rebuildDocumentMirrors({
+    ...localDocument,
+    activePageId: currentDocument.activePageId,
+    pages
+  }, projectPath);
+}
+
+function edgeIncidentConflict(basePage, currentPage, localPage, reasons) {
+  const baseNodes = itemMap(basePage?.nodes);
+  const currentNodes = itemMap(currentPage?.nodes);
+  const localNodes = itemMap(localPage?.nodes);
+  const currentEdges = Array.isArray(currentPage?.edges) ? currentPage.edges : [];
+  const localEdges = Array.isArray(localPage?.edges) ? localPage.edges : [];
+  for (const [nodeId, baseNode] of baseNodes) {
+    const currentDeleted = !currentNodes.has(nodeId);
+    const localDeleted = !localNodes.has(nodeId);
+    if (currentDeleted && localEdges.some((edge) => (edge.source === nodeId || edge.target === nodeId) && !sameValue(itemMap(basePage.edges).get(edge.id), edge))) {
+      reasons.push(`node-edge:${nodeId}`);
+    }
+    if (localDeleted && currentEdges.some((edge) => (edge.source === nodeId || edge.target === nodeId) && !sameValue(itemMap(basePage.edges).get(edge.id), edge))) {
+      reasons.push(`node-edge:${nodeId}`);
+    }
+    void baseNode;
+  }
+}
+
+function conflictCopyName(sourceName, language, createdAt, existingNames, copyKind = "manual") {
+  const stamp = new Intl.DateTimeFormat(language === "en" ? "en-CA" : "zh-CN", {
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(createdAt)).replace(/\//g, "-").replace(",", "");
+  const label = copyKind === "recovery"
+    ? language === "en" ? "AI recovery copy" : "AI 恢复副本"
+    : copyKind === "conflict"
+      ? language === "en" ? "AI conflict copy" : "AI 冲突副本"
+      : language === "en" ? "Conflict copy" : "冲突副本";
+  const base = `${sourceName} · ${label} · ${stamp}`;
+  let candidate = base;
+  let serial = 2;
+  while (existingNames.has(candidate)) candidate = `${base} (${serial++})`;
+  existingNames.add(candidate);
+  return candidate;
+}
+
+function deterministicUniqueId(prefix, mutationId, sourceId, usedIds) {
+  const digest = crypto.createHash("sha256").update(`${mutationId}:${sourceId}`).digest("hex").slice(0, 12);
+  const safeSource = String(sourceId || "item").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48);
+  let candidate = `${prefix}-${safeSource}-${digest}`;
+  let serial = 2;
+  while (usedIds.has(candidate)) candidate = `${prefix}-${safeSource}-${digest}-${serial++}`;
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function createConflictPage(sourcePage, options) {
+  const { baseRevision, clientMutationId, copyKind = "manual", createdAt, existingNames, incomingIntent, language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds } = options;
+  const pageId = deterministicUniqueId("conflict-page", clientMutationId, sourcePage.id, usedPageIds);
+  const nodeIds = new Map();
+  const nodes = sourcePage.nodes.map((node) => {
+    const id = deterministicUniqueId("conflict-node", clientMutationId, `${sourcePage.id}:${node.id}`, usedNodeIds);
+    nodeIds.set(node.id, id);
+    return { ...node, id, selected: false };
+  });
+  const edges = sourcePage.edges
+    .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    .map((edge) => ({
+      ...edge,
+      id: deterministicUniqueId("conflict-edge", clientMutationId, `${sourcePage.id}:${edge.id}`, usedEdgeIds),
+      source: nodeIds.get(edge.source),
+      target: nodeIds.get(edge.target)
+    }));
+  const page = {
+    ...sourcePage,
+    id: pageId,
+    name: conflictCopyName(sourcePage.name, language, createdAt, existingNames, copyKind),
+    createdAt,
+    updatedAt: createdAt,
+    nodes,
+    edges,
+    conflict: {
+      sourcePageId: sourcePage.id,
+      baseRevision,
+      priorRevision,
+      reasons: [...new Set(reasons)],
+      incomingIntent,
+      ...(copyKind === "manual" ? {} : { copyKind }),
+      createdAt,
+      incomingFingerprint: documentFingerprint(sourcePage)
+    }
+  };
+  return {
+    page,
+    nodeIdMap: Object.fromEntries(nodeIds),
+    edgeIdMap: Object.fromEntries(sourcePage.edges.map((edge, index) => [edge.id, edges[index]?.id]).filter((entry) => entry[1]))
+  };
+}
+
+function rebuildDocumentMirrors(document, projectPath) {
+  const pages = document.pages;
+  const activePageId = pages.some((page) => page.id === document.activePageId) ? document.activePageId : pages[0].id;
+  const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+  return normalizeScatterDocument({
+    ...document,
+    projectName: document.projectName || projectNameFromPath(projectPath),
+    activePageId,
+    viewport: activePage.viewport,
+    nodes: activePage.nodes,
+    edges: activePage.edges
+  }, projectPath);
+}
+
+function mergeConcurrentDocuments({ baseDocument, currentDocument, deletedPageSnapshots, localDocument, baseRevision, priorRevision, clientMutationId, language, objectWriters, projectPath }) {
+  const basePages = itemMap(baseDocument.pages);
+  const currentPages = itemMap(currentDocument.pages);
+  const localPages = itemMap(localDocument.pages);
+  const deletedSnapshots = isObject(deletedPageSnapshots) ? deletedPageSnapshots : {};
+  const pageIds = [...new Set([...basePages.keys(), ...currentPages.keys(), ...localPages.keys()])];
+  const pages = [];
+  const conflictCopies = [];
+  const mergedPageIds = [];
+  const createdAt = nowIso();
+  const usedPageIds = new Set(currentDocument.pages.map((page) => page.id));
+  const usedNodeIds = new Set(currentDocument.pages.flatMap((page) => page.nodes.map((node) => node.id)));
+  const usedEdgeIds = new Set(currentDocument.pages.flatMap((page) => page.edges.map((edge) => edge.id)));
+  const existingNames = new Set(currentDocument.pages.map((page) => page.name));
+  let localActivePageId = localDocument.activePageId;
+
+  for (const pageId of pageIds) {
+    const basePage = basePages.get(pageId);
+    const currentPage = currentPages.get(pageId);
+    const localPage = localPages.get(pageId);
+    const currentChanged = pageContentChanged(basePage, currentPage);
+    const localChanged = pageContentChanged(basePage, localPage);
+    if (!basePage) {
+      if (currentPage && localPage && !sameValue(currentPage, localPage)) {
+        pages.push(currentPage);
+        const reasons = [`page-add:${pageId}`];
+        const copy = createConflictPage(localPage, { baseRevision, clientMutationId, createdAt, existingNames, incomingIntent: "edit", language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds });
+        pages.push(copy.page);
+        conflictCopies.push({ sourcePageId: pageId, conflictPageId: copy.page.id, originalPageId: pageId, originalPageAvailable: true, incomingIntent: "edit", reasons, nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap });
+        localActivePageId = copy.page.id;
+      } else if (localPage) pages.push(localPage);
+      else if (currentPage) pages.push(currentPage);
+      continue;
+    }
+    if (!localPage && !currentPage) continue;
+    if (!localPage) {
+      if (!currentChanged) continue;
+      pages.push(currentPage);
+      const snapshot = deletedSnapshots[pageId] ? normalizeScatterPage(deletedSnapshots[pageId], 0, basePage) : basePage;
+      const reasons = [`page-delete-edit:${pageId}`];
+      const copy = createConflictPage(snapshot, { baseRevision, clientMutationId, createdAt, existingNames, incomingIntent: "delete", language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds });
+      pages.push(copy.page);
+      conflictCopies.push({ sourcePageId: pageId, conflictPageId: copy.page.id, originalPageId: pageId, originalPageAvailable: true, incomingIntent: "delete", reasons, nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap });
+      localActivePageId = copy.page.id;
+      continue;
+    }
+    if (!currentPage) {
+      if (!localChanged) continue;
+      const reasons = [`page-delete-edit:${pageId}`];
+      const copy = createConflictPage(localPage, { baseRevision, clientMutationId, createdAt, existingNames, incomingIntent: "edit", language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds });
+      pages.push(copy.page);
+      conflictCopies.push({ sourcePageId: pageId, conflictPageId: copy.page.id, originalPageId: pageId, originalPageAvailable: false, incomingIntent: "edit", reasons, nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap });
+      localActivePageId = copy.page.id;
+      continue;
+    }
+    if (!localChanged) {
+      pages.push(currentPage);
+      continue;
+    }
+    if (!currentChanged) {
+      pages.push({ ...localPage, viewport: currentPage.viewport });
+      continue;
+    }
+    if (!pageContentChanged(currentPage, localPage)) {
+      pages.push(currentPage);
+      continue;
+    }
+    const reasons = [];
+    if (basePage.name !== currentPage.name && basePage.name !== localPage.name && currentPage.name !== localPage.name) reasons.push(`page-name:${pageId}`);
+    const mergedNodes = mergeAtomicItems(basePage.nodes, currentPage.nodes, localPage.nodes, comparableNode, "node", reasons);
+    const mergedEdges = mergeAtomicItems(basePage.edges, currentPage.edges, localPage.edges, (edge) => edge, "edge", reasons);
+    edgeIncidentConflict(basePage, currentPage, localPage, reasons);
+    const mergedNodeIds = new Set(mergedNodes.map((node) => node.id));
+    if (mergedEdges.some((edge) => !mergedNodeIds.has(edge.source) || !mergedNodeIds.has(edge.target))) reasons.push(`dangling-edge:${pageId}`);
+    if (reasons.length) {
+      const directConflictReasons = reasons.filter((reason) => /^(node|edge|page-name):/.test(reason));
+      const conflictOwnedByAi = directConflictReasons.length > 0 && directConflictReasons.every((reason) => {
+        const [kind, id] = reason.split(":");
+        if (kind === "node") return objectWriters?.[`node:${pageId}:${id}`] === "ai";
+        if (kind === "edge") return objectWriters?.[`edge:${pageId}:${id}`] === "ai";
+        if (kind === "page-name") return objectWriters?.[`page:${pageId}`] === "ai";
+        return false;
+      });
+      if (conflictOwnedByAi) {
+        const humanReasons = [];
+        const humanNodes = mergeAtomicItems(basePage.nodes, localPage.nodes, currentPage.nodes, comparableNode, "node", humanReasons, "current");
+        const humanEdges = mergeAtomicItems(basePage.edges, localPage.edges, currentPage.edges, (edge) => edge, "edge", humanReasons, "current");
+        const humanNodeIds = new Set(humanNodes.map((node) => node.id));
+        const validHumanEdges = humanEdges.filter((edge) => humanNodeIds.has(edge.source) && humanNodeIds.has(edge.target));
+        pages.push({
+          ...currentPage,
+          name: localPage.name !== basePage.name ? localPage.name : currentPage.name,
+          viewport: localPage.viewport,
+          updatedAt: createdAt,
+          nodes: humanNodes,
+          edges: validHumanEdges
+        });
+        const humanPositions = itemMap(localPage.nodes);
+        const aiCandidate = {
+          ...currentPage,
+          nodes: currentPage.nodes.map((node) => humanPositions.has(node.id) ? { ...node, position: humanPositions.get(node.id).position } : node)
+        };
+        const copy = createConflictPage(aiCandidate, {
+          baseRevision,
+          clientMutationId,
+          copyKind: "conflict",
+          createdAt,
+          existingNames,
+          incomingIntent: "edit",
+          language,
+          priorRevision,
+          reasons,
+          usedEdgeIds,
+          usedNodeIds,
+          usedPageIds
+        });
+        copy.page.conflict.source = "ai";
+        pages.push(copy.page);
+        conflictCopies.push({ sourcePageId: pageId, conflictPageId: copy.page.id, originalPageId: pageId, originalPageAvailable: true, incomingIntent: "edit", source: "ai", reasons: [...new Set(reasons)], nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap });
+        continue;
+      }
+      pages.push(currentPage);
+      const copy = createConflictPage(localPage, { baseRevision, clientMutationId, createdAt, existingNames, incomingIntent: "edit", language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds });
+      pages.push(copy.page);
+      conflictCopies.push({ sourcePageId: pageId, conflictPageId: copy.page.id, originalPageId: pageId, originalPageAvailable: true, incomingIntent: "edit", reasons: [...new Set(reasons)], nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap });
+      if (localDocument.activePageId === pageId) localActivePageId = copy.page.id;
+      continue;
+    }
+    pages.push({
+      ...currentPage,
+      name: localPage.name !== basePage.name ? localPage.name : currentPage.name,
+      updatedAt: createdAt,
+      nodes: mergedNodes,
+      edges: mergedEdges
+    });
+    mergedPageIds.push(pageId);
+  }
+  if (!pages.length) pages.push(defaultScatterPage());
+  const document = sameValue(pages, currentDocument.pages)
+    ? currentDocument
+    : rebuildDocumentMirrors({
+        ...currentDocument,
+        updatedAt: createdAt,
+        pages
+      }, projectPath);
+  return { document, conflictCopies, mergedPageIds, localActivePageId };
 }
 
 function coerceNumber(value, fallback) {
@@ -2891,11 +3348,154 @@ function validateGraphCandidate(page, args, projectPath, options = {}) {
   };
 }
 
+function graphContextProjectKey(projectPath) {
+  return path.resolve(projectPath);
+}
+
+function rememberGraphContext(projectPath, document, revisionState) {
+  const projectKey = graphContextProjectKey(projectPath);
+  const createdAt = Date.now();
+  const activePage = cloneJson(activeScatterPage(document));
+  const context = {
+    id: `graph-context-${crypto.randomUUID()}`,
+    projectKey,
+    pageId: activePage.id,
+    page: activePage,
+    documentRevision: revisionState.revision,
+    documentVersion: revisionState.documentVersion,
+    createdAt,
+    expiresAt: createdAt + GRAPH_CONTEXT_TTL_MS
+  };
+  const contexts = (projectGraphContexts.get(projectKey) || []).filter((item) => item.expiresAt > createdAt);
+  contexts.push(context);
+  projectGraphContexts.set(projectKey, contexts.slice(-MAX_GRAPH_CONTEXTS_PER_PROJECT));
+  return context;
+}
+
+function readGraphContextSnapshot(projectPath, contextId) {
+  const projectKey = graphContextProjectKey(projectPath);
+  const now = Date.now();
+  const contexts = (projectGraphContexts.get(projectKey) || []).filter((item) => item.expiresAt > now);
+  projectGraphContexts.set(projectKey, contexts);
+  return contexts.find((item) => item.id === contextId) || null;
+}
+
+function remapAiAdditionCollisions(basePage, currentPage, candidatePage, clientMutationId) {
+  const baseNodes = itemMap(basePage.nodes);
+  const currentNodes = itemMap(currentPage.nodes);
+  const baseEdges = itemMap(basePage.edges);
+  const currentEdges = itemMap(currentPage.edges);
+  const usedNodeIds = new Set(currentPage.nodes.map((node) => node.id));
+  const usedEdgeIds = new Set(currentPage.edges.map((edge) => edge.id));
+  const nodeIdMap = {};
+  const edgeIdMap = {};
+  const nodes = candidatePage.nodes.map((node) => {
+    if (baseNodes.has(node.id) || !currentNodes.has(node.id) || sameValue(comparableNodeSemantic(currentNodes.get(node.id)), comparableNodeSemantic(node))) return node;
+    const id = deterministicUniqueId("ai-node", clientMutationId, `${basePage.id}:${node.id}`, usedNodeIds);
+    nodeIdMap[node.id] = id;
+    return { ...node, id };
+  });
+  const edges = candidatePage.edges.map((edge) => {
+    const remapped = {
+      ...edge,
+      source: nodeIdMap[edge.source] || edge.source,
+      target: nodeIdMap[edge.target] || edge.target
+    };
+    if (baseEdges.has(edge.id) || !currentEdges.has(edge.id) || sameValue(currentEdges.get(edge.id), remapped)) return remapped;
+    const id = deterministicUniqueId("ai-edge", clientMutationId, `${basePage.id}:${edge.id}`, usedEdgeIds);
+    edgeIdMap[edge.id] = id;
+    return { ...remapped, id };
+  });
+  return { page: { ...candidatePage, nodes, edges }, nodeIdMap, edgeIdMap };
+}
+
+function mergeAiGraphCandidate({ basePage, currentPage, candidatePage, clientMutationId }) {
+  const collision = remapAiAdditionCollisions(basePage, currentPage, candidatePage, clientMutationId);
+  const aiPage = collision.page;
+  const reasons = [];
+  const baseNodes = itemMap(basePage.nodes);
+  const currentNodes = itemMap(currentPage.nodes);
+  const aiNodes = itemMap(aiPage.nodes);
+  const nodes = [];
+  for (const id of new Set([...baseNodes.keys(), ...currentNodes.keys(), ...aiNodes.keys()])) {
+    const baseNode = baseNodes.get(id);
+    const currentNode = currentNodes.get(id);
+    const aiNode = aiNodes.get(id);
+    if (!baseNode) {
+      if (currentNode) nodes.push(currentNode);
+      if (aiNode && (!currentNode || !sameValue(comparableNodeSemantic(currentNode), comparableNodeSemantic(aiNode)))) nodes.push(aiNode);
+      continue;
+    }
+    const currentChanged = changedFromBase(baseNode, currentNode, comparableNodeSemantic);
+    const aiChanged = changedFromBase(baseNode, aiNode, comparableNodeSemantic);
+    if (currentChanged && aiChanged && !sameValue(comparableNodeSemantic(currentNode), comparableNodeSemantic(aiNode))) {
+      reasons.push(`node:${id}`);
+      if (currentNode) nodes.push(currentNode);
+      continue;
+    }
+    const chosen = aiChanged ? aiNode : currentNode;
+    if (chosen) nodes.push(currentNode ? { ...chosen, position: currentNode.position } : chosen);
+  }
+
+  const baseEdges = itemMap(basePage.edges);
+  const currentEdges = itemMap(currentPage.edges);
+  const aiEdges = itemMap(aiPage.edges);
+  const edges = [];
+  for (const id of new Set([...baseEdges.keys(), ...currentEdges.keys(), ...aiEdges.keys()])) {
+    const baseEdge = baseEdges.get(id);
+    const currentEdge = currentEdges.get(id);
+    const aiEdge = aiEdges.get(id);
+    if (!baseEdge) {
+      if (currentEdge) edges.push(currentEdge);
+      if (aiEdge && (!currentEdge || !sameValue(currentEdge, aiEdge))) edges.push(aiEdge);
+      continue;
+    }
+    const currentChanged = changedFromBase(baseEdge, currentEdge);
+    const aiChanged = changedFromBase(baseEdge, aiEdge);
+    if (currentChanged && aiChanged && !sameValue(currentEdge, aiEdge)) {
+      reasons.push(`edge:${id}`);
+      if (currentEdge) edges.push(currentEdge);
+      continue;
+    }
+    const chosen = aiChanged ? aiEdge : currentEdge;
+    if (chosen) edges.push(chosen);
+  }
+
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const validEdges = edges.filter((edge) => {
+    const valid = nodeIds.has(edge.source) && nodeIds.has(edge.target);
+    if (!valid) reasons.push(`dangling-edge:${edge.id}`);
+    return valid;
+  });
+  let name = currentPage.name;
+  const currentNameChanged = currentPage.name !== basePage.name;
+  const aiNameChanged = aiPage.name !== basePage.name;
+  if (currentNameChanged && aiNameChanged && currentPage.name !== aiPage.name) reasons.push(`page-name:${basePage.id}`);
+  else if (aiNameChanged) name = aiPage.name;
+  const now = nowIso();
+  const page = { ...currentPage, name, updatedAt: now, nodes, edges: validEdges };
+  const candidateForCopy = {
+    ...aiPage,
+    nodes: aiPage.nodes.map((node) => {
+      const currentNode = currentNodes.get(node.id);
+      return baseNodes.has(node.id) && currentNode ? { ...node, position: currentNode.position } : node;
+    })
+  };
+  return {
+    page,
+    candidateForCopy,
+    reasons: [...new Set(reasons)],
+    nodeIdMap: collision.nodeIdMap,
+    edgeIdMap: collision.edgeIdMap
+  };
+}
+
 async function writeScatterGraph(projectPath, args) {
   return withProjectWriteLock(projectPath, async () => {
     const mode = normalizeGraphWriteMode(args?.mode);
     const existingDocument = await readScatterDocument(projectPath);
-    const currentRevision = projectDocumentRevision(projectPath);
+    const revisionState = await ensureProjectRevisionState(projectPath, existingDocument);
+    const currentRevision = revisionState.revision;
     const reusedTemplates = [];
     const projectGuidanceNodes = [];
     const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
@@ -2905,15 +3505,52 @@ async function writeScatterGraph(projectPath, args) {
     let activePageId;
     let mutationSummary = null;
     const validationAdvisories = deprecatedGraphLayoutAdvisories(args);
+    let graphWriteStatus = "written";
+    let targetPageId = null;
+    let rebasedFromRevision = null;
+    let idMappings = { nodeIds: {}, edgeIds: {} };
+    let conflictCopies = [];
+    let graphRequestFingerprint = null;
+    let graphClientMutationId = null;
 
     if (mode === "merge-active-page") {
-      if (typeof args?.expectedRevision !== "number" || !Number.isFinite(args.expectedRevision) || args.expectedRevision !== currentRevision) {
+      const hasContextContract = typeof args?.contextId === "string" && args.contextId.trim();
+      if (!hasContextContract && (typeof args?.expectedRevision !== "number" || !Number.isFinite(args.expectedRevision) || args.expectedRevision !== currentRevision)) {
         return validationFailure(currentRevision, [
           graphViolation("stale_document", "expectedRevision", "Canvasight document revision is missing or stale.", "Call get_canvasight_graph_context again and rebuild the patch against its documentRevision.")
         ]);
       }
-      const currentPage = activeScatterPage(existingDocument);
-      const merged = applyMergeOperations(currentPage, args, templates, reusedTemplates);
+      if (hasContextContract && (typeof args?.clientMutationId !== "string" || !args.clientMutationId.trim())) {
+        return validationFailure(currentRevision, [
+          graphViolation("client_mutation_id_required", "clientMutationId", "Context-bound graph writes require a stable clientMutationId.", "Generate one mutation id and reuse it for retries of this exact write.")
+        ]);
+      }
+      const context = hasContextContract ? readGraphContextSnapshot(projectPath, args.contextId.trim()) : null;
+      graphClientMutationId = hasContextContract ? args.clientMutationId.trim() : null;
+      graphRequestFingerprint = hasContextContract ? documentFingerprint({ contextId: args.contextId.trim(), args: { ...args, clientMutationId: undefined } }) : null;
+      const priorReceipt = graphClientMutationId ? revisionState.receipts.find((receipt) => receipt.clientMutationId === graphClientMutationId) : null;
+      if (priorReceipt) {
+        if (priorReceipt.requestFingerprint !== graphRequestFingerprint) {
+          return validationFailure(currentRevision, [
+            graphViolation("mutation_id_reused", "clientMutationId", "Canvasight mutation id was reused for a different graph payload.", "Use a new mutation id for a different write.")
+          ]);
+        }
+        return { ...priorReceipt.result, replayed: true, written: false, document: existingDocument, documentRevision: currentRevision, documentVersion: revisionState.documentVersion };
+      }
+      if (hasContextContract && !context) {
+        return validationFailure(currentRevision, [
+          graphViolation("context_expired", "contextId", "Canvasight graph context expired or belongs to a prior daemon process.", "Call get_canvasight_graph_context again and rebuild the write once.")
+        ]);
+      }
+      if (hasContextContract && (typeof args?.expectedRevision !== "number" || args.expectedRevision !== context.documentRevision)) {
+        return validationFailure(currentRevision, [
+          graphViolation("context_revision_mismatch", "expectedRevision", "expectedRevision does not match the bound graph context.", "Use the exact revision returned with this contextId.")
+        ]);
+      }
+      const basePage = hasContextContract ? context.page : activeScatterPage(existingDocument);
+      targetPageId = basePage.id;
+      rebasedFromRevision = hasContextContract ? context.documentRevision : null;
+      const merged = applyMergeOperations(basePage, args, templates, reusedTemplates);
       if (merged.violations.length > 0) return validationFailure(currentRevision, merged.violations);
       const guided = ensureMergedSoftwareProductGuidance(merged.page, args, projectPath, templates, reusedTemplates);
       if (guided.violations.length > 0) return validationFailure(currentRevision, guided.violations);
@@ -2926,8 +3563,63 @@ async function writeScatterGraph(projectPath, args) {
       });
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
       validationAdvisories.push(...validation.advisories);
-      pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? candidatePage : page));
-      activePageId = currentPage.id;
+      const currentPage = existingDocument.pages.find((page) => page.id === basePage.id);
+      if (!currentPage) {
+        const createdAt = nowIso();
+        const usedPageIds = new Set(existingDocument.pages.map((page) => page.id));
+        const usedNodeIds = new Set(existingDocument.pages.flatMap((page) => page.nodes.map((node) => node.id)));
+        const usedEdgeIds = new Set(existingDocument.pages.flatMap((page) => page.edges.map((edge) => edge.id)));
+        const copy = createConflictPage(candidatePage, {
+          baseRevision: context.documentRevision,
+          priorRevision: currentRevision,
+          clientMutationId: graphClientMutationId,
+          copyKind: "recovery",
+          createdAt,
+          existingNames: new Set(existingDocument.pages.map((page) => page.name)),
+          incomingIntent: "edit",
+          language: args?.language === "en" ? "en" : "zh",
+          reasons: [`page-deleted:${basePage.id}`],
+          usedEdgeIds,
+          usedNodeIds,
+          usedPageIds
+        });
+        copy.page.conflict.source = "ai";
+        pages = [...existingDocument.pages, copy.page];
+        graphWriteStatus = "conflict-copy";
+        idMappings = { nodeIds: copy.nodeIdMap, edgeIds: copy.edgeIdMap };
+        conflictCopies = [{ sourcePageId: basePage.id, conflictPageId: copy.page.id, originalPageId: basePage.id, originalPageAvailable: false, copyKind: "recovery", source: "ai", reasons: [`page-deleted:${basePage.id}`], nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap }];
+      } else if (hasContextContract && currentRevision !== context.documentRevision) {
+        const rebased = mergeAiGraphCandidate({ basePage, currentPage, candidatePage, clientMutationId: graphClientMutationId });
+        pages = existingDocument.pages.map((page) => (page.id === currentPage.id ? rebased.page : page));
+        idMappings = { nodeIds: rebased.nodeIdMap, edgeIds: rebased.edgeIdMap };
+        graphWriteStatus = rebased.reasons.length ? "conflict-copy" : "merged";
+        if (rebased.reasons.length) {
+          const createdAt = nowIso();
+          const usedPageIds = new Set(pages.map((page) => page.id));
+          const usedNodeIds = new Set(pages.flatMap((page) => page.nodes.map((node) => node.id)));
+          const usedEdgeIds = new Set(pages.flatMap((page) => page.edges.map((edge) => edge.id)));
+          const copy = createConflictPage(rebased.candidateForCopy, {
+            baseRevision: context.documentRevision,
+            priorRevision: currentRevision,
+            clientMutationId: graphClientMutationId,
+            copyKind: "conflict",
+            createdAt,
+            existingNames: new Set(pages.map((page) => page.name)),
+            incomingIntent: "edit",
+            language: args?.language === "en" ? "en" : "zh",
+            reasons: rebased.reasons,
+            usedEdgeIds,
+            usedNodeIds,
+            usedPageIds
+          });
+          copy.page.conflict.source = "ai";
+          pages.push(copy.page);
+          conflictCopies = [{ sourcePageId: basePage.id, conflictPageId: copy.page.id, originalPageId: basePage.id, originalPageAvailable: true, copyKind: "conflict", source: "ai", reasons: rebased.reasons, nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap }];
+        }
+      } else {
+        pages = existingDocument.pages.map((page) => (page.id === basePage.id ? candidatePage : page));
+      }
+      activePageId = existingDocument.activePageId;
       mutationSummary = combinedSummary;
     } else {
       const incomingPages = graphPageInputs(args).map((page, index) =>
@@ -2974,39 +3666,54 @@ async function writeScatterGraph(projectPath, args) {
       nodes: activePage.nodes,
       edges: activePage.edges
     });
-    const documentRevision = bumpProjectDocumentRevision(projectPath);
+    const documentRevision = currentRevision + 1;
+    const documentVersion = documentFingerprint(document);
+    const resultSummary = {
+      status: graphWriteStatus,
+      written: true,
+      documentRevision,
+      documentVersion,
+      targetPageId: targetPageId || activePage.id,
+      rebasedFromRevision,
+      idMappings,
+      conflictCopies,
+      reusedTemplates,
+      projectGuidanceNodes,
+      mutationSummary,
+      validation: { passed: true, violations: [], advisories: validationAdvisories }
+    };
+    const receipts = graphClientMutationId
+      ? [...revisionState.receipts, { clientMutationId: graphClientMutationId, requestFingerprint: graphRequestFingerprint, result: resultSummary, createdAt: nowIso(), source: "ai-graph" }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS)
+      : revisionState.receipts;
+    await persistProjectRevisionState(projectPath, {
+      ...revisionState,
+      revision: documentRevision,
+      documentVersion,
+      receipts,
+      lastSource: "ai",
+      objectWriters: documentObjectWriters(revisionState.objectWriters, existingDocument, document, "ai")
+    });
 
     await rememberProjectBestEffort(projectPath, {
       name: document.projectName,
       updatedAt: document.updatedAt
     });
 
-    return {
-      status: "written",
-      written: true,
-      document,
-      documentRevision,
-      reusedTemplates,
-      projectGuidanceNodes,
-      mutationSummary,
-      validation: {
-        passed: true,
-        violations: [],
-        advisories: validationAdvisories
-      }
-    };
+    return { ...resultSummary, document };
   });
 }
 
 async function openProject(projectPath) {
   const document = await readScatterDocument(projectPath);
+  const revisionState = await ensureProjectRevisionState(projectPath, document);
   return {
     project: {
       name: projectNameFromPath(projectPath),
       path: projectPath,
       updatedAt: document.updatedAt
     },
-    document
+    document,
+    documentVersion: revisionState.documentVersion
   };
 }
 
@@ -3023,8 +3730,13 @@ function summarizeGraphContextNode(node) {
   };
 }
 
-function graphContext(projectPath, document, preferences = defaultPreferences()) {
+function graphContext(projectPath, document, preferences = defaultPreferences(), revisionState = null) {
   const activePage = activeScatterPage(document);
+  const resolvedRevisionState = revisionState || projectRevisionStates.get(projectRevisionKey(projectPath)) || {
+    revision: projectDocumentRevision(projectPath),
+    documentVersion: documentFingerprint(document)
+  };
+  const context = rememberGraphContext(projectPath, document, resolvedRevisionState);
   const nodes = activePage.nodes.map(summarizeGraphContextNode);
   const edges = activePage.edges.map((edge) => ({
     id: edge.id,
@@ -3036,7 +3748,9 @@ function graphContext(projectPath, document, preferences = defaultPreferences())
     status: "ok",
     projectPath,
     scatterPath: scatterPath(projectPath),
-    documentRevision: projectDocumentRevision(projectPath),
+    contextId: context.id,
+    documentRevision: context.documentRevision,
+    documentVersion: context.documentVersion,
     preferences: normalizePreferences(preferences),
     activePage: {
       id: activePage.id,
@@ -3154,10 +3868,12 @@ function summarizeOpenAttempt(attempt) {
 }
 
 function sessionInfo(session) {
+  const revisionState = session.projectPath ? projectRevisionStates.get(projectRevisionKey(session.projectPath)) : null;
   return {
     codexThreadId: session.codexThreadId,
     threadClaimedAt: session.threadClaimedAt || null,
     documentRevision: projectDocumentRevision(session.projectPath),
+    documentVersion: revisionState?.documentVersion || null,
     language: session.language,
     projectPath: session.projectPath,
     sessionId: session.id,
@@ -4956,25 +5672,119 @@ async function handleSessionApi(req, res, url) {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
     const projectPath = normalizeProjectPath(body.projectPath || session.projectPath);
-    const { document, documentRevision } = await withProjectWriteLock(projectPath, async () => {
-      assertCurrentDocumentRevision(projectPath, body.expectedRevision);
-      const savedDocument = await writeScatterDocument(projectPath, body.document);
-      const nextRevision = bumpProjectDocumentRevision(projectPath);
-      return {
-        document: savedDocument,
-        documentRevision: nextRevision
+    const result = await withProjectWriteLock(projectPath, async () => {
+      const currentDocument = await readScatterDocument(projectPath);
+      const currentState = await ensureProjectRevisionState(projectPath, currentDocument);
+      const modernSave = isObject(body.base) && typeof body.clientMutationId === "string" && body.clientMutationId.trim();
+      if (!modernSave) {
+        assertCurrentDocumentRevision(projectPath, body.expectedRevision);
+        const savedDocument = await writeScatterDocument(projectPath, body.document);
+        const documentRevision = currentState.revision + 1;
+        const documentVersion = documentFingerprint(savedDocument);
+        await persistProjectRevisionState(projectPath, {
+          ...currentState,
+          revision: documentRevision,
+          documentVersion,
+          lastSource: "manual",
+          objectWriters: documentObjectWriters(currentState.objectWriters, currentDocument, savedDocument, "manual")
+        });
+        return { status: "written", written: true, document: savedDocument, documentRevision, documentVersion };
+      }
+
+      const clientMutationId = body.clientMutationId.trim();
+      const requestFingerprint = documentFingerprint({
+        base: body.base,
+        document: body.document,
+        deletedPageSnapshots: body.deletedPageSnapshots || {},
+        language: body.language === "en" ? "en" : "zh"
+      });
+      const priorReceipt = currentState.receipts.find((receipt) => receipt.clientMutationId === clientMutationId);
+      if (priorReceipt) {
+        if (priorReceipt.requestFingerprint !== requestFingerprint) {
+          throw new HttpError(409, "Canvasight mutation id was reused for a different save payload.", "mutation_id_reused");
+        }
+        return {
+          ...priorReceipt.result,
+          written: false,
+          replayed: true,
+          document: currentDocument,
+          documentRevision: currentState.revision,
+          documentVersion: currentState.documentVersion
+        };
+      }
+      if (typeof body.base.revision !== "number" || !Number.isFinite(body.base.revision) || !isObject(body.base.document)) {
+        throw new HttpError(400, "Canvasight concurrent save requires base.revision and base.document.", "invalid_document_base");
+      }
+      const baseDocument = normalizeScatterDocument(body.base.document, projectPath);
+      const localDocument = normalizeScatterDocument(body.document, projectPath);
+      const baseVersion = documentFingerprint(baseDocument);
+      if (typeof body.base.version === "string" && body.base.version && body.base.version !== baseVersion) {
+        throw new HttpError(409, "Canvasight save base does not match its document version.", "invalid_document_base");
+      }
+      if (!currentState.history.some((entry) => entry.revision === body.base.revision && entry.documentVersion === baseVersion)) {
+        throw new HttpError(409, "Canvasight save base revision is not present in the durable revision history.", "invalid_document_base");
+      }
+      let savedDocument;
+      let status;
+      let merge = {
+        baseRevision: body.base.revision,
+        priorRevision: currentState.revision,
+        mergedPageIds: [],
+        conflictCopies: [],
+        localActivePageId: localDocument.activePageId,
+        clientMutationId
       };
+      if (body.base.revision === currentState.revision && baseVersion === currentState.documentVersion) {
+        if (documentsContentEqual(localDocument, currentDocument)) {
+          savedDocument = currentDocument;
+          status = "unchanged";
+        } else {
+          savedDocument = documentWithCurrentNavigation(currentDocument, localDocument, projectPath);
+          status = "written";
+        }
+      } else {
+        const merged = mergeConcurrentDocuments({
+          baseDocument,
+          currentDocument,
+          deletedPageSnapshots: body.deletedPageSnapshots,
+          localDocument,
+          baseRevision: body.base.revision,
+          priorRevision: currentState.revision,
+          clientMutationId,
+          language: body.language === "en" ? "en" : "zh",
+          objectWriters: currentState.objectWriters,
+          projectPath
+        });
+        savedDocument = merged.document;
+        merge = { ...merge, ...merged, document: undefined };
+        delete merge.document;
+        status = merged.conflictCopies.length ? "conflict-copy" : merged.mergedPageIds.length ? "merged" : documentFingerprint(savedDocument) === currentState.documentVersion ? "unchanged" : "merged";
+      }
+      const written = status !== "unchanged";
+      const documentRevision = written ? currentState.revision + 1 : currentState.revision;
+      const documentVersion = written ? documentFingerprint(savedDocument) : currentState.documentVersion;
+      if (written) await writeScatterDocument(projectPath, savedDocument);
+      const resultSummary = { status, written, documentRevision, documentVersion, merge };
+      const receipts = [...currentState.receipts, { clientMutationId, requestFingerprint, result: resultSummary, createdAt: nowIso() }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS);
+      await persistProjectRevisionState(projectPath, {
+        ...currentState,
+        version: 1,
+        revision: documentRevision,
+        documentVersion,
+        receipts,
+        lastSource: written ? "manual" : currentState.lastSource,
+        objectWriters: written ? documentObjectWriters(currentState.objectWriters, currentDocument, savedDocument, "manual") : currentState.objectWriters
+      });
+      return { ...resultSummary, document: savedDocument };
     });
+    const { document, documentRevision } = result;
     session.projectPath = projectPath;
     session.documentRevision = documentRevision;
     await rememberProjectBestEffort(projectPath, {
       name: document.projectName,
       updatedAt: document.updatedAt
     });
-    sendJson(res, 200, {
-      document,
-      documentRevision
-    });
+    sendJson(res, 200, result);
     return true;
   }
 
@@ -5162,7 +5972,8 @@ async function handleHttp(req, res) {
       const threadId = optionalThreadId(body?.threadId);
       const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
       const document = await readScatterDocument(projectPath);
-      sendJson(res, 200, graphContext(projectPath, document, await readPreferences()));
+      const revisionState = await ensureProjectRevisionState(projectPath, document);
+      sendJson(res, 200, graphContext(projectPath, document, await readPreferences(), revisionState));
       return;
     }
 
@@ -5542,7 +6353,9 @@ const canvasightGraphContextOutputSchema = {
     status: { type: "string" },
     projectPath: { type: "string" },
     scatterPath: { type: "string" },
+    contextId: { type: "string" },
     documentRevision: { type: "integer" },
+    documentVersion: { type: "string" },
     preferences: {
       type: "object",
       properties: {
@@ -5566,7 +6379,7 @@ const canvasightGraphContextOutputSchema = {
     edges: { type: "array", items: { type: "object", additionalProperties: true } },
     pages: { type: "array", items: { type: "object", additionalProperties: true } }
   },
-  required: ["status", "projectPath", "documentRevision", "preferences", "activePage", "nodes", "edges", "pages"],
+  required: ["status", "projectPath", "contextId", "documentRevision", "documentVersion", "preferences", "activePage", "nodes", "edges", "pages"],
   additionalProperties: true
 };
 
@@ -5827,7 +6640,7 @@ async function toolWriteCanvasightGraph(args) {
       "Canvasight candidate was not written. Repair the returned validation violations and retry against the latest document revision."
     );
   }
-  const { document, documentRevision, reusedTemplates, projectGuidanceNodes, mutationSummary, validation, written } = result;
+  const { document, documentRevision, documentVersion, reusedTemplates, projectGuidanceNodes, mutationSummary, validation, written } = result;
   const activePage = document.pages.find((page) => page.id === document.activePageId) || document.pages[0];
   const nodeIds = activePage.nodes.map((node) => node.id);
   const edgeIds = activePage.edges.map((edge) => edge.id);
@@ -5835,7 +6648,7 @@ async function toolWriteCanvasightGraph(args) {
   const summary = [
     `Canvasight graph written: ${scatterPath(projectPath)}`,
     `Graph type: ${graphType}`,
-    `Active page: ${activePage.name} (${activePage.id})`,
+    `Target page: ${result.targetPageId || activePage.id}`,
     `Nodes: ${nodeIds.length}`,
     `Edges: ${edgeIds.length}`,
     `Templates reused: ${reusedTemplates.length}`,
@@ -5844,7 +6657,7 @@ async function toolWriteCanvasightGraph(args) {
 
   return toolResult(
     {
-      status: "written",
+      status: result.status,
       written: written === true,
       projectPath,
       scatterPath: scatterPath(projectPath),
@@ -5853,6 +6666,11 @@ async function toolWriteCanvasightGraph(args) {
       activePageId: activePage.id,
       activePageName: activePage.name,
       documentRevision,
+      documentVersion,
+      targetPageId: result.targetPageId || activePage.id,
+      rebasedFromRevision: result.rebasedFromRevision ?? null,
+      idMappings: result.idMappings || { nodeIds: {}, edgeIds: {} },
+      conflictCopies: result.conflictCopies || [],
       nodeIds,
       edgeIds,
       reusedTemplates,
@@ -6316,7 +7134,15 @@ const tools = [
         },
         expectedRevision: {
           type: "integer",
-          description: "Revision returned by get_canvasight_graph_context. Required for merge-active-page stale-write protection."
+          description: "Exact revision returned with contextId. Legacy calls without contextId remain strict stale-write checked."
+        },
+        contextId: {
+          type: "string",
+          description: "Context id returned by get_canvasight_graph_context. Binds merge-active-page to that Page and enables safe automatic rebase."
+        },
+        clientMutationId: {
+          type: "string",
+          description: "Stable unique id for this exact context-bound graph mutation. Reuse it only when retrying the same payload."
         },
         graphType: {
           type: "string",

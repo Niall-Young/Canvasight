@@ -10,6 +10,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 1 | 2026-07-13T15:00:26Z
+- `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
 - `issue-duplicate-native-canvas-open` | assigned | high | Development Agent | 重复原生 Widget 的无内容保存阻断 AI 写图 | `agent-reports/assigned/issue-duplicate-native-canvas-open.md` | 2 | 2026-07-13T13:57:26Z
 - `issue-skill-composition-node-assignment` | assigned | high | Development Agent | Skill 组合与节点级 Skill 分配缺失 | `agent-reports/assigned/issue-skill-composition-node-assignment.md` | 2 | 2026-07-13T13:31:00Z
 - `issue-windows-native-acceptance-0-4-10` | assigned | high | Test Supervisor Agent | Windows 原生宿主验收 0.4.10 | `agent-reports/assigned/issue-windows-native-acceptance-0-4-10.md` | 3 | 2026-07-13T07:35:33Z

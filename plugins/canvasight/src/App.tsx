@@ -583,6 +583,84 @@ function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePag
   };
 }
 
+function sameDocumentValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function rebaseLocalChangesAfterSave(
+  projectPath: string,
+  sentDocument: ScatterDocument,
+  latestLocalDocument: ScatterDocument,
+  savedDocument: ScatterDocument,
+  merge: import("../shared/types").SaveDocumentResult["merge"]
+): ScatterDocument {
+  const pages = savedDocument.pages.map((page) => ({ ...page, nodes: [...page.nodes], edges: [...page.edges] }));
+  const sentPages = new Map(sentDocument.pages.map((page) => [page.id, page]));
+  const latestPages = new Map(latestLocalDocument.pages.map((page) => [page.id, page]));
+  const conflictBySource = new Map((merge?.conflictCopies ?? []).map((copy) => [copy.sourcePageId, copy]));
+  const sourcePageIds = new Set([...sentPages.keys(), ...latestPages.keys()]);
+
+  for (const sourcePageId of sourcePageIds) {
+    const sentPage = sentPages.get(sourcePageId);
+    const latestPage = latestPages.get(sourcePageId);
+    const conflict = conflictBySource.get(sourcePageId);
+    const targetPageId = conflict?.conflictPageId ?? sourcePageId;
+    const targetIndex = pages.findIndex((page) => page.id === targetPageId);
+    if (!sentPage && latestPage) {
+      if (targetIndex < 0) pages.push(latestPage);
+      continue;
+    }
+    if (sentPage && !latestPage) {
+      if (targetIndex >= 0) pages.splice(targetIndex, 1);
+      continue;
+    }
+    if (!sentPage || !latestPage || sameDocumentValue(sentPage, latestPage) || targetIndex < 0) continue;
+    const targetPage = pages[targetIndex];
+    const nodeIdMap = conflict?.nodeIdMap ?? {};
+    const edgeIdMap = conflict?.edgeIdMap ?? {};
+    const targetNodes = new Map(targetPage.nodes.map((node) => [node.id, node]));
+    const sentNodes = new Map(sentPage.nodes.map((node) => [node.id, node]));
+    const latestNodes = new Map(latestPage.nodes.map((node) => [node.id, node]));
+    for (const nodeId of new Set([...sentNodes.keys(), ...latestNodes.keys()])) {
+      const before = sentNodes.get(nodeId);
+      const after = latestNodes.get(nodeId);
+      if (sameDocumentValue(before, after)) continue;
+      const targetNodeId = nodeIdMap[nodeId] ?? nodeId;
+      if (!after) targetNodes.delete(targetNodeId);
+      else targetNodes.set(targetNodeId, { ...after, id: targetNodeId, selected: false });
+    }
+    const targetEdges = new Map(targetPage.edges.map((edge) => [edge.id, edge]));
+    const sentEdges = new Map(sentPage.edges.map((edge) => [edge.id, edge]));
+    const latestEdges = new Map(latestPage.edges.map((edge) => [edge.id, edge]));
+    for (const edgeId of new Set([...sentEdges.keys(), ...latestEdges.keys()])) {
+      const before = sentEdges.get(edgeId);
+      const after = latestEdges.get(edgeId);
+      if (sameDocumentValue(before, after)) continue;
+      const targetEdgeId = edgeIdMap[edgeId] ?? edgeId;
+      if (!after) targetEdges.delete(targetEdgeId);
+      else {
+        targetEdges.set(targetEdgeId, {
+          ...after,
+          id: targetEdgeId,
+          source: nodeIdMap[after.source] ?? after.source,
+          target: nodeIdMap[after.target] ?? after.target
+        });
+      }
+    }
+    pages[targetIndex] = {
+      ...targetPage,
+      name: sentPage.name !== latestPage.name ? latestPage.name : targetPage.name,
+      viewport: !sameDocumentValue(sentPage.viewport, latestPage.viewport) ? latestPage.viewport : targetPage.viewport,
+      updatedAt: latestPage.updatedAt,
+      nodes: [...targetNodes.values()],
+      edges: [...targetEdges.values()]
+    };
+  }
+  const activeConflict = conflictBySource.get(latestLocalDocument.activePageId);
+  const activePageId = activeConflict?.conflictPageId ?? latestLocalDocument.activePageId;
+  return normalizeDocument(projectPath, { ...savedDocument, pages, activePageId });
+}
+
 function flowEdges(edges: ScatterEdge[], selectedNodeId: string | null, hoveredNodeId: string | null, connectionPreview: ConnectionHoverTarget | null): Edge[] {
   const activeNodeIds = new Set(
     [selectedNodeId, hoveredNodeId, connectionPreview?.sourceId, connectionPreview?.targetId].filter(Boolean) as string[]
@@ -792,8 +870,25 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
   const [runFeedback, setRunFeedback] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const [documentConflicts, setDocumentConflicts] = useState<Array<{
+    id: string;
+    message: string;
+    aiPageId: string;
+  }>>([]);
+  const [manualDocumentConflict, setManualDocumentConflict] = useState<{
+    message: string;
+    originalPageId: string | null;
+  } | null>(null);
+  const [saveFlushNonce, setSaveFlushNonce] = useState(0);
   const hydratedRef = useRef(false);
   const documentRevisionRef = useRef<number | null>(null);
+  const documentVersionRef = useRef<string | null>(null);
+  const baseDocumentRef = useRef<{ revision: number; version: string; document: ScatterDocument } | null>(null);
+  const localMutationGenerationRef = useRef(0);
+  const acknowledgedMutationGenerationRef = useRef(0);
+  const saveRequestCountRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef(false);
   const skipNextSaveRef = useRef(false);
   const reloadingExternalDocumentRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
@@ -1103,20 +1198,81 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const applyOpenedProject = useCallback(
-    async (projectPath: string, result: Awaited<ReturnType<typeof canvasightApi.openProject>>, status?: string): Promise<void> => {
+    async (
+      projectPath: string,
+      result: Awaited<ReturnType<typeof canvasightApi.openProject>>,
+      status?: string,
+      preserveLocalNavigation = false
+    ): Promise<void> => {
       const document = normalizeDocument(projectPath, result.document);
+      const currentState = useScatterStore.getState();
+      const currentActivePage = preserveLocalNavigation
+        ? currentState.pages.find((page) => page.id === currentState.activePageId)
+        : null;
+      const serverActivePage = currentActivePage ? document.pages.find((page) => page.id === currentActivePage.id) : null;
+      const displayDocument = serverActivePage
+        ? normalizeDocument(projectPath, {
+            ...document,
+            activePageId: serverActivePage.id,
+            pages: document.pages.map((page) =>
+              page.id === serverActivePage.id ? { ...page, viewport: currentActivePage?.viewport ?? page.viewport } : page
+            )
+          })
+        : document;
+      if (preserveLocalNavigation) {
+        const newConflictPages = document.pages.filter(
+          (page) => page.conflict && !currentState.pages.some((currentPage) => currentPage.id === page.id)
+        );
+        const newAiConflictPages = newConflictPages.filter((page) => page.conflict?.source === "ai");
+        if (newAiConflictPages.length) {
+          setDocumentConflicts((current) => {
+            const ids = new Set(current.map((item) => item.id));
+            return [
+              ...current,
+              ...newAiConflictPages
+                .filter((page) => !ids.has(page.id))
+                .map((page) => ({
+                  id: page.id,
+                  aiPageId: page.id,
+                  message: page.conflict?.copyKind === "recovery" ? t("status.aiRecoveryCopyDetected") : t("status.aiConflictCopyDetected")
+                }))
+            ];
+          });
+        }
+        if (newConflictPages.some((page) => page.conflict?.source !== "ai")) {
+          setManualDocumentConflict({ message: t("status.conflictCopyDetected"), originalPageId: null });
+        }
+      }
       documentRevisionRef.current = result.documentRevision;
+      documentVersionRef.current = result.documentVersion;
+      baseDocumentRef.current = {
+        revision: result.documentRevision,
+        version: result.documentVersion,
+        document
+      };
+      acknowledgedMutationGenerationRef.current = localMutationGenerationRef.current;
       skipNextSaveRef.current = true;
-      setProjectDocument(result.project, document);
+      setProjectDocument(result.project, displayDocument);
+      if (
+        preserveLocalNavigation &&
+        currentState.selectedNodeId &&
+        displayDocument.activePageId === currentState.activePageId &&
+        displayDocument.nodes.some((node) => node.id === currentState.selectedNodeId)
+      ) {
+        setSelectedNodeId(currentState.selectedNodeId);
+      }
       hydratedRef.current = true;
       setStatus(status ?? t("app.openedProject", { name: result.project.name }));
       await claimUrlThreadForProject(result.project.path);
     },
-    [claimUrlThreadForProject, setProjectDocument, setStatus, t]
+    [claimUrlThreadForProject, setProjectDocument, setSelectedNodeId, setStatus, t]
   );
 
   const openProjectPath = useCallback(
-    async (projectPath: string, options: { silent?: boolean; status?: string; fatal?: boolean } = {}) => {
+    async (
+      projectPath: string,
+      options: { silent?: boolean; status?: string; fatal?: boolean; preserveLocalNavigation?: boolean } = {}
+    ) => {
       const trimmedPath = projectPath.trim();
       if (!trimmedPath) return;
       if (!options.silent) {
@@ -1125,7 +1281,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }
       try {
         const result = await canvasightApi.openProject(trimmedPath);
-        await applyOpenedProject(trimmedPath, result, options.status);
+        await applyOpenedProject(trimmedPath, result, options.status, options.preserveLocalNavigation === true);
       } catch (error) {
         if (options.fatal) throw error;
         const fallbackProject = {
@@ -1134,6 +1290,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           updatedAt: new Date().toISOString()
         };
         documentRevisionRef.current = null;
+        documentVersionRef.current = null;
+        baseDocumentRef.current = null;
         skipNextSaveRef.current = true;
         setProjectDocument(fallbackProject, emptyDocument(trimmedPath));
         hydratedRef.current = true;
@@ -1263,30 +1421,145 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       skipNextSaveRef.current = false;
       return;
     }
+    const mutationGeneration = ++localMutationGenerationRef.current;
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      const expectedRevision = documentRevisionRef.current;
+      if (saveInFlightRef.current) {
+        saveQueuedRef.current = true;
+        return;
+      }
+      const base = baseDocumentRef.current;
+      if (!base) return;
+      const currentState = useScatterStore.getState();
+      if (!currentState.project || currentState.project.path !== project.path) return;
+      const document = toDocument(currentState.project, currentState.pages, currentState.activePageId, currentState.nodes, currentState.edges);
+      const deletedPageSnapshots = Object.fromEntries(
+        base.document.pages.filter((page) => !document.pages.some((candidate) => candidate.id === page.id)).map((page) => [page.id, page])
+      );
+      const clientMutationId = crypto.randomUUID();
+      saveInFlightRef.current = true;
+      saveRequestCountRef.current += 1;
       setSaving(true);
       canvasightApi
-        .saveDocument(project.path, toDocument(project, pages, activePageId, nodes, edges), expectedRevision)
+        .saveDocument({
+          projectPath: project.path,
+          document,
+          expectedRevision: base.revision,
+          base,
+          clientMutationId,
+          deletedPageSnapshots,
+          language
+        })
         .then((result) => {
-          documentRevisionRef.current = result.documentRevision;
-          setStatus(t("status.saved"));
+          documentRevisionRef.current = Math.max(documentRevisionRef.current ?? 0, result.documentRevision);
+          documentVersionRef.current = result.documentVersion;
+          const hasNewerLocalChanges = localMutationGenerationRef.current !== mutationGeneration;
+          const normalizedResult = normalizeDocument(project.path, result.document);
+          const conflict = result.merge?.conflictCopies.find((item) => item.conflictPageId === result.merge?.localActivePageId) ?? result.merge?.conflictCopies[0];
+          baseDocumentRef.current = {
+            revision: result.documentRevision,
+            version: result.documentVersion,
+            document: normalizedResult
+          };
+          if (!hasNewerLocalChanges) {
+            acknowledgedMutationGenerationRef.current = mutationGeneration;
+            if (result.status === "merged" || result.status === "conflict-copy") {
+              const previousActivePage = useScatterStore.getState().activePageId;
+              const previousSelectedNodeId = useScatterStore.getState().selectedNodeId;
+              const targetPageId = result.status === "conflict-copy" && conflict?.source !== "ai"
+                ? result.merge?.localActivePageId
+                : previousActivePage;
+              const preservedPage = normalizedResult.pages.find((page) => page.id === targetPageId);
+              const appliedDocument = preservedPage
+                ? { ...normalizedResult, activePageId: preservedPage.id, viewport: preservedPage.viewport, nodes: preservedPage.nodes, edges: preservedPage.edges }
+                : normalizedResult;
+              skipNextSaveRef.current = true;
+              setProjectDocument(project, appliedDocument);
+              if (previousSelectedNodeId && appliedDocument.nodes.some((node) => node.id === previousSelectedNodeId)) {
+                setSelectedNodeId(previousSelectedNodeId);
+              }
+            }
+          } else {
+            const latestState = useScatterStore.getState();
+            if (latestState.project?.path === project.path) {
+              const latestLocalDocument = toDocument(
+                latestState.project,
+                latestState.pages,
+                latestState.activePageId,
+                latestState.nodes,
+                latestState.edges
+              );
+              const rebasedDocument = rebaseLocalChangesAfterSave(project.path, document, latestLocalDocument, normalizedResult, result.merge);
+              const previousSelectedNodeId = latestState.selectedNodeId;
+              setProjectDocument(project, rebasedDocument);
+              if (previousSelectedNodeId && rebasedDocument.nodes.some((node) => node.id === previousSelectedNodeId)) {
+                setSelectedNodeId(previousSelectedNodeId);
+              }
+            }
+          }
+          if (result.status === "conflict-copy" && conflict) {
+            if (conflict.source === "ai") {
+              setDocumentConflicts((current) => current.some((item) => item.id === conflict.conflictPageId)
+                ? current
+                : [...current, {
+                    id: conflict.conflictPageId,
+                    aiPageId: conflict.conflictPageId,
+                    message: conflict.originalPageAvailable ? t("status.aiConflictCopyDetected") : t("status.aiRecoveryCopyDetected")
+                  }]);
+            } else {
+              setManualDocumentConflict({
+                message:
+                  conflict.incomingIntent === "delete"
+                    ? t("status.conflictDeleteNotApplied")
+                    : conflict.originalPageAvailable
+                      ? t("status.conflictCopySaved")
+                      : t("status.conflictCopyRestored"),
+                originalPageId: conflict.originalPageAvailable ? conflict.originalPageId : null
+              });
+            }
+          }
+          setStatus(
+            result.status === "merged"
+              ? t("status.concurrentChangesMerged")
+              : result.status === "conflict-copy"
+                ? conflict?.source === "ai"
+                  ? conflict.originalPageAvailable === false
+                    ? t("status.aiRecoveryCopyDetected")
+                    : t("status.aiConflictCopyDetected")
+                  : conflict?.incomingIntent === "delete"
+                    ? t("status.conflictDeleteNotApplied")
+                    : conflict?.originalPageAvailable === false
+                      ? t("status.conflictCopyRestored")
+                      : t("status.conflictCopySaved")
+                : t("status.saved")
+          );
         })
         .catch((error) => {
           if (isStaleDocumentError(error)) {
-            void openProjectPath(project.path, { silent: true, status: t("status.externalDocumentReloaded") });
+            void openProjectPath(project.path, {
+              silent: true,
+              status: t("status.externalDocumentReloaded"),
+              preserveLocalNavigation: true
+            });
             return;
           }
           setStatus(error instanceof Error ? error.message : t("status.saveFailed"));
         })
-        .finally(() => setSaving(false));
+        .finally(() => {
+          saveInFlightRef.current = false;
+          saveRequestCountRef.current = Math.max(0, saveRequestCountRef.current - 1);
+          if (saveRequestCountRef.current === 0) setSaving(false);
+          if (saveQueuedRef.current) {
+            saveQueuedRef.current = false;
+            setSaveFlushNonce((value) => value + 1);
+          }
+        });
     }, saveDebounceMs);
 
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
-  }, [activePageId, edges, nodes, openProjectPath, pages, project, setSaving, setStatus, t]);
+  }, [activePageId, edges, language, nodes, openProjectPath, pages, project, saveFlushNonce, setProjectDocument, setSaving, setSelectedNodeId, setStatus, t]);
 
   useEffect(() => {
     if (!hydratedRef.current || !project) return;
@@ -1299,9 +1572,14 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         if (cancelled || session.projectPath !== project.path) return;
         const currentRevision = documentRevisionRef.current;
         if (currentRevision === null || session.documentRevision <= currentRevision) return;
+        if (localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current || saveRequestCountRef.current > 0) return;
         reloadingExternalDocumentRef.current = true;
         try {
-          await openProjectPath(project.path, { silent: true, status: t("status.externalDocumentReloaded") });
+          await openProjectPath(project.path, {
+            silent: true,
+            status: t("status.externalDocumentReloaded"),
+            preserveLocalNavigation: true
+          });
         } finally {
           reloadingExternalDocumentRef.current = false;
         }
@@ -2574,6 +2852,36 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         {runFeedback ? (
           <ToastViewport className="canvas-run-toast-viewport">
             <Toast tone={runFeedback.tone} message={runFeedback.message} onClose={hideRunFeedback} />
+          </ToastViewport>
+        ) : null}
+        {documentConflicts[0] ? (
+          <ToastViewport className="canvas-document-conflict-viewport">
+            <Toast
+              tone="information"
+              message={documentConflicts[0].message}
+              actionLabel={t("status.viewAiPage")}
+              onAction={() => {
+                setActivePageId(documentConflicts[0].aiPageId);
+                setDocumentConflicts((current) => current.slice(1));
+              }}
+              onClose={() => setDocumentConflicts((current) => current.slice(1))}
+            />
+          </ToastViewport>
+        ) : null}
+        {manualDocumentConflict && !documentConflicts[0] ? (
+          <ToastViewport className="canvas-document-conflict-viewport">
+            <Toast
+              tone="information"
+              message={manualDocumentConflict.message}
+              actionLabel={manualDocumentConflict.originalPageId ? t("status.viewOriginalPage") : undefined}
+              onAction={manualDocumentConflict.originalPageId
+                ? () => {
+                    setActivePageId(manualDocumentConflict.originalPageId as string);
+                    setManualDocumentConflict(null);
+                  }
+                : undefined}
+              onClose={() => setManualDocumentConflict(null)}
+            />
           </ToastViewport>
         ) : null}
       </main>

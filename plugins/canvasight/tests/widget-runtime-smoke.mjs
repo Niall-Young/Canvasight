@@ -528,7 +528,7 @@ try {
   assert.equal(near(zoomRegression.finalZoom, 2), true);
   assert.equal(zoomRegression.finalLabel, 200);
   assert.ok(zoomRegression.saveCallCount > 0, "the final user viewport must schedule document persistence");
-  assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression)}`);
+  assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
   assert.equal(zoomRegression.overlay, false);
   assert.deepEqual(zoomRegression.errors, []);
   cdp.close();

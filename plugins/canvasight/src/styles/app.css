@@ -3710,6 +3710,20 @@ button.achievement-card.is-unlocked:focus-visible {
   background: var(--color-interaction);
 }
 
+.kit-toast-action {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.canvas-document-conflict-viewport {
+  inset: auto 20px 20px auto;
+}
+
 .kit-toast-viewport {
   position: fixed;
   z-index: 50;

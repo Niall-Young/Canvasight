@@ -147,6 +147,17 @@ export interface ScatterPage {
   viewport: { x: number; y: number; zoom: number };
   nodes: ScatterNode[];
   edges: ScatterEdge[];
+  conflict?: {
+    sourcePageId: string;
+    baseRevision: number;
+    priorRevision: number;
+    reasons: string[];
+    incomingIntent: "edit" | "delete";
+    copyKind?: "conflict" | "recovery";
+    source?: "ai" | "manual";
+    createdAt: string;
+    incomingFingerprint: string;
+  };
 }
 
 export interface ScatterDocument {
@@ -162,13 +173,49 @@ export interface ScatterDocument {
 
 export interface OpenProjectResult {
   documentRevision: number;
+  documentVersion: string;
   project: ScatterProjectInfo;
   document: ScatterDocument;
 }
 
 export interface SaveDocumentResult {
+  status: "unchanged" | "written" | "merged" | "conflict-copy";
+  written: boolean;
   document: ScatterDocument;
   documentRevision: number;
+  documentVersion: string;
+  merge?: {
+    baseRevision: number;
+    priorRevision: number;
+    mergedPageIds: string[];
+    conflictCopies: Array<{
+      sourcePageId: string;
+      conflictPageId: string;
+      originalPageId: string;
+      originalPageAvailable: boolean;
+      incomingIntent: "edit" | "delete";
+      source?: "ai" | "manual";
+      reasons: string[];
+      nodeIdMap: Record<string, string>;
+      edgeIdMap: Record<string, string>;
+    }>;
+    localActivePageId: string;
+    clientMutationId: string;
+  };
+}
+
+export interface SaveDocumentInput {
+  projectPath: string;
+  document: ScatterDocument;
+  expectedRevision: number;
+  base: {
+    revision: number;
+    version?: string;
+    document: ScatterDocument;
+  };
+  clientMutationId: string;
+  deletedPageSnapshots?: Record<string, ScatterPage>;
+  language: ResolvedLanguage;
 }
 
 export interface AssistantRunInput {
