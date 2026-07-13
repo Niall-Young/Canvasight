@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T07:19:29Z
+    last_seen: 2026-07-13T07:30:50Z
     handoff_source: issue-cross-platform-ci-regressions-0-4-10
     last_report: solution-cross-platform-ci-regressions-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Resolved Windows bundle EOL determinism and Linux daemon start-lock publication race
+    notes: Approved the test-only Windows fixture correction; production runtime remains unchanged
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T07:19:29Z
+    last_seen: 2026-07-13T07:30:50Z
     handoff_source: issue-windows-native-acceptance-0-4-10
-    last_report: issue-windows-native-acceptance-0-4-10
+    last_report: solution-windows-runtime-selection-fixture-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Cross-platform regression stress gates pass locally; Windows native acceptance remains pending
+    notes: Windows runtime fixture passes locally; owns pending hosted matrix review and native acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

@@ -21,6 +21,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-windows-runtime-selection-fixture-0-4-10.md` - makes the full fake Codex runtime fixture execute on Windows without changing production runtime or weakening selection assertions.
+- `agent-reports/resolved/solution-windows-runtime-selection-fixture-0-4-10.md` - uses real `node.exe` candidates plus the fake app-server script and platform PATH delimiter.
 - `agent-reports/resolved/integration-summary-cross-platform-ci-regressions-0-4-10.md` - corrected Windows generated-bundle EOL determinism and the Linux daemon start-lock race; hosted matrix rerun remains pending after push.
 - `agent-reports/resolved/solution-cross-platform-ci-regressions-0-4-10.md` - documents the LF-only checkout contract, line-ending-safe freshness check, single-flight lock correction and stress verification.
 - `agent-reports/resolved/integration-summary-mcp-self-contained-distribution.md` - shipped the self-contained MCP entry, clean-distribution test, OS matrix workflow, version 0.4.10 and bilingual recovery guidance; real Windows native-host acceptance remains assigned.

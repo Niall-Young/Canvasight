@@ -83,10 +83,12 @@ const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
 const directModeNotLoadedPath = path.join(tempRoot, "direct-mode-not-loaded-threads.txt");
 const directModeThreadReadFailPath = path.join(tempRoot, "direct-mode-thread-read-fail-threads.txt");
-const fakeCodexPath = path.join(tempRoot, "fake-codex.mjs");
+const fakeCodexScriptPath = path.join(tempRoot, "fake-codex.mjs");
+const fakeCodexPath = process.platform === "win32" ? process.execPath : fakeCodexScriptPath;
+const fakeCodexAppServerArgs = process.platform === "win32" ? fakeCodexScriptPath : "";
 
 fs.writeFileSync(
-  fakeCodexPath,
+  fakeCodexScriptPath,
   `#!/usr/bin/env node
 import fs from "node:fs";
 
@@ -158,7 +160,7 @@ function shouldConfirmTurnStart(message) {
 
 function handle(message) {
   if (message.method === "initialize") {
-    append("runtime/initialize", { executable: process.argv[1] });
+    append("runtime/initialize", { executable: process.argv[1], execPath: process.execPath });
     if (process.env.CANVASIGHT_FAKE_FAIL_INITIALIZE === "1") {
       write({ id: message.id, error: { code: -32603, message: "fake Desktop app-server handshake failure" } });
       return;
@@ -258,7 +260,7 @@ process.stdin.on("data", (chunk) => {
 `,
   "utf8"
 );
-fs.chmodSync(fakeCodexPath, 0o755);
+fs.chmodSync(fakeCodexScriptPath, 0o755);
 
 let nextId = 1;
 let stdoutBuffer = "";
@@ -274,6 +276,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_HOME: canvasightHome,
     CANVASIGHT_EXPORT_DIR: exportDirectory,
     CANVASIGHT_CODEX_BIN: fakeCodexPath,
+    CANVASIGHT_CODEX_APP_SERVER_ARGS: fakeCodexAppServerArgs,
     CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
@@ -1920,6 +1923,7 @@ function createMcpClient(label, envOverrides = {}) {
       CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_CODEX_APP_SERVER_ARGS: fakeCodexAppServerArgs,
       CANVASIGHT_CODEX_NATIVE: "1",
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
       CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
@@ -2027,6 +2031,7 @@ function createContentLengthMcpClient(label, envOverrides = {}) {
       CANVASIGHT_DEFAULT_PROJECT_PATH: defaultProjectPath,
       CANVASIGHT_HOME: canvasightHome,
       CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_CODEX_APP_SERVER_ARGS: fakeCodexAppServerArgs,
       CANVASIGHT_CODEX_NATIVE: "1",
       CANVASIGHT_NATIVE_LOG: nativeLogPath,
       CANVASIGHT_OPEN_EXTERNAL_BROWSER: "0",
@@ -2156,13 +2161,14 @@ async function stopDaemon(home = canvasightHome) {
 
 async function assertDesktopRuntimeSelection() {
   const runtimeRoot = path.join(tempRoot, "runtime-selection");
-  const explicitBin = path.join(runtimeRoot, "explicit-override.mjs");
-  const codexDesktopBin = path.join(runtimeRoot, "Codex.app", "Contents", "Resources", "codex");
-  const chatGptDesktopBin = path.join(runtimeRoot, "ChatGPT.app", "Contents", "Resources", "codex");
+  const windowsExecutableSuffix = process.platform === "win32" ? ".exe" : "";
+  const explicitBin = path.join(runtimeRoot, `explicit-override${process.platform === "win32" ? ".exe" : ".mjs"}`);
+  const codexDesktopBin = path.join(runtimeRoot, "Codex.app", "Contents", "Resources", `codex${windowsExecutableSuffix}`);
+  const chatGptDesktopBin = path.join(runtimeRoot, "ChatGPT.app", "Contents", "Resources", `codex${windowsExecutableSuffix}`);
   const pathBinDir = path.join(runtimeRoot, "path-bin");
-  const pathBin = path.join(pathBinDir, "codex");
-  const missingBin = path.join(runtimeRoot, "missing", "codex");
-  const brokenDesktopBin = path.join(runtimeRoot, "broken-desktop.mjs");
+  const pathBin = path.join(pathBinDir, `codex${windowsExecutableSuffix}`);
+  const missingBin = path.join(runtimeRoot, "missing", `codex${windowsExecutableSuffix}`);
+  const brokenDesktopBin = path.join(runtimeRoot, `broken-desktop${process.platform === "win32" ? ".exe" : ".mjs"}`);
 
   for (const target of [explicitBin, codexDesktopBin, chatGptDesktopBin, pathBin, brokenDesktopBin]) {
     await fsp.mkdir(path.dirname(target), { recursive: true });
@@ -2205,7 +2211,9 @@ async function assertDesktopRuntimeSelection() {
   async function initializedExecutable() {
     const entries = await readNativeLog();
     const initialized = entries.filter((entry) => entry.method === "runtime/initialize");
-    return initialized.map((entry) => entry.params?.executable);
+    return initialized.map((entry) =>
+      path.resolve(process.platform === "win32" ? entry.params?.execPath : entry.params?.executable)
+    );
   }
 
   await fsp.writeFile(nativeLogPath, "", "utf8");
@@ -2213,7 +2221,7 @@ async function assertDesktopRuntimeSelection() {
     CANVASIGHT_CODEX_BIN: explicitBin,
     CANVASIGHT_CODEX_APP_BIN: codexDesktopBin,
     CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
-    PATH: `${pathBinDir}:${process.env.PATH}`
+    PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
   });
   assert.deepEqual(await initializedExecutable(), [explicitBin]);
 
@@ -2221,7 +2229,7 @@ async function assertDesktopRuntimeSelection() {
   await openWithRuntime("codex-desktop", {
     CANVASIGHT_CODEX_APP_BIN: codexDesktopBin,
     CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
-    PATH: `${pathBinDir}:${process.env.PATH}`
+    PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
   });
   assert.deepEqual(await initializedExecutable(), [codexDesktopBin]);
 
@@ -2229,7 +2237,7 @@ async function assertDesktopRuntimeSelection() {
   await openWithRuntime("chatgpt-desktop", {
     CANVASIGHT_CODEX_APP_BIN: missingBin,
     CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
-    PATH: `${pathBinDir}:${process.env.PATH}`
+    PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
   });
   assert.deepEqual(await initializedExecutable(), [chatGptDesktopBin]);
 
@@ -2237,7 +2245,7 @@ async function assertDesktopRuntimeSelection() {
   await openWithRuntime("path-fallback", {
     CANVASIGHT_CODEX_APP_BIN: missingBin,
     CANVASIGHT_CHATGPT_APP_BIN: missingBin,
-    PATH: `${pathBinDir}:${process.env.PATH}`
+    PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
   });
   assert.deepEqual(await initializedExecutable(), [pathBin]);
 
@@ -2248,7 +2256,7 @@ async function assertDesktopRuntimeSelection() {
       CANVASIGHT_CODEX_APP_BIN: brokenDesktopBin,
       CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
       CANVASIGHT_FAKE_FAIL_INITIALIZE: "1",
-      PATH: `${pathBinDir}:${process.env.PATH}`
+      PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
     },
     { expectsFailure: true }
   );
