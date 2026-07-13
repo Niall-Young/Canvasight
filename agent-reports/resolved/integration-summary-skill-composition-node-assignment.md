@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-13T13:31:00Z
-updated_at: 2026-07-13T13:31:00Z
+updated_at: 2026-07-13T13:38:02Z
 depends_on:
   - issue-skill-composition-node-assignment
   - solution-skill-composition-node-assignment
@@ -44,7 +44,8 @@ verification_evidence:
 
 - Baseline HEAD：`e10c71066a58934cb688189ff80810ebe3d3f5af`
 - Commit-ready scope：本集成 summary 所列的 0.4.12 Skill 组合实现、测试、文档、报告和生成产物。
-- Commit：pending
+- 主功能 Commit：`d27b3492b324fb6d671a93db3a1f3420761825c0`（`feat: 支持画布与节点级 Skill 组合`）
+- 主功能提交后 `git status --short` 为空；本文件随后仅回填交付证据。
 
 ## 未解决风险
 
