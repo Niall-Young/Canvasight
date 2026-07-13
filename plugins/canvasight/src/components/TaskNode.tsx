@@ -1,9 +1,9 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from "react";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
-import { resolveCanvasightAssetUrl } from "../lib/canvasightApi";
+import { getCanvasightAssetBaseUrl, resolveCanvasightAssetUrl, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
 import { shortcuts } from "../lib/shortcuts";
 import { filterSkills, findSkillQuery, insertSkillToken, type SkillQueryRange } from "../lib/skills";
@@ -71,6 +71,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [skillStatus, setSkillStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [activeSkillIndex, setActiveSkillIndex] = useState(0);
+  const assetBaseUrl = useSyncExternalStore(subscribeCanvasightRuntimeData, getCanvasightAssetBaseUrl, getCanvasightAssetBaseUrl);
 
   const runMode = data.runMode || "flow";
   const hasBody = bodyDraft.trim().length > 0;
@@ -573,7 +574,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
                 className="nodrag"
                 fileName={attachment.originalName}
                 imageAlt={attachment.originalName}
-                imageSrc={attachment.kind === "image" ? resolveCanvasightAssetUrl(attachment.fileUrl) : undefined}
+                imageSrc={attachment.kind === "image" ? resolveCanvasightAssetUrl(attachment.fileUrl, assetBaseUrl) : undefined}
                 kind={attachment.kind}
                 title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
                 onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}

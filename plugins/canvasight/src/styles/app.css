@@ -2662,11 +2662,13 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .kit-upload-chip-thumbnail-empty {
+  display: inline-flex;
   width: 100%;
   height: 100%;
-  background:
-    radial-gradient(circle at 30% 35%, #6f8c4a 0 18%, transparent 19%),
-    linear-gradient(135deg, #e7d8bc 0%, #7fb0c8 46%, #2f6b58 100%);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-icon-subtle);
+  background: var(--color-background-sunken);
 }
 
 .kit-upload-chip-thumbnail img {

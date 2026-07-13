@@ -317,17 +317,26 @@ function apiBaseUrl(): string {
   }
 }
 
+export function getCanvasightAssetBaseUrl(): string {
+  return apiBaseUrl();
+}
+
+export function subscribeCanvasightRuntimeData(onChange: () => void): () => void {
+  window.addEventListener("canvasight:widget-data", onChange);
+  return () => window.removeEventListener("canvasight:widget-data", onChange);
+}
+
 function apiUrl(path: string): string {
   const baseUrl = apiBaseUrl();
   if (!baseUrl) return path;
   return new URL(path, baseUrl).toString();
 }
 
-export function resolveCanvasightAssetUrl(fileUrl: string): string {
+export function resolveCanvasightAssetUrl(fileUrl: string, baseUrl = apiBaseUrl()): string {
   if (!fileUrl) return "";
   if (/^(?:data|blob):/i.test(fileUrl)) return fileUrl;
   try {
-    return apiUrl(fileUrl);
+    return baseUrl ? new URL(fileUrl, baseUrl).toString() : fileUrl;
   } catch {
     return fileUrl;
   }

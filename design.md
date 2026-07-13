@@ -52,6 +52,7 @@ Task nodes should feel like compact work objects rather than document cards:
 - A selected node should expose editing and run controls clearly.
 - Title and body editing should preserve text input behavior, including IME composition.
 - Attachments should appear as compact chips with file size and removal affordances.
+- Valid image attachments must render thumbnails from the actual image content. Loading and error states must use neutral, unmistakable, recoverable feedback and must never imitate image content or appear to be a real thumbnail.
 - Parent and child connection handles should remain discoverable on the left and right edges.
 - Hovering a connected edge or related node should create a visible relationship highlight.
 - Running, loading, errored, selected, and editing states must be visually distinct.

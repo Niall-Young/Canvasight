@@ -19,6 +19,7 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-widget-runtim
 const canvasightHome = path.join(tempRoot, "home");
 const projectPath = path.join(tempRoot, "project");
 fs.mkdirSync(projectPath, { recursive: true });
+const thumbnailPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 
 function createMcpClient() {
   const child = spawn(process.execPath, [serverPath], {
@@ -85,7 +86,24 @@ function hostHtml(widgetData) {
         id: "node-a",
         type: "task",
         position: { x: 100, y: 120 },
-        data: { title: "Thread return source", body: "Must remain visible after host restore.", attachments: [], effort: "xhigh", runMode: "flow" }
+        data: {
+          title: "Thread return source",
+          body: "Must remain visible after host restore.",
+          attachments: [{
+            id: "attachment-image",
+            kind: "image",
+            source: "paste",
+            originalName: "thumbnail.png",
+            storedPath: path.join(projectPath, ".scatter", "assets", "thumbnail.png"),
+            relativePath: ".scatter/assets/thumbnail.png",
+            fileUrl: "/thumbnail.png",
+            mime: "image/png",
+            size: thumbnailPng.length,
+            createdAt: new Date().toISOString()
+          }],
+          effort: "xhigh",
+          runMode: "flow"
+        }
       },
       {
         id: "node-b",
@@ -119,13 +137,18 @@ function hostHtml(widgetData) {
     documentRevision: 1
   };
   return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/widget" style="width:1200px;height:800px;border:0"></iframe><script>
-  const widgetData = ${JSON.stringify(widgetData)};
+  const widgetData = ${JSON.stringify({ ...widgetData, apiBaseUrl: "http://127.0.0.1:1" })};
   const session = ${JSON.stringify(session)};
   const opened = ${JSON.stringify(opened)};
   window.__HOST_RECORDS__ = { messages: [], toolCalls: [], ready: null, errors: [] };
   const frame = document.getElementById('widget');
   function send(message) { frame.contentWindow.postMessage(message, '*'); }
   function result(id, value) { send({ jsonrpc: '2.0', id, result: value }); }
+  window.__HOST_SEND_WIDGET_DATA__ = (nextWidgetData) => send({
+    jsonrpc: '2.0',
+    method: 'ui/notifications/tool-result',
+    params: { content: [], structuredContent: { status: 'opening' }, _meta: { widgetData: nextWidgetData } }
+  });
   window.addEventListener('error', (event) => window.__HOST_RECORDS__.errors.push(event.message));
   window.addEventListener('message', (event) => {
     if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
@@ -243,9 +266,14 @@ try {
 
   const widgetData = opened._meta.widgetData;
   webServer = http.createServer((req, res) => {
-    res.setHeader("content-type", "text/html; charset=utf-8");
-    if (req.url === "/widget") res.end(widgetHtml);
-    else res.end(hostHtml(widgetData));
+    if (req.url === "/thumbnail.png") {
+      res.setHeader("content-type", "image/png");
+      res.end(thumbnailPng);
+    } else {
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      if (req.url === "/widget") res.end(widgetHtml);
+      else res.end(hostHtml(widgetData));
+    }
   });
   await new Promise((resolve) => webServer.listen(0, "127.0.0.1", resolve));
   const address = webServer.address();
@@ -316,6 +344,26 @@ try {
   assert.equal(evidence.ready.body.canvasVisible, true);
   assert.ok(evidence.ready.body.canvasWidth > 0 && evidence.ready.body.canvasHeight > 0);
   assert.deepEqual(evidence.errors, []);
+
+  const recoveredThumbnail = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const placeholder = doc.querySelector('.kit-upload-chip-thumbnail-empty');
+    if (!placeholder) return false;
+    window.__HOST_SEND_WIDGET_DATA__({
+      ...win.__CANVASIGHT_WIDGET_DATA__,
+      apiBaseUrl: window.location.origin
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const image = doc.querySelector('.kit-upload-chip-thumbnail img');
+    return image && image.complete && image.naturalWidth > 0
+      ? { src: image.src, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight }
+      : false;
+  })()`, "attachment thumbnail after late widget runtime metadata");
+  assert.equal(recoveredThumbnail.src, `${new URL(hostUrl).origin}/thumbnail.png`);
+  assert.equal(recoveredThumbnail.naturalWidth, 1);
+  assert.equal(recoveredThumbnail.naturalHeight, 1);
 
   const restored = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
@@ -480,7 +528,7 @@ try {
   assert.equal(near(zoomRegression.finalZoom, 2), true);
   assert.equal(zoomRegression.finalLabel, 200);
   assert.ok(zoomRegression.saveCallCount > 0, "the final user viewport must schedule document persistence");
-  assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
+  assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression)}`);
   assert.equal(zoomRegression.overlay, false);
   assert.deepEqual(zoomRegression.errors, []);
   cdp.close();

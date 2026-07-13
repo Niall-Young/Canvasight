@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type ReactElement } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type ReactElement } from "react";
 import { useI18n } from "../../lib/i18n";
 import { cn } from "../../lib/utils";
 import { Icon } from "./icon";
@@ -16,11 +16,7 @@ export function UploadChip({ className, fileName, imageAlt = "", imageSrc, kind 
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const [lockedWidth, setLockedWidth] = useState<number | null>(null);
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [imageSrc]);
+  const [failedImageSrc, setFailedImageSrc] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     setLockedWidth(null);
@@ -61,10 +57,12 @@ export function UploadChip({ className, fileName, imageAlt = "", imageSrc, kind 
     >
       {kind === "image" ? (
         <span className="kit-upload-chip-thumbnail" aria-hidden="true">
-          {imageSrc && !imageFailed ? (
-            <img alt={imageAlt} src={imageSrc} onError={() => setImageFailed(true)} />
+          {imageSrc && failedImageSrc !== imageSrc ? (
+            <img alt={imageAlt} src={imageSrc} onError={() => setFailedImageSrc(imageSrc)} />
           ) : (
-            <span className="kit-upload-chip-thumbnail-empty" />
+            <span className="kit-upload-chip-thumbnail-empty">
+              <Icon name="warning" size={12} />
+            </span>
           )}
         </span>
       ) : (
