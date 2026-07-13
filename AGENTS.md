@@ -143,6 +143,7 @@ Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasigh
 - `npm run test:markdown` verifies node Run Markdown includes the current node plus downstream children in stable order.
 - `npm run test:dev-server` verifies the persistent dev server lifecycle.
 - `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts, concurrent daemon single-flight, stdout-close/EPIPE handling, and newline plus `Content-Length` JSON-RPC transports.
+- `npm run diagnose:mcp` performs an isolated MCP registration probe without opening the canvas or starting the daemon. It reports manifest Node-command resolution, executable/runtime details, `initialize`, `tools/list`, required open tools, and lifecycle-log stages; on Windows it can also be run as `node .\tests\mcp-registration-probe.mjs` to avoid PowerShell script-policy shims.
 
 Plugin validation runs from the repo root:
 

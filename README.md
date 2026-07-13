@@ -160,6 +160,7 @@ npm run build
 npm run test:markdown
 npm run test:dev-server
 npm run test:mcp
+npm run diagnose:mcp
 ```
 
 `npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户先运行 dev server。
@@ -196,9 +197,19 @@ synthetic VM、DOM mock、metadata shape、postMessage、MCP smoke、build、plu
 
 不要用 browser fallback、daemon health 或再次看到 tool success 来覆盖这个结论。
 
-**安装后看不到 Canvasight tools？**
+**Windows 安装后仍看不到 Canvasight tools？**
 
-先用 `tool_search` 查找 `canvasight open_canvasight await_canvasight_widget_ready`。如果仍不可用，确认 `codex plugin list` 的版本和来源。若刚安装或升级过插件，重新加载窗口或重启 Codex 后再新建任务并重新 `@Canvasight`；只新建任务可能无效。
+先用 `tool_search` 查找 `canvasight open_canvasight await_canvasight_widget_ready`，再用 `codex.cmd plugin list`（不要使用可能被 PowerShell 执行策略拦截的 `codex.ps1`）确认插件来源和已解析版本。若刚安装或升级，完全退出并重启 Codex Desktop，再新建任务并重新 `@Canvasight`；只新建任务可能仍沿用旧注册快照。
+
+如果 tools 仍缺失，问题还在 MCP 启动/注册层，不要先排查 daemon 或 widget。在已安装插件根目录运行 `node .\tests\mcp-registration-probe.mjs`；探针会检查 manifest 中的 Node 命令，完成 `initialize` 和 `tools/list`，确认必要的打开工具，并输出 Node 可执行文件、工作目录、阶段和隔离的生命周期日志位置。仓库开发环境也可运行 `npm run diagnose:mcp`。
+
+查看 `%USERPROFILE%\.canvasight\mcp-lifecycle.log`（设置了 `CANVASIGHT_HOME` 时改看该目录）：
+
+- 没有本次启动的 `stdio_start`：Codex Desktop 没有启动 Canvasight MCP；检查插件缓存、`.mcp.json` 和 Desktop 进程是否能解析 Node。
+- 有 `stdio_start` 但没有 `request`/`initialize`：MCP 子进程已启动，但宿主没有完成握手。
+- 有 `initialize` 和 `tools/list`：Canvasight MCP 已响应，继续检查当前任务的插件工具注册快照。
+
+不要把直接运行 `node .\mcp\server.mjs` 后持续等待当成故障；stdio MCP 会等待 JSON-RPC 输入。探针只证明 MCP 握手健康，不能证明原生画布已打开。
 
 **`Transport closed` 是什么？**
 
@@ -380,6 +391,7 @@ npm run build
 npm run test:markdown
 npm run test:dev-server
 npm run test:mcp
+npm run diagnose:mcp
 ```
 
 `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require a manually started dev server.
@@ -416,9 +428,19 @@ Check `await_canvasight_widget_ready` first:
 
 Do not override this result with a browser fallback, daemon health, or another successful open-tool response.
 
-**Canvasight tools are missing after installation.**
+**Canvasight tools are still missing on Windows after installation.**
 
-Use `tool_search` for `canvasight open_canvasight await_canvasight_widget_ready`. If they remain unavailable, verify the source and version with `codex plugin list`. After an install or upgrade, reload the window or restart Codex before creating a new task and tagging `@Canvasight` again; creating a task alone may not refresh the app-level registry.
+Use `tool_search` for `canvasight open_canvasight await_canvasight_widget_ready`, then run `codex.cmd plugin list` (not `codex.ps1`, which a PowerShell execution policy may block) to verify the plugin source and resolved version. After an install or upgrade, fully quit and restart Codex Desktop, then create a new task and tag `@Canvasight` again; creating a task alone can retain the old registry snapshot.
+
+If the tools are still missing, the failure is still in MCP startup/registration; do not start with daemon or widget debugging. From the installed plugin root, run `node .\tests\mcp-registration-probe.mjs`. The probe checks the manifest Node command, performs `initialize` and `tools/list`, verifies the required open tools, and reports the Node executable, working directory, stages, and isolated lifecycle-log path. Repository development environments can also run `npm run diagnose:mcp`.
+
+Inspect `%USERPROFILE%\.canvasight\mcp-lifecycle.log` (or the configured `CANVASIGHT_HOME`):
+
+- No `stdio_start` for the attempt: Codex Desktop did not start the Canvasight MCP process; inspect the installed cache, `.mcp.json`, and whether the Desktop process can resolve Node.
+- `stdio_start` exists but no `request`/`initialize`: the MCP child started but the host did not complete the handshake.
+- `initialize` and `tools/list` are present: Canvasight MCP responded; inspect the current task's plugin-tool registry snapshot next.
+
+A bare `node .\mcp\server.mjs` command waiting indefinitely is not itself a failure; a stdio MCP server waits for JSON-RPC input. The probe proves only MCP handshake health, not that the native canvas opened.
 
 **What does `Transport closed` mean?**
 

@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.5+codex.20260712223248";
+const SERVER_VERSION = "0.4.8+codex.20260713111000";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -6429,7 +6429,12 @@ function runMcpStdio() {
   appendMcpLifecycle("stdio_start", {
     argv: process.argv.slice(2),
     cwd: process.cwd(),
-    canvasightHome: canvasightHome()
+    canvasightHome: canvasightHome(),
+    execPath: process.execPath,
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    parentPid: process.ppid
   });
 
   process.stdin.on("data", (chunk) => {
