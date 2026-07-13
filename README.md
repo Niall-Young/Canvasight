@@ -35,6 +35,8 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
    Codex 会完成 marketplace 和插件安装。如果你想手动运行 CLI，或者需要从本地 checkout 安装，请参阅后面的[插件安装](#插件安装)。
 
+   ![小饭团把 Canvasight 插件交给 Codex 安装](images/fantuan-illustration-zh-01.png)
+
 2. **让 Codex 加载插件。** 安装、重装或升级后，重新加载 Codex 窗口或完全重启 Codex；然后打开要使用 Canvasight 的项目，新建一个 Codex 任务，并在任务中 `@Canvasight`。
 
 3. **打开画布。** 把下面这段提示词完整复制到 Codex：
@@ -42,6 +44,8 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
    ```text
    @Canvasight 打开当前项目的 Canvasight 画布。请使用当前任务的项目目录，并在原生画布确认就绪后再告诉我。
    ```
+
+   ![小饭团在 Codex 中打开 Canvasight 原生画布](images/fantuan-illustration-zh-02.png)
 
 4. **创建画布内容。** 画布打开后，选择一个适合当前工作的提示词复制到 Codex：
 
@@ -76,6 +80,8 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
    ```
 
 6. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务。
+
+   ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
 
 ### 原生 widget 合同
 
@@ -311,6 +317,8 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
    Codex will handle the marketplace and plugin installation. To run the CLI manually or install from a local checkout, see [Plugin Installation](#plugin-installation).
 
+   ![Fantuan asks Codex to install the Canvasight plugin](images/fantuan-illustration-en-01.png)
+
 2. **Let Codex load the plugin.** After an install, reinstall, or upgrade, reload the Codex window or quit and restart Codex. Then open the project you want to use with Canvasight, create a new Codex task, and mention `@Canvasight` in that task.
 
 3. **Open the canvas.** Copy this complete prompt into Codex:
@@ -318,6 +326,8 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
    ```text
    @Canvasight Open the Canvasight canvas for the current project. Use this task's project directory, and only tell me it is ready after the native canvas has been verified.
    ```
+
+   ![Fantuan opens the Canvasight native canvas in Codex](images/fantuan-illustration-en-02.png)
 
 4. **Create canvas content.** After the canvas opens, copy the prompt that best matches your work into Codex:
 
@@ -352,6 +362,8 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
    ```
 
 6. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. When ready, click Run on the node you want to execute. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task.
+
+   ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
 
 ### Native Widget Contract
 
