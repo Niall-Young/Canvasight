@@ -230,6 +230,13 @@ function handle(message) {
               interface: { displayName: "PDF 专家" }
             },
             {
+              name: "PDF",
+              description: "Duplicate lower-priority metadata must not create a second picker row.",
+              enabled: true,
+              path: "/private/secret/skills/pdf-duplicate/SKILL.md",
+              scope: "repo"
+            },
+            {
               name: "figma",
               description: "Translate Figma design context into implementation evidence.",
               enabled: true,
@@ -2506,6 +2513,46 @@ async function assertDesktopRuntimeSelection() {
   assert.deepEqual(await initializedExecutable(), [chatGptDesktopBin]);
 
   await fsp.writeFile(nativeLogPath, "", "utf8");
+  const splitRuntimeHome = path.join(runtimeRoot, "skills-path-native-chatgpt-home");
+  const splitRuntimeClient = createMcpClient("runtime-skills-path-native-chatgpt", {
+    CANVASIGHT_HOME: splitRuntimeHome,
+    CANVASIGHT_CODEX_BIN: "",
+    CANVASIGHT_SKILLS_CODEX_BIN: "",
+    CANVASIGHT_CODEX_APP_BIN: missingBin,
+    CANVASIGHT_CHATGPT_APP_BIN: chatGptDesktopBin,
+    CANVASIGHT_FAKE_THREAD_CWD: defaultProjectPath,
+    PATH: `${pathBinDir}${path.delimiter}${process.env.PATH}`
+  });
+  try {
+    await splitRuntimeClient.request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "canvasight-runtime-skills-path-native-chatgpt", version: "0.0.0" }
+    });
+    const skills = await splitRuntimeClient.request("tools/call", {
+      name: "list_canvasight_skills",
+      arguments: { projectPath: defaultProjectPath }
+    });
+    assert.equal(skills.structuredContent.status, "ok");
+    const opened = await splitRuntimeClient.request("tools/call", {
+      name: "open_canvasight",
+      arguments: { threadId: "thread-runtime-skills-path-native-chatgpt", language: "zh" }
+    });
+    await splitRuntimeClient.request("tools/call", {
+      name: "close_canvasight",
+      arguments: { sessionId: opened.structuredContent.sessionId }
+    });
+  } finally {
+    splitRuntimeClient.stop();
+    await stopDaemon(splitRuntimeHome);
+  }
+  assert.deepEqual(
+    await initializedExecutable(),
+    [pathBin, chatGptDesktopBin],
+    "Skill discovery must prefer PATH over ChatGPT while native thread operations remain Desktop-first"
+  );
+
+  await fsp.writeFile(nativeLogPath, "", "utf8");
   await openWithRuntime("path-fallback", {
     CANVASIGHT_CODEX_APP_BIN: missingBin,
     CANVASIGHT_CHATGPT_APP_BIN: missingBin,
@@ -3072,6 +3119,17 @@ async function main() {
     assert.equal(widgetSkillsProxy.structuredContent.ok, true);
     assert.deepEqual(widgetSkillsProxy.structuredContent.data.skills.map((skill) => skill.name), ["figma"]);
     assert.doesNotMatch(JSON.stringify(widgetSkillsProxy.structuredContent.data), /\/private\/secret|SKILL\.md/);
+    const widgetCompleteSkillsProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/skills?projectPath=${encodeURIComponent(defaultProjectPath)}`,
+        method: "GET",
+        ...widgetIdentity()
+      }
+    });
+    assert.equal(widgetCompleteSkillsProxy.structuredContent.data.count, 2);
+    assert.equal(widgetCompleteSkillsProxy.structuredContent.data.total, 2);
+    assert.deepEqual(widgetCompleteSkillsProxy.structuredContent.data.skills.map((skill) => skill.name), ["figma", "pdf"]);
     const widgetDefaultPreferences = await request("tools/call", {
       name: "canvasight_widget_api",
       arguments: {

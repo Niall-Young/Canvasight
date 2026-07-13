@@ -19,34 +19,34 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:45:18Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-13T15:14:35Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to review persistent AI conflict feedback and Page navigation preservation
+    notes: Reused on the current thread to review Skill picker portal placement and zoom isolation
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:45:55Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-13T15:14:35Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to align design.md with context-bound AI rebase and human-priority conflict handling
+    notes: Reused on the current thread to align design.md with viewport Portal and complete Skill matching
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T15:02:38Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-13T15:14:35Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented context-bound AI rebase, human-priority conflicts, UI save reconciliation, and durable receipts for 0.4.14
+    notes: Reused on the current thread to implement complete Skill discovery and viewport-level picker placement
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,34 +63,34 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:59:51Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: issue-cross-thread-page-concurrent-edit
+    last_seen: 2026-07-13T15:14:35Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns remaining native-host double-task acceptance after exact 0.4.14 installation and all automated gates passed
+    notes: Reused on the current thread to verify Skill runtime completeness, placement and browser interaction coverage
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:48:04Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-13T15:14:35Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to synchronize bilingual human-AI concurrency guidance
+    notes: Reused on the current thread to confirm existing bilingual Skill picker guidance remains accurate
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:50:54Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-13T15:19:12Z
+    handoff_source: issue-skill-picker-completeness-position
+    last_report: integration-summary-skill-picker-completeness-position
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to record the 0.4.14 concurrency baseline and own selective Git closure after verification
+    notes: Reused on the current thread to perform selective Git closure for the verified 0.4.15 Skill picker delivery
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

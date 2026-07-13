@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.14";
+const SERVER_VERSION = "0.4.15";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -405,6 +405,34 @@ function codexAppRuntime() {
   // testable without changing their production preference order.
   const codexDesktopBin = configuredExecutable("CANVASIGHT_CODEX_APP_BIN") || DEFAULT_CODEX_APP_BIN;
   if (fs.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
+
+  const chatGptDesktopBin = configuredExecutable("CANVASIGHT_CHATGPT_APP_BIN") || DEFAULT_CHATGPT_APP_BIN;
+  if (fs.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
+
+  return { bin: "codex", source: "path_fallback", isDesktop: false };
+}
+
+function commandAvailableOnPath(command) {
+  const pathEntries = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const extensions = process.platform === "win32"
+    ? String(process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)
+    : [""];
+  return pathEntries.some((entry) =>
+    extensions.some((extension) => fs.existsSync(path.join(entry, `${command}${extension.toLowerCase()}`)) || fs.existsSync(path.join(entry, `${command}${extension.toUpperCase()}`)))
+  );
+}
+
+function codexSkillsRuntime() {
+  const explicitSkillsBin = configuredExecutable("CANVASIGHT_SKILLS_CODEX_BIN");
+  if (explicitSkillsBin) return { bin: explicitSkillsBin, source: "skills_explicit_override", isDesktop: false };
+
+  const explicitBin = configuredExecutable("CANVASIGHT_CODEX_BIN");
+  if (explicitBin) return { bin: explicitBin, source: "explicit_override", isDesktop: false };
+
+  const codexDesktopBin = configuredExecutable("CANVASIGHT_CODEX_APP_BIN") || DEFAULT_CODEX_APP_BIN;
+  if (fs.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
+
+  if (commandAvailableOnPath("codex")) return { bin: "codex", source: "path_fallback", isDesktop: false };
 
   const chatGptDesktopBin = configuredExecutable("CANVASIGHT_CHATGPT_APP_BIN") || DEFAULT_CHATGPT_APP_BIN;
   if (fs.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
@@ -4990,7 +5018,7 @@ async function appServerRequestSequence(requests, options = {}) {
   // Resolve once for the entire native operation. In particular, never retry a
   // Desktop request through PATH after its handshake or request fails: PATH may
   // point at an older CLI that cannot read this Desktop task's rollout format.
-  const runtime = codexAppRuntime();
+  const runtime = options.runtime || codexAppRuntime();
   const results = await appServerRequestSequenceViaTransport(requests, options, transport, runtime);
   Object.defineProperty(results, "canvasightAppServerTransport", {
     value: transport.kind,
@@ -5253,8 +5281,8 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
   });
 }
 
-function appServerRequest(method, params, { experimentalApi = false } = {}) {
-  return appServerRequestSequence([{ method, params }], { experimentalApi }).then((results) => results[0] || {});
+function appServerRequest(method, params, { experimentalApi = false, runtime = null } = {}) {
+  return appServerRequestSequence([{ method, params }], { experimentalApi, runtime }).then((results) => results[0] || {});
 }
 
 function normalizeSkillListLimit(value) {
@@ -5288,12 +5316,16 @@ function skillSummaryMatchesQuery(skill, query) {
 async function listResolvedCodexSkills(projectPath, options = {}) {
   const cwd = normalizeProjectPath(projectPath);
   const query = typeof options.query === "string" ? options.query.trim() : "";
-  const limit = normalizeSkillListLimit(options.limit);
+  const limit = options.limit === undefined || options.limit === null ? null : normalizeSkillListLimit(options.limit);
   try {
-    const result = await appServerRequest("skills/list", {
-      cwds: [cwd],
-      forceReload: options.forceReload === true
-    });
+    const result = await appServerRequest(
+      "skills/list",
+      {
+        cwds: [cwd],
+        forceReload: options.forceReload === true
+      },
+      { runtime: codexSkillsRuntime() }
+    );
     const entries = Array.isArray(result?.data) ? result.data : [];
     const entry =
       entries.find((candidate) => optionalProjectPath(candidate?.cwd) === cwd) ||
@@ -5314,17 +5346,19 @@ async function listResolvedCodexSkills(projectPath, options = {}) {
     const deduplicated = new Map();
     (Array.isArray(entry.skills) ? entry.skills : []).forEach((skill) => {
       const summary = summarizeCodexSkill(skill);
-      if (summary && !deduplicated.has(summary.name)) deduplicated.set(summary.name, summary);
+      const key = summary?.name.toLocaleLowerCase();
+      if (summary && key && !deduplicated.has(key)) deduplicated.set(key, summary);
     });
     const matched = [...deduplicated.values()]
       .filter((skill) => skillSummaryMatchesQuery(skill, query))
       .sort((left, right) => left.name.localeCompare(right.name));
+    const visible = limit === null ? matched : matched.slice(0, limit);
     return {
       status: "ok",
       query,
-      count: Math.min(matched.length, limit),
+      count: visible.length,
       total: matched.length,
-      skills: matched.slice(0, limit),
+      skills: visible,
       ...(Array.isArray(entry.errors) && entry.errors.length > 0
         ? {
             advisory: {
@@ -6588,7 +6622,7 @@ async function toolListCanvasightSkills(args) {
   const result = await listResolvedCodexSkills(projectPath, {
     query: args?.query,
     forceReload: args?.forceReload === true,
-    limit: args?.limit
+    limit: args?.limit ?? 50
   });
   return toolResult(
     result,

@@ -35,7 +35,7 @@ function skillScore(skill: SkillSummary, query: string): number {
   return 0;
 }
 
-export function filterSkills(skills: SkillSummary[], query: string, limit = 8): SkillSummary[] {
+export function filterSkills(skills: SkillSummary[], query: string, limit = Number.POSITIVE_INFINITY): SkillSummary[] {
   const needle = normalized(query);
   return skills
     .map((skill, index) => ({ skill, index, score: skillScore(skill, needle) }))

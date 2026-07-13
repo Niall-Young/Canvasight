@@ -2033,16 +2033,22 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .skill-picker {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 100%;
+  position: fixed;
+  z-index: 60;
+  width: min(336px, calc(100vw - 24px));
+  max-height: min(360px, calc(100dvh - 24px));
   overflow: hidden;
   border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-md);
   background: var(--color-background-raised);
   box-shadow: var(--shadow-popover);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.skill-picker.is-positioned {
+  opacity: 1;
+  visibility: visible;
 }
 
 .skill-picker-header {
@@ -2068,7 +2074,7 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .skill-picker-list {
   display: flex;
-  max-height: 248px;
+  max-height: min(316px, calc(100dvh - 68px));
   overflow-y: auto;
   flex-direction: column;
   padding: 4px;

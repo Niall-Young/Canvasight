@@ -907,7 +907,7 @@ export const canvasightApi = {
   },
 
   listSkills(projectPath: string, forceReload = false): Promise<SkillListResponse> {
-    const params = new URLSearchParams({ projectPath, limit: "200" });
+    const params = new URLSearchParams({ projectPath });
     if (forceReload) params.set("forceReload", "true");
     return requestJson<SkillListResponse>(`/api/skills?${params.toString()}`);
   },
