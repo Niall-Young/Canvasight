@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: 019f5bbf-d635-7f83-8d8e-b8476a72c37d
 created_at: 2026-07-13T13:57:26Z
-updated_at: 2026-07-13T13:57:26Z
+updated_at: 2026-07-13T14:00:39Z
 depends_on:
   - issue-duplicate-native-canvas-open
 related_files:
@@ -112,5 +112,6 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `c2c15c418ba43e0e1143f64b7a27f48fde44e70e`
-- commit: pending Project Management Agent scoped closure
-- worktree: 仅本轮报告文件待审查
+- commit: `ff5c5074864985761b080462b75103161db9bc73`（`docs: 记录重复原生画布诊断`）
+- post-commit: `main` 领先 `origin/main` 1 个提交；本轮 4 个报告/队列/roster 路径已提交。
+- worktree: 另有 README、MCP source、open Skill/reference 与 MCP smoke 的未暂存改动，未纳入本轮诊断提交并原样保留。
