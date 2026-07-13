@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-13T07:19:29Z
-updated_at: 2026-07-13T07:19:29Z
+updated_at: 2026-07-13T07:35:33Z
 depends_on:
   - issue-cross-platform-ci-regressions-0-4-10
   - solution-cross-platform-ci-regressions-0-4-10
@@ -24,7 +24,7 @@ verification_status: passed
 verification_evidence:
   - Exact Node 20.19 build, clean distribution, 14-tool registration and MCP runtime gates pass.
   - Five parallel full MCP smoke suites completed 20 concurrent opens successfully.
-  - A new hosted matrix run is required after the corrective commit is pushed.
+  - GitHub Actions run 29232468700 passes Windows, macOS and Linux completely.
 ---
 
 # 0.4.10 跨平台 CI 回归集成总结
@@ -44,7 +44,7 @@ verification_evidence:
 - Customer Support Agent：Main Thread confirmed the existing bilingual 0.4.10 upgrade guidance remains accurate.
 - Design Standards Expert：Main Thread confirmed `design.md` needs no update.
 - Development Standards Lead：Main Thread confirmed existing self-contained distribution rules already cover this correction.
-- Project Management Agent：Pending selective staging, commit and push after hosted-local gates freeze.
+- Project Management Agent：Completed selective staging, commits and pushes for the verified release.
 - Skill Expert Agent：Main Thread confirmed no skill files or trigger contracts changed.
 
 ## Agent 输入
@@ -67,7 +67,6 @@ verification_evidence:
 
 ## 未解决
 
-- The corrective commit has not yet produced a new hosted three-OS result.
 - Real Windows Codex fullscreen ready/control/same-task Run evidence remains unavailable.
 
 ## 风险
@@ -77,7 +76,6 @@ verification_evidence:
 
 ## 下一轮分派
 
-- Project Management Agent performs scoped commit and push after final local verification.
 - Test Supervisor Agent keeps ownership of real Windows native acceptance.
 
 ## 已完成改动
@@ -88,7 +86,7 @@ verification_evidence:
 
 ## 处理结果
 
-Cross-platform CI root causes are corrected and locally stress-verified; hosted validation remains pending until push.
+Cross-platform CI root causes are corrected, locally stress-verified and confirmed by the fully green hosted three-OS matrix.
 
 ## 修改文件
 
@@ -108,6 +106,7 @@ Cross-platform CI root causes are corrected and locally stress-verified; hosted 
 
 - All local gates passed; only the existing Vite chunk-size warning remains.
 - Re-running the original failed hosted commit reproduced both failures, strengthening the root-cause evidence.
+- Final GitHub Actions run `29232468700` passed Windows, macOS and Linux.
 
 ## 回写状态
 
@@ -122,5 +121,5 @@ Cross-platform CI root causes are corrected and locally stress-verified; hosted 
 
 - Branch: `main`.
 - Baseline commit: `77e257d5faf66b24d29fe64f9e559a8c13416cb2`.
-- Corrective commit: pending Project Management Agent closure.
-- Worktree: scoped cross-platform correction and Agent Team records only.
+- Runtime correction commit: `bdf14b49bee0bbba9b5acc77bbf74ad82031f7b0`.
+- Verified test fixture commit: `a8ed39c97932b9aca56ca5b62822815bee6b5b0b`.

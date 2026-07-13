@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-13T07:30:50Z
-updated_at: 2026-07-13T07:30:50Z
+updated_at: 2026-07-13T07:35:33Z
 depends_on:
   - issue-windows-runtime-selection-fixture-0-4-10
   - solution-windows-runtime-selection-fixture-0-4-10
@@ -20,7 +20,7 @@ verification_status: passed
 verification_evidence:
   - Exact Node 20.19 full MCP smoke, bundle and clean 14-tool distribution checks pass.
   - Production runtime, generated bundle and package version remain unchanged.
-  - A fresh hosted Windows confirmation is pending after push.
+  - GitHub Actions run 29232468700 passes Windows, macOS and Linux completely.
 ---
 
 # Windows runtime selection 测试夹具集成总结
@@ -60,7 +60,6 @@ verification_evidence:
 
 ## 未解决
 
-- A new hosted Windows matrix result is pending after push.
 - Real Windows native fullscreen ready/control/same-task Run acceptance remains unavailable.
 
 ## 风险
@@ -70,8 +69,7 @@ verification_evidence:
 
 ## 下一轮分派
 
-- Project Management Agent performs focused commit and push.
-- Test Supervisor Agent reviews the resulting hosted matrix and retains native acceptance ownership.
+- Test Supervisor Agent retains real Windows native acceptance ownership.
 
 ## 已完成改动
 
@@ -80,7 +78,7 @@ verification_evidence:
 
 ## 处理结果
 
-The final automated Windows fixture defect is locally resolved without changing release runtime `0.4.10+codex.20260713151335`.
+The final automated Windows fixture defect is resolved without changing release runtime `0.4.10+codex.20260713151335`; the complete hosted three-OS matrix is green.
 
 ## 修改文件
 
@@ -95,7 +93,8 @@ The final automated Windows fixture defect is locally resolved without changing 
 
 ## 验证记录
 
-- Local gates pass; hosted Windows is the remaining automated evidence.
+- Local gates pass.
+- GitHub Actions run `29232468700` passes Windows, macOS and Linux build, reproducibility, clean distribution, 14-tool registration and full MCP runtime tests.
 
 ## 回写状态
 
@@ -110,5 +109,5 @@ The final automated Windows fixture defect is locally resolved without changing 
 
 - Branch: `main`.
 - Baseline commit: `bdf14b49bee0bbba9b5acc77bbf74ad82031f7b0`.
-- Third-round test/report commit: pending.
-- Worktree: test-only fixture and Agent Team records.
+- Verified runtime/test commit: `a8ed39c97932b9aca56ca5b62822815bee6b5b0b`.
+- Worktree: final hosted-evidence report closure only.

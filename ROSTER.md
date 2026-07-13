@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T07:30:50Z
+    last_seen: 2026-07-13T07:35:33Z
     handoff_source: issue-windows-native-acceptance-0-4-10
-    last_report: solution-windows-runtime-selection-fixture-0-4-10
+    last_report: integration-summary-windows-runtime-selection-fixture-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Windows runtime fixture passes locally; owns pending hosted matrix review and native acceptance
+    notes: Windows, macOS and Linux hosted gates pass; owns remaining real Windows native acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f5694-1746-7223-bd64-8cbca20eb319
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T05:23:33Z
-    handoff_source: issue-readme-bilingual-fantuan-illustrations
-    last_report: integration-summary-readme-bilingual-fantuan-illustrations
+    last_seen: 2026-07-13T07:35:33Z
+    handoff_source: integration-summary-windows-runtime-selection-fixture-0-4-10
+    last_report: integration-summary-windows-runtime-selection-fixture-0-4-10
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline and owns selective closure for the bilingual illustration scope
+    notes: Completed selective commits and pushes for the self-contained 0.4.10 cross-platform delivery
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

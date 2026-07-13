@@ -6,11 +6,11 @@ status: assigned
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: high
-version: 2
+version: 3
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-07-13T07:02:28Z
-updated_at: 2026-07-13T07:19:29Z
+updated_at: 2026-07-13T07:35:33Z
 depends_on:
   - issue-mcp-distribution-missing-dependencies
 related_files:
@@ -19,7 +19,7 @@ related_files:
   - .github/workflows/canvasight-plugin.yml
 verification_status: not_started
 verification_evidence:
-  - Automated clean-distribution, 14-tool registration and native supporting smoke pass after the cross-platform startup-race correction.
+  - GitHub Actions run 29232468700 passes Windows, macOS and Linux clean-distribution, 14-tool registration and full MCP runtime gates.
   - No real Windows Codex fullscreen instance evidence is available in this workspace.
 solution_report: null
 ---
