@@ -4001,6 +4001,10 @@ async function main() {
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").position.y, 1520);
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-design-md").position.y, 1900);
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").data.projectGuidanceFile, "AGENTS.md");
+    assert.equal(
+      productScatterJson.nodes.find((node) => node.id === "project-guidance-agents-md").data.body,
+      "当前项目缺少 AGENTS.md。请创建该文件，基于现有项目内容和当前需求，写清项目上下文、工作规则、实现约束、验证命令与 git 提交约定。不要默认加入 Agent Team 等未启用的可选流程，也不要写成空模板。"
+    );
     assert.equal(productScatterJson.nodes.find((node) => node.id === "project-guidance-design-md").data.projectGuidanceFile, "design.md");
 
     const guidedProjectPath = path.join(tempRoot, "guided-product-project");

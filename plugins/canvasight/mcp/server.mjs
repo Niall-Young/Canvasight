@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.17";
+var SERVER_VERSION = "0.4.18";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17464,7 +17464,7 @@ var SOFTWARE_PRODUCT_GUIDANCE_FILES = [
     aliases: ["agents.md", "agents-md", "agents md"],
     nodeId: "project-guidance-agents-md",
     title: "补充 AGENTS.md",
-    body: "当前项目缺少 AGENTS.md。请创建该文件，写清项目上下文、工作规则、Agent Team 分工、实现标准、设计标准、验证命令和 git 提交规则。已有约定应从项目文件和当前需求中归纳，不要写成空模板。"
+    body: "当前项目缺少 AGENTS.md。请创建该文件，基于现有项目内容和当前需求，写清项目上下文、工作规则、实现约束、验证命令与 git 提交约定。不要默认加入 Agent Team 等未启用的可选流程，也不要写成空模板。"
   },
   {
     canonicalName: "design.md",

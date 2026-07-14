@@ -26,6 +26,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-agents-md-guidance-agent-team-opt-in.md` - corrected the generic AGENTS.md guidance node so disabled optional workflows remain opt-in.
+- `agent-reports/resolved/solution-agents-md-guidance-agent-team-opt-in.md` - scoped the fix to MCP guidance copy, exact regression coverage, and versioned bundle output.
+- `agent-reports/resolved/issue-agents-md-guidance-agent-team-opt-in.md` - resolved the misleading Agent Team requirement shown when Agent Team was not enabled.
 - `agent-reports/resolved/issue-stable-release-self-update.md` - v0.4.11 complete-plugin updater, official Release, and stable channel passed Windows, macOS, and Linux gates.
 - `agent-reports/resolved/integration-summary-windows-runtime-selection-fixture-0-4-10.md` - records the fully green Windows, macOS and Linux build, clean-distribution, 14-tool registration and MCP runtime matrix.
 - `agent-reports/resolved/solution-windows-runtime-selection-fixture-0-4-10.md` - uses real `node.exe` candidates plus the fake app-server script and platform PATH delimiter.
