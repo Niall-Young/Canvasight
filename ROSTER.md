@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T08:32:19Z
+    last_seen: 2026-07-14T08:38:46Z
     handoff_source: issue-publish-stable-release-0-4-20
-    last_report: issue-publish-stable-release-0-4-20
+    last_report: integration-summary-canvasight-0-4-20-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns the frozen 0.4.20 release candidate selective commit, tag, workflow, and stable closure after explicit user risk acceptance
+    notes: Completed selective candidate commit and 0.4.20 release closure; stable, tag, and release commit verified identical
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
