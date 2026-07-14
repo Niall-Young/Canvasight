@@ -10,7 +10,6 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-16` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.16 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-16.md` | 4 | 2026-07-14T03:52:34Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
 - `issue-duplicate-native-canvas-open` | assigned | high | Development Agent | 重复原生 Widget 的无内容保存阻断 AI 写图 | `agent-reports/assigned/issue-duplicate-native-canvas-open.md` | 2 | 2026-07-13T13:57:26Z
