@@ -84,11 +84,14 @@ async function setVersions(version) {
   lock.version = version;
   if (!lock.packages?.[""]) throw new Error("package-lock.json is missing the root package entry");
   lock.packages[""].version = version;
+  const serverVersionPattern = /const SERVER_VERSION = "[^"]+";/;
+  if (!serverVersionPattern.test(server)) {
+    throw new Error("mcp/server.source.mjs SERVER_VERSION was not found");
+  }
   const updatedServer = server.replace(
-    /const SERVER_VERSION = "[^"]+";/,
+    serverVersionPattern,
     `const SERVER_VERSION = "${version}";`,
   );
-  if (updatedServer === server) throw new Error("mcp/server.source.mjs SERVER_VERSION was not found");
   await Promise.all([
     writeJson(releaseFiles.manifest, manifest),
     writeJson(releaseFiles.package, pkg),

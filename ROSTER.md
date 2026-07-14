@@ -61,36 +61,36 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: null
+    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:34:38Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: integration-summary-skill-picker-caret-combobox
+    last_seen: 2026-07-14T03:45:48Z
+    handoff_source: issue-publish-stable-release-0-4-16
+    last_report: issue-publish-stable-release-0-4-16
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to verify caret geometry, four-way placement, compact scrolling and combobox ARIA
+    notes: Rebuilt on the current thread to supervise the 0.4.16 local and GitHub release matrix, asset, ref, and updater verification
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: null
+    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:34:38Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: integration-summary-skill-picker-caret-combobox
+    last_seen: 2026-07-14T03:45:48Z
+    handoff_source: issue-publish-stable-release-0-4-16
+    last_report: issue-publish-stable-release-0-4-16
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reused on the current thread to confirm existing bilingual Skill picker guidance remains accurate
+    notes: Rebuilt on the current thread and requested bilingual development-command synchronization without changing dynamic stable update guidance
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: null
+    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:37:16Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: integration-summary-skill-picker-caret-combobox
+    last_seen: 2026-07-14T03:52:34Z
+    handoff_source: issue-publish-stable-release-0-4-16
+    last_report: integration-summary-canvasight-0-4-16-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to selectively close the verified caret-combobox scope without staging concurrent attachment work
+    notes: Active for the frozen seven-path 0.4.16 release-candidate Git closure; tag and push remain intentionally pending
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

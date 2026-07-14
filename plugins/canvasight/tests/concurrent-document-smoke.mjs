@@ -55,7 +55,11 @@ async function startDaemon() {
   daemon.once("exit", (code, signal) => {
     if (code && daemonState) process.stderr.write(`Concurrent document daemon exited: code=${code} signal=${signal} ${stderr}\n`);
   });
-  daemonState = await waitForDaemon();
+  try {
+    daemonState = await waitForDaemon();
+  } catch (error) {
+    throw new Error(`${error.message}${stderr.trim() ? `; daemon stderr: ${stderr.trim()}` : ""}`);
+  }
 }
 
 async function stopDaemon() {

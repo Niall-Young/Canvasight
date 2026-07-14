@@ -248,22 +248,28 @@ npm run dev
 npm run dev:status
 npm run dev:stop
 npm run dev:foreground
+npm run preview
 npm run daemon
 npm run daemon:stop
 npm run typecheck
 npm run build
 npm run test:markdown
 npm run test:markdown-export
+npm run test:skills
 npm run test:dev-server
 npm run test:mcp
+npm run test:concurrency
 npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.11
+npm run release:prepare -- 0.4.16
+npm run release:verify -- 0.4.16
 ```
 
 `npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+
+`npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
 
 插件校验：
 
@@ -587,22 +593,28 @@ npm run dev
 npm run dev:status
 npm run dev:stop
 npm run dev:foreground
+npm run preview
 npm run daemon
 npm run daemon:stop
 npm run typecheck
 npm run build
 npm run test:markdown
 npm run test:markdown-export
+npm run test:skills
 npm run test:dev-server
 npm run test:mcp
+npm run test:concurrency
 npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.11
+npm run release:prepare -- 0.4.16
+npm run release:verify -- 0.4.16
 ```
 
 `npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+
+`npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
 
 Plugin validation:
 
