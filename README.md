@@ -22,6 +22,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 给节点添加图片、文件和上下文附件。
 - 节点始终通过 Chat 发送当前节点及其下游节点到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
+- 梳理框架遇到会改变方向的关键歧义时，在当前 Codex 消息中直接显示 Canvasight 确认卡；提交后自动继续原 Graph Writer 请求，无需打开画布。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
 - 可选地在 Run Markdown 中加入 Agent Team 协作协议：以 `ROSTER.md` 恢复角色席位、以版本化报告维护唯一 owner 与验证证据，并从报告派生 `agent-reports/QUEUE.md`。
@@ -124,6 +125,8 @@ Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatt
 
 生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
 
+当两个以上合理答案会实质改变内容模式、框架维度、目标范围、关键关系、写入方式或必要覆盖时，Graph Writer 会调用 `ask_canvasight_framework_questions`，把一至三道问题作为紧凑卡片直接放进当前消息。每题支持单选或多选、二至三个预设答案和自定义补充；推荐项只是建议，不会替用户提交。卡片不会打开 Canvasight、启动 daemon、建立项目 Session 或写入 `.scatter`。提交成功后，答案作为当前任务中可见的用户消息发送，Graph Writer 重新获取最新 graph context 后继续；发送失败会保留选择并允许重试。旧任务看不到该工具或宿主无法渲染 inline UI 时，Codex 改用普通文字提问，不会改开全屏画布或猜测关键答案。
+
 专业内容 Skill 可以通过 Codex description 路由或用户显式 `$Skill` 主导一次写图。此时 `skill-led` 只替换默认专业内容框架：专业 Skill 负责内容，Canvasight 仍是 Page、节点、关系、revision、原子写入和固定水平布局的唯一写入者。多个专业 Skill 无法调和时必须先询问用户，不能静默混合。
 
 节点级 Skill 是另一层能力。用户手动 `$Skill` 始终可用；“允许 AI 为节点选择 Skill”是默认关闭、跨项目生效的全局设置。开启后 AI 只在 Skill description 与节点职责明确匹配时写入 `$skill-name`，并提交来源和理由用于本次写图校验。Canvasight 不给节点增加隐藏 Skill 字段，也不提供 Skill 安装或启用管理。
@@ -179,6 +182,7 @@ codex plugin add canvasight@canvasight-local
 
 原生打开与确认：
 
+- `ask_canvasight_framework_questions`：在当前 Codex 消息中显示一至三道关键框架问题；不会打开或依赖 Canvasight 工作区。
 - `open_canvasight`：正常入口；返回 provisional `opening`、`openAttemptId` 和 `sessionId`，不代表画布已打开。
 - `render_canvasight_canvas_widget`：显式 widget 兼容入口。
 - `open_canvasight_recent_project`：在新任务中打开最近项目。
@@ -263,8 +267,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.16
-npm run release:verify -- 0.4.16
+npm run release:prepare -- 0.4.17
+npm run release:verify -- 0.4.17
 ```
 
 `npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
@@ -367,6 +371,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Add images, files, and contextual attachments to nodes.
 - Nodes always use Chat to send the selected node plus downstream nodes to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
+- Resolve consequential framework ambiguity through a Canvasight confirmation card embedded directly in the current Codex message, then continue the original Graph Writer request without opening the canvas.
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
 - Reopen recent Canvasight projects from a new Codex task.
 - Optionally include the Agent Team protocol in generated Run Markdown: `ROSTER.md` restores role seats, versioned reports hold the single owner and verification evidence, and `agent-reports/QUEUE.md` is derived from reports.
@@ -469,6 +474,8 @@ When the user asks to continue the current canvas, expand a node, or remove an e
 
 Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
 
+When two or more plausible answers would materially change the content mode, framework dimensions, target scope, key relationships, write behavior, or required coverage, Graph Writer calls `ask_canvasight_framework_questions`. It embeds one to three compact questions directly in the current message. Each question supports single or multiple selection, two or three presets, and a custom answer; a recommended option is guidance only. The card never opens Canvasight, starts the daemon, creates a project session, or writes to `.scatter`. After a successful submission, the answers become a visible user message in the same task and Graph Writer reacquires the latest graph context before continuing. A failed send preserves the selections for retry. If an older task cannot see the tool or its host cannot render inline UI, Codex falls back to concise text questions instead of opening fullscreen Canvasight or guessing a consequential answer.
+
 A professional content Skill can lead one graph write through Codex description routing or an explicit `$Skill`. `skill-led` replaces only Canvasight's default professional content framework: the professional Skill owns content decisions, while Canvasight remains the sole writer for Pages, nodes, relationships, revisions, atomic persistence, and the fixed horizontal layout. Conflicting professional Skills must be resolved with the user before writing.
 
 Node-level Skills are separate. Manual `$Skill` text always works. “Allow AI to choose Skills for nodes” is a global, cross-project opt-in that defaults off. When enabled, AI writes `$skill-name` only for a clear description-to-responsibility match and supplies a source and rationale for write-time validation. Canvasight adds no hidden node Skill field and does not manage Skill installation or enablement.
@@ -524,6 +531,7 @@ After a real installation, the updater only asks you to reload or restart Codex 
 
 Native open and confirmation:
 
+- `ask_canvasight_framework_questions`: renders one to three consequential framework questions inline in the current Codex message; it does not open or require the Canvasight workspace.
 - `open_canvasight`: normal entrypoint; returns provisional `opening`, `openAttemptId`, and `sessionId`, which do not prove that the canvas opened.
 - `render_canvasight_canvas_widget`: explicit compatibility alias for widget rendering.
 - `open_canvasight_recent_project`: opens a recent project in a new task.
@@ -608,8 +616,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.16
-npm run release:verify -- 0.4.16
+npm run release:prepare -- 0.4.17
+npm run release:verify -- 0.4.17
 ```
 
 `npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.

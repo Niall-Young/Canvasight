@@ -17309,9 +17309,10 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.16";
+var SERVER_VERSION = "0.4.17";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
+var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
 var DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
 var DAEMON_START_LOCK_STALE_MS = 15e3;
 var DAEMON_START_LOCK_WAIT_MS = 12e3;
@@ -21588,18 +21589,19 @@ function canvasightWidgetConnectDomains(extraOrigins = []) {
   domains.add("http://localhost:*");
   return Array.from(domains);
 }
-function canvasightWidgetResourceMeta(extraOrigins = []) {
-  const connectDomains = canvasightWidgetConnectDomains(extraOrigins);
+function canvasightWidgetResourceMeta(extraOrigins = [], { allowDaemon = true, displayMode = "fullscreen", description = "Canvasight native Codex widget shell for the project canvas." } = {}) {
+  const connectDomains = allowDaemon ? canvasightWidgetConnectDomains(extraOrigins) : [];
   return {
     ui: {
       prefersBorder: false,
+      displayMode,
       csp: {
         connectDomains,
         frameDomains: connectDomains,
         resourceDomains: [...connectDomains, "data:", "blob:"]
       }
     },
-    "openai/widgetDescription": "Canvasight native Codex widget shell for the project canvas.",
+    "openai/widgetDescription": description,
     "openai/widgetPrefersBorder": false,
     "openai/widgetCSP": {
       connect_domains: connectDomains,
@@ -21608,11 +21610,11 @@ function canvasightWidgetResourceMeta(extraOrigins = []) {
     }
   };
 }
-function canvasightWidgetHtml() {
+function canvasightWidgetHtml({ mode = "workspace", title = "Canvasight" } = {}) {
   const app = inlineCanvasightApp();
   const appScript = escapeInlineScript(app.script);
   const appStyle = escapeInlineStyle(app.style);
-  return '<!doctype html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>Canvasight</title>\n  <style id="canvasightAppStyles">'.concat(appStyle, '</style>\n  <style>\n    html, body {\n      width: 100%;\n      height: 100%;\n      margin: 0;\n      overflow: hidden;\n      background: #f7f7f7;\n      color: #333;\n      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n    }\n    #canvasight-widget-root {\n      position: fixed;\n      inset: 0;\n      min-width: 0;\n      min-height: 0;\n      background: #f7f7f7;\n    }\n    #root, #canvasight-frame {\n      position: absolute;\n      inset: 0;\n      width: 100%;\n      height: 100%;\n      border: 0;\n      background: #f7f7f7;\n    }\n    #canvasight-widget-status {\n      position: absolute;\n      left: 50%;\n      top: 18px;\n      z-index: 2;\n      max-width: min(560px, calc(100% - 48px));\n      transform: translateX(-50%);\n      padding: 8px 12px;\n      border: 1px solid rgba(0, 0, 0, 0.08);\n      border-radius: 12px;\n      background: rgba(255, 255, 255, 0.94);\n      color: #666;\n      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);\n      font-size: 13px;\n      line-height: 18px;\n      pointer-events: none;\n      opacity: 0;\n      transition: opacity 160ms ease;\n    }\n    #canvasight-widget-status:not(:empty) {\n      opacity: 1;\n    }\n    #canvasight-widget-status[data-tone="ok"] {\n      color: #146c2e;\n    }\n    #canvasight-widget-status[data-tone="error"] {\n      color: #a62626;\n    }\n  </style>\n  <script>\n    globalThis.__CANVASIGHT_WIDGET_SHELL__ = true;\n    globalThis.__CANVASIGHT_WIDGET_SERVER_VERSION__ = ').concat(JSON.stringify(SERVER_VERSION), ';\n  </script>\n</head>\n<body>\n  <div id="canvasight-widget-root">\n    <div id="root"></div>\n    <div id="canvasight-widget-status" role="status" aria-live="polite">Starting Canvasight...</div>\n  </div>\n  <script>\n    window.addEventListener("error", (event) => {\n      const status = document.getElementById("canvasight-widget-status");\n      if (!status) return;\n      status.textContent = event.error?.message || event.message || "Canvasight module failed to start.";\n      status.dataset.tone = "error";\n    });\n    window.addEventListener("unhandledrejection", (event) => {\n      const status = document.getElementById("canvasight-widget-status");\n      if (!status) return;\n      status.textContent = event.reason?.message || String(event.reason || "Canvasight startup promise failed.");\n      status.dataset.tone = "error";\n    });\n  </script>\n  <script id="canvasightAppModule" type="module">').concat(appScript, "</script>\n</body>\n</html>");
+  return '<!doctype html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>'.concat(title, '</title>\n  <style id="canvasightAppStyles">').concat(appStyle, '</style>\n  <style>\n    html, body {\n      width: 100%;\n      height: 100%;\n      margin: 0;\n      overflow: hidden;\n      background: #f7f7f7;\n      color: #333;\n      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n    }\n    #canvasight-widget-root {\n      position: fixed;\n      inset: 0;\n      min-width: 0;\n      min-height: 0;\n      background: #f7f7f7;\n    }\n    #root, #canvasight-frame {\n      position: absolute;\n      inset: 0;\n      width: 100%;\n      height: 100%;\n      border: 0;\n      background: #f7f7f7;\n    }\n    #canvasight-widget-status {\n      position: absolute;\n      left: 50%;\n      top: 18px;\n      z-index: 2;\n      max-width: min(560px, calc(100% - 48px));\n      transform: translateX(-50%);\n      padding: 8px 12px;\n      border: 1px solid rgba(0, 0, 0, 0.08);\n      border-radius: 12px;\n      background: rgba(255, 255, 255, 0.94);\n      color: #666;\n      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);\n      font-size: 13px;\n      line-height: 18px;\n      pointer-events: none;\n      opacity: 0;\n      transition: opacity 160ms ease;\n    }\n    #canvasight-widget-status:not(:empty) {\n      opacity: 1;\n    }\n    #canvasight-widget-status[data-tone="ok"] {\n      color: #146c2e;\n    }\n    #canvasight-widget-status[data-tone="error"] {\n      color: #a62626;\n    }\n    ').concat(mode === "framework-questions" ? "\n    html, body {\n      height: auto;\n      min-width: 0;\n      min-height: 0;\n      overflow: visible;\n      background: transparent;\n    }\n    #canvasight-widget-root, #root {\n      position: relative;\n      inset: auto;\n      width: 100%;\n      height: auto;\n      min-width: 0;\n      min-height: 0;\n      overflow: visible;\n      background: transparent;\n    }\n    " : "", "\n  </style>\n  <script>\n    globalThis.__CANVASIGHT_WIDGET_SHELL__ = true;\n    globalThis.__CANVASIGHT_WIDGET_MODE__ = ").concat(JSON.stringify(mode), ";\n    globalThis.__CANVASIGHT_WIDGET_SERVER_VERSION__ = ").concat(JSON.stringify(SERVER_VERSION), ';\n  </script>\n</head>\n<body>\n  <div id="canvasight-widget-root">\n    <div id="root"></div>\n    <div id="canvasight-widget-status" role="status" aria-live="polite">').concat(mode === "workspace" ? "Starting Canvasight..." : "", '</div>\n  </div>\n  <script>\n    window.addEventListener("error", (event) => {\n      const status = document.getElementById("canvasight-widget-status");\n      if (!status) return;\n      status.textContent = event.error?.message || event.message || "Canvasight module failed to start.";\n      status.dataset.tone = "error";\n    });\n    window.addEventListener("unhandledrejection", (event) => {\n      const status = document.getElementById("canvasight-widget-status");\n      if (!status) return;\n      status.textContent = event.reason?.message || String(event.reason || "Canvasight startup promise failed.");\n      status.dataset.tone = "error";\n    });\n  </script>\n  <script id="canvasightAppModule" type="module">').concat(appScript, "</script>\n</body>\n</html>");
 }
 function messageField(value, keys) {
   if (!isObject2(value)) return null;
@@ -22795,12 +22797,36 @@ function widgetResourceDescriptor() {
     _meta: canvasightWidgetResourceMeta()
   };
 }
+function frameworkQuestionsResourceDescriptor() {
+  const description = "Compact inline Canvasight framework confirmation form.";
+  return {
+    uri: CANVASIGHT_FRAMEWORK_QUESTIONS_URI,
+    name: "canvasight-framework-questions-widget",
+    title: "Canvasight framework confirmation",
+    description,
+    mimeType: p,
+    _meta: canvasightWidgetResourceMeta([], { allowDaemon: false, displayMode: "inline", description })
+  };
+}
 function listCanvasightResources() {
   return {
-    resources: [widgetResourceDescriptor()]
+    resources: [widgetResourceDescriptor(), frameworkQuestionsResourceDescriptor()]
   };
 }
 async function readCanvasightResource(uri) {
+  if (uri === CANVASIGHT_FRAMEWORK_QUESTIONS_URI) {
+    const description = "Compact inline Canvasight framework confirmation form.";
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: p,
+          text: canvasightWidgetHtml({ mode: "framework-questions", title: "Canvasight framework confirmation" }),
+          _meta: canvasightWidgetResourceMeta([], { allowDaemon: false, displayMode: "inline", description })
+        }
+      ]
+    };
+  }
   if (uri !== CANVASIGHT_WIDGET_URI) {
     throw new HttpError(404, "Unknown Canvasight resource: ".concat(uri), "resource_not_found");
   }
@@ -22926,6 +22952,21 @@ var canvasightRunOutputSchema = {
 var looseObjectOutputSchema = {
   type: "object",
   additionalProperties: true
+};
+var frameworkQuestionsOutputSchema = {
+  type: "object",
+  properties: {
+    kind: { type: "string", const: "canvasight.framework-questions" },
+    schemaVersion: { type: "integer", const: 1 },
+    confirmationId: { type: "string" },
+    language: { type: "string", enum: ["zh", "en"] },
+    title: { type: "string" },
+    description: { type: "string" },
+    questions: { type: "array", minItems: 1, maxItems: 3, items: { type: "object", additionalProperties: true } },
+    instruction: { type: "string", const: "wait_for_user_confirmation" }
+  },
+  required: ["kind", "schemaVersion", "confirmationId", "language", "title", "questions", "instruction"],
+  additionalProperties: false
 };
 var canvasightGraphContextOutputSchema = {
   type: "object",
@@ -23380,7 +23421,146 @@ async function toolCloseCanvasight(args) {
     closed.existed ? "Canvasight session closed: ".concat(args.sessionId) : "Canvasight session already closed: ".concat(args.sessionId)
   );
 }
+function requiredTrimmedString(value, field, maxLength = 500) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new HttpError(400, "".concat(field, " must be a non-empty string."), "invalid_framework_question");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new HttpError(400, "".concat(field, " must be at most ").concat(maxLength, " characters."), "invalid_framework_question");
+  }
+  return trimmed;
+}
+function optionalTrimmedString(value, field, maxLength = 1e3) {
+  if (value == null || value === "") return void 0;
+  return requiredTrimmedString(value, field, maxLength);
+}
+function normalizeFrameworkQuestions(args) {
+  const questions = Array.isArray(args?.questions) ? args.questions : [];
+  if (questions.length < 1 || questions.length > 3) {
+    throw new HttpError(400, "questions must contain between 1 and 3 items.", "invalid_framework_question");
+  }
+  const questionIds = /* @__PURE__ */ new Set();
+  const normalizedQuestions = questions.map((question, questionIndex) => {
+    const prefix = "questions[".concat(questionIndex, "]");
+    const id = requiredTrimmedString(question?.id, "".concat(prefix, ".id"), 80);
+    if (questionIds.has(id)) {
+      throw new HttpError(400, "Duplicate question id: ".concat(id), "invalid_framework_question");
+    }
+    questionIds.add(id);
+    const selectionMode = question?.selectionMode;
+    if (selectionMode !== "single" && selectionMode !== "multiple") {
+      throw new HttpError(400, "".concat(prefix, ".selectionMode must be single or multiple."), "invalid_framework_question");
+    }
+    const options = Array.isArray(question?.options) ? question.options : [];
+    if (options.length < 2 || options.length > 3) {
+      throw new HttpError(400, "".concat(prefix, ".options must contain between 2 and 3 items."), "invalid_framework_question");
+    }
+    const optionIds = /* @__PURE__ */ new Set();
+    let recommendedCount = 0;
+    const normalizedOptions = options.map((option, optionIndex) => {
+      const optionPrefix = "".concat(prefix, ".options[").concat(optionIndex, "]");
+      const optionId = requiredTrimmedString(option?.id, "".concat(optionPrefix, ".id"), 80);
+      if (optionIds.has(optionId)) {
+        throw new HttpError(400, "Duplicate option id in ".concat(id, ": ").concat(optionId), "invalid_framework_question");
+      }
+      optionIds.add(optionId);
+      const recommended = option?.recommended === true;
+      if (recommended) recommendedCount += 1;
+      return {
+        id: optionId,
+        label: requiredTrimmedString(option?.label, "".concat(optionPrefix, ".label"), 160),
+        ...optionalTrimmedString(option?.description, "".concat(optionPrefix, ".description"), 300) ? { description: optionalTrimmedString(option.description, "".concat(optionPrefix, ".description"), 300) } : {},
+        ...recommended ? { recommended: true } : {}
+      };
+    });
+    if (recommendedCount > 1) {
+      throw new HttpError(400, "".concat(prefix, ".options may mark at most one recommended option."), "invalid_framework_question");
+    }
+    return {
+      id,
+      question: requiredTrimmedString(question?.question, "".concat(prefix, ".question"), 500),
+      selectionMode,
+      options: normalizedOptions,
+      customAnswerLabel: optionalTrimmedString(question?.customAnswerLabel, "".concat(prefix, ".customAnswerLabel"), 100) || (args?.language === "en" ? "Custom answer" : "自定义答案")
+    };
+  });
+  return {
+    kind: "canvasight.framework-questions",
+    schemaVersion: 1,
+    confirmationId: "framework-confirmation-".concat(crypto.randomUUID()),
+    language: args?.language === "en" ? "en" : "zh",
+    title: requiredTrimmedString(args?.title, "title", 240),
+    ...optionalTrimmedString(args?.description, "description", 800) ? { description: optionalTrimmedString(args.description, "description", 800) } : {},
+    questions: normalizedQuestions,
+    instruction: "wait_for_user_confirmation"
+  };
+}
+async function toolAskCanvasightFrameworkQuestions(args) {
+  const structuredContent = normalizeFrameworkQuestions(args || {});
+  return toolResult(
+    structuredContent,
+    "Canvasight needs the user's framework confirmation. Stop the current graph-writing flow and wait for the inline component response. Do not write the graph or repeat these questions before the user answers."
+  );
+}
 var tools = [
+  {
+    name: "ask_canvasight_framework_questions",
+    description: "Ask 1-3 consequential framework questions in a compact inline Canvasight form when the answers would materially change content mode, framework dimensions, scope, key relationships, write behavior, or required coverage. Inspect repository, current Page, user context, and relevant Skills first. Stop graph writing after calling this tool and wait for the user's submitted answers.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title for the confirmation card." },
+        description: { type: "string", description: "Optional concise explanation of why confirmation is needed." },
+        language: { type: "string", enum: ["zh", "en"], description: "Component language. Defaults to zh." },
+        questions: {
+          type: "array",
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: "object",
+            properties: {
+              id: { type: "string", description: "Stable question id." },
+              question: { type: "string", description: "Question text." },
+              selectionMode: { type: "string", enum: ["single", "multiple"] },
+              customAnswerLabel: { type: "string", description: "Optional label for the custom answer field." },
+              options: {
+                type: "array",
+                minItems: 2,
+                maxItems: 3,
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", description: "Stable option id within this question." },
+                    label: { type: "string" },
+                    description: { type: "string" },
+                    recommended: { type: "boolean" }
+                  },
+                  required: ["id", "label"],
+                  additionalProperties: false
+                }
+              }
+            },
+            required: ["id", "question", "selectionMode", "options"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["title", "questions"],
+      additionalProperties: false
+    },
+    outputSchema: frameworkQuestionsOutputSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    _meta: {
+      ui: {
+        resourceUri: CANVASIGHT_FRAMEWORK_QUESTIONS_URI,
+        visibility: ["model", "app"],
+        displayMode: "inline"
+      },
+      "openai/toolInvocation/invoking": "Preparing framework questions...",
+      "openai/toolInvocation/invoked": "Framework questions ready"
+    }
+  },
   {
     name: "render_canvasight_canvas_widget",
     description: "Open Canvasight as a native Codex widget for the active project. Pass the active task's CODEX_THREAD_ID as threadId so Chat Run targets the same thread. Prefer this over localhost browser URLs for normal use because the widget has the Codex host bridge and Run buttons can send follow-up messages to the current thread.",
@@ -23953,6 +24133,7 @@ var tools = [
   }
 ];
 async function callTool(name, args) {
+  if (name === "ask_canvasight_framework_questions") return toolAskCanvasightFrameworkQuestions(args || {});
   if (name === "render_canvasight_canvas_widget") return toolRenderCanvasightCanvasWidget(args || {});
   if (name === "open_canvasight") return toolOpenCanvasight(args || {});
   if (name === "open_canvasight_browser_fallback") return toolOpenCanvasightBrowserFallback(args || {});

@@ -82,11 +82,16 @@ try {
   );
   const toolsStage = diagnostic.stages?.find((stage) => stage.stage === "tools_list_ok");
   assert.ok(toolsStage, "installed MCP registration probe did not complete tools/list");
-  assert.equal(toolsStage.toolCount, 15, "installed MCP server must expose exactly 15 tools");
+  assert.equal(toolsStage.toolCount, 16, "installed MCP server must expose exactly 16 tools");
   assert.equal(
     toolsStage.requiredToolsPresent,
     true,
     "installed MCP server is missing open_canvasight or await_canvasight_widget_ready"
+  );
+  assert.equal(
+    toolsStage.frameworkQuestionsToolPresent,
+    true,
+    "installed MCP server is missing ask_canvasight_framework_questions"
   );
 
   console.log(

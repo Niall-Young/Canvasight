@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { FrameworkQuestionsCard } from "./components/FrameworkQuestionsCard";
 import { startCanvasightWidgetBridge } from "./lib/widgetBridge";
+import { isFrameworkQuestionsPayload, type FrameworkQuestionsPayload } from "./lib/frameworkQuestions";
 
 function ReactMountedSignal(): null {
   useEffect(() => {
@@ -24,11 +26,31 @@ function CanvasightRoot(): React.ReactElement {
   return <React.Fragment key={bindingKey}><App /><ReactMountedSignal /></React.Fragment>;
 }
 
+function FrameworkQuestionsRoot(): React.ReactElement {
+  const [payload, setPayload] = useState<FrameworkQuestionsPayload | null>(() => {
+    const initial = window.__CANVASIGHT_FRAMEWORK_QUESTIONS__;
+    return isFrameworkQuestionsPayload(initial) ? initial : null;
+  });
+  useEffect(() => {
+    const handleQuestions = (event: Event) => {
+      const next = (event as CustomEvent<unknown>).detail;
+      if (isFrameworkQuestionsPayload(next)) setPayload(next);
+    };
+    window.addEventListener("canvasight:framework-questions", handleQuestions);
+    return () => window.removeEventListener("canvasight:framework-questions", handleQuestions);
+  }, []);
+  if (!payload) return <main className="framework-questions-shell is-loading" aria-busy="true" />;
+  return <FrameworkQuestionsCard key={payload.confirmationId} payload={payload} />;
+}
+
 try {
   startCanvasightWidgetBridge();
+  const root = window.__CANVASIGHT_WIDGET_MODE__ === "framework-questions"
+    ? <FrameworkQuestionsRoot />
+    : <CanvasightRoot />;
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <CanvasightRoot />
+      {root}
     </React.StrictMode>
   );
 } catch (error) {

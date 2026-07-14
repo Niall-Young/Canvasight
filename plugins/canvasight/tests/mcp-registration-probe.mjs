@@ -135,7 +135,15 @@ try {
   const toolNames = listed.tools?.map((tool) => tool.name) ?? [];
   assert.ok(toolNames.includes("open_canvasight"), "open_canvasight is missing from tools/list");
   assert.ok(toolNames.includes("await_canvasight_widget_ready"), "await_canvasight_widget_ready is missing from tools/list");
-  record("tools_list_ok", { toolCount: toolNames.length, requiredToolsPresent: true });
+  assert.ok(
+    toolNames.includes("ask_canvasight_framework_questions"),
+    "ask_canvasight_framework_questions is missing from tools/list"
+  );
+  record("tools_list_ok", {
+    toolCount: toolNames.length,
+    requiredToolsPresent: true,
+    frameworkQuestionsToolPresent: true
+  });
 
   const lifecycleRaw = await readFile(diagnostic.lifecycleLogPath, "utf8");
   const lifecycleEntries = lifecycleRaw

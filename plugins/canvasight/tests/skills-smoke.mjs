@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const skillsPath = path.join(pluginRoot, "src", "lib", "skills.ts");
 const placementPath = path.join(pluginRoot, "src", "lib", "skillPickerPlacement.ts");
+const graphWriterSkillPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "SKILL.md");
 
 function loadTypescriptModule(sourcePath) {
   const source = fs.readFileSync(sourcePath, "utf8");
@@ -25,6 +26,18 @@ function loadTypescriptModule(sourcePath) {
 
 const { filterSkills, findSkillQuery, insertSkillToken } = loadTypescriptModule(skillsPath);
 const { placeSkillPicker, toViewportCaretRect } = loadTypescriptModule(placementPath);
+const graphWriterSkill = fs.readFileSync(graphWriterSkillPath, "utf8");
+
+assert.match(graphWriterSkill, /ask_canvasight_framework_questions/);
+assert.match(graphWriterSkill, /repository, captured Page, user context, and applicable professional Skills/);
+assert.match(graphWriterSkill, /one to three questions together, with two or three concrete options per question/);
+assert.match(graphWriterSkill, /Do not ask about node count, routine wording, or decoration/);
+assert.match(graphWriterSkill, /stop the graph-write turn and wait/);
+assert.match(graphWriterSkill, /Do not ask an answered question again/);
+assert.match(graphWriterSkill, /Re-run step 1 before writing/);
+assert.match(graphWriterSkill, /tool is unavailable.*ordinary text/s);
+assert.match(graphWriterSkill, /never open Canvasight, invoke another visualization surface, or guess/);
+assert.match(graphWriterSkill, /Never write pending choices or `confirmationId` into `\.scatter`/);
 
 const catalog = [
   { name: "write-product-promo-article", displayName: "产品推广文章", description: "撰写中文产品发布和教程文章", scope: "user" },

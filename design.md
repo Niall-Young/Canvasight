@@ -103,6 +103,45 @@ MCP tool completion, widget resource loading, script loading, daemon health, and
 
 Browser and bare-dev fallback surfaces are clearly labeled diagnostic or fallback contexts. They may help isolate canvas and daemon behavior and may queue Run output after an explicit task claim, but they must never present themselves as native widget success or satisfy native readiness.
 
+## Inline Framework Confirmation
+
+Framework confirmation is a compact MCP UI embedded directly below the current Codex tool response. It is a conversation component, not a reduced canvas workspace. It uses its own inline widget resource and startup path; rendering it must never open or attach the fullscreen Canvasight widget, request fullscreen display mode, switch a Page, show the topbar or canvas, start a project session, connect to the daemon, or read and write `.scatter` state.
+
+The card reuses the same React component language, centralized design tokens, form controls, typography, focus treatment, and theme rules as the Canvasight workspace. New visual rules belong in the shared `app.css` token system rather than in MCP server HTML or a second approximate stylesheet. The message surface supplies the outer placement; the card must not imitate a desktop window, add browser chrome, or use ornamental canvas imagery.
+
+### Card Structure
+
+- Use one compact bordered surface containing a concise title, optional one- or two-line explanation, one to three question groups, and a single footer action.
+- Question groups use a clear prompt followed by two or three preset choices. Keep labels scannable and descriptions secondary; avoid repeating the prompt inside every option.
+- Mark at most one recommended option per question with a quiet `推荐` or `Recommended` badge. Recommendation may guide attention, but must not preselect an answer or visually overpower the user's alternatives.
+- Every question exposes one custom-answer field. The field belongs to that question and stays visually connected to its preset choices.
+- The primary footer action is `确认并继续` in Chinese or `Confirm and continue` in English. It is disabled until every question has a valid answer.
+
+Use the existing compact Canvasight spacing and radius scale: the card should read as a dense work control, not as a settings page. Separate question groups with spacing or a light divider rather than nested cards. Keep the footer stable so validation messages do not move the submit action unexpectedly.
+
+### Selection And Submission States
+
+- Single-select questions use radio semantics. Selecting a preset clears that question's custom answer; entering a non-empty custom answer clears its preset selection.
+- Multi-select questions use checkbox semantics. Multiple presets and a non-empty custom answer may be submitted together.
+- Custom-answer labels must name their purpose, such as `自定义答案`; placeholder text alone is not a label. Whitespace-only input is not a valid answer.
+- Before submission, validation stays local to the unanswered question and uses both text and state, never color alone. Do not show errors merely because the card first rendered.
+- While sending, keep the selected values visible, disable editable controls and duplicate submission, and give the action a compact progress state.
+- After the host bridge confirms success, lock the card and replace the editable body or footer with a concise answer summary plus a clear sent state. The original choices remain auditable in the conversation.
+- If sending fails, preserve every selection and custom answer, restore interaction, show persistent inline error text, and change the action to an explicit retry. Never display success before the bridge Promise resolves.
+- `confirmationId` identifies one submission. Repeated clicks, late callbacks, or host retries must not produce a second user message from the same successful component.
+
+### Message-Surface Behavior
+
+The inline component requests content-driven height and reports size changes as validation, custom input, error, and submitted-summary states change. It must not create an internal page scrollbar at its normal supported widths. Height changes should be immediate and stable, without animated jumps that move the surrounding conversation unpredictably.
+
+At narrow message widths, options stack vertically, text wraps naturally, and the primary action expands to the available width. At wider widths, keep a readable single-column question flow; do not turn separate questions into a dense grid. Long labels and user-authored custom answers wrap without clipping controls or pushing the card beyond its host width.
+
+Light and dark themes use the same semantic surface, text, border, accent, success, error, and focus tokens as the main workspace. Host-provided theme changes must update the card without a reload. Contrast, disabled states, recommendation badges, and error states must remain distinguishable in both themes.
+
+Each question is a semantic `fieldset` with a `legend`; radio and checkbox controls retain their native group behavior. All options, custom inputs, and submission controls are keyboard reachable with a visible focus ring. Arrow-key behavior for radio groups, Space for checkboxes, ordinary text editing, and IME composition must remain intact. The sent summary and persistent error use appropriately polite or assertive live-region semantics, while focus remains stable unless a failed submission requires moving it to the error heading.
+
+This confirmation path is reserved for consequential Graph Writer ambiguity. Ordinary wording, node counts, decorative preferences, and facts recoverable from the repository, active Page, conversation, or relevant Skills do not justify interrupting the message flow with a card.
+
 ## Icon Semantics
 
 Canvasight uses app-local SVG icons through the shared icon registry. Icons should map to the object or command they actually represent:

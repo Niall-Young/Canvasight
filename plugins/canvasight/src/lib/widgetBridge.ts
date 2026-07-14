@@ -4,6 +4,7 @@ import {
   applyHostFonts,
   applyHostStyleVariables
 } from "@modelcontextprotocol/ext-apps";
+import { isFrameworkQuestionsPayload, type FrameworkQuestionsPayload } from "./frameworkQuestions";
 
 type ToolResultLike = {
   _meta?: Record<string, unknown>;
@@ -74,6 +75,8 @@ declare global {
     __CANVASIGHT_WIDGET_DATA__?: CanvasightWidgetData;
     __CANVASIGHT_WIDGET_SERVER_VERSION__?: string;
     __CANVASIGHT_WIDGET_SHELL__?: boolean;
+    __CANVASIGHT_WIDGET_MODE__?: "workspace" | "framework-questions";
+    __CANVASIGHT_FRAMEWORK_QUESTIONS__?: FrameworkQuestionsPayload;
     canvasightMcp?: CanvasightMcpApi;
     openai?: OpenAiGlobals;
   }
@@ -147,7 +150,7 @@ function toolResultFromOpenAiGlobals(globals: OpenAiGlobals): ToolResultLike | n
   const canonicalMetadata = canonicalToolResult(globals.toolResponseMetadata);
   if (canonicalMetadata) {
     const { payload } = payloadFromToolResult(canonicalMetadata);
-    if (typeof payload.url === "string" || typeof payload.browserUrl === "string") return canonicalMetadata;
+    if (isFrameworkQuestionsPayload(payload) || typeof payload.url === "string" || typeof payload.browserUrl === "string") return canonicalMetadata;
   }
   if (!globals.toolOutput || typeof globals.toolOutput !== "object") return canonicalMetadata;
   return {
@@ -182,6 +185,7 @@ export function startCanvasightWidgetBridge(): void {
   let openAiGlobals: OpenAiGlobals = { ...(window.openai ?? {}) };
   let metadataReceived = false;
   let reactMounted = false;
+  const isFrameworkQuestionsWidget = window.__CANVASIGHT_WIDGET_MODE__ === "framework-questions";
   const widgetInstanceId = createWidgetInstanceId();
   const bridgeState: CanvasightBridgeState = {
     bridgeTransport: "none",
@@ -248,6 +252,14 @@ export function startCanvasightWidgetBridge(): void {
     const result = canonicalToolResult(value);
     if (!result) return;
     const { payload } = payloadFromToolResult(result);
+    if (isFrameworkQuestionsPayload(payload)) {
+      metadataReceived = true;
+      toolOutput = payload;
+      window.__CANVASIGHT_FRAMEWORK_QUESTIONS__ = payload;
+      window.dispatchEvent(new CustomEvent("canvasight:framework-questions", { detail: payload }));
+      return;
+    }
+    if (isFrameworkQuestionsWidget) return;
     try {
       const widgetData = normalizedWidgetData(payload);
       if (!widgetData.openAttemptId) throw new Error("Canvasight tool result did not include openAttemptId.");
@@ -319,7 +331,7 @@ export function startCanvasightWidgetBridge(): void {
       typeof message.prompt === "string" && message.prompt.trim()
         ? message.prompt
         : content.map((item) => (typeof item.text === "string" ? item.text : "")).filter(Boolean).join("\n\n");
-    if (!prompt && !content.length) throw new Error("Missing Canvasight Run prompt.");
+    if (!prompt && !content.length) throw new Error("Missing Canvasight message content.");
 
     refreshBridgeState();
     if (!bridgeState.mcpInitialized) await waitForMcpReady();
@@ -327,9 +339,9 @@ export function startCanvasightWidgetBridge(): void {
       const result = await withTimeout(
         app.sendMessage({ role: "user", content } as Parameters<App["sendMessage"]>[0]),
         BRIDGE_TIMEOUT_MS,
-        "Host did not accept the Canvasight Run through ui/message."
+        "Host did not accept the Canvasight message through ui/message."
       );
-      if (result?.isError) throw new Error("Host rejected the Canvasight Run.");
+      if (result?.isError) throw new Error("Host rejected the Canvasight message.");
       return result;
     }
 
@@ -338,7 +350,7 @@ export function startCanvasightWidgetBridge(): void {
       return withTimeout(
         Promise.resolve(followUp({ prompt, scrollToBottom: true })),
         BRIDGE_TIMEOUT_MS,
-        "Host did not accept the Canvasight Run through window.openai.sendFollowUpMessage."
+        "Host did not accept the Canvasight message through window.openai.sendFollowUpMessage."
       );
     }
 
@@ -423,14 +435,18 @@ export function startCanvasightWidgetBridge(): void {
     setStatus(detail?.error || "Canvasight failed to start.", "error");
   });
 
-  window.setTimeout(() => {
-    if (metadataReceived) return;
-    const message = `Canvasight session metadata timed out after ${bootstrapTimeoutMs()}ms. Reopen Canvasight from a new Codex task.`;
-    updateBridgeState({ lastBridgeError: message, reason: "widget_metadata_timeout" });
-    updateBridgeState({ startupStage: "failed" });
-    setStatus(message, "error");
-    window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage: "metadata" } }));
-  }, bootstrapTimeoutMs());
+  if (!isFrameworkQuestionsWidget) {
+    const metadataTimeoutMs = bootstrapTimeoutMs();
+    window.setTimeout(() => {
+      if (typeof window === "undefined") return;
+      if (metadataReceived) return;
+      const message = `Canvasight session metadata timed out after ${metadataTimeoutMs}ms. Reopen Canvasight from a new Codex task.`;
+      updateBridgeState({ lastBridgeError: message, reason: "widget_metadata_timeout" });
+      updateBridgeState({ startupStage: "failed" });
+      setStatus(message, "error");
+      window.dispatchEvent(new CustomEvent("canvasight:app-error", { detail: { error: message, stage: "metadata" } }));
+    }, metadataTimeoutMs);
+  }
 
   try {
     app = new App(
@@ -465,9 +481,11 @@ export function startCanvasightWidgetBridge(): void {
         if (context?.theme) applyDocumentTheme(context.theme);
         if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
         if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts);
-        void app?.requestDisplayMode({ mode: "fullscreen" }).then((result) => updateDisplayMode(result?.mode)).catch((error) => {
-          updateBridgeState({ lastBridgeError: errorMessage(error, "Canvasight fullscreen request failed."), reason: "fullscreen_request_failed" });
-        });
+        if (!isFrameworkQuestionsWidget) {
+          void app?.requestDisplayMode({ mode: "fullscreen" }).then((result) => updateDisplayMode(result?.mode)).catch((error) => {
+            updateBridgeState({ lastBridgeError: errorMessage(error, "Canvasight fullscreen request failed."), reason: "fullscreen_request_failed" });
+          });
+        }
       })
       .catch((error) => {
         const message = errorMessage(error, "Canvasight MCP Apps bridge initialization failed.");

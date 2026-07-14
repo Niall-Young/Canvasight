@@ -706,9 +706,10 @@ async function waitForCondition(predicate, label, timeoutMs = 1500) {
   assert.fail(`Timed out waiting for ${label}`);
 }
 
-function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40 } = {}) {
+function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40, initializeError = false } = {}) {
   const records = {
     appMessages: [],
+    compatPrompts: [],
     openaiGlobalEvents: []
   };
   const listeners = new Map();
@@ -802,6 +803,14 @@ function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40 } = {}) {
     postMessage(message) {
       records.appMessages.push(message);
       if (!Object.prototype.hasOwnProperty.call(message, "id")) return;
+      if (message.method === "ui/initialize" && initializeError) {
+        queueMicrotask(() => dispatchHostMessage({
+          jsonrpc: "2.0",
+          id: message.id,
+          error: { code: -32603, message: "fake MCP Apps initialization failure" }
+        }));
+        return;
+      }
       let result = {};
       if (message.method === "ui/initialize") {
         result = {
@@ -1046,6 +1055,29 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
     assert.equal(openaiCompat.window.__CANVASIGHT_WIDGET_DATA__.token, "token-openai-event");
     assert.equal(openaiCompat.window.canvasightMcp.getBridgeState().openaiFollowUpAvailable, true);
     await closeWidgetBridgeEnvironment(openaiCompat);
+    restore();
+
+    const compatOnly = createWidgetBridgeEnvironment({ initializeError: true, bootstrapTimeoutMs: 1_000 });
+    compatOnly.window.openai.sendFollowUpMessage = async (message) => {
+      compatOnly.records.compatPrompts.push(message);
+      return { ok: true };
+    };
+    compatOnly.window.__CANVASIGHT_WIDGET_MODE__ = "framework-questions";
+    restore = installWidgetBridgeGlobals(compatOnly);
+    bridgeModule.startCanvasightWidgetBridge();
+    await waitForCondition(
+      () => compatOnly.records.appMessages.some((message) => message.method === "ui/initialize") &&
+        compatOnly.window.canvasightMcp?.getBridgeState().mcpInitialized === false &&
+        compatOnly.window.canvasightMcp?.getBridgeState().openaiFollowUpAvailable === true,
+      "OpenAI compatibility-only MCP failure"
+    );
+    await compatOnly.window.canvasightMcp.sendFollowUpMessage({ prompt: "Canvasight framework compatibility fallback" });
+    assert.deepEqual(compatOnly.records.compatPrompts, [{
+      prompt: "Canvasight framework compatibility fallback",
+      scrollToBottom: true
+    }]);
+    assert.equal(compatOnly.window.canvasightMcp.getBridgeState().bridgeTransport, "openai_compat_followup");
+    await closeWidgetBridgeEnvironment(compatOnly);
     restore();
 
     const openaiDirectDetail = createWidgetBridgeEnvironment();
@@ -2747,6 +2779,101 @@ async function main() {
   }, 30000);
 
   try {
+    const inlineOnlyHome = path.join(tempRoot, "inline-framework-questions-home");
+    const inlineOnlyClient = createMcpClient("inline-framework-questions", {
+      CANVASIGHT_HOME: inlineOnlyHome,
+      CODEX_THREAD_ID: "thread-inline-framework-questions"
+    });
+    try {
+      await inlineOnlyClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "canvasight-inline-framework-questions-smoke", version: "0.0.0" }
+      });
+      inlineOnlyClient.notify("notifications/initialized", {});
+      const questionDefinitions = [{
+        id: "scope",
+        question: "Which scope should this framework cover?",
+        selectionMode: "single",
+        options: [
+          { id: "product", label: "Product only", recommended: true },
+          { id: "product-and-delivery", label: "Product and delivery" }
+        ],
+        customAnswerLabel: "Add another scope"
+      }, {
+        id: "dimensions",
+        question: "Which dimensions must remain explicit?",
+        selectionMode: "multiple",
+        options: [
+          { id: "roles", label: "Roles" },
+          { id: "stages", label: "Stages" },
+          { id: "risks", label: "Risks" }
+        ]
+      }];
+      const asked = await inlineOnlyClient.request("tools/call", {
+        name: "ask_canvasight_framework_questions",
+        arguments: {
+          title: "Confirm framework direction",
+          description: "These choices change the generated topology.",
+          language: "en",
+          questions: questionDefinitions
+        }
+      });
+      assert.equal(asked.structuredContent.kind, "canvasight.framework-questions");
+      assert.equal(asked.structuredContent.schemaVersion, 1);
+      assert.match(asked.structuredContent.confirmationId, /^framework-confirmation-/);
+      assert.equal(asked.structuredContent.language, "en");
+      assert.equal(asked.structuredContent.instruction, "wait_for_user_confirmation");
+      assert.deepEqual(asked.structuredContent.questions[0], questionDefinitions[0]);
+      assert.deepEqual(asked.structuredContent.questions[1], {
+        ...questionDefinitions[1],
+        customAnswerLabel: "Custom answer"
+      });
+      assert.match(asked.content[0].text, /wait|stop/i);
+      assert.deepEqual(Object.keys(asked._meta || {}), []);
+      await assert.rejects(inlineOnlyClient.request("tools/call", {
+        name: "ask_canvasight_framework_questions",
+        arguments: { title: "No questions", questions: [] }
+      }));
+      await assert.rejects(inlineOnlyClient.request("tools/call", {
+        name: "ask_canvasight_framework_questions",
+        arguments: {
+          title: "Duplicate ids",
+          questions: [questionDefinitions[0], { ...questionDefinitions[0] }]
+        }
+      }), /unique|duplicate/i);
+      await assert.rejects(inlineOnlyClient.request("tools/call", {
+        name: "ask_canvasight_framework_questions",
+        arguments: {
+          title: "Too few options",
+          questions: [{ ...questionDefinitions[0], options: [questionDefinitions[0].options[0]] }]
+        }
+      }));
+      const inlineResource = await inlineOnlyClient.request("resources/read", {
+        uri: "ui://widget/canvasight/framework-questions.html"
+      });
+      assert.equal(inlineResource.contents[0].uri, "ui://widget/canvasight/framework-questions.html");
+      assert.equal(inlineResource.contents[0].mimeType, "text/html;profile=mcp-app");
+      assert.deepEqual(
+        inlineResource.contents[0]._meta["openai/widgetCSP"].connect_domains,
+        [],
+        "the message-inline resource must not receive daemon network access"
+      );
+      assert.equal(
+        fs.existsSync(path.join(inlineOnlyHome, "daemon.json")),
+        false,
+        "using the message-inline tool and resource must not start a Canvasight daemon"
+      );
+      const inlineLifecycle = await readMcpLifecycleLog(inlineOnlyHome);
+      assert.equal(
+        inlineLifecycle.some((entry) => entry.event === "canvasight_open_attempt_created" || entry.event === "daemon_spawned"),
+        false,
+        "the message-inline path must not enter the fullscreen OpenAttempt or daemon lifecycle"
+      );
+    } finally {
+      inlineOnlyClient.stop();
+    }
+
     await assertDesktopRuntimeSelection();
 
     const initialized = await request("initialize", {
@@ -2777,6 +2904,18 @@ async function main() {
     assert.equal(toolNames.has("await_canvasight_widget_ready"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
+    assert.equal(toolNames.has("ask_canvasight_framework_questions"), true);
+    const frameworkQuestionsTool = listed.tools.find((tool) => tool.name === "ask_canvasight_framework_questions");
+    assert.equal(frameworkQuestionsTool._meta.ui.resourceUri, "ui://widget/canvasight/framework-questions.html");
+    assert.deepEqual(frameworkQuestionsTool._meta.ui.visibility, ["model", "app"]);
+    assert.equal(frameworkQuestionsTool.inputSchema.properties.questions.minItems, 1);
+    assert.equal(frameworkQuestionsTool.inputSchema.properties.questions.maxItems, 3);
+    assert.deepEqual(
+      frameworkQuestionsTool.inputSchema.properties.questions.items.properties.selectionMode.enum,
+      ["single", "multiple"]
+    );
+    assert.equal(frameworkQuestionsTool.inputSchema.properties.questions.items.properties.options.minItems, 2);
+    assert.equal(frameworkQuestionsTool.inputSchema.properties.questions.items.properties.options.maxItems, 3);
     const renderTool = listed.tools.find((tool) => tool.name === "render_canvasight_canvas_widget");
     assert.match(renderTool.description, /native Codex widget/);
     assert.match(renderTool.description, /send follow-up messages to the current thread/);
@@ -3009,9 +3148,13 @@ async function main() {
     await assertDaemonNodeExecutableFallback();
 
     const resources = await request("resources/list", {});
-    assert.equal(resources.resources.length, 1);
-    assert.equal(resources.resources[0].uri, "ui://widget/canvasight/canvas.html");
-    assert.equal(resources.resources[0].mimeType, "text/html;profile=mcp-app");
+    assert.equal(resources.resources.length, 2);
+    const resourceUris = resources.resources.map((resource) => resource.uri).sort();
+    assert.deepEqual(resourceUris, [
+      "ui://widget/canvasight/canvas.html",
+      "ui://widget/canvasight/framework-questions.html"
+    ]);
+    assert.equal(resources.resources.every((resource) => resource.mimeType === "text/html;profile=mcp-app"), true);
     const widgetResource = await request("resources/read", {
       uri: "ui://widget/canvasight/canvas.html"
     });

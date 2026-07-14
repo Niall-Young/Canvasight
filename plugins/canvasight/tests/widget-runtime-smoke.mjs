@@ -224,6 +224,60 @@ function hostHtml(widgetData) {
   </script></body></html>`;
 }
 
+function frameworkQuestionsHostHtml(toolResult) {
+  return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/framework-widget" style="width:760px;height:720px;border:0"></iframe><script>
+  const toolResult = ${JSON.stringify(toolResult)};
+  window.__HOST_RECORDS__ = { displayRequests: [], errors: [], messageAttempts: 0, messages: [], sentMessages: [], toolCalls: [] };
+  const frame = document.getElementById('widget');
+  function send(message) { frame.contentWindow.postMessage(message, '*'); }
+  function result(id, value) { send({ jsonrpc: '2.0', id, result: value }); }
+  window.__HOST_SET_THEME__ = (theme) => send({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { theme } });
+  window.addEventListener('error', (event) => window.__HOST_RECORDS__.errors.push(event.message));
+  window.addEventListener('message', (event) => {
+    if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
+    const message = event.data;
+    window.__HOST_RECORDS__.messages.push(message);
+    if (message.method === 'ui/initialize') {
+      result(message.id, {
+        protocolVersion: '2026-01-26',
+        hostInfo: { name: 'canvasight-inline-fake-host', version: '1.0.0' },
+        hostCapabilities: { message: {} },
+        hostContext: {
+          theme: 'light',
+          displayMode: 'inline',
+          availableDisplayModes: ['inline', 'fullscreen'],
+          containerDimensions: { width: 760, height: 720 }
+        }
+      });
+      return;
+    }
+    if (message.method === 'ui/request-display-mode') {
+      window.__HOST_RECORDS__.displayRequests.push(message.params);
+      result(message.id, { mode: 'inline' });
+      return;
+    }
+    if (message.method === 'ui/message') {
+      window.__HOST_RECORDS__.messageAttempts += 1;
+      window.__HOST_RECORDS__.sentMessages.push(message.params);
+      result(message.id, window.__HOST_RECORDS__.messageAttempts === 1 ? { isError: true } : {});
+      return;
+    }
+    if (message.method === 'tools/call') {
+      window.__HOST_RECORDS__.toolCalls.push(message.params);
+      result(message.id, { content: [], structuredContent: { ok: false, error: 'inline questions must not call server tools' } });
+      return;
+    }
+    if (message.method === 'ui/notifications/initialized') {
+      send({
+        jsonrpc: '2.0',
+        method: 'ui/notifications/tool-result',
+        params: toolResult
+      });
+    }
+  });
+  </script></body></html>`;
+}
+
 function createCdpClient(webSocketUrl) {
   const socket = new WebSocket(webSocketUrl);
   let nextId = 1;
@@ -274,6 +328,38 @@ let webServer;
 try {
   await mcp.request("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "widget-runtime-smoke", version: "1" } });
   mcp.notify("notifications/initialized", {});
+  const frameworkQuestions = await mcp.request("tools/call", {
+    name: "ask_canvasight_framework_questions",
+    arguments: {
+      title: "Confirm framework direction",
+      description: "These answers materially change the graph.",
+      language: "en",
+      questions: [{
+        id: "scope",
+        question: "Which scope should the framework cover?",
+        selectionMode: "single",
+        options: [
+          { id: "product", label: "Product only", recommended: true },
+          { id: "delivery", label: "Product and delivery" }
+        ],
+        customAnswerLabel: "Another scope"
+      }, {
+        id: "dimensions",
+        question: "Which dimensions must stay explicit?",
+        selectionMode: "multiple",
+        options: [
+          { id: "roles", label: "Roles", recommended: true },
+          { id: "stages", label: "Stages" },
+          { id: "risks", label: "Risks" }
+        ],
+        customAnswerLabel: "Additional dimensions"
+      }]
+    }
+  });
+  const frameworkResource = await mcp.request("resources/read", { uri: "ui://widget/canvasight/framework-questions.html" });
+  const frameworkWidgetHtml = frameworkResource.contents[0].text;
+  assert.equal(fs.existsSync(path.join(canvasightHome, "daemon.json")), false, "inline questions must not start the daemon");
+  assert.match(frameworkWidgetHtml, /id="canvasightAppModule" type="module"/);
   const opened = await mcp.request("tools/call", {
     name: "open_canvasight",
     arguments: { projectPath, language: "en", threadId: "thread-composed-widget" }
@@ -293,12 +379,15 @@ try {
     } else {
       res.setHeader("content-type", "text/html; charset=utf-8");
       if (req.url === "/widget") res.end(widgetHtml);
+      else if (req.url === "/framework-widget") res.end(frameworkWidgetHtml);
+      else if (req.url === "/framework-host") res.end(frameworkQuestionsHostHtml(frameworkQuestions));
       else res.end(hostHtml(widgetData));
     }
   });
   await new Promise((resolve) => webServer.listen(0, "127.0.0.1", resolve));
   const address = webServer.address();
   const hostUrl = `http://127.0.0.1:${address.port}/host`;
+  const frameworkHostUrl = `http://127.0.0.1:${address.port}/framework-host`;
 
   chrome = spawn(chromePath, [
     "--headless=new",
@@ -322,10 +411,167 @@ try {
     });
   });
   const endpoint = new URL(browserWs);
-  const targets = await (await fetch(`http://${endpoint.host}/json/new?${encodeURIComponent(hostUrl)}`, { method: "PUT" })).json();
+  const targets = await (await fetch(`http://${endpoint.host}/json/new?${encodeURIComponent(frameworkHostUrl)}`, { method: "PUT" })).json();
   const cdp = createCdpClient(targets.webSocketDebuggerUrl);
   await cdp.send("Runtime.enable");
   await cdp.send("Page.enable");
+
+  const inlineReady = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const form = doc && doc.querySelector('[data-testid="framework-questions"]');
+    if (!form) return false;
+    return {
+      questions: doc.querySelectorAll('[data-testid^="framework-question-"]').length,
+      radios: doc.querySelectorAll('input[type="radio"]').length,
+      checkboxes: doc.querySelectorAll('input[type="checkbox"]').length,
+      textareas: doc.querySelectorAll('textarea').length,
+      recommended: doc.body.innerText.includes('Recommended'),
+      displayRequests: window.__HOST_RECORDS__.displayRequests,
+      toolCalls: window.__HOST_RECORDS__.toolCalls,
+      errors: window.__HOST_RECORDS__.errors
+    };
+  })()`, "inline framework questions mounted");
+  assert.deepEqual(inlineReady, {
+    questions: 2,
+    radios: 2,
+    checkboxes: 3,
+    textareas: 2,
+    recommended: true,
+    displayRequests: [],
+    toolCalls: [],
+    errors: []
+  });
+  const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
+    const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');
+    return notices.length > 0 && notices.at(-1).params.height > 0 ? notices.at(-1).params : false;
+  })()`, "inline widget auto-resize notification");
+  assert.ok(autoResizeNotice.width > 0 && autoResizeNotice.height > 0);
+  const darkTheme = await waitForEvaluation(cdp, `(() => {
+    window.__HOST_SET_THEME__('dark');
+    const doc = document.getElementById('widget').contentDocument;
+    return doc.documentElement.getAttribute('data-theme') === 'dark'
+      ? { theme: doc.documentElement.getAttribute('data-theme'), colorScheme: doc.documentElement.style.colorScheme }
+      : false;
+  })()`, "inline dark theme update");
+  assert.deepEqual(darkTheme, { theme: "dark", colorScheme: "dark" });
+  await waitForEvaluation(cdp, `(() => {
+    window.__HOST_SET_THEME__('light');
+    return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'light';
+  })()`, "inline light theme restore");
+
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      const doc = document.getElementById('widget').contentDocument;
+      const checkbox = doc.querySelector('input[type="checkbox"]');
+      checkbox.focus();
+      return checkbox.checked;
+    })()`,
+    returnByValue: true
+  });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space" });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space" });
+  const keyboardSelection = await waitForEvaluation(cdp, `(() => document.getElementById('widget').contentDocument.querySelector('input[type="checkbox"]').checked)()`, "keyboard checkbox selection");
+  assert.equal(keyboardSelection, true);
+
+  const firstSubmit = await waitForEvaluation(cdp, `(async () => {
+    const doc = document.getElementById('widget').contentDocument;
+    const radios = Array.from(doc.querySelectorAll('input[type="radio"]'));
+    radios[1].click();
+    const textareas = Array.from(doc.querySelectorAll('textarea'));
+    const textareaValueSetter = Object.getOwnPropertyDescriptor(document.getElementById('widget').contentWindow.HTMLTextAreaElement.prototype, 'value').set;
+    textareaValueSetter.call(textareas[0], 'Platform and ecosystem');
+    textareas[0].dispatchEvent(new Event('input', { bubbles: true }));
+    const checkboxes = Array.from(doc.querySelectorAll('input[type="checkbox"]'));
+    checkboxes[1].click();
+    textareaValueSetter.call(textareas[1], 'Dependencies');
+    textareas[1].dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const submit = doc.querySelector('[data-testid="framework-submit"]');
+    const singleClearedByCustom = radios.every((radio) => !radio.checked);
+    submit.click();
+    return { singleClearedByCustom, disabledBeforeSubmit: submit.disabled };
+  })()`, "first inline submission attempted");
+  assert.equal(firstSubmit.singleClearedByCustom, true, "a single-select custom answer must clear preset radio choices");
+  assert.equal(firstSubmit.disabledBeforeSubmit, false);
+
+  const retryReady = await waitForEvaluation(cdp, `(() => {
+    const doc = document.getElementById('widget').contentDocument;
+    const status = doc.querySelector('[data-testid="framework-status"]');
+    const submit = doc.querySelector('[data-testid="framework-submit"]');
+    return window.__HOST_RECORDS__.messageAttempts === 1 && status && submit && !submit.disabled
+      ? { status: status.textContent, button: submit.textContent, retained: Array.from(doc.querySelectorAll('textarea')).map((field) => field.value) }
+      : false;
+  })()`, "failed inline submission retained for retry");
+  assert.match(retryReady.status, /fail|retry|again/i);
+  assert.match(retryReady.button, /retry|continue/i);
+  assert.deepEqual(retryReady.retained, ["Platform and ecosystem", "Dependencies"]);
+
+  const submitted = await waitForEvaluation(cdp, `(async () => {
+    const doc = document.getElementById('widget').contentDocument;
+    doc.querySelector('[data-testid="framework-submit"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const controls = Array.from(doc.querySelectorAll('input, textarea'));
+    const attemptsAfterSuccess = window.__HOST_RECORDS__.messageAttempts;
+    doc.querySelector('[data-testid="framework-submit"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return {
+      attemptsAfterSuccess,
+      attemptsAfterDuplicateClick: window.__HOST_RECORDS__.messageAttempts,
+      allLocked: controls.every((control) => control.matches(':disabled')) && !doc.querySelector('[data-testid="framework-submit"]'),
+      status: doc.querySelector('[data-testid="framework-status"]')?.textContent || '',
+      summary: doc.querySelector('[data-testid="framework-answer-summary"]')?.textContent || '',
+      sent: window.__HOST_RECORDS__.sentMessages.at(-1),
+      displayRequests: window.__HOST_RECORDS__.displayRequests,
+      toolCalls: window.__HOST_RECORDS__.toolCalls,
+      errors: window.__HOST_RECORDS__.errors
+    };
+  })()`, "successful inline submission locked");
+  assert.equal(submitted.attemptsAfterSuccess, 2);
+  assert.equal(submitted.attemptsAfterDuplicateClick, 2, "confirmationId state must prevent duplicate sends");
+  assert.equal(submitted.allLocked, true);
+  assert.match(submitted.status, /confirmed|sent|continue/i);
+  assert.match(submitted.summary, /Which scope should the framework cover\?/);
+  assert.match(submitted.summary, /Platform and ecosystem/);
+  assert.match(submitted.summary, /Roles/);
+  assert.match(submitted.summary, /Stages/);
+  assert.match(submitted.summary, /Dependencies/);
+  assert.match(JSON.stringify(submitted.sent), /Canvasight framework confirmation/);
+  assert.match(JSON.stringify(submitted.sent), /questionId.*scope/);
+  assert.match(JSON.stringify(submitted.sent), /customAnswer.*Platform and ecosystem/);
+  assert.match(JSON.stringify(submitted.sent), /selectedOptionIds.*roles.*stages/);
+  assert.match(JSON.stringify(submitted.sent), /get_canvasight_graph_context/);
+  assert.match(JSON.stringify(submitted.sent), /continue.*Graph Writer/i);
+  assert.deepEqual(submitted.displayRequests, []);
+  assert.deepEqual(submitted.toolCalls, []);
+  assert.deepEqual(submitted.errors, []);
+
+  await cdp.send("Page.reload", { ignoreCache: true });
+  const restoredConfirmation = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const summary = doc && doc.querySelector('[data-testid="framework-answer-summary"]');
+    const status = doc && doc.querySelector('[data-testid="framework-status"]');
+    if (!summary || !status) return false;
+    return {
+      summary: summary.textContent,
+      status: status.textContent,
+      attempts: window.__HOST_RECORDS__.messageAttempts,
+      disabled: Array.from(doc.querySelectorAll('input, textarea')).every((control) => control.matches(':disabled')),
+      submitExists: Boolean(doc.querySelector('[data-testid="framework-submit"]'))
+    };
+  })()`, "submitted confirmation restored after widget remount");
+  assert.match(restoredConfirmation.summary, /Platform and ecosystem/);
+  assert.match(restoredConfirmation.summary, /Roles/);
+  assert.match(restoredConfirmation.summary, /Stages/);
+  assert.match(restoredConfirmation.summary, /Dependencies/);
+  assert.match(restoredConfirmation.status, /confirmed|sent|continue/i);
+  assert.equal(restoredConfirmation.attempts, 0, "restoring the same confirmationId must not send another user message");
+  assert.equal(restoredConfirmation.disabled, true);
+  assert.equal(restoredConfirmation.submitExists, false);
+
+  await cdp.send("Page.navigate", { url: hostUrl });
+  await waitForEvaluation(cdp, `Boolean(document.getElementById('widget') && document.getElementById('widget').contentDocument)`, "fullscreen host navigation");
 
   const evidence = await waitForEvaluation(cdp, `(() => {
     const frame = document.getElementById('widget');

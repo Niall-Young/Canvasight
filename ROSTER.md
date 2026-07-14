@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:21:08Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: issue-skill-picker-completeness-position
+    last_seen: 2026-07-14T05:56:32Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-questions
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to define caret-anchored combobox placement and compact results
+    notes: Rebuilt on the current thread to review the inline framework-question message component and update design.md
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T03:35:05Z
-    handoff_source: integration-summary-playwright-cli-artifact-cleanup
-    last_report: integration-summary-playwright-cli-artifact-cleanup
+    last_seen: 2026-07-14T05:56:32Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-questions
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to review safe cleanup and scoped ignore behavior for Playwright CLI artifacts
+    notes: Rebuilt on the current thread to implement the inline framework-question MCP UI path
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: active
+    status: blocked
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T03:45:48Z
-    handoff_source: issue-publish-stable-release-0-4-16
-    last_report: issue-publish-stable-release-0-4-16
+    last_seen: 2026-07-14T05:56:32Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-questions
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to supervise the 0.4.16 local and GitHub release matrix, asset, ref, and updater verification
+    notes: Automated inline and fullscreen regressions passed; blocked on restarted Codex Desktop native-host acceptance in a new task
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
