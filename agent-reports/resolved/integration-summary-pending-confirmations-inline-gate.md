@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-14T06:22:20Z
-updated_at: 2026-07-14T06:22:20Z
+updated_at: 2026-07-14T06:25:00Z
 depends_on:
   - issue-pending-confirmations-bypass-inline-gate
   - solution-pending-confirmations-inline-gate
@@ -68,5 +68,6 @@ verification_evidence:
 ## Git 状态
 
 - baseline HEAD: `2ca62ee4db0cceefd0592a3edd841c7b581e4fb8`
-- planned commit: `fix: 阻止待确认事项绕过消息提问`
-- unrelated changes: 0.4.18 runtime/guidance work and its reports remain unstaged
+- concurrent preceding commit: `7cd8a4c` (`fix: 修正 AGENTS 节点的 Agent Team 提示`)，由并行任务独立提交
+- feature commit: `1e7e69c92ec176e553da8013273c6bd1d89ae9ab` (`fix: 阻止待确认事项绕过消息提问`)
+- scoped commit review: 7 个本轮路径通过 name-only、stat 和 diff check；未把并行 0.4.18 改动混入本提交
