@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:33:45Z
-    handoff_source: issue-native-widget-attachment-relative-url
-    last_report: solution-native-widget-attachment-proxy-preview
+    last_seen: 2026-07-14T03:35:05Z
+    handoff_source: integration-summary-playwright-cli-artifact-cleanup
+    last_report: integration-summary-playwright-cli-artifact-cleanup
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented the session-scoped app-only MCP attachment preview proxy; native Desktop acceptance remains pending
+    notes: Rebuilt on the current thread to review safe cleanup and scoped ignore behavior for Playwright CLI artifacts
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
