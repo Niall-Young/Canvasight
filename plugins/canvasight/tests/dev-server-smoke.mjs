@@ -13,6 +13,8 @@ const __dirname = path.dirname(__filename);
 const pluginRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(pluginRoot, "scripts", "dev-server.mjs");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
+const viteBin = path.join(pluginRoot, "node_modules", "vite", "bin", "vite.js");
+const viteConfigSource = fs.readFileSync(path.join(pluginRoot, "vite.config.ts"), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8"));
 const pluginVersion = packageJson.version;
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-dev-server-"));
@@ -25,9 +27,13 @@ const queuedPort = await findFreePort();
 const origin = `http://127.0.0.1:${port}`;
 const unboundOrigin = `http://127.0.0.1:${unboundPort}`;
 const queuedOrigin = `http://127.0.0.1:${queuedPort}`;
+const concurrentPortA = await findFreePort();
+const concurrentPortB = await findFreePort();
 const unboundCanvasightHome = path.join(tempRoot, "home-unbound");
 const queuedCanvasightHome = path.join(tempRoot, "home-queued");
+const concurrentCanvasightHome = path.join(tempRoot, "home-concurrent");
 const trackedDaemonPids = new Set();
+const trackedViteChildren = new Set();
 
 fs.writeFileSync(
   fakeCodexPath,
@@ -225,6 +231,51 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForPage(origin, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const page = await fetchText(origin);
+    if (page.ok && page.text.includes("<title>Canvasight</title>")) return;
+    await sleep(50);
+  }
+  throw new Error(`Vite did not become ready: ${origin}`);
+}
+
+async function startVite(port, home) {
+  const child = spawn(process.execPath, [viteBin, "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
+    cwd: pluginRoot,
+    env: {
+      ...process.env,
+      CANVASIGHT_CODEX_BIN: fakeCodexPath,
+      CANVASIGHT_HOME: home,
+      CANVASIGHT_NATIVE_LOG: nativeLogPath,
+      CANVASIGHT_FAKE_THREAD_CWD: path.join(tempRoot, "thread-project")
+    },
+    stdio: "ignore"
+  });
+  trackedViteChildren.add(child);
+  await waitForPage(`http://127.0.0.1:${port}`);
+  return child;
+}
+
+async function stopTrackedViteChildren() {
+  for (const child of trackedViteChildren) {
+    if (child.exitCode !== null) continue;
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // The Vite process exited between the check and signal.
+    }
+  }
+  await Promise.all(Array.from(trackedViteChildren, (child) => {
+    if (child.exitCode !== null) return Promise.resolve();
+    return Promise.race([
+      new Promise((resolve) => child.once("exit", resolve)),
+      sleep(2000)
+    ]);
+  }));
+}
+
 async function fetchText(url) {
   try {
     const response = await fetch(url);
@@ -311,6 +362,25 @@ async function stopTrackedDaemons() {
 
 async function main() {
   try {
+    assert.match(viteConfigSource, /daemon-start\.lock/);
+    assert.match(viteConfigSource, /flag: "wx"/);
+    const [concurrentViteA, concurrentViteB] = await Promise.all([
+      startVite(concurrentPortA, concurrentCanvasightHome),
+      startVite(concurrentPortB, concurrentCanvasightHome)
+    ]);
+    assert.equal(concurrentViteA.exitCode, null);
+    assert.equal(concurrentViteB.exitCode, null);
+    const concurrentOrigins = [
+      `http://127.0.0.1:${concurrentPortA}`,
+      `http://127.0.0.1:${concurrentPortB}`
+    ];
+    await Promise.all(concurrentOrigins.map((concurrentOrigin) => fetchJson(`${concurrentOrigin}/api/preferences`)));
+    const concurrentDaemon = await readDaemonState(concurrentCanvasightHome);
+    await Promise.all(concurrentOrigins.map((concurrentOrigin) => fetchJson(`${concurrentOrigin}/api/preferences`)));
+    const reusedConcurrentDaemon = await readDaemonState(concurrentCanvasightHome);
+    assert.equal(reusedConcurrentDaemon.pid, concurrentDaemon.pid, "concurrent Vite instances must reuse one daemon");
+    assert.equal(reusedConcurrentDaemon.token, concurrentDaemon.token, "concurrent Vite instances must not replace daemon state");
+
     const started = run("start");
     assert.equal(started.status, 0, started.stderr || started.stdout);
     assert.match(started.stdout, /Canvasight dev server running|Canvasight dev server is already reachable/);
@@ -533,7 +603,7 @@ async function main() {
         threadName: "Unbound Run"
       })
     });
-    assert.equal(unboundRun.status, 409);
+    assert.equal(unboundRun.status, 409, unboundRun.text);
     assert.equal(unboundRun.json.code, "unbound_dev_session");
     assert.equal(String(unboundRun.json.error).includes("claim_canvasight_thread"), true);
 
@@ -682,6 +752,8 @@ async function main() {
     await stopDaemon();
     await stopDaemon(unboundCanvasightHome);
     await stopDaemon(queuedCanvasightHome);
+    await stopTrackedViteChildren();
+    await stopDaemon(concurrentCanvasightHome);
     await stopTrackedDaemons();
     await fsp.rm(tempRoot, { recursive: true, force: true });
   }

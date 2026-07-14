@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:31:10Z
-    handoff_source: issue-agent-team-only-agents-guidance
-    last_report: integration-summary-agent-team-only-agents-guidance
+    last_seen: 2026-07-14T08:14:13Z
+    handoff_source: issue-node20-dev-server-daemon-readiness-flake
+    last_report: solution-node20-dev-server-daemon-readiness-flake
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed the shared AGENTS.md content-state detector and managed-block preservation boundary
+    notes: Fixed the Node 20.19 dev-server daemon readiness race with shared cross-process single-flight; awaiting Test Supervisor independent verification
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,34 +63,34 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:31:10Z
-    handoff_source: issue-agent-team-only-agents-guidance
-    last_report: integration-summary-agent-team-only-agents-guidance
+    last_seen: 2026-07-14T08:20:38Z
+    handoff_source: issue-node20-dev-server-daemon-readiness-flake
+    last_report: issue-node20-dev-server-daemon-readiness-flake
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: AGENTS.md three-state MCP regressions passed; prior native-host acceptance blockers remain unresolved and keep this seat blocked
+    notes: Independently passed the final 0.4.20 Node 20.19 dev-server race fix; seat remains blocked only on meaningful fullscreen control, same-task Run, and late-metadata acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:06:04Z
-    handoff_source: issue-update-creates-numbered-duplicates
-    last_report: issue-update-creates-numbered-duplicates
+    last_seen: 2026-07-14T07:48:11Z
+    handoff_source: issue-publish-stable-release-0-4-20
+    last_report: issue-publish-stable-release-0-4-20
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Confirmed the bilingual README already states the zero-mutation update contract; no README change required
+    notes: Rebuilding on the current thread to review bilingual release-facing documentation for Canvasight 0.4.20
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:06:04Z
-    handoff_source: issue-update-creates-numbered-duplicates
-    last_report: issue-update-creates-numbered-duplicates
+    last_seen: 2026-07-14T08:32:19Z
+    handoff_source: issue-publish-stable-release-0-4-20
+    last_report: issue-publish-stable-release-0-4-20
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilding on the current thread for selective staging and commit closure of the numbered-duplicate workflow fix
+    notes: Owns the frozen 0.4.20 release candidate selective commit, tag, workflow, and stable closure after explicit user risk acceptance
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

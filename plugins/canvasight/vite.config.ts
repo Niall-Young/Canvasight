@@ -15,6 +15,9 @@ const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
 const packageJson = JSON.parse(fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8")) as { version?: string };
 const serverVersion = typeof packageJson.version === "string" ? packageJson.version : "";
 const defaultCanvasightHome = path.join(os.homedir(), ".canvasight");
+const daemonStartLockStaleMs = 15_000;
+const daemonStartLockWaitMs = 12_000;
+const daemonStartLockUnreadableStaleMs = 1_000;
 type DaemonState = {
   codexNativeEnabled?: boolean;
   origin: string;
@@ -53,6 +56,10 @@ function canvasightHome(): string {
 
 function canvasightDaemonStatePath(): string {
   return path.join(canvasightHome(), "daemon.json");
+}
+
+function canvasightDaemonStartLockPath(): string {
+  return path.join(canvasightHome(), "daemon-start.lock");
 }
 
 function normalizeDaemonState(value: unknown): DaemonState | null {
@@ -132,6 +139,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function processIsAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForDaemon(token: string): Promise<DaemonState> {
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline) {
@@ -145,28 +162,103 @@ async function waitForDaemon(token: string): Promise<DaemonState> {
   throw new Error("Canvasight daemon did not start in time");
 }
 
+type DaemonStartLock = {
+  acquired: true;
+  token: string;
+  existing: null;
+} | {
+  acquired: false;
+  token: "";
+  existing: DaemonState;
+};
+
+async function readDaemonStartLock(): Promise<Record<string, unknown> | null> {
+  try {
+    const raw = await fsp.readFile(canvasightDaemonStartLockPath(), "utf8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+async function acquireDaemonStartLock(): Promise<DaemonStartLock> {
+  await fsp.mkdir(canvasightHome(), { recursive: true });
+  const deadline = Date.now() + daemonStartLockWaitMs;
+  while (Date.now() < deadline) {
+    const token = crypto.randomBytes(12).toString("base64url");
+    try {
+      await fsp.writeFile(
+        canvasightDaemonStartLockPath(),
+        `${JSON.stringify({ pid: process.pid, token, serverVersion, pluginRoot, createdAt: nowIso() })}\n`,
+        { encoding: "utf8", flag: "wx" }
+      );
+      return { acquired: true, token, existing: null };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+
+    const existing = await healthyDaemonState(await readDaemonState());
+    if (existing) return { acquired: false, token: "", existing };
+
+    const lock = await readDaemonStartLock();
+    const createdAt = Date.parse(typeof lock?.createdAt === "string" ? lock.createdAt : "");
+    let unreadableLockAgeMs: number | null = null;
+    if (!lock) {
+      try {
+        const stat = await fsp.stat(canvasightDaemonStartLockPath());
+        unreadableLockAgeMs = Math.max(0, Date.now() - stat.mtimeMs);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+    const stale = lock
+      ? !processIsAlive(Number(lock.pid)) ||
+        (Number.isFinite(createdAt) && Date.now() - createdAt >= daemonStartLockStaleMs)
+      : unreadableLockAgeMs !== null && unreadableLockAgeMs >= daemonStartLockUnreadableStaleMs;
+    if (stale) {
+      await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+      continue;
+    }
+    await sleep(100);
+  }
+  throw new Error("Canvasight daemon start lock timed out");
+}
+
+async function releaseDaemonStartLock(lock: DaemonStartLock): Promise<void> {
+  if (!lock.acquired) return;
+  const current = await readDaemonStartLock();
+  if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+}
+
 async function ensureDaemonServer(): Promise<DaemonState> {
   const existing = await healthyDaemonState(await readDaemonState());
   if (existing) return existing;
 
   if (daemonStartPromise) return daemonStartPromise;
   const promise = (async () => {
-    const rechecked = await healthyDaemonState(await readDaemonState());
-    if (rechecked) return rechecked;
+    const lock = await acquireDaemonStartLock();
+    if (lock.existing) return lock.existing;
+    try {
+      const rechecked = await healthyDaemonState(await readDaemonState());
+      if (rechecked) return rechecked;
 
-    const token = crypto.randomBytes(24).toString("base64url");
-    const child = spawn(process.execPath, [serverPath, "--daemon"], {
-      cwd: pluginRoot,
-      detached: true,
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        CANVASIGHT_CODEX_NATIVE: process.env.CANVASIGHT_CODEX_NATIVE ?? "1",
-        CANVASIGHT_DAEMON_TOKEN: token
-      }
-    });
-    child.unref();
-    return waitForDaemon(token);
+      const token = crypto.randomBytes(24).toString("base64url");
+      const child = spawn(process.execPath, [serverPath, "--daemon", `--canvasight-home=${canvasightHome()}`], {
+        cwd: pluginRoot,
+        detached: true,
+        stdio: "ignore",
+        env: {
+          ...process.env,
+          CANVASIGHT_CODEX_NATIVE: process.env.CANVASIGHT_CODEX_NATIVE ?? "1",
+          CANVASIGHT_DAEMON_TOKEN: token
+        }
+      });
+      child.unref();
+      return await waitForDaemon(token);
+    } finally {
+      await releaseDaemonStartLock(lock);
+    }
   })();
   daemonStartPromise = promise;
   try {
