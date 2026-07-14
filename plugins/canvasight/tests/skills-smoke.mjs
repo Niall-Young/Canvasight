@@ -30,13 +30,22 @@ const graphWriterSkill = fs.readFileSync(graphWriterSkillPath, "utf8");
 
 assert.match(graphWriterSkill, /ask_canvasight_framework_questions/);
 assert.match(graphWriterSkill, /repository, captured Page, user context, and applicable professional Skills/);
-assert.match(graphWriterSkill, /one to three questions together, with two or three concrete options per question/);
-assert.match(graphWriterSkill, /Do not ask about node count, routine wording, or decoration/);
-assert.match(graphWriterSkill, /stop the graph-write turn and wait/);
+assert.match(graphWriterSkill, /Before any `write_canvasight_graph` call, classify every planned unresolved item as either `blocking-framework` or `non-blocking-backlog`/);
+assert.match(graphWriterSkill, /`blocking-framework`.*identity or authority.*primary audience.*included content or media types.*language coverage/s);
+assert.match(graphWriterSkill, /planned visible output.*(?:待确认|“待确认”).*call `ask_canvasight_framework_questions` first/s);
+assert.match(graphWriterSkill, /call `ask_canvasight_framework_questions` first and stop the graph-write turn/);
+assert.match(graphWriterSkill, /Never write or claim completion first, and never place an unanswered blocking item in a pending\/open-question node/);
+assert.match(graphWriterSkill, /`non-blocking-backlog`.*Keep it only when the user requested an exploratory\/open-question backlog/s);
+assert.match(graphWriterSkill, /highest-priority one to three blocking confirmations into one card/);
+assert.match(graphWriterSkill, /merge semantically overlapping pending items into one question/);
+assert.match(graphWriterSkill, /three-question cap never permits writing while another independent blocker remains/);
+assert.match(graphWriterSkill, /facts that the repository, Page, context, or Skills can establish/);
+assert.match(graphWriterSkill, /Do not ask about node count, routine wording, decoration/);
+assert.match(graphWriterSkill, /After calling the tool, wait for its visible user-message response/);
 assert.match(graphWriterSkill, /Do not ask an answered question again/);
 assert.match(graphWriterSkill, /Re-run step 1 before writing/);
 assert.match(graphWriterSkill, /tool is unavailable.*ordinary text/s);
-assert.match(graphWriterSkill, /never open Canvasight, invoke another visualization surface, or guess/);
+assert.match(graphWriterSkill, /never open Canvasight, invoke another visualization surface, guess a consequential answer, or proceed with a write/);
 assert.match(graphWriterSkill, /Never write pending choices or `confirmationId` into `\.scatter`/);
 
 const catalog = [

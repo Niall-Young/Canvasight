@@ -8,12 +8,12 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:43:02Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-14T06:22:20Z
+    handoff_source: issue-pending-confirmations-bypass-inline-gate
+    last_report: integration-summary-pending-confirmations-inline-gate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to review human-priority AI rebase and conflict-copy semantics
+    notes: Reviewed the pending-confirmation gate and non-blocking open-question exception
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T05:56:32Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-questions
+    last_seen: 2026-07-14T06:22:20Z
+    handoff_source: issue-pending-confirmations-bypass-inline-gate
+    last_report: integration-summary-pending-confirmations-inline-gate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to implement the inline framework-question MCP UI path
+    notes: Hardened Graph Writer pending-confirmation gating without touching unrelated 0.4.18 runtime work
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T05:56:32Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-questions
+    last_seen: 2026-07-14T06:22:20Z
+    handoff_source: issue-pending-confirmations-bypass-inline-gate
+    last_report: integration-summary-pending-confirmations-inline-gate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Automated inline and fullscreen regressions passed; blocked on restarted Codex Desktop native-host acceptance in a new task
+    notes: Pending-confirmation gate regression passed; prior inline/fullscreen native-host acceptance remains unresolved
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
