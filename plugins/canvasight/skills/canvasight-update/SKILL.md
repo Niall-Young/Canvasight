@@ -12,6 +12,7 @@ Use the bundled updater as the only update path. It compares the installed plugi
 - Resolve the plugin root as two directories above this `SKILL.md`.
 - For a check-only request, run `node <plugin-root>/scripts/update-canvasight.mjs --check`. Never run `--update`, marketplace commands, or installation commands.
 - For an explicit install or upgrade request, run `node <plugin-root>/scripts/update-canvasight.mjs --update`.
+- Run exactly that one bundled-updater command and no other shell command. Do not run `npm install`, `npm ci`, another package manager, builds, tests, release preparation or verification, direct `codex plugin` or marketplace commands, Git commands, cleanup, or duplicate-file repair before or after it. The updater owns every permitted check, install, verification, and rollback step.
 - Parse the script's JSON result. Do not infer success from partial command output or run recovery commands outside the script.
 
 ## Report The Result

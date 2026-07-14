@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: null
+    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T06:22:20Z
-    handoff_source: issue-pending-confirmations-bypass-inline-gate
-    last_report: integration-summary-pending-confirmations-inline-gate
+    last_seen: 2026-07-14T07:06:04Z
+    handoff_source: issue-update-creates-numbered-duplicates
+    last_report: issue-update-creates-numbered-duplicates
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Hardened Graph Writer pending-confirmation gating without touching unrelated 0.4.18 runtime work
+    notes: Resolved numbered-duplicate workflow by proving updater non-causality and integrating the single-command update Skill guardrail
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,45 +61,45 @@ roles:
   - role: Test Supervisor Agent
     status: blocked
     agent_id: /root/test_supervisor_agent
-    thread_id: null
+    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T06:22:20Z
-    handoff_source: issue-pending-confirmations-bypass-inline-gate
-    last_report: integration-summary-pending-confirmations-inline-gate
+    last_seen: 2026-07-14T07:06:04Z
+    handoff_source: issue-update-creates-numbered-duplicates
+    last_report: issue-update-creates-numbered-duplicates
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Pending-confirmation gate regression passed; prior inline/fullscreen native-host acceptance remains unresolved
+    notes: Numbered-duplicate diagnosis and updater regression passed; prior native-host acceptance blockers remain unresolved and keep this seat blocked
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
+    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T03:45:48Z
-    handoff_source: issue-publish-stable-release-0-4-16
-    last_report: issue-publish-stable-release-0-4-16
+    last_seen: 2026-07-14T07:06:04Z
+    handoff_source: issue-update-creates-numbered-duplicates
+    last_report: issue-update-creates-numbered-duplicates
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread and requested bilingual development-command synchronization without changing dynamic stable update guidance
+    notes: Confirmed the bilingual README already states the zero-mutation update contract; no README change required
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f5eb0-4d27-7df0-9f98-af747871f372
+    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T03:58:02Z
-    handoff_source: issue-publish-stable-release-0-4-16
-    last_report: solution-release-stable-0-4-16
+    last_seen: 2026-07-14T07:06:04Z
+    handoff_source: issue-update-creates-numbered-duplicates
+    last_report: issue-update-creates-numbered-duplicates
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed v0.4.16 Release and stable delivery evidence; remains active for Main Thread final integration-summary Git closure
+    notes: Rebuilding on the current thread for selective staging and commit closure of the numbered-duplicate workflow fix
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
-    thread_id: null
+    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:48:31Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-14T07:06:04Z
+    handoff_source: issue-update-creates-numbered-duplicates
+    last_report: issue-update-creates-numbered-duplicates
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to update and validate context-bound graph-writer retry semantics
+    notes: Hardened and validated the update Skill against extra npm, build, release, install, Git, and cleanup side effects
 ```

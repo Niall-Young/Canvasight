@@ -12,6 +12,7 @@ const pluginRoot = path.resolve(__dirname, "..");
 const skillsPath = path.join(pluginRoot, "src", "lib", "skills.ts");
 const placementPath = path.join(pluginRoot, "src", "lib", "skillPickerPlacement.ts");
 const graphWriterSkillPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "SKILL.md");
+const updateSkillPath = path.join(pluginRoot, "skills", "canvasight-update", "SKILL.md");
 
 function loadTypescriptModule(sourcePath) {
   const source = fs.readFileSync(sourcePath, "utf8");
@@ -27,6 +28,12 @@ function loadTypescriptModule(sourcePath) {
 const { filterSkills, findSkillQuery, insertSkillToken } = loadTypescriptModule(skillsPath);
 const { placeSkillPicker, toViewportCaretRect } = loadTypescriptModule(placementPath);
 const graphWriterSkill = fs.readFileSync(graphWriterSkillPath, "utf8");
+const updateSkill = fs.readFileSync(updateSkillPath, "utf8");
+
+assert.match(updateSkill, /Run exactly that one bundled-updater command and no other shell command/);
+assert.match(updateSkill, /Do not run `npm install`, `npm ci`, another package manager, builds, tests, release preparation or verification/);
+assert.match(updateSkill, /direct `codex plugin` or marketplace commands, Git commands, cleanup, or duplicate-file repair/);
+assert.match(updateSkill, /The updater owns every permitted check, install, verification, and rollback step/);
 
 assert.match(graphWriterSkill, /ask_canvasight_framework_questions/);
 assert.match(graphWriterSkill, /repository, captured Page, user context, and applicable professional Skills/);
