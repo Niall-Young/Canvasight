@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 2
+version: 3
 agent_id: /root
 thread_id: null
 created_at: 2026-07-14T06:22:20Z
-updated_at: 2026-07-14T06:25:00Z
+updated_at: 2026-07-14T06:31:00Z
 depends_on:
   - issue-pending-confirmations-bypass-inline-gate
   - solution-pending-confirmations-inline-gate
@@ -54,6 +54,7 @@ verification_evidence:
 - `npm run test:skills`：通过。
 - Graph Writer Skill quick validator：通过。
 - 当前任务已发现 `ask_canvasight_framework_questions`，排除“工具不可见”作为本次漏问原因。
+- `codex plugin add --json canvasight@canvasight-local` 已安装 0.4.18；缓存内 Graph Writer Skill 包含 blocking-framework 门禁，`codex plugin list` 解析为 0.4.18。
 
 ## 报告状态变更
 
