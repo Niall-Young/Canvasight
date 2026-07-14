@@ -1400,6 +1400,49 @@ async function assertSkillAssignmentAndContentModeContracts(origin) {
     "AGENTS.md"
   );
 
+  const agentTeamOnlyProject = path.join(tempRoot, "skill-led-agent-team-only-project");
+  await fsp.mkdir(agentTeamOnlyProject, { recursive: true });
+  await fsp.writeFile(path.join(agentTeamOnlyProject, "design.md"), "# Existing product design guidance\n", "utf8");
+  const managedAgentTeamBlock = "<!-- canvasight-agent-team:start -->\n## Canvasight Agent Team\n\nManaged protocol only.\n<!-- canvasight-agent-team:end -->\n";
+  await fsp.writeFile(path.join(agentTeamOnlyProject, "AGENTS.md"), managedAgentTeamBlock, "utf8");
+  const agentTeamOnly = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: agentTeamOnlyProject,
+      graphType: "software-product",
+      pageName: "Agent Team project guidance",
+      frameworkManifest: skillLedManifest("agent-team-content-node"),
+      nodes: [{ id: "agent-team-content-node", title: "Professional PDF outline", body: "Define the PDF narrative, page structure, and rendered acceptance evidence." }],
+      edges: []
+    }
+  });
+  assert.equal(agentTeamOnly.structuredContent.status, "written");
+  assert.deepEqual(agentTeamOnly.structuredContent.nodeIds, ["agent-team-content-node", "project-guidance-agents-md"]);
+  assert.deepEqual(agentTeamOnly.structuredContent.projectGuidanceNodes.map((node) => node.fileName), ["AGENTS.md"]);
+  assert.equal(agentTeamOnly.structuredContent.document.nodes.find((node) => node.id === "project-guidance-agents-md").data.title, "完善 AGENTS.md");
+  const agentTeamOnlyGuidanceBody = agentTeamOnly.structuredContent.document.nodes.find((node) => node.id === "project-guidance-agents-md").data.body;
+  assert.match(agentTeamOnlyGuidanceBody, /仅包含 Canvasight Agent Team 受管协议/);
+  assert.match(agentTeamOnlyGuidanceBody, /保留受管段落/);
+  assert.match(agentTeamOnlyGuidanceBody, /不要重复创建或扩写 Agent Team 分工/);
+
+  const substantiveAgentsProject = path.join(tempRoot, "skill-led-substantive-agents-project");
+  await fsp.mkdir(substantiveAgentsProject, { recursive: true });
+  await fsp.writeFile(path.join(substantiveAgentsProject, "design.md"), "# Existing product design guidance\n", "utf8");
+  await fsp.writeFile(path.join(substantiveAgentsProject, "AGENTS.md"), `# Project rules\n\nKeep changes scoped and run the project tests.\n\n${managedAgentTeamBlock}`, "utf8");
+  const substantiveAgents = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: substantiveAgentsProject,
+      graphType: "software-product",
+      pageName: "Existing project guidance",
+      frameworkManifest: skillLedManifest("substantive-content-node"),
+      nodes: [{ id: "substantive-content-node", title: "Professional PDF outline", body: "Define the PDF narrative, page structure, and rendered acceptance evidence." }],
+      edges: []
+    }
+  });
+  assert.equal(substantiveAgents.structuredContent.status, "written");
+  assert.deepEqual(substantiveAgents.structuredContent.projectGuidanceNodes, []);
+
   const nonProductSkillLed = await request("tools/call", {
     name: "write_canvasight_graph",
     arguments: {

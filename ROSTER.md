@@ -8,12 +8,12 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T06:22:20Z
-    handoff_source: issue-pending-confirmations-bypass-inline-gate
-    last_report: integration-summary-pending-confirmations-inline-gate
+    last_seen: 2026-07-14T07:31:10Z
+    handoff_source: issue-agent-team-only-agents-guidance
+    last_report: integration-summary-agent-team-only-agents-guidance
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed the pending-confirmation gate and non-blocking open-question exception
+    notes: Reviewed missing, Agent-Team-managed-only, and substantive AGENTS.md product semantics
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:06:04Z
-    handoff_source: issue-update-creates-numbered-duplicates
-    last_report: issue-update-creates-numbered-duplicates
+    last_seen: 2026-07-14T07:31:10Z
+    handoff_source: issue-agent-team-only-agents-guidance
+    last_report: integration-summary-agent-team-only-agents-guidance
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Resolved numbered-duplicate workflow by proving updater non-causality and integrating the single-command update Skill guardrail
+    notes: Reviewed the shared AGENTS.md content-state detector and managed-block preservation boundary
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: blocked
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f5f69-51fb-7f22-bdd0-0922f855b680
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:06:04Z
-    handoff_source: issue-update-creates-numbered-duplicates
-    last_report: issue-update-creates-numbered-duplicates
+    last_seen: 2026-07-14T07:31:10Z
+    handoff_source: issue-agent-team-only-agents-guidance
+    last_report: integration-summary-agent-team-only-agents-guidance
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Numbered-duplicate diagnosis and updater regression passed; prior native-host acceptance blockers remain unresolved and keep this seat blocked
+    notes: AGENTS.md three-state MCP regressions passed; prior native-host acceptance blockers remain unresolved and keep this seat blocked
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

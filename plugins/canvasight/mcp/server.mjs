@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.19";
+var SERVER_VERSION = "0.4.20";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17464,7 +17464,9 @@ var SOFTWARE_PRODUCT_GUIDANCE_FILES = [
     aliases: ["agents.md", "agents-md", "agents md"],
     nodeId: "project-guidance-agents-md",
     title: "补充 AGENTS.md",
-    body: "当前项目缺少 AGENTS.md。请创建该文件，基于现有项目内容和当前需求，写清项目上下文、工作规则、实现约束、验证命令与 git 提交约定。不要默认加入 Agent Team 等未启用的可选流程，也不要写成空模板。"
+    agentTeamOnlyTitle: "完善 AGENTS.md",
+    body: "当前项目缺少 AGENTS.md。请创建该文件，基于现有项目内容和当前需求，写清项目上下文、工作规则、实现约束、验证命令与 git 提交约定。不要默认加入 Agent Team 等未启用的可选流程，也不要写成空模板。",
+    agentTeamOnlyBody: "当前 AGENTS.md 仅包含 Canvasight Agent Team 受管协议，仍缺少项目通用规则。请保留受管段落，并基于现有项目内容和当前需求，补充项目上下文、工作规则、实现约束、验证命令与 git 提交约定。不要重复创建或扩写 Agent Team 分工，也不要写成空模板。"
   },
   {
     canonicalName: "design.md",
@@ -19202,7 +19204,11 @@ function graphNodeFieldText(value, field) {
 function graphHasGuidanceIntent(title, guidanceFile) {
   if (!title) return false;
   const aliases = guidanceFile.aliases.map((alias) => normalizeTemplateQuery(alias));
-  const directTitles = [normalizeTemplateQuery(guidanceFile.title), normalizeTemplateQuery("补充 ".concat(guidanceFile.canonicalName))];
+  const directTitles = [
+    normalizeTemplateQuery(guidanceFile.title),
+    normalizeTemplateQuery(guidanceFile.agentTeamOnlyTitle),
+    normalizeTemplateQuery("补充 ".concat(guidanceFile.canonicalName))
+  ].filter(Boolean);
   if (directTitles.includes(title)) return true;
   return aliases.some(
     (alias) => [
@@ -19227,8 +19233,25 @@ function graphHasGuidanceNode(rawNodes, guidanceFile) {
     return id === nodeId || projectGuidanceFile === canonicalName || graphHasGuidanceIntent(title, guidanceFile);
   });
 }
+function projectGuidanceFileStatus(projectPath, guidanceFile) {
+  const existingPath = guidanceFile.candidates.map((candidate) => path.join(projectPath, candidate)).find((candidate) => fs.existsSync(candidate));
+  if (!existingPath) return "missing";
+  if (guidanceFile.canonicalName !== "AGENTS.md") return "present";
+  try {
+    const existing = fs.readFileSync(existingPath, "utf8");
+    const startIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_START);
+    const endIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_END);
+    if (startIndex >= 0 && endIndex > startIndex) {
+      const outsideManagedBlock = "".concat(existing.slice(0, startIndex)).concat(existing.slice(endIndex + AGENT_TEAM_AGENTS_MD_END.length));
+      if (!outsideManagedBlock.trim()) return "agent-team-only";
+    }
+  } catch {
+    return "present";
+  }
+  return "present";
+}
 function projectHasGuidanceFile(projectPath, guidanceFile) {
-  return guidanceFile.candidates.some((candidate) => fs.existsSync(path.join(projectPath, candidate)));
+  return projectGuidanceFileStatus(projectPath, guidanceFile) === "present";
 }
 function projectGuidanceNodeId(baseId, usedIds) {
   let id = baseId;
@@ -19269,10 +19292,10 @@ function requiresSoftwareProductGuidance(args) {
 function softwareProductGuidanceNodes(projectPath, args, pageIndex, rawNodes) {
   if (!requiresSoftwareProductGuidance(args) || pageIndex !== 0 || !projectPath) return [];
   const usedIds = guidanceInputNodeIds(rawNodes);
-  return SOFTWARE_PRODUCT_GUIDANCE_FILES.filter((guidanceFile) => !projectHasGuidanceFile(projectPath, guidanceFile)).filter((guidanceFile) => !graphHasGuidanceNode(rawNodes, guidanceFile)).map((guidanceFile) => ({
+  return SOFTWARE_PRODUCT_GUIDANCE_FILES.map((guidanceFile) => ({ guidanceFile, status: projectGuidanceFileStatus(projectPath, guidanceFile) })).filter(({ status }) => status !== "present").filter(({ guidanceFile }) => !graphHasGuidanceNode(rawNodes, guidanceFile)).map(({ guidanceFile, status }) => ({
     id: projectGuidanceNodeId(guidanceFile.nodeId, usedIds),
-    title: guidanceFile.title,
-    body: guidanceFile.body,
+    title: status === "agent-team-only" ? guidanceFile.agentTeamOnlyTitle : guidanceFile.title,
+    body: status === "agent-team-only" ? guidanceFile.agentTeamOnlyBody : guidanceFile.body,
     codexMode: "chat",
     runMode: "flow",
     data: {
