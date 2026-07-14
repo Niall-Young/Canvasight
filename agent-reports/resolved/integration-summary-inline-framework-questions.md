@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-07-14T05:56:32Z
-updated_at: 2026-07-14T05:56:32Z
+updated_at: 2026-07-14T06:01:30Z
 depends_on:
   - issue-inline-framework-questions
   - solution-inline-framework-questions
@@ -79,6 +79,6 @@ verification_evidence:
 ## Git 状态
 
 - baseline HEAD: `3de85d18cec9ab831d6ec719bf425bdb65352003`
-- planned feature commit: `feat: 新增消息内框架确认组件`
+- feature commit: `498ad757a316ad231c6d156b51d018b8ec260d8f` (`feat: 新增消息内框架确认组件`)
 - staged scope: 28 个本功能路径；`git diff --cached --name-only`、`--stat` 和 `--check` 已复核，无范围外文件
 - unrelated untracked files: 四个 `plugins/canvasight/dist/* 2.*`，保留且不提交
