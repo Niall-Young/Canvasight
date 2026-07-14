@@ -6,7 +6,7 @@ import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
-import { placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
+import { measureTextareaCaretRect, placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
 import { shortcuts } from "../lib/shortcuts";
 import { filterSkills, findSkillQuery, insertSkillToken, type SkillQueryRange } from "../lib/skills";
 import { formatBytes } from "../lib/utils";
@@ -101,7 +101,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const skillPickerRef = useRef<HTMLDivElement>(null);
-  const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const skillOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const pointerStartedSelectedRef = useRef(false);
   const suppressConnectButtonClickRef = useRef(false);
   const isComposingRef = useRef(false);
@@ -174,12 +174,12 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     const updatePosition = () => {
       frame = 0;
       const anchor = bodyRef.current;
-      const node = rootRef.current;
       const picker = skillPickerRef.current;
-      if (!anchor || !node || !picker) return;
+      if (!anchor || !picker) return;
+      const caretRect = measureTextareaCaretRect(anchor);
+      if (!caretRect) return;
       const nextPosition = placeSkillPicker({
-        anchorRect: anchor.getBoundingClientRect(),
-        nodeRect: node.getBoundingClientRect(),
+        anchorRect: caretRect,
         pickerHeight: picker.offsetHeight,
         pickerWidth: picker.offsetWidth,
         viewportHeight: window.innerHeight,
@@ -198,12 +198,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     updatePosition();
     window.addEventListener("resize", schedulePositionUpdate);
     window.addEventListener("pointermove", schedulePositionUpdate, true);
+    document.addEventListener("selectionchange", schedulePositionUpdate);
     document.addEventListener("wheel", schedulePositionUpdate, true);
     document.addEventListener("scroll", schedulePositionUpdate, true);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedulePositionUpdate);
       window.removeEventListener("pointermove", schedulePositionUpdate, true);
+      document.removeEventListener("selectionchange", schedulePositionUpdate);
       document.removeEventListener("wheel", schedulePositionUpdate, true);
       document.removeEventListener("scroll", schedulePositionUpdate, true);
     };
@@ -376,15 +378,22 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   );
 
   const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (isComposingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.currentTarget === bodyRef.current && skillQuery) {
       if (event.key === "ArrowDown" && visibleSkills.length) {
         event.preventDefault();
-        setActiveSkillIndex((current) => (current + 1) % visibleSkills.length);
+        setActiveSkillIndex((current) => Math.min(visibleSkills.length - 1, current + 1));
         return;
       }
       if (event.key === "ArrowUp" && visibleSkills.length) {
         event.preventDefault();
-        setActiveSkillIndex((current) => (current - 1 + visibleSkills.length) % visibleSkills.length);
+        setActiveSkillIndex((current) => Math.max(0, current - 1));
+        return;
+      }
+      if ((event.key === "PageDown" || event.key === "PageUp") && visibleSkills.length) {
+        event.preventDefault();
+        const direction = event.key === "PageDown" ? 1 : -1;
+        setActiveSkillIndex((current) => Math.max(0, Math.min(visibleSkills.length - 1, current + direction * 4)));
         return;
       }
       if ((event.key === "Enter" || event.key === "Tab") && visibleSkills[activeSkillIndex]) {
@@ -610,8 +619,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           placeholder={t("task.bodyPlaceholder")}
           readOnly={editingField !== "body"}
           tabIndex={editingField === "body" ? 0 : -1}
+          role="combobox"
+          aria-autocomplete="list"
           aria-activedescendant={skillQuery && visibleSkills[activeSkillIndex] ? `${skillPickerId}-option-${activeSkillIndex}` : undefined}
-          aria-controls={skillQuery ? skillPickerId : undefined}
+          aria-controls={skillQuery && visibleSkills.length ? skillPickerId : undefined}
           aria-expanded={editingField === "body" && Boolean(skillQuery)}
           aria-haspopup="listbox"
           onPointerDown={handleEditablePointerDown}
@@ -624,6 +635,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           onCompositionStart={handleCompositionStart}
           onCompositionEnd={handleCompositionEnd}
           onChange={handleBodyChange}
+          onSelect={(event) => syncSkillQuery(event.currentTarget.value, event.currentTarget)}
           />
 
           {editingField === "body" && skillQuery ? createPortal(
@@ -632,46 +644,47 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
               className={`skill-picker nodrag nowheel ${skillPickerPosition ? "is-positioned" : ""}`}
               data-placement={skillPickerPosition?.placement}
               id={skillPickerId}
-              role="listbox"
-              aria-label={t("task.skillPickerLabel")}
+              role={visibleSkills.length ? "listbox" : "presentation"}
+              aria-label={visibleSkills.length ? t("task.skillPickerLabel") : undefined}
               style={{ left: skillPickerPosition?.left ?? 0, top: skillPickerPosition?.top ?? 0 }}
             >
-            <div className="skill-picker-header">
-              <span>{t("task.skillPickerTitle")}</span>
-              <button
-                type="button"
-                className="skill-picker-refresh"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => void loadSkills(true)}
-              >
-                {t("task.skillPickerRefresh")}
-              </button>
-            </div>
-            {skillStatus === "loading" ? <p className="skill-picker-message">{t("task.skillPickerLoading")}</p> : null}
+            {skillStatus === "loading" ? <p className="skill-picker-message" role="status" aria-live="polite">{t("task.skillPickerLoading")}</p> : null}
             {skillStatus !== "loading" && visibleSkills.length ? (
               <div className="skill-picker-list">
                 {visibleSkills.map((skill, index) => (
-                  <button
+                  <div
                     key={skill.name}
                     ref={(option) => {
                       skillOptionRefs.current[index] = option;
                     }}
                     id={`${skillPickerId}-option-${index}`}
-                    type="button"
                     role="option"
+                    tabIndex={-1}
                     aria-selected={index === activeSkillIndex}
                     className={`skill-picker-option ${index === activeSkillIndex ? "is-active" : ""}`}
-                    onMouseDown={(event) => event.preventDefault()}
+                    onPointerDown={(event) => event.preventDefault()}
                     onMouseEnter={() => setActiveSkillIndex(index)}
                     onClick={() => chooseSkill(skill)}
                   >
                     <span className="skill-picker-option-name">${skill.name}</span>
                     <span className="skill-picker-option-description">{skill.displayName || skill.description}</span>
-                  </button>
+                  </div>
                 ))}
               </div>
             ) : null}
-            {skillStatus === "error" ? <p className="skill-picker-message is-error">{t("task.skillPickerUnavailable")}</p> : null}
+            {skillStatus === "error" ? (
+              <div className="skill-picker-message is-error" role="status" aria-live="polite">
+                <span>{t("task.skillPickerUnavailable")}</span>
+                <button
+                  type="button"
+                  className="skill-picker-retry"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void loadSkills(true)}
+                >
+                  {t("task.skillPickerRefresh")}
+                </button>
+              </div>
+            ) : null}
             {skillStatus === "ready" && !visibleSkills.length ? <p className="skill-picker-message">{t("task.skillPickerNoMatch")}</p> : null}
             {skillStatus !== "loading" && !visibleSkills.length ? <p className="skill-picker-hint">{t("task.skillPickerManualHint")}</p> : null}
             </div>,

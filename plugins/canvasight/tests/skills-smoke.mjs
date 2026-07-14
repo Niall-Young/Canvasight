@@ -24,7 +24,7 @@ function loadTypescriptModule(sourcePath) {
 }
 
 const { filterSkills, findSkillQuery, insertSkillToken } = loadTypescriptModule(skillsPath);
-const { placeSkillPicker } = loadTypescriptModule(placementPath);
+const { placeSkillPicker, toViewportCaretRect } = loadTypescriptModule(placementPath);
 
 const catalog = [
   { name: "write-product-promo-article", displayName: "产品推广文章", description: "撰写中文产品发布和教程文章", scope: "user" },
@@ -48,50 +48,72 @@ const completeCatalog = Array.from({ length: 18 }, (_, index) => ({
 assert.equal(filterSkills(completeCatalog, "").length, completeCatalog.length, "an empty query must expose the complete catalog");
 assert.equal(filterSkills(completeCatalog, "", 8).length, 8, "explicit result limits must remain available to non-picker callers");
 
-const sidePlacement = placeSkillPicker({
-  anchorRect: { top: 120, right: 420, bottom: 220, left: 120 },
-  nodeRect: { top: 80, right: 440, bottom: 300, left: 100 },
-  pickerHeight: 300,
-  pickerWidth: 336,
+const belowPlacement = placeSkillPicker({
+  anchorRect: { top: 120, right: 122, bottom: 138, left: 120 },
+  pickerHeight: 228,
+  pickerWidth: 288,
   viewportHeight: 800,
   viewportWidth: 1200
 });
-assert.equal(sidePlacement.placement, "right");
-assert.equal(sidePlacement.left, 450);
-
-const leftPlacement = placeSkillPicker({
-  anchorRect: { top: 120, right: 1080, bottom: 220, left: 780 },
-  nodeRect: { top: 80, right: 1100, bottom: 300, left: 760 },
-  pickerHeight: 300,
-  pickerWidth: 336,
-  viewportHeight: 800,
-  viewportWidth: 1200
-});
-assert.equal(leftPlacement.placement, "left");
-assert.equal(leftPlacement.left, 414);
-
-const compactViewportPlacement = placeSkillPicker({
-  anchorRect: { top: 120, right: 760, bottom: 220, left: 80 },
-  nodeRect: { top: 80, right: 800, bottom: 300, left: 40 },
-  pickerHeight: 300,
-  pickerWidth: 336,
-  viewportHeight: 720,
-  viewportWidth: 840
-});
-assert.equal(compactViewportPlacement.placement, "below");
-assert.equal(compactViewportPlacement.top, 310);
-assert.ok(compactViewportPlacement.left >= 12 && compactViewportPlacement.left + 336 <= 828);
+assert.equal(belowPlacement.placement, "below");
+assert.equal(belowPlacement.top, 144, "below placement must leave the caret line visible");
 
 const abovePlacement = placeSkillPicker({
-  anchorRect: { top: 560, right: 760, bottom: 660, left: 80 },
-  nodeRect: { top: 520, right: 800, bottom: 700, left: 40 },
-  pickerHeight: 300,
-  pickerWidth: 336,
-  viewportHeight: 720,
-  viewportWidth: 840
+  anchorRect: { top: 680, right: 782, bottom: 698, left: 780 },
+  pickerHeight: 228,
+  pickerWidth: 288,
+  viewportHeight: 800,
+  viewportWidth: 1200
 });
 assert.equal(abovePlacement.placement, "above");
-assert.equal(abovePlacement.top, 210);
+assert.equal(abovePlacement.top, 446);
+
+const rightPlacement = placeSkillPicker({
+  anchorRect: { top: 146, right: 322, bottom: 164, left: 320 },
+  pickerHeight: 228,
+  pickerWidth: 288,
+  viewportHeight: 280,
+  viewportWidth: 900
+});
+assert.equal(rightPlacement.placement, "right");
+assert.equal(rightPlacement.left, 328);
+assert.equal(rightPlacement.top, 44, "side placement must remain clamped inside the viewport");
+
+const leftPlacement = placeSkillPicker({
+  anchorRect: { top: 146, right: 842, bottom: 164, left: 840 },
+  pickerHeight: 228,
+  pickerWidth: 288,
+  viewportHeight: 280,
+  viewportWidth: 900
+});
+assert.equal(leftPlacement.placement, "left");
+assert.equal(leftPlacement.left, 546);
+
+const clampedPlacement = placeSkillPicker({
+  anchorRect: { top: 90, right: 4, bottom: 108, left: 2 },
+  pickerHeight: 228,
+  pickerWidth: 288,
+  viewportHeight: 280,
+  viewportWidth: 330
+});
+assert.equal(clampedPlacement.left, 10);
+assert.equal(clampedPlacement.top, 44);
+
+assert.deepEqual(
+  { ...toViewportCaretRect({
+    caretHeight: 20,
+    localLeft: 140,
+    localTop: 72,
+    scaleX: 0.8,
+    scaleY: 0.8,
+    scrollLeft: 10,
+    scrollTop: 32,
+    textareaLeft: 200,
+    textareaTop: 100
+  }) },
+  { bottom: 148, left: 304, right: 305, top: 132 },
+  "caret coordinates must include textarea scroll and XYFlow scale"
+);
 
 const replaced = insertSkillToken("先分析，再用 $产品 完成", query, "write-product-promo-article");
 assert.equal(replaced.value, "先分析，再用 $write-product-promo-article 完成");

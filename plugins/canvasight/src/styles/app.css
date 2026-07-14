@@ -2035,8 +2035,8 @@ button.achievement-card.is-unlocked:focus-visible {
 .skill-picker {
   position: fixed;
   z-index: 60;
-  width: min(336px, calc(100vw - 24px));
-  max-height: min(360px, calc(100dvh - 24px));
+  width: min(288px, calc(100vw - 16px));
+  max-height: min(228px, calc(100dvh - 16px));
   overflow: hidden;
   border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-md);
@@ -2051,31 +2051,11 @@ button.achievement-card.is-unlocked:focus-visible {
   visibility: visible;
 }
 
-.skill-picker-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  color: var(--color-text-subtle);
-  border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
-  font-size: var(--text-12);
-  line-height: var(--line-12);
-}
-
-.skill-picker-refresh {
-  padding: 0;
-  color: var(--color-text-link);
-  border: 0;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-
 .skill-picker-list {
   display: flex;
-  max-height: min(316px, calc(100dvh - 68px));
+  max-height: min(228px, calc(100dvh - 16px));
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex-direction: column;
   padding: 4px;
 }
@@ -2087,7 +2067,8 @@ button.achievement-card.is-unlocked:focus-visible {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
   color: var(--color-text);
   border: 0;
   border-radius: var(--radius-sm);
@@ -2129,7 +2110,21 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .skill-picker-message.is-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--color-negative);
+}
+
+.skill-picker-retry {
+  flex: none;
+  padding: 0;
+  color: var(--color-text-link);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .skill-picker-hint {
