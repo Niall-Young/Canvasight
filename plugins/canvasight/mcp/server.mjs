@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.18";
+var SERVER_VERSION = "0.4.19";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -19262,7 +19262,6 @@ function guidanceInputNodeIds(rawNodes) {
 function requiresSoftwareProductGuidance(args) {
   if (Object.prototype.hasOwnProperty.call(args || {}, "frameworkManifest")) {
     const manifest = isObject2(args?.frameworkManifest) ? args.frameworkManifest : null;
-    if (manifest?.contentMode === "skill-led") return false;
     return manifest?.primaryDomain === "software-product" && manifest.intent !== "refine";
   }
   return normalizeGraphType(args?.graphType) === "software-product";
@@ -20216,7 +20215,7 @@ function validateFrameworkManifest(page, manifest, projectPath, options = {}) {
       }
     }
   }
-  if (!skillLed && manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
+  if (manifest.primaryDomain === "software-product" && manifest.intent !== "refine") {
     SOFTWARE_PRODUCT_GUIDANCE_FILES.forEach((guidanceFile) => {
       if (!projectHasGuidanceFile(projectPath, guidanceFile) && !graphHasGuidanceNode(page.nodes, guidanceFile)) {
         violations.push(graphViolation("project_guidance_missing", "frameworkManifest.coverage.product.deliverables", "Project requires a delivery node for missing ".concat(guidanceFile.canonicalName, "."), "Add a node that explicitly creates ".concat(guidanceFile.canonicalName, ".")));
@@ -20436,9 +20435,10 @@ async function writeScatterGraph(projectPath, args) {
       projectGuidanceNodes.push(...guided.projectGuidanceNodes);
       const candidatePage = guided.page;
       const combinedSummary = guided.summary ? mergeMutationSummaries(merged.summary, guided.summary) : merged.summary;
+      const generatedGuidanceNodeIds = new Set(guided.projectGuidanceNodes.map((node) => node.nodeId));
       const validation = validateGraphCandidate(candidatePage, args, projectPath, {
         preferences,
-        requiredCoverageNodeIds: [...combinedSummary.addedNodeIds, ...combinedSummary.updatedNodeIds]
+        requiredCoverageNodeIds: [...combinedSummary.addedNodeIds, ...combinedSummary.updatedNodeIds].filter((nodeId) => !generatedGuidanceNodeIds.has(nodeId))
       });
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
       validationAdvisories.push(...validation.advisories);
@@ -20505,9 +20505,10 @@ async function writeScatterGraph(projectPath, args) {
         (page, index) => buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
       );
       for (let index = 0; index < incomingPages.length; index += 1) {
+        const generatedGuidanceNodeIds = new Set(projectGuidanceNodes.filter((node) => node.pageIndex === index).map((node) => node.nodeId));
         const validation = validateGraphCandidate(incomingPages[index], args, projectPath, {
           preferences,
-          requiredCoverageNodeIds: incomingPages[index].nodes.map((node) => node.id)
+          requiredCoverageNodeIds: incomingPages[index].nodes.map((node) => node.id).filter((nodeId) => !generatedGuidanceNodeIds.has(nodeId))
         });
         if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
         validationAdvisories.push(...validation.advisories);

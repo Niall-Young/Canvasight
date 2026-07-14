@@ -1379,6 +1379,8 @@ async function assertSkillAssignmentAndContentModeContracts(origin) {
   assert.match(aiEnabled.structuredContent.document.nodes[0].data.body, /^\$pdf /);
 
   const skillLedProject = path.join(tempRoot, "skill-led-content-project");
+  await fsp.mkdir(skillLedProject, { recursive: true });
+  await fsp.writeFile(path.join(skillLedProject, "design.md"), "# Existing product design guidance\n", "utf8");
   const skillLed = await request("tools/call", {
     name: "write_canvasight_graph",
     arguments: {
@@ -1391,8 +1393,30 @@ async function assertSkillAssignmentAndContentModeContracts(origin) {
     }
   });
   assert.equal(skillLed.structuredContent.status, "written");
-  assert.deepEqual(skillLed.structuredContent.nodeIds, ["professional-node"]);
-  assert.deepEqual(skillLed.structuredContent.projectGuidanceNodes, []);
+  assert.deepEqual(skillLed.structuredContent.nodeIds, ["professional-node", "project-guidance-agents-md"]);
+  assert.deepEqual(skillLed.structuredContent.projectGuidanceNodes.map((node) => node.fileName), ["AGENTS.md"]);
+  assert.equal(
+    skillLed.structuredContent.document.nodes.find((node) => node.id === "project-guidance-agents-md").data.projectGuidanceFile,
+    "AGENTS.md"
+  );
+
+  const nonProductSkillLed = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: path.join(tempRoot, "skill-led-article-project"),
+      graphType: "software-product",
+      pageName: "Professional article content",
+      frameworkManifest: {
+        ...skillLedManifest("article-node"),
+        primaryDomain: "article"
+      },
+      nodes: [{ id: "article-node", title: "Professional article outline", body: "Define the article narrative, section structure, and editorial acceptance evidence." }],
+      edges: []
+    }
+  });
+  assert.equal(nonProductSkillLed.structuredContent.status, "written");
+  assert.deepEqual(nonProductSkillLed.structuredContent.nodeIds, ["article-node"]);
+  assert.deepEqual(nonProductSkillLed.structuredContent.projectGuidanceNodes, []);
 
   const uncoveredSkillLed = await request("tools/call", {
     name: "write_canvasight_graph",

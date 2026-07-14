@@ -26,6 +26,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-skill-led-project-guidance-omission.md` - restored missing project-guidance nodes for skill-led software-product writes.
+- `agent-reports/resolved/solution-skill-led-project-guidance-omission.md` - decoupled project governance from content mode and exempted only generated guidance ids from Skill coverage.
+- `agent-reports/resolved/issue-skill-led-project-guidance-omission.md` - resolved the missing AGENTS.md creation node regression in skill-led software-product graphs.
 - `agent-reports/resolved/integration-summary-agents-md-guidance-agent-team-opt-in.md` - corrected the generic AGENTS.md guidance node so disabled optional workflows remain opt-in.
 - `agent-reports/resolved/solution-agents-md-guidance-agent-team-opt-in.md` - scoped the fix to MCP guidance copy, exact regression coverage, and versioned bundle output.
 - `agent-reports/resolved/issue-agents-md-guidance-agent-team-opt-in.md` - resolved the misleading Agent Team requirement shown when Agent Team was not enabled.
