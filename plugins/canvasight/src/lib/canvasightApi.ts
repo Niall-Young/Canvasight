@@ -344,6 +344,37 @@ export function resolveCanvasightAssetUrl(fileUrl: string, baseUrl = apiBaseUrl(
   }
 }
 
+interface CanvasightWidgetImageAsset {
+  dataBase64: string;
+  mime: string;
+  size: number;
+}
+
+export async function loadCanvasightImageAsset(fileUrl: string, storedPath: string, baseUrl = apiBaseUrl()): Promise<string> {
+  if (!fileUrl) return "";
+  if (/^(?:data|blob):/i.test(fileUrl)) return fileUrl;
+  if (!isNativeWidgetShell()) return resolveCanvasightAssetUrl(fileUrl, baseUrl);
+
+  let parsed: URL;
+  try {
+    parsed = new URL(fileUrl, baseUrl || "http://canvasight.local");
+  } catch {
+    throw new CanvasightApiError("Canvasight attachment image URL is invalid.", 400, { code: "invalid_asset_url" });
+  }
+  if (parsed.pathname !== "/api/asset" || !parsed.searchParams.get("path") || !storedPath) {
+    throw new CanvasightApiError("Canvasight attachment image URL is not a project asset.", 400, { code: "invalid_asset_url" });
+  }
+
+  const asset = await requestSessionJson<CanvasightWidgetImageAsset>("/attachment-preview", {
+    method: "POST",
+    body: JSON.stringify({ storedPath })
+  });
+  if (!asset?.mime?.startsWith("image/") || !asset.dataBase64) {
+    throw new CanvasightApiError("Canvasight attachment preview did not return an image.", 502, { code: "invalid_asset_preview" });
+  }
+  return `data:${asset.mime};base64,${asset.dataBase64}`;
+}
+
 function sessionIdFromUrl(): string {
   return new URLSearchParams(window.location.search).get("sessionId") || widgetRuntimeData().sessionId || "local";
 }

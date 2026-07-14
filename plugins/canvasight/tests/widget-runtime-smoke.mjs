@@ -20,6 +20,9 @@ const canvasightHome = path.join(tempRoot, "home");
 const projectPath = path.join(tempRoot, "project");
 fs.mkdirSync(projectPath, { recursive: true });
 const thumbnailPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+const thumbnailDataUrl = `data:image/png;base64,${thumbnailPng.toString("base64")}`;
+const thumbnailGif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64");
+const thumbnailGifDataUrl = `data:image/gif;base64,${thumbnailGif.toString("base64")}`;
 
 function createMcpClient() {
   const child = spawn(process.execPath, [serverPath], {
@@ -75,6 +78,8 @@ function createMcpClient() {
 }
 
 function hostHtml(widgetData) {
+  const thumbnailPath = path.join(projectPath, ".scatter", "assets", "thumbnail.png");
+  const thumbnailGifPath = path.join(projectPath, ".scatter", "assets", "thumbnail.gif");
   const page = {
     id: "page-composed",
     name: "Page 1",
@@ -94,11 +99,22 @@ function hostHtml(widgetData) {
             kind: "image",
             source: "paste",
             originalName: "thumbnail.png",
-            storedPath: path.join(projectPath, ".scatter", "assets", "thumbnail.png"),
+            storedPath: thumbnailPath,
             relativePath: ".scatter/assets/thumbnail.png",
-            fileUrl: "/thumbnail.png",
+            fileUrl: `/api/asset?path=${encodeURIComponent(Buffer.from(thumbnailPath).toString("base64url"))}&token=daemon-secret-must-not-cross-widget-tool`,
             mime: "image/png",
             size: thumbnailPng.length,
+            createdAt: new Date().toISOString()
+          }, {
+            id: "attachment-image-gif",
+            kind: "image",
+            source: "paste",
+            originalName: "thumbnail.gif",
+            storedPath: thumbnailGifPath,
+            relativePath: ".scatter/assets/thumbnail.gif",
+            fileUrl: `/api/asset?path=${encodeURIComponent(Buffer.from(thumbnailGifPath).toString("base64url"))}&token=second-daemon-secret`,
+            mime: "image/gif",
+            size: thumbnailGif.length,
             createdAt: new Date().toISOString()
           }],
           effort: "xhigh",
@@ -183,6 +199,11 @@ function hostHtml(widgetData) {
       let data = null;
       if (args.path === '/api/templates') data = [];
       else if (args.path === '/api/preferences') data = { aiSkillAssignmentEnabled: false };
+      else if (args.path && args.path.endsWith('/attachment-preview')) {
+        data = args.body && args.body.storedPath === ${JSON.stringify(thumbnailGifPath)}
+          ? { dataBase64: ${JSON.stringify(thumbnailGif.toString("base64"))}, mime: 'image/gif', size: ${thumbnailGif.length} }
+          : { dataBase64: ${JSON.stringify(thumbnailPng.toString("base64"))}, mime: 'image/png', size: ${thumbnailPng.length} };
+      }
       else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
       else if (args.path && args.path.endsWith('/open-project')) data = opened;
       else if (args.path && args.path.endsWith('/widget-ready')) {
@@ -345,25 +366,27 @@ try {
   assert.ok(evidence.ready.body.canvasWidth > 0 && evidence.ready.body.canvasHeight > 0);
   assert.deepEqual(evidence.errors, []);
 
-  const recoveredThumbnail = await waitForEvaluation(cdp, `(async () => {
+  const proxiedThumbnail = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
-    const win = frame.contentWindow;
     const doc = frame.contentDocument;
-    const placeholder = doc.querySelector('.kit-upload-chip-thumbnail-empty');
-    if (!placeholder) return false;
-    window.__HOST_SEND_WIDGET_DATA__({
-      ...win.__CANVASIGHT_WIDGET_DATA__,
-      apiBaseUrl: window.location.origin
-    });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const image = doc.querySelector('.kit-upload-chip-thumbnail img');
-    return image && image.complete && image.naturalWidth > 0
-      ? { src: image.src, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight }
+    const images = Array.from(doc.querySelectorAll('.kit-upload-chip-thumbnail img'));
+    return images.length === 2 && images.every((image) => image.complete && image.naturalWidth > 0)
+      ? {
+          images: images.map((image) => ({ src: image.src, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight })),
+          assetCalls: window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/attachment-preview'))
+        }
       : false;
-  })()`, "attachment thumbnail after late widget runtime metadata");
-  assert.equal(recoveredThumbnail.src, `${new URL(hostUrl).origin}/thumbnail.png`);
-  assert.equal(recoveredThumbnail.naturalWidth, 1);
-  assert.equal(recoveredThumbnail.naturalHeight, 1);
+  })()`, "attachment thumbnail loaded through the native widget asset proxy");
+  assert.deepEqual(proxiedThumbnail.images.map((image) => image.src).sort(), [thumbnailDataUrl, thumbnailGifDataUrl].sort());
+  assert.equal(proxiedThumbnail.images.every((image) => image.naturalWidth === 1 && image.naturalHeight === 1), true);
+  assert.equal(proxiedThumbnail.assetCalls.length, 2);
+  assert.equal(proxiedThumbnail.assetCalls.every((call) => /^\/api\/sessions\/[^/]+\/attachment-preview$/.test(call.path)), true);
+  assert.deepEqual(proxiedThumbnail.assetCalls.map((call) => call.body.storedPath).sort(), [
+    path.join(projectPath, ".scatter", "assets", "thumbnail.gif"),
+    path.join(projectPath, ".scatter", "assets", "thumbnail.png")
+  ]);
+  assert.doesNotMatch(JSON.stringify(proxiedThumbnail.assetCalls), /daemon-secret/);
+  assert.equal(proxiedThumbnail.assetCalls.some((call) => call.path.includes('/api/asset')), false);
 
   const restored = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');

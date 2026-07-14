@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T15:14:35Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: integration-summary-skill-picker-completeness-position
+    last_seen: 2026-07-14T02:33:45Z
+    handoff_source: issue-native-widget-attachment-relative-url
+    last_report: solution-native-widget-attachment-proxy-preview
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reused on the current thread to implement complete Skill discovery and viewport-level picker placement
+    notes: Implemented the session-scoped app-only MCP attachment preview proxy; native Desktop acceptance remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead

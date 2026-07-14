@@ -2,9 +2,9 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import type { RunMode, ScatterNodeData } from "../../shared/types";
+import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
-import { getCanvasightAssetBaseUrl, resolveCanvasightAssetUrl, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
+import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
 import { placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
 import { shortcuts } from "../lib/shortcuts";
@@ -50,6 +50,48 @@ export let taskNodeActions: RuntimeActions | null = null;
 
 export function setTaskNodeActions(actions: RuntimeActions): void {
   taskNodeActions = actions;
+}
+
+function TaskAttachmentChip({ attachment, nodeId, assetBaseUrl }: { attachment: Attachment; nodeId: string; assetBaseUrl: string }): ReactElement {
+  const [imageSrc, setImageSrc] = useState("");
+  const [imageStatus, setImageStatus] = useState<"idle" | "loading" | "ready" | "error">(attachment.kind === "image" ? "loading" : "idle");
+
+  useEffect(() => {
+    let current = true;
+    setImageSrc("");
+    if (attachment.kind !== "image") return () => { current = false; };
+    setImageStatus("loading");
+    void loadCanvasightImageAsset(attachment.fileUrl, attachment.storedPath, assetBaseUrl)
+      .then((nextImageSrc) => {
+        if (current) {
+          setImageSrc(nextImageSrc);
+          setImageStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (current) {
+          setImageSrc("");
+          setImageStatus("error");
+        }
+      });
+    return () => { current = false; };
+  }, [assetBaseUrl, attachment.fileUrl, attachment.kind, attachment.storedPath]);
+
+  return (
+    <UploadChip
+      className="nodrag"
+      fileName={attachment.originalName}
+      imageAlt={attachment.originalName}
+      imageLoading={attachment.kind === "image" && imageStatus === "loading"}
+      imageSrc={attachment.kind === "image" ? imageSrc : undefined}
+      kind={attachment.kind}
+      title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
+      onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}
+      onRemove={() => {
+        taskNodeActions?.removeAttachment(nodeId, attachment.id);
+      }}
+    />
+  );
 }
 
 function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement {
@@ -640,18 +682,11 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         {data.attachments.length ? (
           <div className="attachment-grid">
             {data.attachments.map((attachment) => (
-              <UploadChip
+              <TaskAttachmentChip
                 key={attachment.id}
-                className="nodrag"
-                fileName={attachment.originalName}
-                imageAlt={attachment.originalName}
-                imageSrc={attachment.kind === "image" ? resolveCanvasightAssetUrl(attachment.fileUrl, assetBaseUrl) : undefined}
-                kind={attachment.kind}
-                title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
-                onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}
-                onRemove={() => {
-                  taskNodeActions?.removeAttachment(id, attachment.id);
-                }}
+                attachment={attachment}
+                nodeId={id}
+                assetBaseUrl={assetBaseUrl}
               />
             ))}
           </div>

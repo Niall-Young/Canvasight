@@ -4236,16 +4236,60 @@ async function main() {
             mime: "text/plain",
             source: "upload",
             dataBase64: Buffer.from("hello canvasight", "utf8").toString("base64")
+          },
+          {
+            name: "thumbnail.png",
+            mime: "image/png",
+            source: "paste",
+            dataBase64: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64").toString("base64")
           }
         ]
       })
     });
-    assert.equal(attachments.length, 1);
+    assert.equal(attachments.length, 2);
     assert.equal(attachments[0].relativePath.startsWith(".scatter/assets/"), true);
     assert.equal(await fsp.readFile(attachments[0].storedPath, "utf8"), "hello canvasight");
     const assetResponse = await fetch(`${origin}${attachments[0].fileUrl}`);
     assert.equal(assetResponse.ok, true);
     assert.equal(await assetResponse.text(), "hello canvasight");
+    const requestWidgetAttachmentPreview = (storedPath) => request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${sessionId}/attachment-preview`,
+        method: "POST",
+        body: { storedPath },
+        openAttemptId: openedData.openAttemptId,
+        widgetInstanceId: "widget-attachment-preview",
+        startupStage: "ready",
+        displayMode: "fullscreen",
+        threadId: "thread-smoke",
+        reactMounted: true
+      }
+    });
+    const widgetThumbnailProxy = await requestWidgetAttachmentPreview(attachments[1].storedPath);
+    assert.equal(widgetThumbnailProxy.structuredContent.ok, true);
+    assert.equal(widgetThumbnailProxy.structuredContent.data.mime, "image/png");
+    assert.equal(widgetThumbnailProxy.structuredContent.data.size, 68);
+    assert.equal(Buffer.from(widgetThumbnailProxy.structuredContent.data.dataBase64, "base64").equals(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")), true);
+    const widgetTextPreview = await requestWidgetAttachmentPreview(attachments[0].storedPath);
+    assert.equal(widgetTextPreview.structuredContent.ok, false);
+    assert.equal(widgetTextPreview.structuredContent.status, 415);
+    assert.equal(widgetTextPreview.structuredContent.code, "attachment_preview_not_image");
+
+    const otherProjectAsset = path.join(tempRoot, "other-project", ".scatter", "assets", "outside.png");
+    await fsp.mkdir(path.dirname(otherProjectAsset), { recursive: true });
+    await fsp.writeFile(otherProjectAsset, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"));
+    const widgetOtherProjectPreview = await requestWidgetAttachmentPreview(otherProjectAsset);
+    assert.equal(widgetOtherProjectPreview.structuredContent.ok, false);
+    assert.equal(widgetOtherProjectPreview.structuredContent.status, 403);
+    assert.equal(widgetOtherProjectPreview.structuredContent.code, "forbidden_attachment_preview_path");
+
+    const oversizedPreview = path.join(projectPath, ".scatter", "assets", "oversized.png");
+    await fsp.writeFile(oversizedPreview, Buffer.alloc(10 * 1024 * 1024 + 1));
+    const widgetOversizedPreview = await requestWidgetAttachmentPreview(oversizedPreview);
+    assert.equal(widgetOversizedPreview.structuredContent.ok, false);
+    assert.equal(widgetOversizedPreview.structuredContent.status, 413);
+    assert.equal(widgetOversizedPreview.structuredContent.code, "attachment_preview_too_large");
 
     const exportedMarkdown = await fetchJson(`${origin}/api/sessions/${sessionId}/export-markdown`, {
       method: "POST",

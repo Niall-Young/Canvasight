@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.15";
+const SERVER_VERSION = "0.4.16";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -19,6 +19,7 @@ const DAEMON_START_LOCK_STALE_MS = 15_000;
 const DAEMON_START_LOCK_WAIT_MS = 12_000;
 const DAEMON_START_LOCK_UNREADABLE_STALE_MS = 1_000;
 const MAX_JSON_BODY_BYTES = 100 * 1024 * 1024;
+const MAX_WIDGET_IMAGE_PREVIEW_BYTES = 10 * 1024 * 1024;
 const MAX_RECENT_PROJECTS = 12;
 const MAX_NODE_TEMPLATES = 200;
 const MAX_SKILL_SUMMARIES = 200;
@@ -5830,6 +5831,43 @@ async function handleSessionApi(req, res, url) {
     session.projectPath = projectPath;
     await rememberProjectBestEffort(projectPath);
     sendJson(res, 200, attachments);
+    return true;
+  }
+
+  if (action === "attachment-preview") {
+    assertMethod(req, "POST");
+    const body = await readJsonBody(req);
+    const storedPath = typeof body?.storedPath === "string" ? body.storedPath.trim() : "";
+    if (!storedPath || !path.isAbsolute(storedPath)) {
+      throw new HttpError(400, "Canvasight attachment preview requires an absolute storedPath.", "invalid_attachment_preview_path");
+    }
+    const assetPath = path.resolve(storedPath);
+    const projectPath = normalizeProjectPath(session.projectPath);
+    const allowedRoots = [scatterAssetsDir(projectPath), canvasightTemplateAssetsDir()];
+    const stat = await fsp.lstat(assetPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new HttpError(403, "Canvasight attachment preview requires a regular project asset.", "forbidden_attachment_preview_path");
+    }
+    const realAssetPath = await fsp.realpath(assetPath);
+    const realAllowedRoots = await Promise.all(
+      allowedRoots.map((root) => fsp.realpath(root).catch(() => null))
+    );
+    if (!realAllowedRoots.some((root) => root && isPathInside(realAssetPath, root))) {
+      throw new HttpError(403, "Canvasight attachment preview is outside the current project.", "forbidden_attachment_preview_path");
+    }
+    if (stat.size > MAX_WIDGET_IMAGE_PREVIEW_BYTES) {
+      throw new HttpError(413, "Canvasight attachment preview is too large.", "attachment_preview_too_large");
+    }
+    const mime = mimeFromPath(realAssetPath).split(";", 1)[0].trim().toLowerCase();
+    if (!mime.startsWith("image/")) {
+      throw new HttpError(415, "Canvasight attachment preview requires an image.", "attachment_preview_not_image");
+    }
+    const bytes = await fsp.readFile(realAssetPath);
+    sendJson(res, 200, {
+      dataBase64: bytes.toString("base64"),
+      mime,
+      size: bytes.length
+    });
     return true;
   }
 

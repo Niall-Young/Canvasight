@@ -6,13 +6,14 @@ import { Icon } from "./icon";
 interface UploadChipProps extends HTMLAttributes<HTMLDivElement> {
   fileName: string;
   imageAlt?: string;
+  imageLoading?: boolean;
   imageSrc?: string;
   kind?: "file" | "image";
   onOpen?: () => void;
   onRemove?: () => void;
 }
 
-export function UploadChip({ className, fileName, imageAlt = "", imageSrc, kind = "file", onOpen, onRemove, ...props }: UploadChipProps): ReactElement {
+export function UploadChip({ className, fileName, imageAlt = "", imageLoading = false, imageSrc, kind = "file", onOpen, onRemove, ...props }: UploadChipProps): ReactElement {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const [lockedWidth, setLockedWidth] = useState<number | null>(null);
@@ -57,7 +58,9 @@ export function UploadChip({ className, fileName, imageAlt = "", imageSrc, kind 
     >
       {kind === "image" ? (
         <span className="kit-upload-chip-thumbnail" aria-hidden="true">
-          {imageSrc && failedImageSrc !== imageSrc ? (
+          {imageLoading ? (
+            <span className="kit-upload-chip-thumbnail-empty is-loading" />
+          ) : imageSrc && failedImageSrc !== imageSrc ? (
             <img alt={imageAlt} src={imageSrc} onError={() => setFailedImageSrc(imageSrc)} />
           ) : (
             <span className="kit-upload-chip-thumbnail-empty">
