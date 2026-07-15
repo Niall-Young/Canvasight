@@ -17,14 +17,14 @@ roles:
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
-    thread_id: null
+    thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T05:56:32Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-questions
+    last_seen: 2026-07-15T13:19:57Z
+    handoff_source: integration-summary-replace-brand-logo
+    last_report: integration-summary-replace-brand-logo
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to review the inline framework-question message component and update design.md
+    notes: Reviewed the supplied SVG replacement across plugin logo, composer icon, and favicon surfaces; design.md remains current
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
@@ -37,16 +37,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to align design.md with the caret-anchored compact combobox contract
   - role: Development Agent
-    status: inactive
+    status: active
     agent_id: /root/development_agent
-    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
+    thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T06:34:36Z
-    handoff_source: issue-historical-widget-polling-storm
-    last_report: solution-historical-widget-polling-storm
+    last_seen: 2026-07-15T13:19:57Z
+    handoff_source: integration-summary-replace-brand-logo
+    last_report: integration-summary-replace-brand-logo
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented and automated the 0.4.21 revision-poll lease, serial scheduler, teardown, and stdio boundary contract
+    notes: Reviewed the minimal PNG asset replacement and generated favicon scope; no runtime or manifest contract changed
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: inactive
+    status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
+    thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:53:13Z
-    handoff_source: issue-publish-stable-release-0-4-21
-    last_report: integration-summary-canvasight-0-4-21-release
+    last_seen: 2026-07-15T13:19:57Z
+    handoff_source: integration-summary-replace-brand-logo
+    last_report: integration-summary-replace-brand-logo
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently verified the 0.4.21 local, cross-platform, and native-host release evidence
+    notes: Defined build, plugin validation, asset integrity, and browser-visible favicon checks for the logo replacement
   - role: Customer Support Agent
     status: inactive
     agent_id: /root/customer_support_agent
@@ -81,16 +81,16 @@ roles:
     replaced_by: null
     notes: Reviewed and synchronized the 0.4.21 bilingual README examples and Release notes
   - role: Project Management Agent
-    status: inactive
+    status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
+    thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:53:13Z
-    handoff_source: issue-publish-stable-release-0-4-21
-    last_report: integration-summary-canvasight-0-4-21-release
+    last_seen: 2026-07-15T13:21:56Z
+    handoff_source: integration-summary-replace-brand-logo
+    last_report: integration-summary-replace-brand-logo
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed selective candidate commit and audited the 0.4.21 Release and stable closure
+    notes: Reviewed the frozen logo-replacement scope and completed selective staging and commit closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
