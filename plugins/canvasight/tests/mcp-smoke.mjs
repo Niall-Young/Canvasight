@@ -2843,7 +2843,7 @@ async function main() {
   const killTimer = setTimeout(() => {
     child.kill("SIGTERM");
     rejectPending(new Error(`MCP smoke test timed out. stderr=${stderrBuffer}`));
-  }, 30000);
+  }, 60000);
 
   try {
     const inlineOnlyHome = path.join(tempRoot, "inline-framework-questions-home");
@@ -3113,6 +3113,8 @@ async function main() {
         arguments: { limit: 2 }
       });
       assert.equal(lifecycleRecent.structuredContent.status, "listed");
+      await sleep(10_100);
+      assert.equal(lifecycleClient.child.exitCode, null, "an open stdio transport must not idle-exit after the revision lease timeout");
       await lifecycleClient.endStdinAndWait();
     } finally {
       if (!lifecycleClient.child.killed) lifecycleClient.child.kill("SIGTERM");
@@ -3482,6 +3484,192 @@ async function main() {
     assert.equal(widgetReadyAfterAck.structuredContent.canvasRendered, true);
     assert.equal(widgetReadyAfterAck.structuredContent.canvasVisible, true);
     assert.equal(widgetReadyAfterAck.structuredContent.sessionId, widgetOpened.structuredContent.sessionId);
+
+    const revisionPollPath = `/api/sessions/${widgetOpened.structuredContent.sessionId}/revision-poll`;
+    const activePollBody = { visible: true, focused: true, canvasWidth: 800, canvasHeight: 600 };
+    const ownerPoll = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: revisionPollPath,
+        method: "POST",
+        body: activePollBody,
+        ...widgetIdentity({ startupStage: "ready" })
+      }
+    });
+    assert.equal(ownerPoll.structuredContent.data.status, "owner");
+    assert.equal(ownerPoll.structuredContent.data.owner, true);
+    assert.equal(typeof ownerPoll.structuredContent.data.documentRevision, "number");
+    const renewedPoll = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: revisionPollPath,
+        method: "POST",
+        body: activePollBody,
+        ...widgetIdentity({ startupStage: "ready" })
+      }
+    });
+    assert.equal(renewedPoll.structuredContent.data.status, "owner", "the exact owner tuple renews its lease");
+
+    for (const [label, identity, body] of [
+      ["not-ready", widgetIdentity({ startupStage: "hydrating_project" }), activePollBody],
+      ["not-fullscreen", widgetIdentity({ startupStage: "ready", displayMode: "inline" }), activePollBody],
+      ["hidden", widgetIdentity({ startupStage: "ready" }), { ...activePollBody, visible: false }],
+      ["blurred", widgetIdentity({ startupStage: "ready" }), { ...activePollBody, focused: false }],
+      ["zero-size", widgetIdentity({ startupStage: "ready" }), { ...activePollBody, canvasWidth: 0 }]
+    ]) {
+      const inactive = await request("tools/call", {
+        name: "canvasight_widget_api",
+        arguments: { path: revisionPollPath, method: "POST", body, ...identity }
+      });
+      assert.equal(inactive.structuredContent.data.status, "inactive", `${label} widget cannot own revision polling`);
+      assert.equal(Object.hasOwn(inactive.structuredContent.data, "documentRevision"), false);
+    }
+
+    const ownerPollRestored = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "POST", body: activePollBody, ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(ownerPollRestored.structuredContent.data.status, "owner");
+
+    const openReadyLeaseOwner = async (projectPath, threadId, suffix) => {
+      await fsp.mkdir(projectPath, { recursive: true });
+      const opened = await request("tools/call", {
+        name: "render_canvasight_canvas_widget",
+        arguments: { language: "zh", projectPath, threadId }
+      });
+      const data = widgetDataFor(opened);
+      const identity = {
+        openAttemptId: data.openAttemptId,
+        widgetInstanceId: `widget-lease-${suffix}`,
+        startupStage: "ready",
+        displayMode: "fullscreen",
+        threadId,
+        reactMounted: true
+      };
+      const sessionPath = `/api/sessions/${opened.structuredContent.sessionId}`;
+      const ready = await request("tools/call", {
+        name: "canvasight_widget_api",
+        arguments: {
+          path: `${sessionPath}/widget-ready`,
+          method: "POST",
+          body: {
+            status: "ready",
+            stage: "ready",
+            ...identity,
+            projectHydrated: true,
+            canvasRendered: true,
+            canvasVisible: true,
+            canvasWidth: 800,
+            canvasHeight: 600
+          },
+          ...identity,
+          startupStage: "hydrating_project"
+        }
+      });
+      assert.equal(ready.structuredContent.ok, true);
+      const poll = await request("tools/call", {
+        name: "canvasight_widget_api",
+        arguments: { path: `${sessionPath}/revision-poll`, method: "POST", body: activePollBody, ...identity }
+      });
+      return { opened, poll };
+    };
+    const distinctThreadLease = await openReadyLeaseOwner(defaultProjectPath, "thread-lease-distinct", "thread");
+    assert.equal(distinctThreadLease.poll.structuredContent.data.status, "owner", "the same project in a different task has an independent lease");
+    const distinctProjectLease = await openReadyLeaseOwner(path.join(tempRoot, "lease-distinct-project"), "thread-smoke", "project");
+    assert.equal(distinctProjectLease.poll.structuredContent.data.status, "owner", "a different project in the same task has an independent lease");
+    await request("tools/call", { name: "close_canvasight", arguments: { sessionId: distinctThreadLease.opened.structuredContent.sessionId } });
+    await request("tools/call", { name: "close_canvasight", arguments: { sessionId: distinctProjectLease.opened.structuredContent.sessionId } });
+
+    const standbyOpened = await request("tools/call", {
+      name: "render_canvasight_canvas_widget",
+      arguments: { language: "zh" }
+    });
+    const standbyData = widgetDataFor(standbyOpened);
+    const standbyInstanceId = "widget-fullscreen-standby";
+    const standbyIdentity = {
+      openAttemptId: standbyData.openAttemptId,
+      widgetInstanceId: standbyInstanceId,
+      startupStage: "ready",
+      displayMode: "fullscreen",
+      threadId: "thread-smoke",
+      reactMounted: true
+    };
+    const standbyReady = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${standbyOpened.structuredContent.sessionId}/widget-ready`,
+        method: "POST",
+        body: {
+          status: "ready",
+          stage: "ready",
+          ...standbyIdentity,
+          projectHydrated: true,
+          canvasRendered: true,
+          canvasVisible: true,
+          canvasWidth: 800,
+          canvasHeight: 600
+        },
+        ...standbyIdentity,
+        startupStage: "hydrating_project"
+      }
+    });
+    assert.equal(standbyReady.structuredContent.ok, true);
+    const standbyPollPath = `/api/sessions/${standbyOpened.structuredContent.sessionId}/revision-poll`;
+    const standbyPoll = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: standbyPollPath, method: "POST", body: activePollBody, ...standbyIdentity }
+    });
+    assert.equal(standbyPoll.structuredContent.data.status, "standby");
+    assert.equal(Object.hasOwn(standbyPoll.structuredContent.data, "documentRevision"), false, "standby never receives revision data");
+
+    const staleStandbyDelete = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: standbyPollPath, method: "DELETE", ...standbyIdentity }
+    });
+    assert.equal(staleStandbyDelete.structuredContent.data.released, false, "standby DELETE cannot release the owner");
+
+    await sleep(10_050);
+    const expiredTakeover = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: standbyPollPath, method: "POST", body: activePollBody, ...standbyIdentity }
+    });
+    assert.equal(expiredTakeover.structuredContent.data.status, "owner", "standby takes over after the abandoned lease expires");
+    const expiredStaleDelete = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "DELETE", ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(expiredStaleDelete.structuredContent.data.released, false, "expired owner cannot release its replacement");
+    const expiredOwnerRelease = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: standbyPollPath, method: "DELETE", ...standbyIdentity }
+    });
+    assert.equal(expiredOwnerRelease.structuredContent.data.released, true);
+    const ownerPollReclaimed = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "POST", body: activePollBody, ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(ownerPollReclaimed.structuredContent.data.status, "owner");
+    const ownerRelease = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "DELETE", ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(ownerRelease.structuredContent.data.released, true);
+    const takeoverPoll = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: standbyPollPath, method: "POST", body: activePollBody, ...standbyIdentity }
+    });
+    assert.equal(takeoverPoll.structuredContent.data.status, "owner", "standby takes over immediately after release");
+    const staleOwnerDelete = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "DELETE", ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(staleOwnerDelete.structuredContent.data.released, false, "stale owner DELETE cannot release the replacement");
+    await request("tools/call", { name: "close_canvasight", arguments: { sessionId: standbyOpened.structuredContent.sessionId } });
+    const afterClosePoll = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: { path: revisionPollPath, method: "POST", body: activePollBody, ...widgetIdentity({ startupStage: "ready" }) }
+    });
+    assert.equal(afterClosePoll.structuredContent.data.status, "owner", "closing a session releases its revision poll lease");
     const widgetReadyWrongThread = await request("tools/call", {
       name: "await_canvasight_widget_ready",
       arguments: {

@@ -185,6 +185,9 @@ export function startCanvasightWidgetBridge(): void {
   let openAiGlobals: OpenAiGlobals = { ...(window.openai ?? {}) };
   let metadataReceived = false;
   let reactMounted = false;
+  let tearingDown = false;
+  let metadataTimer: number | null = null;
+  const removeWindowListeners: Array<() => void> = [];
   const isFrameworkQuestionsWidget = window.__CANVASIGHT_WIDGET_MODE__ === "framework-questions";
   const widgetInstanceId = createWidgetInstanceId();
   const bridgeState: CanvasightBridgeState = {
@@ -200,6 +203,7 @@ export function startCanvasightWidgetBridge(): void {
   };
 
   const updateBridgeState = (patch: Partial<CanvasightBridgeState>): void => {
+    if (tearingDown) return;
     const changed = Object.entries(patch).some(
       ([key, value]) => bridgeState[key as keyof CanvasightBridgeState] !== value
     );
@@ -207,6 +211,37 @@ export function startCanvasightWidgetBridge(): void {
     Object.assign(bridgeState, patch);
     window.__CANVASIGHT_BRIDGE_STATE__ = { ...bridgeState };
     window.dispatchEvent(new CustomEvent("canvasight:bridge-state", { detail: { ...bridgeState } }));
+  };
+
+  const listenWindow = (type: string, listener: EventListener): void => {
+    window.addEventListener(type, listener);
+    removeWindowListeners.push(() => window.removeEventListener(type, listener));
+  };
+
+  const releaseWidgetBinding = async (binding: CanvasightWidgetData | null | undefined): Promise<void> => {
+    if (!binding?.sessionId || !binding.openAttemptId || !app || !bridgeState.mcpInitialized) return;
+    try {
+      await withTimeout(
+        app.callServerTool({
+          name: "canvasight_widget_api",
+          arguments: {
+            path: `/api/sessions/${binding.sessionId}/revision-poll`,
+            method: "DELETE",
+            body: null,
+            openAttemptId: binding.openAttemptId,
+            widgetInstanceId,
+            startupStage: bridgeState.startupStage,
+            displayMode: bridgeState.displayMode,
+            threadId: binding.threadId ?? binding.codexThreadId ?? "",
+            reactMounted
+          }
+        }),
+        1_250,
+        "Canvasight revision poll lease release timed out."
+      );
+    } catch {
+      // The daemon lease expires automatically when a binding disappears unexpectedly.
+    }
   };
 
   const setStartupStage = (stage: CanvasightStartupStage): void => {
@@ -270,6 +305,7 @@ export function startCanvasightWidgetBridge(): void {
       if (current?.sessionId && !sameBinding && incomingIssuedAt <= currentIssuedAt) return;
       const isRebind = Boolean(current?.sessionId && !sameBinding);
       const previousBinding = current ? { ...current } : null;
+      if (isRebind) void releaseWidgetBinding(previousBinding);
       metadataReceived = true;
       const runtimeData = { ...widgetData, widgetInstanceId };
       toolOutput = runtimeData;
@@ -402,23 +438,23 @@ export function startCanvasightWidgetBridge(): void {
   };
   updateBridgeState({});
 
-  window.addEventListener("openai:set_globals", (event) => {
+  listenWindow("openai:set_globals", (event) => {
     const detail = (event as CustomEvent<{ globals?: unknown } & OpenAiGlobals>).detail;
     const globals = detail?.globals ?? detail;
     consumeOpenAiGlobals(globals);
   });
   consumeOpenAiGlobals(window.openai);
 
-  window.addEventListener("canvasight:react-mounted", () => {
+  listenWindow("canvasight:react-mounted", () => {
     reactMounted = true;
     setStartupStage("connecting_bridge");
     setStatus("", "ok");
   });
-  window.addEventListener("canvasight:startup-stage", (event) => {
+  listenWindow("canvasight:startup-stage", (event) => {
     const stage = (event as CustomEvent<{ stage?: CanvasightStartupStage }>).detail?.stage;
     if (stage && stage in STARTUP_STAGE_RANK) setStartupStage(stage);
   });
-  window.addEventListener("canvasight:app-ready", (event) => {
+  listenWindow("canvasight:app-ready", (event) => {
     const detail = (event as CustomEvent<{ bindingKey?: string }>).detail;
     const runtime = window.__CANVASIGHT_WIDGET_DATA__;
     const currentBindingKey = `${runtime?.sessionId || ""}:${runtime?.openAttemptId || ""}:${runtime?.bindingIssuedAt || 0}`;
@@ -426,7 +462,7 @@ export function startCanvasightWidgetBridge(): void {
     setStartupStage("ready");
     if (bridgeState.startupStage === "ready") setStatus("", "ok");
   });
-  window.addEventListener("canvasight:app-error", (event) => {
+  listenWindow("canvasight:app-error", (event) => {
     const detail = (event as CustomEvent<{ bindingKey?: string; error?: string }>).detail;
     const runtime = window.__CANVASIGHT_WIDGET_DATA__;
     const currentBindingKey = `${runtime?.sessionId || ""}:${runtime?.openAttemptId || ""}:${runtime?.bindingIssuedAt || 0}`;
@@ -437,7 +473,7 @@ export function startCanvasightWidgetBridge(): void {
 
   if (!isFrameworkQuestionsWidget) {
     const metadataTimeoutMs = bootstrapTimeoutMs();
-    window.setTimeout(() => {
+    metadataTimer = window.setTimeout(() => {
       if (typeof window === "undefined") return;
       if (metadataReceived) return;
       const message = `Canvasight session metadata timed out after ${metadataTimeoutMs}ms. Reopen Canvasight from a new Codex task.`;
@@ -452,7 +488,7 @@ export function startCanvasightWidgetBridge(): void {
     app = new App(
       { name: "canvasight", version: window.__CANVASIGHT_WIDGET_SERVER_VERSION__ || "dev" },
       {},
-      { autoResize: true, strict: true }
+      { autoResize: isFrameworkQuestionsWidget, strict: true }
     );
     window.__CANVASIGHT_MCP_APP__ = app;
     app.addEventListener("toolresult", handleToolResult);
@@ -472,6 +508,28 @@ export function startCanvasightWidgetBridge(): void {
         }
       }));
     });
+    app.onteardown = async () => {
+      if (tearingDown) return {};
+      tearingDown = true;
+      const pending: Promise<unknown>[] = [];
+      window.dispatchEvent(new CustomEvent("canvasight:resource-teardown", {
+        detail: {
+          waitUntil(value: Promise<unknown>) {
+            pending.push(Promise.resolve(value));
+          }
+        }
+      }));
+      if (pending.length === 0) pending.push(releaseWidgetBinding(window.__CANVASIGHT_WIDGET_DATA__));
+      await withTimeout(Promise.allSettled(pending), 1_500, "Canvasight widget teardown timed out.").catch(() => undefined);
+      if (metadataTimer !== null) window.clearTimeout(metadataTimer);
+      for (const remove of removeWindowListeners.splice(0)) remove();
+      window.setTimeout(() => {
+        void app?.close().catch(() => undefined);
+        window.__CANVASIGHT_MCP_APP__ = undefined;
+        window.canvasightMcp = undefined;
+      }, 0);
+      return {};
+    };
     const ready = withTimeout(app.connect(), BRIDGE_TIMEOUT_MS, "Canvasight MCP Apps bridge initialization timed out.")
       .then(() => {
         updateBridgeState({ mcpInitialized: true, lastBridgeError: null, startupStage: metadataReceived ? "connecting_session" : "connecting_bridge" });

@@ -37,16 +37,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to align design.md with the caret-anchored compact combobox contract
   - role: Development Agent
-    status: active
+    status: inactive
     agent_id: /root/development_agent
-    thread_id: null
+    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T08:14:13Z
-    handoff_source: issue-node20-dev-server-daemon-readiness-flake
-    last_report: solution-node20-dev-server-daemon-readiness-flake
+    last_seen: 2026-07-15T06:34:36Z
+    handoff_source: issue-historical-widget-polling-storm
+    last_report: solution-historical-widget-polling-storm
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Fixed the Node 20.19 dev-server daemon readiness race with shared cross-process single-flight; awaiting Test Supervisor independent verification
+    notes: Implemented and automated the 0.4.21 revision-poll lease, serial scheduler, teardown, and stdio boundary contract
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: blocked
+    status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: null
+    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T08:20:38Z
-    handoff_source: issue-node20-dev-server-daemon-readiness-flake
-    last_report: issue-node20-dev-server-daemon-readiness-flake
+    last_seen: 2026-07-15T06:34:36Z
+    handoff_source: issue-historical-widget-polling-storm
+    last_report: issue-historical-widget-polling-storm
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently passed the final 0.4.20 Node 20.19 dev-server race fix; seat remains blocked only on meaningful fullscreen control, same-task Run, and late-metadata acceptance
+    notes: Independent automated gates passed; owns the remaining restarted Codex Desktop original-task and control-task native acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: null
+    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T08:38:46Z
-    handoff_source: issue-publish-stable-release-0-4-20
-    last_report: integration-summary-canvasight-0-4-20-release
+    last_seen: 2026-07-15T06:34:36Z
+    handoff_source: issue-historical-widget-polling-storm
+    last_report: integration-summary-historical-widget-polling-storm
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed selective candidate commit and 0.4.20 release closure; stable, tag, and release commit verified identical
+    notes: Performing selective Git closure for the verified 0.4.21 candidate without publishing or moving stable
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

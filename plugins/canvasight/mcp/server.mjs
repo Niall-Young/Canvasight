@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.20";
+var SERVER_VERSION = "0.4.21";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17486,6 +17486,7 @@ var isStopDaemonMode = process.argv.includes("--stop-daemon");
 var sessions = /* @__PURE__ */ new Map();
 var projectThreadClaims = /* @__PURE__ */ new Map();
 var projectDocumentRevisions = /* @__PURE__ */ new Map();
+var revisionPollLeases = /* @__PURE__ */ new Map();
 var projectRevisionStates = /* @__PURE__ */ new Map();
 var projectWriteLocks = /* @__PURE__ */ new Map();
 var projectGraphContexts = /* @__PURE__ */ new Map();
@@ -17509,6 +17510,23 @@ var HttpError = class extends Error {
 };
 function projectRevisionKey(projectPath) {
   return path.resolve(projectPath);
+}
+var REVISION_POLL_INTERVAL_MS = 5e3;
+var REVISION_POLL_LEASE_MS = 1e4;
+function revisionPollLeaseKey(projectPath, threadId) {
+  return JSON.stringify([path.resolve(projectPath), optionalThreadId(threadId) || ""]);
+}
+function revisionPollOwner(session, identity) {
+  return {
+    sessionId: session.id,
+    openAttemptId: String(identity.openAttemptId || ""),
+    widgetInstanceId: String(identity.widgetInstanceId || "")
+  };
+}
+function sameRevisionPollOwner(left, right) {
+  return Boolean(
+    left && right && left.sessionId === right.sessionId && left.openAttemptId === right.openAttemptId && left.widgetInstanceId === right.widgetInstanceId
+  );
 }
 function projectDocumentRevision(projectPath) {
   return projectDocumentRevisions.get(projectRevisionKey(projectPath)) || 0;
@@ -20945,6 +20963,72 @@ function getSession(id) {
   if (!session) throw new HttpError(404, "Session not found");
   return session;
 }
+function revisionPollContext(session, identity) {
+  const attempt = requireOpenAttempt(session, identity.openAttemptId);
+  const widgetInstanceId = typeof identity.widgetInstanceId === "string" ? identity.widgetInstanceId.trim() : "";
+  const instance = attempt.instances.get(widgetInstanceId);
+  const threadId = optionalThreadId(attempt.threadId) || optionalThreadId(session.codexThreadId);
+  if (!threadId) throw new HttpError(409, "Canvasight revision polling requires a bound Codex task.", "revision_poll_thread_required");
+  const requestThreadId = optionalThreadId(identity.threadId);
+  if (!requestThreadId || requestThreadId !== threadId) {
+    throw new HttpError(409, "Canvasight revision poll belongs to a different Codex task.", "widget_thread_mismatch");
+  }
+  return {
+    attempt,
+    instance,
+    key: revisionPollLeaseKey(session.projectPath, threadId),
+    owner: revisionPollOwner(session, identity),
+    threadId
+  };
+}
+function claimRevisionPollLease(session, identity, evidence = {}) {
+  const context = revisionPollContext(session, identity);
+  const eligible = Boolean(
+    identity.startupStage === "ready" && identity.displayMode === "fullscreen" && identity.reactMounted === true && context.instance?.stage === "ready" && context.instance?.displayMode === "fullscreen" && evidence.visible === true && evidence.focused === true && toNumber(evidence.canvasWidth, 0) > 0 && toNumber(evidence.canvasHeight, 0) > 0
+  );
+  const existing = revisionPollLeases.get(context.key);
+  if (!eligible) {
+    if (sameRevisionPollOwner(existing?.owner, context.owner)) revisionPollLeases.delete(context.key);
+    return { status: "inactive", owner: false, pollIntervalMs: REVISION_POLL_INTERVAL_MS };
+  }
+  const now = Date.now();
+  if (existing && existing.expiresAt > now && !sameRevisionPollOwner(existing.owner, context.owner)) {
+    return {
+      status: "standby",
+      owner: false,
+      leaseExpiresAt: new Date(existing.expiresAt).toISOString(),
+      retryAfterMs: Math.max(1, existing.expiresAt - now),
+      pollIntervalMs: REVISION_POLL_INTERVAL_MS
+    };
+  }
+  const expiresAt = now + REVISION_POLL_LEASE_MS;
+  revisionPollLeases.set(context.key, {
+    owner: context.owner,
+    projectPath: path.resolve(session.projectPath),
+    threadId: context.threadId,
+    expiresAt
+  });
+  return {
+    status: "owner",
+    owner: true,
+    documentRevision: projectDocumentRevision(session.projectPath),
+    leaseExpiresAt: new Date(expiresAt).toISOString(),
+    retryAfterMs: REVISION_POLL_INTERVAL_MS,
+    pollIntervalMs: REVISION_POLL_INTERVAL_MS
+  };
+}
+function releaseRevisionPollLease(session, identity) {
+  const context = revisionPollContext(session, identity);
+  const existing = revisionPollLeases.get(context.key);
+  const released = sameRevisionPollOwner(existing?.owner, context.owner);
+  if (released) revisionPollLeases.delete(context.key);
+  return { status: released ? "released" : "not-owner", released };
+}
+function releaseSessionRevisionPollLeases(sessionIdValue) {
+  for (const [key, lease] of revisionPollLeases) {
+    if (lease.owner.sessionId === sessionIdValue) revisionPollLeases.delete(key);
+  }
+}
 function projectThreadClaimKey(projectPath) {
   return path.resolve(projectPath);
 }
@@ -21382,6 +21466,7 @@ function closeSession(sessionIdValue) {
   const session = sessions.get(sessionIdValue);
   if (!session) return false;
   sessions.delete(sessionIdValue);
+  releaseSessionRevisionPollLeases(sessionIdValue);
   const claimKey = projectThreadClaimKey(session.projectPath);
   const claim = projectThreadClaims.get(claimKey);
   if (claim?.sessionId === sessionIdValue) projectThreadClaims.delete(claimKey);
@@ -22203,7 +22288,7 @@ async function handleSessionApi(req, res, url2) {
   const requestIdentity = {
     openAttemptId: req.headers["x-canvasight-open-attempt-id"],
     widgetInstanceId: req.headers["x-canvasight-widget-instance-id"],
-    startupStage: req.headers["x-canvasight-startup-stage"],
+    startupStage: normalizeStartupStage(req.headers["x-canvasight-startup-stage"]),
     displayMode: req.headers["x-canvasight-display-mode"],
     threadId: req.headers["x-canvasight-thread-id"],
     reactMounted: req.headers["x-canvasight-react-mounted"] === "true"
@@ -22246,6 +22331,17 @@ async function handleSessionApi(req, res, url2) {
     }
     sendJson(res, 200, setOpenAttemptReady(session, { ...requestIdentity, ...body }));
     return true;
+  }
+  if (action === "revision-poll") {
+    if (req.method === "POST") {
+      sendJson(res, 200, claimRevisionPollLease(session, requestIdentity, await readJsonBody(req)));
+      return true;
+    }
+    if (req.method === "DELETE") {
+      sendJson(res, 200, releaseRevisionPollLease(session, requestIdentity));
+      return true;
+    }
+    throw new HttpError(405, "Expected POST or DELETE");
   }
   if (action === "open-project") {
     assertMethod(req, "POST");

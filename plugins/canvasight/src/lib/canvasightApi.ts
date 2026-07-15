@@ -29,6 +29,15 @@ export interface SessionInfo {
   threadClaimedAt?: string | null;
 }
 
+export interface RevisionPollLeaseResponse {
+  status: "inactive" | "owner" | "standby";
+  owner: boolean;
+  documentRevision?: number;
+  leaseExpiresAt?: string;
+  pollIntervalMs: number;
+  retryAfterMs?: number;
+}
+
 export interface RunPayload {
   attachments: Attachment[];
   agentTeam: AgentTeamRunConfig;
@@ -844,6 +853,24 @@ export const canvasightApi = {
     } catch {
       // The visible app error remains authoritative when the daemon cannot receive failure telemetry.
     }
+  },
+
+  claimRevisionPoll(evidence: {
+    visible: boolean;
+    focused: boolean;
+    canvasWidth: number;
+    canvasHeight: number;
+  }): Promise<RevisionPollLeaseResponse> {
+    return requestSessionJson<RevisionPollLeaseResponse>("/revision-poll", {
+      method: "POST",
+      body: JSON.stringify(evidence)
+    });
+  },
+
+  releaseRevisionPoll(): Promise<{ status: "released" | "not-owner"; released: boolean }> {
+    return requestSessionJson<{ status: "released" | "not-owner"; released: boolean }>("/revision-poll", {
+      method: "DELETE"
+    });
   },
 
   openProject(projectPath: string): Promise<OpenProjectResult> {

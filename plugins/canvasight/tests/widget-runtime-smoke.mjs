@@ -156,22 +156,32 @@ function hostHtml(widgetData) {
   const widgetData = ${JSON.stringify({ ...widgetData, apiBaseUrl: "http://127.0.0.1:1" })};
   const session = ${JSON.stringify(session)};
   const opened = ${JSON.stringify(opened)};
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], ready: null, errors: [] };
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
-  function send(message) { frame.contentWindow.postMessage(message, '*'); }
-  function result(id, value) { send({ jsonrpc: '2.0', id, result: value }); }
-  window.__HOST_SEND_WIDGET_DATA__ = (nextWidgetData) => send({
+  function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
+  function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
+  window.__HOST_SEND_WIDGET_DATA__ = (nextWidgetData, target = frame.contentWindow) => send({
     jsonrpc: '2.0',
     method: 'ui/notifications/tool-result',
     params: { content: [], structuredContent: { status: 'opening' }, _meta: { widgetData: nextWidgetData } }
-  });
+  }, target);
+  window.__HOST_TEARDOWN__ = (target = frame.contentWindow) => {
+    const id = 900000 + window.__HOST_RECORDS__.teardownResponses.length;
+    send({ jsonrpc: '2.0', id, method: 'ui/resource-teardown', params: {} }, target);
+    return id;
+  };
   window.addEventListener('error', (event) => window.__HOST_RECORDS__.errors.push(event.message));
   window.addEventListener('message', (event) => {
-    if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
+    const knownFrame = Array.from(document.querySelectorAll('iframe')).some((candidate) => candidate.contentWindow === event.source);
+    if (!knownFrame || !event.data || typeof event.data !== 'object') return;
     const message = event.data;
     window.__HOST_RECORDS__.messages.push(message);
+    if (!message.method && message.id >= 900000) {
+      window.__HOST_RECORDS__.teardownResponses.push(message);
+      return;
+    }
     if (message.method === 'ui/initialize') {
-      result(message.id, {
+      result(event.source, message.id, {
         protocolVersion: '2026-01-26',
         hostInfo: { name: 'canvasight-composed-fake-host', version: '1.0.0' },
         hostCapabilities: { message: {} },
@@ -185,11 +195,11 @@ function hostHtml(widgetData) {
       return;
     }
     if (message.method === 'ui/request-display-mode') {
-      result(message.id, { mode: 'fullscreen' });
+      result(event.source, message.id, { mode: 'fullscreen' });
       return;
     }
     if (message.method === 'ui/message') {
-      result(message.id, {});
+      result(event.source, message.id, {});
       return;
     }
     if (message.method === 'tools/call') {
@@ -208,9 +218,31 @@ function hostHtml(widgetData) {
       else if (args.path && args.path.endsWith('/open-project')) data = opened;
       else if (args.path && args.path.endsWith('/widget-ready')) {
         window.__HOST_RECORDS__.ready = { identity: args, body: args.body };
+        window.__HOST_RECORDS__.readyInstances.push(args.widgetInstanceId);
         data = { ...args.body, status: 'ready', verified: true, reportedAt: new Date().toISOString() };
+      } else if (args.path && args.path.endsWith('/revision-poll')) {
+        const ownerId = args.widgetInstanceId;
+        const now = Date.now();
+        window.__HOST_RECORDS__.revisionInFlight += 1;
+        window.__HOST_RECORDS__.revisionMaxInFlight = Math.max(window.__HOST_RECORDS__.revisionMaxInFlight, window.__HOST_RECORDS__.revisionInFlight);
+        window.__HOST_RECORDS__.revisionPolls.push({ at: now, method: args.method, widgetInstanceId: ownerId });
+        if (args.method === 'DELETE') {
+          const released = window.__HOST_RECORDS__.revisionOwner === ownerId;
+          if (released) window.__HOST_RECORDS__.revisionOwner = null;
+          data = { status: released ? 'released' : 'not-owner', released };
+        } else if (!window.__HOST_RECORDS__.revisionOwner || window.__HOST_RECORDS__.revisionOwner === ownerId) {
+          window.__HOST_RECORDS__.revisionOwner = ownerId;
+          data = { status: 'owner', owner: true, documentRevision: 1, pollIntervalMs: 5000, retryAfterMs: 5000 };
+        } else {
+          data = { status: 'standby', owner: false, pollIntervalMs: 5000, retryAfterMs: 10000 };
+        }
+        setTimeout(() => {
+          window.__HOST_RECORDS__.revisionInFlight -= 1;
+          result(event.source, message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } });
+        }, 120);
+        return;
       } else if (args.path && args.path.includes('/api/sessions/')) data = session;
-      result(message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } });
+      result(event.source, message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } });
       return;
     }
     if (message.method === 'ui/notifications/initialized') {
@@ -218,7 +250,7 @@ function hostHtml(widgetData) {
         jsonrpc: '2.0',
         method: 'ui/notifications/tool-result',
         params: { content: [], structuredContent: { status: 'opening' }, _meta: { widgetData } }
-      });
+      }, event.source);
     }
   });
   </script></body></html>`;
@@ -592,6 +624,7 @@ try {
       statusText: (doc.getElementById('canvasight-widget-status') || {}).textContent || '',
       ready,
       bridgeStage: frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.startupStage,
+      workspaceSizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length,
       errors: window.__HOST_RECORDS__.errors
     };
   })()`, "production canvas ready and visible");
@@ -610,6 +643,7 @@ try {
   assert.equal(evidence.ready.body.canvasRendered, true);
   assert.equal(evidence.ready.body.canvasVisible, true);
   assert.ok(evidence.ready.body.canvasWidth > 0 && evidence.ready.body.canvasHeight > 0);
+  assert.equal(evidence.workspaceSizeNotices, 0, "fullscreen workspace must not start ext-apps auto ResizeObserver");
   assert.deepEqual(evidence.errors, []);
 
   const proxiedThumbnail = await waitForEvaluation(cdp, `(async () => {
@@ -800,6 +834,88 @@ try {
   assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
   assert.equal(zoomRegression.overlay, false);
   assert.deepEqual(zoomRegression.errors, []);
+
+  const historicalPolling = await waitForEvaluation(cdp, `(async () => {
+    const original = document.getElementById('widget');
+    for (let index = 1; index < 4; index += 1) {
+      const historical = document.createElement('iframe');
+      historical.id = 'widget-history-' + index;
+      historical.src = '/widget';
+      historical.style.cssText = 'position:fixed;inset:0;width:1200px;height:800px;border:0;';
+      document.body.appendChild(historical);
+    }
+    const deadline = Date.now() + 12000;
+    while (Date.now() < deadline && new Set(window.__HOST_RECORDS__.readyInstances).size < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const frames = Array.from(document.querySelectorAll('iframe'));
+    const active = frames.at(-1);
+    active.focus();
+    active.contentWindow.focus();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    window.__HOST_RECORDS__.revisionPolls = [];
+    window.__HOST_RECORDS__.revisionMaxInFlight = window.__HOST_RECORDS__.revisionInFlight;
+    const startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 30500));
+    const calls = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.at >= startedAt);
+    const posts = calls.filter((call) => call.method === 'POST');
+    return {
+      readyCount: new Set(window.__HOST_RECORDS__.readyInstances).size,
+      postCount: posts.length,
+      postWidgetIds: Array.from(new Set(posts.map((call) => call.widgetInstanceId))),
+      maxInFlight: window.__HOST_RECORDS__.revisionMaxInFlight,
+      revisionInFlight: window.__HOST_RECORDS__.revisionInFlight,
+      activeFrameId: active.id,
+      originalStillMounted: original.isConnected
+    };
+  })()`, "four historical production widgets bounded polling", 50000);
+  assert.equal(historicalPolling.readyCount, 4);
+  assert.equal(historicalPolling.originalStillMounted, true);
+  assert.ok(historicalPolling.postCount >= 5 && historicalPolling.postCount <= 7, `30s owner poll count must remain bounded: ${JSON.stringify(historicalPolling)}`);
+  assert.equal(historicalPolling.postWidgetIds.length, 1, "only the focused eligible historical widget may poll");
+  assert.ok(historicalPolling.maxInFlight <= 1, `revision polling must remain serial: ${JSON.stringify(historicalPolling)}`);
+  assert.equal(historicalPolling.revisionInFlight, 0);
+
+  const teardown = await waitForEvaluation(cdp, `(async () => {
+    const active = document.getElementById(${JSON.stringify("widget-history-3")});
+    const activeWidgetInstanceId = active.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    const beforePosts = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'POST').length;
+    window.__HOST_TEARDOWN__(active.contentWindow);
+    window.__HOST_TEARDOWN__(active.contentWindow);
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.teardownResponses.length < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5500));
+    const afterPosts = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'POST').length;
+    const deletes = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'DELETE' && call.widgetInstanceId === activeWidgetInstanceId).length;
+    const next = document.getElementById('widget-history-2');
+    const nextWidgetInstanceId = next.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    next.focus();
+    next.contentWindow.focus();
+    const takeoverDeadline = Date.now() + 3000;
+    while (
+      Date.now() < takeoverDeadline &&
+      !window.__HOST_RECORDS__.revisionPolls.some((call) => call.method === 'POST' && call.widgetInstanceId === nextWidgetInstanceId)
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const takeover = window.__HOST_RECORDS__.revisionPolls.find((call) => call.method === 'POST' && call.widgetInstanceId === nextWidgetInstanceId);
+    return {
+      beforePosts,
+      afterPosts,
+      responseCount: window.__HOST_RECORDS__.teardownResponses.length,
+      deletes,
+      activeWidgetInstanceId,
+      nextWidgetInstanceId,
+      takeoverWidgetInstanceId: takeover && takeover.widgetInstanceId
+    };
+  })()`, "idempotent resource teardown stops polling", 12000);
+  assert.equal(teardown.responseCount, 2, "concurrent ui/resource-teardown requests are both acknowledged");
+  assert.equal(teardown.afterPosts, teardown.beforePosts, "teardown must stop every later revision poll");
+  assert.ok(teardown.deletes <= 1, "teardown must not issue duplicate owner release requests");
+  assert.notEqual(teardown.nextWidgetInstanceId, teardown.activeWidgetInstanceId);
+  assert.equal(teardown.takeoverWidgetInstanceId, teardown.nextWidgetInstanceId, "focus transfers revision polling ownership to the next eligible widget");
   cdp.close();
   console.log("Canvasight composed production widget smoke passed.");
 } finally {
