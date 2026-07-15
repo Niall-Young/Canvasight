@@ -59,38 +59,38 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: inactive
+    status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
+    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:18:13Z
-    handoff_source: issue-historical-widget-polling-storm
-    last_report: issue-historical-widget-polling-storm
+    last_seen: 2026-07-15T07:46:22Z
+    handoff_source: issue-publish-stable-release-0-4-21
+    last_report: integration-summary-canvasight-0-4-21-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independent automated gates and restarted Codex Desktop native ready, repeated reopen, focused polling, control, and same-task Run acceptance passed
+    notes: Independently verifying the 0.4.21 release candidate on the current thread
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: null
+    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:48:11Z
-    handoff_source: issue-publish-stable-release-0-4-20
-    last_report: issue-publish-stable-release-0-4-20
+    last_seen: 2026-07-15T07:46:22Z
+    handoff_source: issue-publish-stable-release-0-4-21
+    last_report: integration-summary-canvasight-0-4-21-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilding on the current thread to review bilingual release-facing documentation for Canvasight 0.4.20
+    notes: Reviewing 0.4.21 release-facing documentation and notes on the current thread
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
+    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T06:34:36Z
-    handoff_source: issue-historical-widget-polling-storm
-    last_report: integration-summary-historical-widget-polling-storm
+    last_seen: 2026-07-15T07:36:12Z
+    handoff_source: issue-publish-stable-release-0-4-21
+    last_report: issue-publish-stable-release-0-4-21
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Performing selective Git closure for the verified 0.4.21 candidate without publishing or moving stable
+    notes: Auditing 0.4.21 release Git hygiene and remote publication closure on the current thread
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

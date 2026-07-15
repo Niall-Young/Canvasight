@@ -269,8 +269,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.20
-npm run release:verify -- 0.4.20
+npm run release:prepare -- 0.4.21
+npm run release:verify -- 0.4.21
 ```
 
 `npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
@@ -618,8 +618,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.4.20
-npm run release:verify -- 0.4.20
+npm run release:prepare -- 0.4.21
+npm run release:verify -- 0.4.21
 ```
 
 `npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
