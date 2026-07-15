@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: active
+    status: inactive
     agent_id: /root/test_supervisor_agent
     thread_id: 019f6458-f4a1-77a0-b865-0a07f94c0f09
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T06:34:36Z
+    last_seen: 2026-07-15T07:18:13Z
     handoff_source: issue-historical-widget-polling-storm
     last_report: issue-historical-widget-polling-storm
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independent automated gates passed; owns the remaining restarted Codex Desktop original-task and control-task native acceptance
+    notes: Independent automated gates and restarted Codex Desktop native ready, repeated reopen, focused polling, control, and same-task Run acceptance passed
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
