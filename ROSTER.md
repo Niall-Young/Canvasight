@@ -59,38 +59,38 @@ roles:
     replaced_by: null
     notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
   - role: Test Supervisor Agent
-    status: active
+    status: inactive
     agent_id: /root/test_supervisor_agent
     thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:46:22Z
+    last_seen: 2026-07-15T07:53:13Z
     handoff_source: issue-publish-stable-release-0-4-21
-    last_report: integration-summary-canvasight-0-4-21-release-candidate
+    last_report: integration-summary-canvasight-0-4-21-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently verifying the 0.4.21 release candidate on the current thread
+    notes: Independently verified the 0.4.21 local, cross-platform, and native-host release evidence
   - role: Customer Support Agent
-    status: active
+    status: inactive
     agent_id: /root/customer_support_agent
     thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:46:22Z
+    last_seen: 2026-07-15T07:53:13Z
     handoff_source: issue-publish-stable-release-0-4-21
-    last_report: integration-summary-canvasight-0-4-21-release-candidate
+    last_report: integration-summary-canvasight-0-4-21-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewing 0.4.21 release-facing documentation and notes on the current thread
+    notes: Reviewed and synchronized the 0.4.21 bilingual README examples and Release notes
   - role: Project Management Agent
-    status: active
+    status: inactive
     agent_id: /root/project_management_agent
     thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:36:12Z
+    last_seen: 2026-07-15T07:53:13Z
     handoff_source: issue-publish-stable-release-0-4-21
-    last_report: issue-publish-stable-release-0-4-21
+    last_report: integration-summary-canvasight-0-4-21-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Auditing 0.4.21 release Git hygiene and remote publication closure on the current thread
+    notes: Completed selective candidate commit and audited the 0.4.21 Release and stable closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
