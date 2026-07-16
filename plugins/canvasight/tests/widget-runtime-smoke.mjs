@@ -18,6 +18,7 @@ assert.equal(fs.existsSync(chromePath), true, `Chrome is required for the compos
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-widget-runtime-"));
 const canvasightHome = path.join(tempRoot, "home");
 const projectPath = path.join(tempRoot, "project");
+const visualOutputPath = path.resolve(pluginRoot, "..", "..", "output", "playwright", "framework-questions");
 fs.mkdirSync(projectPath, { recursive: true });
 const thumbnailPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
 const thumbnailDataUrl = `data:image/png;base64,${thumbnailPng.toString("base64")}`;
@@ -354,6 +355,12 @@ async function waitForEvaluation(cdp, expression, label, timeoutMs = 20_000) {
   assert.fail(`Timed out waiting for ${label}${last ? `: ${last}` : ""}; diagnostics=${JSON.stringify(diagnostics.result?.value)}`);
 }
 
+async function captureFrameworkQuestions(cdp, filename) {
+  await fsp.mkdir(visualOutputPath, { recursive: true });
+  const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  await fsp.writeFile(path.join(visualOutputPath, filename), Buffer.from(screenshot.data, "base64"));
+}
+
 const mcp = createMcpClient();
 let chrome;
 let webServer;
@@ -560,7 +567,7 @@ try {
     outlineOffset: "2px"
   });
   assert.deepEqual(lightCustomInput.disabled, { matches: true, background: lightCustomInput.tokens.input, height: lightCustomInput.base.height });
-  const figmaChoiceContract = await waitForEvaluation(cdp, `(() => {
+  const inlineChoiceContract = await waitForEvaluation(cdp, `(() => {
     const doc = document.getElementById('widget').contentDocument;
     const resolveColor = (variable) => {
       const probe = doc.createElement('span');
@@ -606,9 +613,9 @@ try {
       checkbox: inspect('checkbox'),
       radio: inspect('radio')
     };
-  })()`, "Figma choice item contract");
-  for (const choice of [figmaChoiceContract.checkbox, figmaChoiceContract.radio]) {
-    assert.equal(choice.itemBackground, figmaChoiceContract.colors.input);
+  })()`, "inline choice item contract");
+  for (const choice of [inlineChoiceContract.checkbox, inlineChoiceContract.radio]) {
+    assert.equal(choice.itemBackground, inlineChoiceContract.colors.input);
     assert.deepEqual(choice.itemBorder, ["1px", "rgba(0, 0, 0, 0)"]);
     assert.equal(choice.itemRadius, "12px");
     assert.deepEqual(choice.itemPadding, ["12px", "16px", "12px", "16px"]);
@@ -616,14 +623,14 @@ try {
     assert.equal(choice.itemShadow, "none");
     assert.deepEqual(choice.controlSize, ["16px", "16px"]);
     assert.equal(choice.controlBorder, "2px");
-    assert.equal(choice.controlBorderColor, figmaChoiceContract.colors.connecting);
+    assert.equal(choice.controlBorderColor, inlineChoiceContract.colors.connecting);
     assert.equal(choice.controlTopOffset, "3px");
     assert.equal(choice.contentGap, "2px");
     assert.deepEqual(choice.headingType, ["14px", "22px"]);
     assert.deepEqual(choice.descriptionType, ["14px", "22px"]);
   }
-  assert.equal(figmaChoiceContract.checkbox.controlRadius, "6px");
-  assert.equal(figmaChoiceContract.radio.controlRadius, "99999px");
+  assert.equal(inlineChoiceContract.checkbox.controlRadius, "6px");
+  assert.equal(inlineChoiceContract.radio.controlRadius, "99999px");
   const responsiveLayout = await waitForEvaluation(cdp, `(() => {
     const frame = document.getElementById('widget');
     const doc = frame && frame.contentDocument;
@@ -642,6 +649,10 @@ try {
       viewport: doc.documentElement.clientWidth,
       scrollWidth: doc.documentElement.scrollWidth,
       cardWidth: card.getBoundingClientRect().width,
+      cardBorder: getComputedStyle(card).borderTopWidth,
+      cardRadius: getComputedStyle(card).borderRadius,
+      cardShadow: getComputedStyle(card).boxShadow,
+      cardBackground: getComputedStyle(card).backgroundColor,
       legendPaddingTop: getComputedStyle(doc.querySelector('.framework-question legend')).paddingTop,
       legendTextOffset: legendTextRect.top - questionRect.top,
       legendOptionsGap: optionsRect.top - legendRect.bottom,
@@ -665,7 +676,11 @@ try {
     })));
   })()`, "inline responsive layout");
   assert.equal(responsiveLayout.wide.scrollWidth, responsiveLayout.wide.viewport, "wide inline card must not overflow horizontally");
-  assert.ok(responsiveLayout.wide.cardWidth <= 660, "wide inline card must keep a compact readable measure");
+  assert.equal(responsiveLayout.wide.cardWidth, responsiveLayout.wide.viewport, "inline form must use the message surface width instead of creating a narrow nested card");
+  assert.equal(responsiveLayout.wide.cardBorder, "0px", "inline form must not draw a second outer border");
+  assert.equal(responsiveLayout.wide.cardRadius, "0px", "inline form must not draw a second outer radius");
+  assert.equal(responsiveLayout.wide.cardShadow, "none", "inline form must not draw a second outer shadow");
+  assert.equal(responsiveLayout.wide.cardBackground, "rgba(0, 0, 0, 0)", "inline form must keep the host message surface visible");
   assert.equal(responsiveLayout.wide.legendPaddingTop, "14px", "question legend must keep space below the section divider");
   assert.ok(responsiveLayout.wide.legendTextOffset >= 12, "question text must be visibly separated from the section divider");
   assert.ok(responsiveLayout.wide.legendOptionsGap >= 8, "question text must keep the existing gap before its options");
@@ -675,6 +690,7 @@ try {
   assert.equal(responsiveLayout.narrow.bodyScrollWidth, responsiveLayout.narrow.viewport, "narrow inline body must not overflow horizontally");
   assert.ok(responsiveLayout.narrow.submitWidth >= responsiveLayout.narrow.footerWidth - 34, "narrow submit action must expand to the footer width");
   assert.ok(responsiveLayout.narrow.customInputWidth <= responsiveLayout.narrow.customWidth, "narrow custom-answer input must stay inside its label");
+  await captureFrameworkQuestions(cdp, "framework-questions-flat-light-unselected.png");
   const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
     const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');
     return notices.length > 0 && notices.at(-1).params.height > 0 ? notices.at(-1).params : false;
@@ -685,6 +701,8 @@ try {
     const doc = document.getElementById('widget').contentDocument;
     if (doc.documentElement.getAttribute('data-theme') !== 'dark') return false;
     const input = doc.querySelector('.framework-question-custom-input');
+    const option = doc.querySelector('.framework-question-option:not(.is-selected)');
+    const optionStyle = getComputedStyle(option);
     const probe = doc.createElement('span');
     probe.style.color = 'var(--color-background-input)';
     doc.body.appendChild(probe);
@@ -702,6 +720,10 @@ try {
       colorScheme: doc.documentElement.style.colorScheme,
       inputBackground: getComputedStyle(input).backgroundColor,
       inputToken,
+      unselectedOption: {
+        background: optionStyle.backgroundColor,
+        border: optionStyle.borderTopColor
+      },
       focusBackground,
       disabledBackground
     };
@@ -709,8 +731,11 @@ try {
   assert.equal(darkTheme.theme, "dark");
   assert.equal(darkTheme.colorScheme, "dark");
   assert.equal(darkTheme.inputBackground, darkTheme.inputToken, "dark custom-answer input must use the input background token");
+  assert.equal(darkTheme.unselectedOption.background, darkTheme.inputToken, "dark unselected choice must retain the established input surface");
+  assert.equal(darkTheme.unselectedOption.border, "rgba(0, 0, 0, 0)", "dark unselected choice must retain the established borderless row state");
   assert.equal(darkTheme.focusBackground, darkTheme.inputToken, "dark focused custom-answer input must keep the input background token");
   assert.equal(darkTheme.disabledBackground, darkTheme.inputToken, "dark disabled custom-answer input must keep the input background token");
+  await captureFrameworkQuestions(cdp, "framework-questions-flat-dark-unselected.png");
   await waitForEvaluation(cdp, `(() => {
     window.__HOST_SET_THEME__('light');
     return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'light';
@@ -740,7 +765,7 @@ try {
     const focus = getComputedStyle(probe).color;
     probe.remove();
     return input.matches(':focus-visible') ? { border: getComputedStyle(item).borderTopColor, focus } : false;
-  })()`, "keyboard-visible Figma choice focus");
+  })()`, "keyboard-visible inline choice focus");
   assert.equal(keyboardFocusContract.border, keyboardFocusContract.focus);
   await cdp.send("Runtime.evaluate", {
     expression: `document.getElementById('widget').contentDocument.activeElement.blur()`,
@@ -762,6 +787,7 @@ try {
       const itemStyle = getComputedStyle(item);
       const controlStyle = getComputedStyle(control);
       return {
+        itemBackground: itemStyle.backgroundColor,
         itemBorder: [itemStyle.borderTopWidth, itemStyle.borderTopColor],
         itemShadow: itemStyle.boxShadow,
         controlBackground: controlStyle.backgroundColor,
@@ -779,6 +805,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 200));
     return {
       colors: {
+        input: resolveColor('--color-background-input'),
         connecting: resolveColor('--color-border-connecting'),
         dark: resolveColor('--color-background-dark'),
         inverted: resolveColor('--color-inverted')
@@ -786,8 +813,9 @@ try {
       checkbox: inspectSelected(doc.querySelector('input[type="checkbox"]')),
       radio: inspectSelected(radio)
     };
-  })()`, "selected Figma choice states");
+  })()`, "selected inline choice states");
   for (const choice of [selectedChoiceContract.checkbox, selectedChoiceContract.radio]) {
+    assert.equal(choice.itemBackground, selectedChoiceContract.colors.input);
     assert.deepEqual(choice.itemBorder, ["1px", selectedChoiceContract.colors.connecting]);
     assert.equal(choice.itemShadow, "none");
     assert.equal(choice.controlBackground, selectedChoiceContract.colors.dark);
@@ -795,6 +823,7 @@ try {
   }
   assert.equal(selectedChoiceContract.checkbox.checkOpacity, "1");
   assert.deepEqual(selectedChoiceContract.radio.dot, ["8px", "8px", selectedChoiceContract.colors.inverted]);
+  await captureFrameworkQuestions(cdp, "framework-questions-flat-light-selected.png");
   await waitForEvaluation(cdp, `(() => {
     window.__HOST_SET_THEME__('dark');
     return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'dark';
@@ -845,7 +874,7 @@ try {
       radio,
       keyboardFocus
     };
-  })()`, "dark Figma selected choice states");
+  })()`, "dark selected inline choice states");
   assert.equal(darkSelectedChoiceContract.theme, "dark");
   for (const choice of [darkSelectedChoiceContract.checkbox, darkSelectedChoiceContract.radio]) {
     assert.equal(choice.itemBackground, darkSelectedChoiceContract.colors.input);
@@ -855,6 +884,7 @@ try {
   }
   assert.equal(darkSelectedChoiceContract.radio.markBackground, darkSelectedChoiceContract.colors.inverted);
   assert.equal(darkSelectedChoiceContract.keyboardFocus, darkSelectedChoiceContract.colors.focus);
+  await captureFrameworkQuestions(cdp, "framework-questions-flat-dark-selected.png");
   await waitForEvaluation(cdp, `(() => {
     window.__HOST_SET_THEME__('light');
     return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'light';

@@ -204,18 +204,18 @@ button {
 
 .framework-questions-card {
   width: 100%;
-  max-width: 660px;
-  margin: 0 auto;
-  overflow: hidden;
-  border: var(--border-weight-sm) solid var(--color-border-divider);
-  border-radius: var(--radius-md);
-  background: var(--color-background-surface);
-  box-shadow: var(--shadow-node);
+  max-width: none;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .framework-questions-header {
-  padding: 15px 18px 13px;
-  border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
+  padding: 10px 0 14px;
+  border: 0;
 }
 
 .framework-questions-eyebrow {
@@ -247,8 +247,11 @@ button {
 .framework-question {
   min-width: 0;
   margin: 0;
-  padding: 0 18px 16px;
+  padding: 0 0 16px;
   border: 0;
+}
+
+.framework-question:not(:last-child) {
   border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
 }
 
@@ -388,8 +391,8 @@ button {
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
-  padding: 11px 18px;
-  background: var(--color-background-surface);
+  padding: 12px 0 0;
+  background: transparent;
 }
 
 .framework-questions-submit.kit-button {
@@ -466,8 +469,8 @@ button {
   .framework-questions-header,
   .framework-question,
   .framework-questions-footer {
-    padding-right: 16px;
-    padding-left: 16px;
+    padding-right: 0;
+    padding-left: 0;
   }
 
   .framework-question-options {

@@ -17,14 +17,14 @@ roles:
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
-    thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:58:54Z
-    handoff_source: issue-framework-choice-figma-kit-parity
-    last_report: integration-summary-framework-choice-figma-kit-parity
+    last_seen: 2026-07-16T13:50:05Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-flat-form-contrast
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed the follow-up divider spacing fix and kept the existing Canvasight KitButton, provider-card, kit-checkbox, and settings-input language unchanged
+    notes: Approved flat outer form while preserving the existing Scatter Figma Kit neutral selected state with no blue row fill
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f6b0a-d214-7933-a56c-05cff971639b
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:22:08Z
-    handoff_source: issue-framework-form-stale-installed-snapshot
-    last_report: solution-framework-form-stale-installed-snapshot
+    last_seen: 2026-07-16T13:50:05Z
+    handoff_source: issue-inline-framework-questions
+    last_report: solution-inline-framework-flat-form-contrast
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Prepared and verified the 0.4.25 immutable snapshot; Main Thread installed an SHA-1-identical cache and confirmed installed/enabled, while restart and native-host acceptance remain outstanding
+    notes: Restored the existing Figma choice contract, removed the duplicate outer card, and prepared the installed 0.4.27 snapshot
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f6b11-e89a-7ee3-a880-3716dcf1f79c
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:20:56Z
-    handoff_source: issue-framework-form-stale-installed-snapshot
-    last_report: solution-framework-form-stale-installed-snapshot-test
+    last_seen: 2026-07-16T13:50:05Z
+    handoff_source: issue-inline-framework-questions
+    last_report: issue-inline-framework-questions
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently passed 0.4.25 release, composed widget, clean distribution, plugin validation, and candidate snapshot resource hash checks without installing
+    notes: Automated and visual evidence passed for 0.4.27; owns the remaining restarted native-host acceptance blocker
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

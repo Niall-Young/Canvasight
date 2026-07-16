@@ -107,24 +107,24 @@ Browser and bare-dev fallback surfaces are clearly labeled diagnostic or fallbac
 
 Framework confirmation is a compact MCP UI embedded directly below the current Codex tool response. It is a conversation component, not a reduced canvas workspace. It uses its own inline widget resource and startup path; rendering it must never open or attach the fullscreen Canvasight widget, request fullscreen display mode, switch a Page, show the topbar or canvas, start a project session, connect to the daemon, or read and write `.scatter` state.
 
-The card reuses the same React component language, centralized design tokens, form controls, typography, focus treatment, and theme rules as the Canvasight workspace. New visual rules belong in the shared `app.css` token system rather than in MCP server HTML or a second approximate stylesheet. The message surface supplies the outer placement; the card must not imitate a desktop window, add browser chrome, or use ornamental canvas imagery.
+The form reuses the same React component language, centralized design tokens, form controls, typography, focus treatment, and theme rules as the Canvasight workspace. New visual rules belong in the shared `app.css` token system rather than in MCP server HTML or a second approximate stylesheet. The message surface supplies the only outer container and placement; the inline form itself has no outer border, radius, shadow, or opaque card background, and must not imitate a desktop window, add browser chrome, or use ornamental canvas imagery.
 
 ### Card Structure
 
-- Use one compact bordered surface containing a concise title, optional one- or two-line explanation, one to three question groups, and a single footer action.
+- Use one compact flat form containing a concise title, optional one- or two-line explanation, one to three question groups, and a single footer action. Do not draw a second card inside the Codex message container.
 - Question groups use a clear prompt followed by two or three preset choices. Keep labels scannable and descriptions secondary; avoid repeating the prompt inside every option.
 - Mark at most one recommended option per question with a quiet `推荐` or `Recommended` badge. Recommendation may guide attention, but must not preselect an answer or visually overpower the user's alternatives.
 - Every question exposes one custom-answer field. The field belongs to that question and stays visually connected to its preset choices.
 - Custom-answer textareas use the same `background-input` surface token as other editable input controls in both light and dark themes; they must not fall back to the raised or card surface.
 - The primary footer action is `确认并继续` in Chinese or `Confirm and continue` in English. It is disabled until every question has a valid answer.
 
-Use the existing compact Canvasight spacing and radius scale: the card should read as a dense work control, not as a settings page. Separate question groups with spacing or a light divider rather than nested cards. Keep the footer stable so validation messages do not move the submit action unexpectedly.
+Use the existing compact Canvasight spacing and radius scale: the form should read as a dense work control, not as a settings page. Separate question groups with spacing or a light divider rather than wrapping the whole form or every group in nested cards. Keep the footer flat and stable so validation messages do not move the submit action unexpectedly.
 
 ### Selection And Submission States
 
 - Single-select questions use radio semantics. Selecting a preset clears that question's custom answer; entering a non-empty custom answer clears its preset selection.
 - Multi-select questions use checkbox semantics. Multiple presets and a non-empty custom answer may be submitted together.
-- Preset choice items follow the Scatter UI kit project-select pattern in both themes: input-surface background, 12px radius, 12px vertical and 16px horizontal padding, 12px control-to-copy gap, and 14px/22px regular label and description text. A persistent selected item adds only the 1px connecting-border and no shadow; the focus token is reserved for actual keyboard focus.
+- Preset choice items follow the established Scatter UI kit project-select pattern in both themes: input-surface background, 12px radius, 12px vertical and 16px horizontal padding, 12px control-to-copy gap, and 14px/22px regular label and description text. A persistent selected item adds only the 1px connecting-border and no shadow; it never receives a blue or primary-tinted row fill. The focus token is reserved for actual keyboard focus. Because the inline form has no opaque outer card background, the input-surface rows remain visually separate from the host message surface without inventing another selection style.
 - Checkbox and radio controls remain 16px square with a 2px connecting-border. Checkbox corners use the 6px radius and radio controls are fully round. Selected controls use the theme's dark-background token with the inverted-token check or centered 8px radio dot; never hard-code black or white, so the same component reverses correctly in dark mode.
 - Custom-answer labels must name their purpose, such as `自定义答案`; placeholder text alone is not a label. Whitespace-only input is not a valid answer.
 - Before submission, validation stays local to the unanswered question and uses both text and state, never color alone. Do not show errors merely because the card first rendered.
