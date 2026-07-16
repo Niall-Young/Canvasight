@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 5
+version: 6
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:01:20Z
-updated_at: 2026-07-16T12:26:06Z
+updated_at: 2026-07-16T12:27:41Z
 depends_on:
   - issue-framework-questions-visual-redesign
   - solution-framework-questions-visual-redesign
@@ -139,3 +139,6 @@ verification_evidence:
 - staged verification: explicit pathspec, name-only/stat/check passed
 - post-corrective-implementation worktree: clean before this evidence write-back
 - follow-up spacing baseline: `78aa1d9c492d853e6e56db5d297127421d62aeac`
+- follow-up spacing commit: `baac230593fb56db8de8bebbcace0ac1ad5a25cc` (`fix: 调整框架提问标题间距`)
+- follow-up staged verification: explicit pathspec, name-only/stat/check passed; output/playwright excluded
+- post-follow-up-implementation worktree: clean before this evidence write-back
