@@ -247,7 +247,7 @@ button {
 .framework-question {
   min-width: 0;
   margin: 0;
-  padding: 14px 18px 16px;
+  padding: 0 18px 16px;
   border: 0;
   border-bottom: var(--border-weight-sm) solid var(--color-border-divider);
 }
@@ -255,7 +255,7 @@ button {
 .framework-question legend {
   width: 100%;
   margin: 0 0 9px;
-  padding: 0;
+  padding: 14px 0 0;
   color: var(--color-text);
   font-size: var(--text-14);
   font-weight: 600;

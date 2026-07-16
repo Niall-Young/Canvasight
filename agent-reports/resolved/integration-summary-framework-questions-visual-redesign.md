@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 4
+version: 5
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:01:20Z
-updated_at: 2026-07-16T12:19:54Z
+updated_at: 2026-07-16T12:26:06Z
 depends_on:
   - issue-framework-questions-visual-redesign
   - solution-framework-questions-visual-redesign
@@ -25,6 +25,7 @@ verification_evidence:
   - Playwright verified light, dark, desktop, mobile, single-column, no-overflow, and full-width narrow submit behavior.
   - Clean plugin distribution and plugin validation passed; the global Agent Team validator remains blocked by pre-existing legacy report, template, and QUEUE debt outside this delivery.
   - User rejected the first custom visual pass; the corrected pass directly reuses Canvasight KitButton, provider-card, settings-input, and kit-checkbox selectors from the original workspace migration.
+  - Follow-up browser screenshot and Range geometry verification confirm the question title now sits 14px below the section divider.
 ---
 
 # 框架提问表单 Canvasight 组件复用集成总结
@@ -63,6 +64,7 @@ verification_evidence:
 - 首轮误用蓝色 Button 和 framework 专属选择态。
 - 蓝点、题数、两位数编号、蓝色推荐 badge 与自定义 disabled/focus 规则。
 - Canvasight 组件同源性缺少自动化证据。
+- 原生 fieldset/legend 盒模型导致题目标题紧贴上一条分割线。
 
 ## 未解决
 
@@ -81,6 +83,7 @@ verification_evidence:
 - FrameworkQuestionsCard 直接使用 KitButton、provider-card、settings-input 与 kit-checkbox classes。
 - inline CSS 只保留布局和原生 radio 适配，选择/按钮/输入状态回归既有 Canvasight 家族。
 - widget runtime 增加组件复用断言并重建 `dist`。
+- 将 fieldset 顶部间距移到 legend，并增加标题与分割线几何回归断言。
 
 ## 处理结果
 
@@ -113,6 +116,7 @@ verification_evidence:
 - typecheck / build：passed。
 - widget runtime：passed，含新增 760px / 360px 响应式断言。
 - Playwright：light / dark / mobile 截图 passed；760px 与 360px 均无横向 overflow；KitButton computed background 为 `rgb(31, 31, 31)`，provider card 和 settings input 值与既有 selector 一致。
+- Follow-up Playwright 截图确认标题与分割线间距恢复；widget runtime 断言 `legend` 顶部 padding 为 14px、正文偏移至少 12px、标题到选项至少 8px。
 - distribution / plugin：passed，16 tools、无 node_modules/cache，plugin validator passed。
 - Agent Team validator：因既有 legacy 根报告缺 frontmatter、旧模板 schema 和 QUEUE 债务失败；本轮新增报告字段完整，未改写这些历史文件。
 
@@ -134,3 +138,4 @@ verification_evidence:
 - corrective implementation commit: `1e63625f7bbbb916eb43c84df8a6240479602332` (`fix: 复用 Canvasight 框架提问组件样式`)
 - staged verification: explicit pathspec, name-only/stat/check passed
 - post-corrective-implementation worktree: clean before this evidence write-back
+- follow-up spacing baseline: `78aa1d9c492d853e6e56db5d297127421d62aeac`

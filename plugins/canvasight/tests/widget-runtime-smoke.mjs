@@ -499,10 +499,21 @@ try {
     if (!doc) return false;
     const card = doc.querySelector('.framework-questions-card');
     const options = doc.querySelector('.framework-question-options');
+    const firstQuestion = doc.querySelector('.framework-question');
+    const firstLegend = firstQuestion.querySelector('legend');
+    const legendTextRange = doc.createRange();
+    legendTextRange.selectNodeContents(firstLegend);
+    const questionRect = firstQuestion.getBoundingClientRect();
+    const legendRect = firstLegend.getBoundingClientRect();
+    const legendTextRect = legendTextRange.getBoundingClientRect();
+    const optionsRect = options.getBoundingClientRect();
     const wide = {
       viewport: doc.documentElement.clientWidth,
       scrollWidth: doc.documentElement.scrollWidth,
       cardWidth: card.getBoundingClientRect().width,
+      legendPaddingTop: getComputedStyle(doc.querySelector('.framework-question legend')).paddingTop,
+      legendTextOffset: legendTextRect.top - questionRect.top,
+      legendOptionsGap: optionsRect.top - legendRect.bottom,
       optionTracks: getComputedStyle(options).gridTemplateColumns.split(' ').length
     };
     frame.style.width = '360px';
@@ -522,6 +533,9 @@ try {
   })()`, "inline responsive layout");
   assert.equal(responsiveLayout.wide.scrollWidth, responsiveLayout.wide.viewport, "wide inline card must not overflow horizontally");
   assert.ok(responsiveLayout.wide.cardWidth <= 660, "wide inline card must keep a compact readable measure");
+  assert.equal(responsiveLayout.wide.legendPaddingTop, "14px", "question legend must keep space below the section divider");
+  assert.ok(responsiveLayout.wide.legendTextOffset >= 12, "question text must be visibly separated from the section divider");
+  assert.ok(responsiveLayout.wide.legendOptionsGap >= 8, "question text must keep the existing gap before its options");
   assert.equal(responsiveLayout.wide.optionTracks, 1, "framework choices must remain a single-column reading flow");
   assert.ok(responsiveLayout.narrow.viewport <= 360 && responsiveLayout.narrow.viewport >= 320, "narrow inline viewport must stay within the supported message width");
   assert.equal(responsiveLayout.narrow.scrollWidth, responsiveLayout.narrow.viewport, "narrow inline document must not overflow horizontally");

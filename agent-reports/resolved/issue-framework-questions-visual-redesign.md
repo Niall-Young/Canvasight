@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: medium
-version: 2
+version: 3
 agent_id: /root/development_agent
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T11:59:10Z
-updated_at: 2026-07-16T12:16:49Z
+updated_at: 2026-07-16T12:26:06Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/components/FrameworkQuestionsCard.tsx
@@ -21,6 +21,7 @@ verification_evidence:
   - JSX now directly reuses KitButton, assistant-provider-card, settings-dialog-input, and kit-checkbox visual primitives from the original Canvasight workspace.
   - Production build, composed widget runtime, clean distribution, and plugin validation passed.
   - Playwright verified the black KitButton, provider-card selection, settings input, light/dark themes, and 760px/360px layouts.
+  - Follow-up geometry verification confirms a stable 14px divider-to-legend offset and at least 8px between the legend and options.
 solution_report: agent-reports/resolved/solution-framework-questions-visual-redesign.md
 ---
 
@@ -105,7 +106,7 @@ resolved
 
 ## 处理结果
 
-已按用户反馈纠正首轮方案，直接复用 Canvasight / Scatter 现有组件与类，并通过构建、运行时和浏览器同源验证。
+已按用户反馈纠正首轮方案，直接复用 Canvasight / Scatter 现有组件与类；后续又修复原生 `legend` 不继承 fieldset 顶部内边距导致的贴线问题，将 14px 间距落在标题自身并通过构建、运行时和浏览器几何验证。
 
 ## 修改文件
 
