@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 5
+version: 6
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:42:15Z
-updated_at: 2026-07-16T12:48:42Z
+updated_at: 2026-07-16T12:50:33Z
 depends_on:
   - issue-framework-choice-figma-kit-parity
   - solution-framework-choice-figma-kit-parity
@@ -132,5 +132,6 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `94aaa5f1ef28a342c05d7033296d259b81c6b491`
-- planned implementation commit: `fix: 按 Figma 还原框架提问选择控件`
-- commit: pending Project Management Agent closure
+- implementation commit: `8e443169333ec8782f95bf85050d2ee1644b53cf` (`fix: 按 Figma 还原框架提问选择控件`)
+- staged verification: 13 approved physical paths, explicit pathspec, cached name-only/stat/check passed; Playwright output excluded
+- post-implementation worktree: clean before this evidence write-back
