@@ -22,6 +22,7 @@
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:markdown-export": "node tests/markdown-export-smoke.mjs",
     "test:skills": "node tests/skills-smoke.mjs",
+    "test:rich-content": "node tests/rich-node-content-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs",
     "test:concurrency": "node tests/concurrent-document-smoke.mjs",
     "test:update": "node --test tests/update-canvasight-smoke.mjs",

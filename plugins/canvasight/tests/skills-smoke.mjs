@@ -147,6 +147,7 @@ assert.deepEqual(
 const replaced = insertSkillToken("先分析，再用 $产品 完成", query, "write-product-promo-article");
 assert.equal(replaced.value, "先分析，再用 $write-product-promo-article 完成");
 assert.equal(replaced.caret, "先分析，再用 $write-product-promo-article ".length);
+assert.equal(findSkillQuery("价格 $100", "价格 $100".length, "价格 $100".length), null, "ordinary prices must not open the Skill picker");
 
 const secondDraft = `${replaced.value} $fig`;
 const second = findSkillQuery(secondDraft, secondDraft.length, secondDraft.length);

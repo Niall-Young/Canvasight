@@ -13,12 +13,12 @@ function normalized(value: string): string {
 export function findSkillQuery(value: string, selectionStart: number | null, selectionEnd: number | null): SkillQueryRange | null {
   if (selectionStart === null || selectionEnd === null || selectionStart !== selectionEnd) return null;
   const prefix = value.slice(0, selectionStart);
-  const match = prefix.match(/(?:^|\s)\$([^\s$]*)$/u);
+  const match = prefix.match(/(?:^|\s)\$([\p{L}_][\p{L}\p{N}_.:/-]*)?$/u);
   if (!match) return null;
   const start = prefix.lastIndexOf("$");
   let end = selectionStart;
   while (end < value.length && !/\s/u.test(value[end])) end += 1;
-  return { start, end, query: match[1] };
+  return { start, end, query: match[1] ?? "" };
 }
 
 function skillScore(skill: SkillSummary, query: string): number {

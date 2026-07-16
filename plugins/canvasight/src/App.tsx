@@ -387,6 +387,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
+function richBodyImageAnchorOffsetFromTarget(target: EventTarget | null): number | undefined {
+  const element = target instanceof Element ? target : null;
+  const editor = element?.closest<HTMLElement>("[data-rich-body-editor]");
+  if (!editor) return undefined;
+  const offset = Number(editor.dataset.richSelectionOffset);
+  return Number.isFinite(offset) ? offset : undefined;
+}
+
 function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {
   return {
     ...webDefaultAppSettings,
@@ -751,6 +759,7 @@ async function filesToInputs(files: FileList | File[], source: "upload" | "drop"
 function cloneNodeData(data: ScatterNodeData): ScatterNodeData {
   return {
     ...data,
+    bodyImageAnchors: data.bodyImageAnchors?.map((anchor) => ({ ...anchor })),
     attachments: data.attachments.map((attachment) => ({ ...attachment }))
   };
 }
@@ -1984,12 +1993,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const addFilesToNode = useCallback(
-    async (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => {
+    async (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste", imageAnchorOffset?: number) => {
       if (!project) return;
       try {
         const inputs = await filesToInputs(files, source);
         const attachments = await canvasightApi.saveAttachments(project.path, inputs);
-        appendAttachments(nodeId, attachments);
+        appendAttachments(nodeId, attachments, imageAnchorOffset);
         setStatus(t("status.attachmentsAdded", { count: attachments.length }));
       } catch (error) {
         setStatus(error instanceof Error ? error.message : t("status.addAttachmentFailed"));
@@ -1999,12 +2008,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const chooseFilesForNode = useCallback(
-    async (nodeId: string) => {
+    async (nodeId: string, imageAnchorOffset?: number) => {
       const input = document.createElement("input");
       input.type = "file";
       input.multiple = true;
       input.onchange = () => {
-        if (input.files?.length) void addFilesToNode(nodeId, input.files, "upload");
+        if (input.files?.length) void addFilesToNode(nodeId, input.files, "upload", imageAnchorOffset);
       };
       input.click();
     },
@@ -2141,7 +2150,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
       if (!selectedNode || !event.dataTransfer.files.length) return;
       event.preventDefault();
-      void addFilesToNode(selectedNode.id, event.dataTransfer.files, "drop");
+      void addFilesToNode(selectedNode.id, event.dataTransfer.files, "drop", richBodyImageAnchorOffsetFromTarget(event.target));
     },
     [addFilesToNode, insertTemplateAtPosition, selectedNode, templateFromDragEvent]
   );
@@ -2193,7 +2202,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       if (!nodeId || !nodes.some((node) => node.id === nodeId)) return;
 
       event.preventDefault();
-      void addFilesToNode(nodeId, files, "paste");
+      void addFilesToNode(nodeId, files, "paste", richBodyImageAnchorOffsetFromTarget(target));
     }
 
     window.addEventListener("paste", handlePaste, true);

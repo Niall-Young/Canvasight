@@ -2,13 +2,14 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
+import type { Attachment, BodyImageAnchor, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
-import { measureTextareaCaretRect, placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
+import { placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
 import { shortcuts } from "../lib/shortcuts";
 import { filterSkills, findSkillQuery, insertSkillToken, type SkillQueryRange } from "../lib/skills";
+import { resolveBodyImageAnchors, richNodeSemanticSignature, shiftImageAnchorsForReplacement } from "../lib/richNodeContent";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
@@ -16,26 +17,25 @@ import { IconButton } from "./ui/icon-button";
 import { Icon } from "./ui/icon";
 import { TooltipAnchor } from "./ui/tooltip";
 import { UploadChip } from "./ui/upload-chip";
+import {
+  getRichNodeSelectionOffset,
+  measureRichNodeCaretRect,
+  renderRichNodeEditor,
+  RichNodeBody,
+  serializeRichNodeEditor,
+  setRichNodeSelectionOffset
+} from "./RichNodeBody";
 
 type TaskNodeProps = NodeProps<Node<ScatterNodeData, "task">>;
 type EditableField = "title" | "body";
 type ConnectedNodeSide = "left" | "right";
 
-function fitTextareaHeight(textarea: HTMLTextAreaElement | null): boolean {
-  if (!textarea) return false;
-  const previousHeight = textarea.style.height;
-  textarea.style.height = "auto";
-  const nextHeight = `${textarea.scrollHeight}px`;
-  textarea.style.height = nextHeight;
-  return previousHeight !== nextHeight;
-}
-
 interface RuntimeActions {
   updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
   beginNodeEdit: () => void;
   commitNodeEdit: () => void;
-  chooseFilesForNode: (nodeId: string) => Promise<void>;
-  addFilesToNode: (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => Promise<void>;
+  chooseFilesForNode: (nodeId: string, imageAnchorOffset?: number) => Promise<void>;
+  addFilesToNode: (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste", imageAnchorOffset?: number) => Promise<void>;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
   duplicateNode: (nodeId: string) => void;
@@ -99,7 +99,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const updateNodeInternals = useUpdateNodeInternals();
   const rootRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const skillPickerRef = useRef<HTMLDivElement>(null);
   const skillOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const pointerStartedSelectedRef = useRef(false);
@@ -107,12 +107,15 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const isComposingRef = useRef(false);
   const pendingFinishAfterCompositionRef = useRef(false);
   const pendingNodeInternalsUpdateRef = useRef(false);
+  const bodySelectionOffsetRef = useRef(data.body.length);
   // Keep IME edits local until composition ends so store/autosave updates do not commit raw pinyin.
   const titleDraftRef = useRef(data.title);
   const bodyDraftRef = useRef(data.body);
+  const bodyImageAnchorsDraftRef = useRef<BodyImageAnchor[] | undefined>(data.bodyImageAnchors);
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [titleDraft, setTitleDraft] = useState(data.title);
   const [bodyDraft, setBodyDraft] = useState(data.body);
+  const [bodyImageAnchorsDraft, setBodyImageAnchorsDraft] = useState<BodyImageAnchor[] | undefined>(data.bodyImageAnchors);
   const [skillQuery, setSkillQuery] = useState<SkillQueryRange | null>(null);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [skillStatus, setSkillStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -130,6 +133,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   );
   const skillPickerId = `skill-picker-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   const visibleSkills = useMemo(() => filterSkills(skills, skillQuery?.query ?? ""), [skillQuery?.query, skills]);
+  const inlineImageIds = useMemo(
+    () => new Set(resolveBodyImageAnchors(bodyDraft, bodyImageAnchorsDraft, data.attachments).map((anchor) => anchor.attachmentId)),
+    [bodyDraft, bodyImageAnchorsDraft, data.attachments]
+  );
+  const fileAttachments = useMemo(
+    () => data.attachments.filter((attachment) => attachment.kind !== "image" || !inlineImageIds.has(attachment.id)),
+    [data.attachments, inlineImageIds]
+  );
 
   const loadSkills = useCallback(async (forceReload = false) => {
     setSkillStatus("loading");
@@ -142,12 +153,15 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     }
   }, []);
 
-  const syncSkillQuery = useCallback((value: string, textarea: HTMLTextAreaElement) => {
+  const syncSkillQuery = useCallback((value: string, editor: HTMLDivElement) => {
     if (isComposingRef.current) {
       setSkillQuery(null);
       return;
     }
-    const nextQuery = findSkillQuery(value, textarea.selectionStart, textarea.selectionEnd);
+    const selectionOffset = getRichNodeSelectionOffset(editor);
+    bodySelectionOffsetRef.current = selectionOffset ?? bodySelectionOffsetRef.current;
+    editor.dataset.richSelectionOffset = String(bodySelectionOffsetRef.current);
+    const nextQuery = findSkillQuery(value, selectionOffset, selectionOffset);
     setSkillQuery(nextQuery);
     if (nextQuery && skillStatus === "idle") void loadSkills();
   }, [loadSkills, skillStatus]);
@@ -176,7 +190,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       const anchor = bodyRef.current;
       const picker = skillPickerRef.current;
       if (!anchor || !picker) return;
-      const caretRect = measureTextareaCaretRect(anchor);
+      const caretRect = measureRichNodeCaretRect(anchor);
       if (!caretRect) return;
       const nextPosition = placeSkillPicker({
         anchorRect: caretRect,
@@ -211,19 +225,13 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     };
   }, [editingField, skillQuery, skillStatus, visibleSkills.length]);
 
-  const fitBodyTextarea = useCallback((deferNodeInternalsUpdate = false) => {
-    if (fitTextareaHeight(bodyRef.current)) {
-      if (deferNodeInternalsUpdate) {
-        pendingNodeInternalsUpdateRef.current = true;
-        return;
-      }
-      updateNodeInternals(id);
-    }
-  }, [id, updateNodeInternals]);
-
   useLayoutEffect(() => {
-    fitBodyTextarea(isComposingRef.current);
-  }, [bodyDraft, fitBodyTextarea]);
+    if (isComposingRef.current) {
+      pendingNodeInternalsUpdateRef.current = true;
+      return;
+    }
+    updateNodeInternals(id);
+  }, [bodyDraft, bodyImageAnchorsDraft, data.attachments, id, updateNodeInternals]);
 
   useEffect(() => {
     if (editingField === "title") return;
@@ -235,7 +243,16 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     if (editingField === "body") return;
     bodyDraftRef.current = data.body;
     setBodyDraft(data.body);
-  }, [data.body, editingField]);
+    bodyImageAnchorsDraftRef.current = data.bodyImageAnchors;
+    setBodyImageAnchorsDraft(data.bodyImageAnchors);
+  }, [data.body, data.bodyImageAnchors, editingField]);
+
+  useEffect(() => {
+    if (editingField !== "body" || data.body !== bodyDraftRef.current) return;
+    if (JSON.stringify(data.bodyImageAnchors ?? []) === JSON.stringify(bodyImageAnchorsDraftRef.current ?? [])) return;
+    bodyImageAnchorsDraftRef.current = data.bodyImageAnchors;
+    setBodyImageAnchorsDraft(data.bodyImageAnchors);
+  }, [data.attachments, data.body, data.bodyImageAnchors, editingField]);
 
   const isNodeEditableElement = useCallback(
     (target: EventTarget | null) => target === titleRef.current || target === bodyRef.current,
@@ -255,12 +272,15 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       if ((!field || field === "body") && bodyDraftRef.current !== data.body) {
         patch.body = bodyDraftRef.current;
       }
+      if ((!field || field === "body") && JSON.stringify(bodyImageAnchorsDraftRef.current ?? []) !== JSON.stringify(data.bodyImageAnchors ?? [])) {
+        patch.bodyImageAnchors = bodyImageAnchorsDraftRef.current;
+      }
 
       if (Object.keys(patch).length > 0) {
         taskNodeActions?.updateNodeData(id, patch);
       }
     },
-    [data.body, data.title, id]
+    [data.body, data.bodyImageAnchors, data.title, id]
   );
 
   const finishEditing = useCallback(
@@ -294,8 +314,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
 
     if (editingField === "body") {
       bodyRef.current?.focus();
-      const valueLength = bodyRef.current?.value.length ?? 0;
-      bodyRef.current?.setSelectionRange(valueLength, valueLength);
+      if (bodyRef.current) setRichNodeSelectionOffset(bodyRef.current, bodySelectionOffsetRef.current);
     }
   }, [editingField]);
 
@@ -312,14 +331,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     []
   );
 
-  const handleEditableFocus = useCallback((event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: EditableField) => {
+  const handleEditableFocus = useCallback((event: React.FocusEvent<HTMLInputElement | HTMLDivElement>, field: EditableField) => {
     if (editingField !== field) {
       event.currentTarget.blur();
     }
   }, [editingField]);
 
   const handleEditableBlur = useCallback(
-    (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: EditableField) => {
+    (event: React.FocusEvent<HTMLInputElement | HTMLDivElement>, field: EditableField) => {
       if (editingField !== field) return;
       if (isNodeEditableElement(event.relatedTarget)) return;
       if (isComposingRef.current) {
@@ -337,21 +356,34 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     setSkillQuery(null);
   }, []);
 
-  const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLInputElement | HTMLDivElement>) => {
     const field = event.currentTarget === titleRef.current ? "title" : "body";
-    const value = event.currentTarget.value;
 
     if (field === "title") {
+      const value = (event.currentTarget as HTMLInputElement).value;
       titleDraftRef.current = value;
       setTitleDraft(value);
     } else {
+      const editor = event.currentTarget as HTMLDivElement;
+      const selectionOffset = getRichNodeSelectionOffset(editor) ?? bodySelectionOffsetRef.current;
+      const next = serializeRichNodeEditor(editor);
+      const value = next.body;
       bodyDraftRef.current = value;
       setBodyDraft(value);
-      if (fitTextareaHeight(event.currentTarget as HTMLTextAreaElement)) {
-        pendingNodeInternalsUpdateRef.current = true;
-      }
+      bodyImageAnchorsDraftRef.current = next.bodyImageAnchors;
+      setBodyImageAnchorsDraft(next.bodyImageAnchors);
+      editor.dataset.richBodyValue = value;
+      editor.dataset.richAnchorsValue = JSON.stringify(next.bodyImageAnchors ?? []);
+      pendingNodeInternalsUpdateRef.current = true;
       window.setTimeout(() => {
-        if (bodyRef.current) syncSkillQuery(bodyRef.current.value, bodyRef.current);
+        if (!bodyRef.current) return;
+        const nextSignature = richNodeSemanticSignature(bodyDraftRef.current, bodyImageAnchorsDraftRef.current, data.attachments);
+        if (bodyRef.current.dataset.richSemanticSignature !== nextSignature) {
+          renderRichNodeEditor(bodyRef.current, bodyDraftRef.current, bodyImageAnchorsDraftRef.current, data.attachments);
+          bodyRef.current.focus();
+          setRichNodeSelectionOffset(bodyRef.current, selectionOffset);
+        }
+        syncSkillQuery(bodyDraftRef.current, bodyRef.current);
       }, 0);
     }
 
@@ -369,15 +401,15 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       }
       pendingFinishAfterCompositionRef.current = false;
     }, 0);
-  }, [finishEditing, flushDraftToStore, id, isNodeEditableFocused, syncSkillQuery, updateNodeInternals]);
+  }, [data.attachments, finishEditing, flushDraftToStore, id, isNodeEditableFocused, syncSkillQuery, updateNodeInternals]);
 
   const isChangeDuringComposition = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    (event: React.ChangeEvent<HTMLInputElement>) =>
       isComposingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing),
     []
   );
 
-  const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLDivElement>) => {
     if (isComposingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.currentTarget === bodyRef.current && skillQuery) {
       if (event.key === "ArrowDown" && visibleSkills.length) {
@@ -400,13 +432,22 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         event.preventDefault();
         const selectedSkill = visibleSkills[activeSkillIndex];
         const next = insertSkillToken(bodyDraftRef.current, skillQuery, selectedSkill.name);
+        const nextAnchors = shiftImageAnchorsForReplacement(
+          bodyImageAnchorsDraftRef.current,
+          skillQuery.start,
+          skillQuery.end,
+          next.caret - skillQuery.start
+        );
         bodyDraftRef.current = next.value;
         setBodyDraft(next.value);
-        taskNodeActions?.updateNodeData(id, { body: next.value });
+        bodyImageAnchorsDraftRef.current = nextAnchors;
+        setBodyImageAnchorsDraft(nextAnchors);
+        taskNodeActions?.updateNodeData(id, { body: next.value, bodyImageAnchors: nextAnchors });
         setSkillQuery(null);
+        if (bodyRef.current) renderRichNodeEditor(bodyRef.current, next.value, nextAnchors, data.attachments);
         window.requestAnimationFrame(() => {
           bodyRef.current?.focus();
-          bodyRef.current?.setSelectionRange(next.caret, next.caret);
+          if (bodyRef.current) setRichNodeSelectionOffset(bodyRef.current, next.caret);
         });
         return;
       }
@@ -419,7 +460,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     if (event.key === "Escape") {
       event.currentTarget.blur();
     }
-  }, [activeSkillIndex, id, skillQuery, visibleSkills]);
+  }, [activeSkillIndex, data.attachments, id, skillQuery, visibleSkills]);
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -434,41 +475,59 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     [data.title, id, isChangeDuringComposition]
   );
 
-  const handleBodyChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = event.currentTarget.value;
-      const isComposing = isChangeDuringComposition(event);
+  const handleBodyInput = useCallback(
+    (event: React.FormEvent<HTMLDivElement>) => {
+      const selectionOffset = getRichNodeSelectionOffset(event.currentTarget) ?? bodySelectionOffsetRef.current;
+      const next = serializeRichNodeEditor(event.currentTarget);
+      const value = next.body;
+      const isComposing = isComposingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing);
       bodyDraftRef.current = value;
       setBodyDraft(value);
-
-      if (fitTextareaHeight(event.currentTarget)) {
-        if (isComposing) {
-          pendingNodeInternalsUpdateRef.current = true;
-        } else {
-          updateNodeInternals(id);
-        }
-      }
+      bodyImageAnchorsDraftRef.current = next.bodyImageAnchors;
+      setBodyImageAnchorsDraft(next.bodyImageAnchors);
+      event.currentTarget.dataset.richBodyValue = value;
+      event.currentTarget.dataset.richAnchorsValue = JSON.stringify(next.bodyImageAnchors ?? []);
+      pendingNodeInternalsUpdateRef.current = isComposing;
 
       if (!isComposing && value !== data.body) {
-        taskNodeActions?.updateNodeData(id, { body: value });
+        taskNodeActions?.updateNodeData(id, { body: value, bodyImageAnchors: next.bodyImageAnchors });
+      } else if (!isComposing && JSON.stringify(next.bodyImageAnchors ?? []) !== JSON.stringify(data.bodyImageAnchors ?? [])) {
+        taskNodeActions?.updateNodeData(id, { bodyImageAnchors: next.bodyImageAnchors });
       }
-      if (!isComposing) syncSkillQuery(value, event.currentTarget);
+      if (!isComposing) {
+        const nextSignature = richNodeSemanticSignature(value, next.bodyImageAnchors, data.attachments);
+        if (event.currentTarget.dataset.richSemanticSignature !== nextSignature) {
+          renderRichNodeEditor(event.currentTarget, value, next.bodyImageAnchors, data.attachments);
+          event.currentTarget.focus();
+          setRichNodeSelectionOffset(event.currentTarget, selectionOffset);
+        }
+        syncSkillQuery(value, event.currentTarget);
+      }
     },
-    [data.body, id, isChangeDuringComposition, syncSkillQuery, updateNodeInternals]
+    [data.body, data.bodyImageAnchors, id, syncSkillQuery]
   );
 
   const chooseSkill = useCallback((skill: SkillSummary) => {
     if (!skillQuery) return;
     const next = insertSkillToken(bodyDraftRef.current, skillQuery, skill.name);
+    const nextAnchors = shiftImageAnchorsForReplacement(
+      bodyImageAnchorsDraftRef.current,
+      skillQuery.start,
+      skillQuery.end,
+      next.caret - skillQuery.start
+    );
     bodyDraftRef.current = next.value;
     setBodyDraft(next.value);
-    taskNodeActions?.updateNodeData(id, { body: next.value });
+    bodyImageAnchorsDraftRef.current = nextAnchors;
+    setBodyImageAnchorsDraft(nextAnchors);
+    taskNodeActions?.updateNodeData(id, { body: next.value, bodyImageAnchors: nextAnchors });
     setSkillQuery(null);
+    if (bodyRef.current) renderRichNodeEditor(bodyRef.current, next.value, nextAnchors, data.attachments);
     window.requestAnimationFrame(() => {
       bodyRef.current?.focus();
-      bodyRef.current?.setSelectionRange(next.caret, next.caret);
+      if (bodyRef.current) setRichNodeSelectionOffset(bodyRef.current, next.caret);
     });
-  }, [id, skillQuery]);
+  }, [data.attachments, id, skillQuery]);
 
   const handleConnectButtonMouseDown = useCallback(
     (side: ConnectedNodeSide) => (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -612,30 +671,49 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
 
       <div className="task-node-card">
         <div className="task-body-editor">
-          <textarea
-          ref={bodyRef}
-          className={`task-body ${hasBody ? "has-content" : ""} ${editingField === "body" ? "nodrag nowheel is-editing" : "is-readonly"}`}
-          value={bodyDraft}
-          placeholder={t("task.bodyPlaceholder")}
-          readOnly={editingField !== "body"}
-          tabIndex={editingField === "body" ? 0 : -1}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-activedescendant={skillQuery && visibleSkills[activeSkillIndex] ? `${skillPickerId}-option-${activeSkillIndex}` : undefined}
-          aria-controls={skillQuery && visibleSkills.length ? skillPickerId : undefined}
-          aria-expanded={editingField === "body" && Boolean(skillQuery)}
-          aria-haspopup="listbox"
-          onPointerDown={handleEditablePointerDown}
-          onClick={() => {
-            if (editingField !== "body") startEditing("body");
-          }}
-          onFocus={(event) => handleEditableFocus(event, "body")}
-          onBlur={(event) => handleEditableBlur(event, "body")}
-          onKeyDown={handleEditableKeyDown}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
-          onChange={handleBodyChange}
-          onSelect={(event) => syncSkillQuery(event.currentTarget.value, event.currentTarget)}
+          <RichNodeBody
+            ref={bodyRef}
+            assetBaseUrl={assetBaseUrl}
+            attachments={data.attachments}
+            body={bodyDraft}
+            bodyImageAnchors={bodyImageAnchorsDraft}
+            className={`task-body rich-node-body ${hasBody ? "has-content" : ""} ${editingField === "body" ? "nodrag nowheel is-editing" : "is-readonly"}`}
+            editing={editingField === "body"}
+            placeholder={t("task.bodyPlaceholder")}
+            tabIndex={editingField === "body" ? 0 : -1}
+            aria-autocomplete="list"
+            aria-activedescendant={skillQuery && visibleSkills[activeSkillIndex] ? `${skillPickerId}-option-${activeSkillIndex}` : undefined}
+            aria-controls={skillQuery && visibleSkills.length ? skillPickerId : undefined}
+            aria-expanded={editingField === "body" && Boolean(skillQuery)}
+            aria-haspopup="listbox"
+            onPointerDown={handleEditablePointerDown}
+            onPointerUp={(event) => {
+              if (editingField !== "body") return;
+              syncSkillQuery(bodyDraftRef.current, event.currentTarget);
+            }}
+            onClick={(event) => {
+              const target = event.target instanceof Element ? event.target : null;
+              if (target?.closest("a, button")) return;
+              if (editingField !== "body") startEditing("body");
+            }}
+            onFocus={(event) => handleEditableFocus(event, "body")}
+            onBlur={(event) => handleEditableBlur(event, "body")}
+            onKeyDown={handleEditableKeyDown}
+            onKeyUp={(event) => {
+              if (editingField !== "body") return;
+              syncSkillQuery(bodyDraftRef.current, event.currentTarget);
+            }}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
+            onInput={handleBodyInput}
+            onPaste={(event) => {
+              if (event.clipboardData.files.length) return;
+              const text = event.clipboardData.getData("text/plain");
+              if (!text) return;
+              event.preventDefault();
+              document.execCommand("insertText", false, text);
+            }}
+            onRemoveAttachment={(attachmentId) => taskNodeActions?.removeAttachment(id, attachmentId)}
           />
 
           {editingField === "body" && skillQuery ? createPortal(
@@ -692,9 +770,9 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           ) : null}
         </div>
 
-        {data.attachments.length ? (
+        {fileAttachments.length ? (
           <div className="attachment-grid">
-            {data.attachments.map((attachment) => (
+            {fileAttachments.map((attachment) => (
               <TaskAttachmentChip
                 key={attachment.id}
                 attachment={attachment}
@@ -707,7 +785,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
 
         <div className="task-node-footer">
           <TooltipAnchor className="nodrag" label={t("task.addAttachment")}>
-            <IconButton className="nodrag" filled={false} icon="plus-lg" size="lg" aria-label={t("task.addAttachment")} onClick={() => taskNodeActions?.chooseFilesForNode(id)} />
+            <IconButton
+              className="nodrag"
+              filled={false}
+              icon="plus-lg"
+              size="lg"
+              aria-label={t("task.addAttachment")}
+              onClick={() => taskNodeActions?.chooseFilesForNode(id, bodySelectionOffsetRef.current)}
+            />
           </TooltipAnchor>
         </div>
       </div>
