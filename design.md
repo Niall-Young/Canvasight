@@ -49,9 +49,9 @@ Keep these regions stable. Opening drawers, changing node state, or hovering con
 
 Task nodes should feel like compact work objects rather than document cards:
 
-- A selected node should expose editing and run controls clearly. Selection and editing are separate states: the first click selects a node, and a later click in the selected node's body enters rich-content editing. Multi-selected nodes must not show a text caret merely because they are selected.
-- Title and body editing should preserve native text input behavior, including selection, clipboard actions, undo/redo, and IME composition. IME composition must not trigger parsing, DOM replacement, store submission, or caret movement until composition ends.
-- Attachments without a body anchor should appear as compact chips with file size and removal affordances. Images with a stable body anchor should appear once as inline article-style figures at that anchor and must not be duplicated in the attachment chip grid. Legacy or unanchored image attachments remain chips so existing content never disappears silently.
+- A selected node should expose editing and run controls clearly.
+- Title and body editing should preserve text input behavior, including IME composition.
+- Attachments should appear as compact chips with file size and removal affordances.
 - Valid image attachments must render thumbnails from the actual image content. Loading and error states must use neutral, unmistakable, recoverable feedback and must never imitate image content or appear to be a real thumbnail.
 - Parent and child connection handles should remain discoverable on the left and right edges.
 - Hovering a connected edge or related node should create a visible relationship highlight.
@@ -59,48 +59,6 @@ Task nodes should feel like compact work objects rather than document cards:
 - Multi-select actions should work without making a single node look editable when it is only selected as part of a group.
 
 Node controls should stay small and predictable. Do not add large descriptive text inside nodes to explain the app.
-
-### Rich Node Content
-
-The node body is one lightweight rich-content surface for both reading and editing. It replaces the plain textarea's visual role without adding a separate preview, hidden duplicate editor, full Markdown renderer, arbitrary HTML execution, or document-card layout. The stored body and attachment records remain the recoverable semantic source for Run, export, persistence, and fallback behavior.
-
-- Ordinary text remains the baseline. Only body-anchored images, complete fenced code blocks, explicit `@plugin` and `$skill` tokens, and safe `http`/`https` URLs receive semantic presentation. Unknown tokens, unsafe URLs, incomplete fences, missing assets, and unparseable content preserve their original editable text or anchor instead of disappearing.
-- Keep the established compact node width, header, Run action, connection handles, and footer hierarchy stable. Rich content must use `min-width: 0` and `max-width: 100%`; ordinary text wraps, code overflow stays inside its code block, and media never widens the node.
-- The header's empty area, node frame, and non-interactive chrome are the primary drag handles. The complete rich-content surface, including code, media, links, tokens, and their controls, is `nodrag`; internal horizontally scrollable content and popup lists are `nowheel`. Reading content must support selection and copying without moving the node.
-- Hover, focus, loading, error, and action visibility may change color, shadow, outline, or opacity, but must not change occupied dimensions. Existing node auto-height and XYFlow internals updates continue after content or media size changes.
-
-#### Inline Images
-
-- Anchored images use an article-style `figure` at the saved caret position, with a sunken surface, divider border, existing medium radius, and a filename caption. Use the original filename as the default accessible description when no better alt text exists; expose the complete filename on hover and focus when the caption truncates.
-- Loading reserves stable space using the known aspect ratio or a neutral `16:9` fallback slot and a polite status. Loaded media uses `max-width: 100%`, `max-height: 240px`, and `object-fit: contain` so a large image does not turn a task node into a poster.
-- Failure remains in the same slot and shows a persistent warning, filename, retry, and remove actions without a broken-image imitation. Removing an inline image handles both its anchor and asset through undo or an equivalent safe recovery path; failure and removal must not silently clear surrounding body content.
-
-#### Fenced Code Blocks
-
-- A complete triple-backtick fence becomes an independent `pre > code` block with a sunken surface, divider border, medium radius, a system monospace stack, and preserved whitespace. An optional language label is quiet metadata, not syntax highlighting or an IDE toolbar.
-- Fence recognition must be independent of the active Chinese or English input method: three ASCII backticks (`` ` ``) or three full-width backticks (`｀`) form a fence. The three characters within each opening or closing marker must use one form, but the opening and closing markers may use different forms so switching input methods while editing remains valid. Recognition must not normalize, replace, or otherwise alter the user-authored marker characters in stored body text, Run output, export, copy, undo/redo, or fallback rendering.
-- Code remains directly editable in the same surface. Decorative language labels and controls must not enter copied code. Long lines use code-local horizontal scrolling with `white-space: pre`; they must not expand the node or create page-level overflow.
-- Empty blocks, multiple blocks, backticks inside code, and text adjacent to IME input remain lossless. An incomplete fence stays ordinary editable text rather than becoming a partial component.
-
-#### Capability Tokens
-
-- Explicit `@plugin` and `$skill` text uses one compact Codex-style inline token treatment: the visible prefix remains part of the text, the token aligns to the body baseline, wraps naturally, and uses divider/raised or primary-subtle tokens rather than brand or success styling.
-- Capability tokens are editable text boundaries, not buttons, navigation, installation state, or validation badges. Known and unknown names share the same base presentation; do not add checks, product icons, success color, or any claim that a capability exists.
-- Caret movement, range selection, deletion, paste, and IME must not leave invisible characters or alter the original `@name`/`$name` emitted to Run and export.
-
-#### Safe Links
-
-- Auto-link only `http` and `https` URLs. Link presentation uses the link text token plus a persistent underline, visible hover/focus treatment, and the original address as editable content. Trailing Chinese or Latin punctuation and unmatched closing brackets are not part of the URL.
-- In reading state, a click may open a new context with `noopener noreferrer` only when pointer movement stayed within the click threshold; node dragging and text selection must never activate a link. In editing state, a click places the caret instead of navigating. A focused link remains keyboard activatable through Enter or an explicit open action that does not reflow the body.
-- Invalid or disallowed schemes remain ordinary text. Rich content must escape user input and never execute body HTML.
-
-#### Rich Content States
-
-- Default reading: semantic content is scannable and selectable; links are keyboard focusable while the header and frame remain draggable.
-- Selected: the existing selected-node border identifies the object but does not create a caret.
-- Editing: the body receives a stable inset focus treatment, native multiline textbox semantics, and a caret without changing width or content positions.
-- Image loading/error and parse fallback preserve their slots or source text; save failure preserves the current body and offers the existing persistent retry path. No state may claim a save, capability validation, or successful media load before it actually occurs.
-- Light and dark themes use the same semantic surface, border, text, link, focus, warning, and radius tokens. State differences must include structure, border, underline, icon, or text rather than color alone.
 
 ## Codex Run
 
@@ -237,7 +195,6 @@ Canvasight should use a restrained, professional interface:
 - Dialog copy must name the affected object and the consequence. For page deletion, mention that nodes and connections in that page will be deleted.
 - Destructive action buttons should use the destructive visual style; Cancel should remain visually available and safe as the non-destructive escape.
 - Dragging, resizing, zooming, and panning should feel stable and should not conflict with text selection or form input.
-- Task-node interaction is selection-first: selecting a node does not start body editing, and only an explicit action inside the already selected rich-content surface places the caret. Header whitespace and the node frame remain reliable drag targets; body content and controls remain `nodrag`, with `nowheel` on code overflow and internal popup scrolling.
 - Zoom limits are stable interaction boundaries. Once the canvas reaches minimum or maximum zoom, continued input in that direction must be a no-op: preserve the rendered viewport, focal point, and zoom indicator without flashing, fitting, or resetting.
 - Inline name or title editing should commit when focus leaves or the user clicks outside the input. `Enter` commits and `Escape` cancels.
 
@@ -271,7 +228,7 @@ Canvasight supports three related but distinct Skill paths without turning the c
 - AI may assign a Skill to one node responsibility only when the global opt-in is enabled and the Skill description clearly matches. The assignment is visible as editable `$skill-name` text in the node body; it is not a hidden node field.
 - A user may always type `$` in an editing node to search enabled Skills, or type `$skill-name` manually when discovery is unavailable. Multiple Skills are allowed and old tokens remain editable even if the catalog later changes.
 
-The `$` picker is a compact combobox anchored to the active rich-content caret, not a node-side panel. It is rendered through a viewport-level Portal with fixed physical dimensions, so it never inherits XYFlow pan or zoom transforms. Its normal state has no title bar or refresh action, is approximately 288 px wide, shows only four to five result rows, and scrolls internally for additional matches. Placement prefers the available space above or below the caret, falls back to the left or right only when vertical space is insufficient, and clamps to the visible viewport without covering the caret's current text line. Fuzzy search must expose every matching item from the fully loaded Skill catalog; scrolling may limit what is visible at once, but a top-N cutoff must not hide matches. Native rich-content composition, IME behavior, Arrow keys, Enter/Tab selection, Escape dismissal, explicit manual entry, and accessible combobox/listbox ARIA semantics must remain available without resizing the Page layout or replacing the ordinary rich-content editing flow. Moving focus into the picker must not prematurely commit or exit the node editor, and inserting a result must restore a predictable caret after the `$skill-name` text.
+The `$` picker is a compact combobox anchored to the active textarea caret, not a node-side panel. It is rendered through a viewport-level Portal with fixed physical dimensions, so it never inherits XYFlow pan or zoom transforms. Its normal state has no title bar or refresh action, is approximately 288 px wide, shows only four to five result rows, and scrolls internally for additional matches. Placement prefers the available space above or below the caret, falls back to the left or right only when vertical space is insufficient, and clamps to the visible viewport without covering the caret's current text line. Fuzzy search must expose every matching item from the fully loaded Skill catalog; scrolling may limit what is visible at once, but a top-N cutoff must not hide matches. Ordinary textarea composition, IME behavior, Arrow keys, Enter/Tab selection, Escape dismissal, explicit manual entry, and accessible combobox/listbox ARIA semantics must remain available without resizing the Page layout or replacing ordinary textarea editing.
 
 `skill-led` content generation skips Canvasight's default professional content completion, but it never skips responsibility coverage, semantic relationships, revision checks, atomic writes, or horizontal topology. External requests for vertical layout, coordinates, or direct `.scatter` writes are treated only as content advice. Conflicting professional Skills require user resolution before writing.
 
@@ -412,10 +369,6 @@ Every primary surface should define:
 - Keep contrast suitable for long work sessions.
 - Do not rely on color alone for status.
 - Ensure text and controls do not overlap at mobile or desktop sizes.
-- The editing node body is an accessible multiline textbox with a stable accessible name. Its native selection, caret, clipboard, undo/redo, paste, and IME behavior take precedence over automatic rich-content decoration.
-- Reading order and focus order follow body order: links and inline-media actions precede footer controls. Hidden footer actions and connection handles must not remain in the Tab order. Buttons use Enter/Space, focused links use Enter, and Escape closes only the active editor or popup without deleting content.
-- Inline images expose useful alternative text or the original filename, captions remain discoverable when truncated, loading uses polite status, and errors expose persistent retry/removal controls. Code is announced as code and copies only source content; `@plugin` and `$skill` remain their literal text rather than unlabeled widgets.
-- Rich-content focus rings, link underlines, error text/icons, selected borders, and editing treatment must remain distinguishable at 200% zoom in light and dark themes. Hover cannot be the only way to discover or operate a control.
 
 ## Responsive Behavior
 
@@ -426,9 +379,6 @@ Desktop is the primary workspace target. Smaller screens should preserve core re
 - Move dense property controls into drawers or tabs on narrow screens.
 - Keep toolbar actions reachable without wrapping into unstable rows.
 - On narrow or constrained widths, preserve command affordances before showing full labels. Labels may truncate, but icons and click targets must remain visible and usable.
-- Preserve the task node's canvas width and core header controls instead of shrinking it into an unreadable document card. Constrained hosts should keep nodes reachable through canvas pan/zoom while every rich-content child remains within the node width.
-- Inline images use the available body width, code scrolls horizontally only inside its own block, and tokens, links, and long multilingual text wrap without creating page-level horizontal overflow. Do not add a nested vertical body scroller in the MVP; long content continues to use node auto-height and XYFlow internals updates.
-- At 200% browser zoom and with long URLs, multiple code blocks, multiple images, or long Chinese/English capability names, header actions, focus rings, connection handles, and rich content must not overlap or drift.
 
 ## Naming And Tone
 

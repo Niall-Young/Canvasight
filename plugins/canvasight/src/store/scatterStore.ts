@@ -9,7 +9,6 @@ import type {
   ScatterPage,
   ScatterProjectInfo
 } from "../../shared/types";
-import { appendImageAnchors, removeImageAnchor } from "../lib/richNodeContent";
 
 const MAX_HISTORY_LENGTH = 100;
 
@@ -63,7 +62,7 @@ interface ScatterState {
   undo: () => void;
   redo: () => void;
   updateNodeData: (nodeId: string, patch: Partial<ScatterNode["data"]>) => void;
-  appendAttachments: (nodeId: string, attachments: Attachment[], imageAnchorOffset?: number) => void;
+  appendAttachments: (nodeId: string, attachments: Attachment[]) => void;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   setSelectedNodeId: (nodeId: string | null) => void;
   setDrawer: (drawer: DrawerMode | null) => void;
@@ -84,7 +83,7 @@ function cloneEdgeForHistory(edge: ScatterEdge): ScatterEdge {
 
 function cloneNodeForHistory(node: ScatterNode): ScatterNode {
   const { selected: _selected, data, ...nodeRest } = node;
-  const { lastRunAt: _lastRunAt, attachments, bodyImageAnchors, ...dataRest } = data;
+  const { lastRunAt: _lastRunAt, attachments, ...dataRest } = data;
 
   return {
     ...nodeRest,
@@ -92,7 +91,6 @@ function cloneNodeForHistory(node: ScatterNode): ScatterNode {
     position: { ...node.position },
     data: {
       ...dataRest,
-      bodyImageAnchors: bodyImageAnchors?.map((anchor) => ({ ...anchor })),
       attachments: attachments.map((attachment) => ({ ...attachment }))
     }
   } as ScatterNode;
@@ -534,14 +532,13 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         )
       });
     },
-    appendAttachments: (nodeId, attachments, imageAnchorOffset) => {
+    appendAttachments: (nodeId, attachments) => {
       const state = get();
       const next = updateNodeInPages(state, nodeId, (node) => ({
         ...node,
         data: {
           ...node.data,
-          attachments: [...node.data.attachments, ...attachments],
-          bodyImageAnchors: appendImageAnchors(node.data.bodyImageAnchors, attachments, imageAnchorOffset, node.data.body.length)
+          attachments: [...node.data.attachments, ...attachments]
         }
       }));
       if (next.currentPageChanged) state.commitCanvasChange({ nodes: next.nodes });
@@ -553,8 +550,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         ...node,
         data: {
           ...node.data,
-          attachments: node.data.attachments.filter((attachment) => attachment.id !== attachmentId),
-          bodyImageAnchors: removeImageAnchor(node.data.bodyImageAnchors, attachmentId)
+          attachments: node.data.attachments.filter((attachment) => attachment.id !== attachmentId)
         }
       }));
       if (next.currentPageChanged) state.commitCanvasChange({ nodes: next.nodes });

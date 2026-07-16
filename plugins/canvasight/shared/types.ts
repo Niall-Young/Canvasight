@@ -92,15 +92,9 @@ export interface AttachmentInput {
   bytes?: ArrayBuffer;
 }
 
-export interface BodyImageAnchor {
-  attachmentId: string;
-  offset: number;
-}
-
 export interface ScatterNodeData extends Record<string, unknown> {
   title: string;
   body: string;
-  bodyImageAnchors?: BodyImageAnchor[];
   attachments: Attachment[];
   effort: EffortLevel;
   runMode: RunMode;

@@ -153,7 +153,6 @@ Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasigh
 - `npm run check:mcp-bundle` rebuilds the MCP entry in memory and fails if the committed `mcp/server.mjs` is stale.
 - `npm run preview` previews the built web app.
 - `npm run test:markdown` verifies node Run Markdown includes the current node plus downstream children in stable order.
-- `npm run test:rich-content` verifies rich-node parsing and byte-preserving serialization, including ASCII/full-width code fences, cross-style opening and closing, and unclosed-fence fallback.
 - `npm run test:skills` verifies `$` query detection, fuzzy Chinese/name matching, token replacement, and multiple node-body Skill tokens.
 - `npm run test:dev-server` verifies the persistent dev server lifecycle.
 - `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts, concurrent daemon single-flight, stdout-close/EPIPE handling, and newline plus `Content-Length` JSON-RPC transports.
