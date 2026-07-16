@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: medium
-version: 1
+version: 2
 agent_id: /root/development_agent
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T11:59:10Z
-updated_at: 2026-07-16T12:01:20Z
+updated_at: 2026-07-16T12:16:49Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/components/FrameworkQuestionsCard.tsx
@@ -18,17 +18,17 @@ related_files:
   - plugins/canvasight/tests/widget-runtime-smoke.mjs
 verification_status: passed
 verification_evidence:
-  - Production build and composed widget runtime smoke passed.
-  - Playwright verified light, dark, 760px, and 360px layouts without horizontal overflow.
-  - Responsive smoke now requires a compact card, single-column choices, no overflow, and full-width narrow submit action.
+  - JSX now directly reuses KitButton, assistant-provider-card, settings-dialog-input, and kit-checkbox visual primitives from the original Canvasight workspace.
+  - Production build, composed widget runtime, clean distribution, and plugin validation passed.
+  - Playwright verified the black KitButton, provider-card selection, settings input, light/dark themes, and 760px/360px layouts.
 solution_report: agent-reports/resolved/solution-framework-questions-visual-redesign.md
 ---
 
-# 框架提问表单视觉过重且层级杂乱
+# 框架提问表单未复用 Canvasight 组件语言
 
 ## TL;DR
 
-现有内联提问表单呈现为大圆角设置页，并在卡片中重复嵌套选项卡，信息密度和消息流场景不匹配。
+首轮紧凑化改造仍使用蓝色旧 Button 和 framework 专属选择样式，没有复用 Canvasight / Scatter 已有的黑色 KitButton 与 kit 组件语言。
 
 ## 发现者
 
@@ -44,14 +44,13 @@ Development Agent
 
 ## 问题描述
 
-用户在真实 `ask_canvasight_framework_questions` 组件中确认当前样式后，明确反馈“太丑了”。审查发现实现偏离 `design.md` 已定义的紧凑对话确认面板基线。
+用户在真实 `ask_canvasight_framework_questions` 组件中先后确认原始样式与首轮改造，明确指出首轮结果仍与 Canvasight 组件不一致，并要求直接照搬 Canvasight / Scatter 已有组件。
 
 ## 现象
 
-- 760px 宽、18px 大圆角和明显阴影让组件像独立设置页。
-- 选项使用多列嵌套卡片，长说明阅读拥挤并形成“卡中卡”。
-- 大写眉题、圆形序号、灰底 textarea 与 64px footer 增加装饰和松散感。
-- 成功后仍保留整张 disabled 表单，答案摘要不够直接。
+- 提交仍使用旧 `Button variant="primary"`，因此是蓝色按钮，而非 Canvasight dialogs 的黑色 `KitButton`。
+- 选中态、推荐 badge、focus ring 和 disabled button 都是 framework 专属蓝色规则。
+- 首轮新增蓝点、题数和两位数序号，但这些并不存在于 Canvasight / Scatter 组件家族。
 
 ## 复现方式
 
@@ -65,13 +64,13 @@ Development Agent
 
 ## 证据
 
-- 用户直接反馈当前表单样式不可接受。
-- Design Agent 与 Development Agent 独立审查均定位到宽度、大圆角、多列选项和嵌套卡片问题。
-- Playwright 初始预览复现了消息内设置页观感。
+- 用户明确指出 Canvasight 使用黑色按钮，并要求复用已有命名组件。
+- `79edfb9` 已提供 `KitButton`、`assistant-provider-card`、`kit-checkbox` 与 settings input 视觉。
+- computed style 证明首轮按钮来自旧 `.ui-button-primary`，而非 `.kit-button.is-filled`。
 
 ## 初步归因
 
-实现沿用了较宽、较松的面板表达，没有严格落实 `design.md` 已要求的紧凑单列对话组件。
+首轮只按视觉直觉重画了 framework 专属 CSS，没有先审计 `components/ui/*` 与原 Scatter 迁移提交，因而选错了旧 Button 家族并新造了一套选择态。
 
 ## 交付给哪个 Agent
 
@@ -90,7 +89,7 @@ Development Agent
 
 ## 期望结果
 
-表单成为更窄、更紧凑、单列、低装饰的对话确认面板；选中、输入、发送和成功摘要状态清晰，深浅主题与窄屏均无溢出。
+表单直接使用 Canvasight 的黑色 KitButton、provider selection card、kit checkbox 和 settings input 语言；不再保留 framework 专属蓝色视觉。
 
 ## Closure Criteria
 
@@ -106,7 +105,7 @@ resolved
 
 ## 处理结果
 
-已完成视觉重构并通过构建、浏览器运行时和响应式可视验证。
+已按用户反馈纠正首轮方案，直接复用 Canvasight / Scatter 现有组件与类，并通过构建、运行时和浏览器同源验证。
 
 ## 修改文件
 

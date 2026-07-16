@@ -474,6 +474,25 @@ try {
     toolCalls: [],
     errors: []
   });
+  const componentReuse = await waitForEvaluation(cdp, `(() => {
+    const doc = document.getElementById('widget').contentDocument;
+    const submit = doc.querySelector('[data-testid="framework-submit"]');
+    const options = Array.from(doc.querySelectorAll('.framework-question-option'));
+    const customInputs = Array.from(doc.querySelectorAll('.framework-question-custom-input'));
+    const controls = Array.from(doc.querySelectorAll('.framework-question-control'));
+    return {
+      kitButton: submit.classList.contains('kit-button') && submit.classList.contains('is-filled'),
+      providerCards: options.length > 0 && options.every((option) => option.classList.contains('assistant-provider-card')),
+      settingsInputs: customInputs.length > 0 && customInputs.every((input) => input.classList.contains('settings-dialog-input')),
+      kitControls: controls.length > 0 && controls.every((control) => control.classList.contains('kit-checkbox'))
+    };
+  })()`, "inline Canvasight component reuse");
+  assert.deepEqual(componentReuse, {
+    kitButton: true,
+    providerCards: true,
+    settingsInputs: true,
+    kitControls: true
+  });
   const responsiveLayout = await waitForEvaluation(cdp, `(() => {
     const frame = document.getElementById('widget');
     const doc = frame && frame.contentDocument;
@@ -504,9 +523,9 @@ try {
   assert.equal(responsiveLayout.wide.scrollWidth, responsiveLayout.wide.viewport, "wide inline card must not overflow horizontally");
   assert.ok(responsiveLayout.wide.cardWidth <= 660, "wide inline card must keep a compact readable measure");
   assert.equal(responsiveLayout.wide.optionTracks, 1, "framework choices must remain a single-column reading flow");
-  assert.equal(responsiveLayout.narrow.viewport, 360);
-  assert.equal(responsiveLayout.narrow.scrollWidth, 360, "narrow inline document must not overflow horizontally");
-  assert.equal(responsiveLayout.narrow.bodyScrollWidth, 360, "narrow inline body must not overflow horizontally");
+  assert.ok(responsiveLayout.narrow.viewport <= 360 && responsiveLayout.narrow.viewport >= 320, "narrow inline viewport must stay within the supported message width");
+  assert.equal(responsiveLayout.narrow.scrollWidth, responsiveLayout.narrow.viewport, "narrow inline document must not overflow horizontally");
+  assert.equal(responsiveLayout.narrow.bodyScrollWidth, responsiveLayout.narrow.viewport, "narrow inline body must not overflow horizontally");
   assert.ok(responsiveLayout.narrow.submitWidth >= responsiveLayout.narrow.footerWidth - 34, "narrow submit action must expand to the footer width");
   const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
     const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');

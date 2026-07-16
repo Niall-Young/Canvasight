@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactElement } from "react";
-import { Button } from "./ui/button";
+import { KitButton } from "./ui/kit-button";
 import {
   buildFrameworkConfirmationMessage,
   type FrameworkQuestionAnswer,
@@ -45,8 +45,8 @@ function restoredSubmission(payload: FrameworkQuestionsPayload): FrameworkQuesti
 
 export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestionsPayload }): ReactElement {
   const copy = payload.language === "en"
-    ? { custom: "Custom answer", recommended: "Recommended", submit: "Confirm and continue", sending: "Sending…", retry: "Retry", sent: "Answers sent. Continuing in this task.", failed: "Could not send. Your selections are preserved; retry when ready.", questionCount: `${payload.questions.length} ${payload.questions.length === 1 ? "question" : "questions"}` }
-    : { custom: "自定义答案", recommended: "推荐", submit: "确认并继续", sending: "正在发送…", retry: "重试", sent: "答案已发送，将在当前任务中继续。", failed: "发送失败，已保留选择，请重试。", questionCount: `${payload.questions.length} 个问题` };
+    ? { custom: "Custom answer", recommended: "Recommended", submit: "Confirm and continue", sending: "Sending…", retry: "Retry", sent: "Answers sent. Continuing in this task.", failed: "Could not send. Your selections are preserved; retry when ready." }
+    : { custom: "自定义答案", recommended: "推荐", submit: "确认并继续", sending: "正在发送…", retry: "重试", sent: "答案已发送，将在当前任务中继续。", failed: "发送失败，已保留选择，请重试。" };
   const restoredRef = useRef<FrameworkQuestionAnswer[] | null>(restoredSubmission(payload));
   const [answers, setAnswers] = useState<Record<string, DraftAnswer>>(() => initialAnswers(payload, restoredRef.current));
   const [submittedAnswers, setSubmittedAnswers] = useState<FrameworkQuestionAnswer[] | null>(restoredRef.current);
@@ -134,25 +134,22 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
     <main className="framework-questions-shell" data-testid="framework-questions">
       <form className="framework-questions-card" data-state={submissionState} onSubmit={submit}>
         <header className="framework-questions-header">
-          <div className="framework-questions-meta">
-            <p className="framework-questions-eyebrow"><span aria-hidden="true" />Canvasight</p>
-            <span className="framework-questions-count">{copy.questionCount}</span>
-          </div>
+          <p className="framework-questions-eyebrow">Canvasight</p>
           <h2>{payload.title}</h2>
           {payload.description ? <p>{payload.description}</p> : null}
         </header>
         {submissionState !== "sent" ? <div className="framework-questions-list">
-          {payload.questions.map((question, index) => {
+          {payload.questions.map((question) => {
             const answer = answers[question.id] ?? { selectedOptionIds: [], customAnswer: "" };
             const inputType = question.selectionMode === "single" ? "radio" : "checkbox";
             return (
               <fieldset key={question.id} className="framework-question" data-testid={`framework-question-${question.id}`} disabled={submissionState === "sending"}>
-                <legend><span>{String(index + 1).padStart(2, "0")}</span>{question.question}</legend>
+                <legend>{question.question}</legend>
                 <div className="framework-question-options">
                   {question.options.map((option) => {
                     const checked = answer.selectedOptionIds.includes(option.id);
                     return (
-                      <label key={option.id} className={`framework-question-option${checked ? " is-selected" : ""}`}>
+                      <label key={option.id} className={`assistant-provider-card framework-question-option${checked ? " is-selected" : ""}`}>
                         <input
                           type={inputType}
                           name={`framework-${payload.confirmationId}-${question.id}`}
@@ -160,10 +157,14 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
                           checked={checked}
                           onChange={(event) => setOption(question.id, option.id, event.currentTarget.checked, question.selectionMode === "single")}
                         />
-                        <span className="framework-question-control" aria-hidden="true" />
-                        <span className="framework-question-option-copy">
-                          <span className="framework-question-option-title">{option.label}{option.recommended ? <span className="framework-question-recommended">{copy.recommended}</span> : null}</span>
-                          {option.description ? <span className="framework-question-option-description">{option.description}</span> : null}
+                        <span className={`kit-checkbox framework-question-control${checked ? " is-checked" : ""}${inputType === "radio" ? " is-radio" : ""}`} aria-hidden="true">
+                          <svg className="kit-checkbox-check" viewBox="0 0 8 6" fill="none">
+                            <path d="M1 3L3 5L7 1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                        <span className="assistant-provider-card-copy framework-question-option-copy">
+                          <span className="assistant-provider-card-title framework-question-option-title">{option.label}{option.recommended ? <span className="framework-question-recommended"> · {copy.recommended}</span> : null}</span>
+                          {option.description ? <span className="assistant-provider-card-description framework-question-option-description">{option.description}</span> : null}
                         </span>
                       </label>
                     );
@@ -172,6 +173,7 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
                 <label className={`framework-question-custom${answer.customAnswer.trim() ? " is-active" : ""}`}>
                   <span>{question.customAnswerLabel || copy.custom}</span>
                   <textarea
+                    className="settings-dialog-input framework-question-custom-input"
                     rows={2}
                     value={answer.customAnswer}
                     placeholder={question.customAnswerLabel || copy.custom}
@@ -192,9 +194,9 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
             ) : submissionState === "failed" ? `${copy.failed}${error ? ` ${error}` : ""}` : ""}
           </div>
           {submissionState !== "sent" ? (
-            <Button type="submit" variant="primary" disabled={!isComplete || submissionState === "sending"} aria-busy={submissionState === "sending"} data-testid="framework-submit">
+            <KitButton className="framework-questions-submit" type="submit" filled size="md" disabled={!isComplete || submissionState === "sending"} aria-busy={submissionState === "sending"} data-testid="framework-submit">
               {submissionState === "sending" ? copy.sending : submissionState === "failed" ? copy.retry : copy.submit}
-            </Button>
+            </KitButton>
           ) : null}
         </footer>
       </form>

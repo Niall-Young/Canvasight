@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 2
+version: 3
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:01:20Z
-updated_at: 2026-07-16T12:05:03Z
+updated_at: 2026-07-16T12:16:49Z
 depends_on:
   - issue-framework-questions-visual-redesign
   - solution-framework-questions-visual-redesign
@@ -24,21 +24,22 @@ verification_evidence:
   - TypeScript, production build, composed widget runtime, and MCP bundle checks passed.
   - Playwright verified light, dark, desktop, mobile, single-column, no-overflow, and full-width narrow submit behavior.
   - Clean plugin distribution and plugin validation passed; the global Agent Team validator remains blocked by pre-existing legacy report, template, and QUEUE debt outside this delivery.
+  - User rejected the first custom visual pass; the corrected pass directly reuses Canvasight KitButton, provider-card, settings-input, and kit-checkbox selectors from the original workspace migration.
 ---
 
-# 框架提问表单视觉重构集成总结
+# 框架提问表单 Canvasight 组件复用集成总结
 
 ## 本轮目标
 
-- 将用户认为过于丑陋的框架提问表单重构为紧凑、清晰的对话确认面板。
+- 撤销用户否定的自创蓝色视觉，直接复用 Canvasight / Scatter 已有组件语言。
 - 保留提问、选择、提交、防重、bridge 和 Graph Writer 工作合同。
 
 ## Agent 状态
 
 - Product Agent：Main Thread 代行，冻结为纯 inline UI 改造，不扩大到 MCP/Graph Writer 合同。
-- Design Agent：完成视觉审查，确认实现应回归现有 `design.md`。
-- Development Agent：完成最小改造边界与行为合同审查。
-- Test Supervisor Agent：完成验证矩阵和 native-host 边界审查。
+- Design Agent：回溯原 Scatter 迁移提交并定位可复用 primitives。
+- Development Agent：完成组件可复用边界和原生表单语义审查。
+- Test Supervisor Agent：完成 selector/computed-style 同源验收标准。
 - Customer Support Agent：Main Thread 代行，判断 README 无需更新。
 - Design Standards Expert：Main Thread 结合 Design Agent 结论代行，`design.md` 无需更新。
 - Development Standards Lead：Main Thread 代行，本轮没有 durable process change，`AGENTS.md` 无需更新。
@@ -47,9 +48,9 @@ verification_evidence:
 
 ## Agent 输入
 
-- Design Agent：收窄面板、6–8px 圆角、单列选项、弱化卡中卡、明确输入和稳定 footer。
-- Development Agent：只触碰组件、共享 CSS、测试与构建产物，保留表单和 bridge 合同。
-- Test Supervisor Agent：先 build 再跑 widget runtime，补齐响应式和浏览器可视证据；不以浏览器 smoke 关闭既有 native-host blocker。
+- Design Agent：黑色主按钮必须直接用 KitButton；选择卡用 provider-card；checkbox/input 用 kit/settings 家族。
+- Development Agent：仓库没有通用 Radio/Textarea/Badge，因此保留原生语义并复用已有 selectors，不伪造不存在的 import。
+- Test Supervisor Agent：任何 framework 专属视觉值都必须能指向一个既有 selector/token。
 
 ## 报告状态变更
 
@@ -59,9 +60,9 @@ verification_evidence:
 
 ## 已解决
 
-- 大圆角宽面板、装饰性眉题和圆形序号。
-- 多列嵌套选项卡与灰底输入造成的设置页观感。
-- 窄屏按钮宽度、横向溢出和成功态摘要可读性。
+- 首轮误用蓝色 Button 和 framework 专属选择态。
+- 蓝点、题数、两位数编号、蓝色推荐 badge 与自定义 disabled/focus 规则。
+- Canvasight 组件同源性缺少自动化证据。
 
 ## 未解决
 
@@ -77,9 +78,9 @@ verification_evidence:
 
 ## 已完成改动
 
-- 重构 FrameworkQuestionsCard 的元信息、发送态与成功摘要呈现。
-- 重写 inline 表单 CSS 为 660px 紧凑单列布局并同步深浅主题和移动端。
-- 增加运行时响应式无溢出回归断言并重建 `dist`。
+- FrameworkQuestionsCard 直接使用 KitButton、provider-card、settings-input 与 kit-checkbox classes。
+- inline CSS 只保留布局和原生 radio 适配，选择/按钮/输入状态回归既有 Canvasight 家族。
+- widget runtime 增加组件复用断言并重建 `dist`。
 
 ## 处理结果
 
@@ -111,7 +112,7 @@ verification_evidence:
 
 - typecheck / build：passed。
 - widget runtime：passed，含新增 760px / 360px 响应式断言。
-- Playwright：light / dark / mobile 截图 passed；760px 与 360px 均无横向 overflow。
+- Playwright：light / dark / mobile 截图 passed；760px 与 360px 均无横向 overflow；KitButton computed background 为 `rgb(31, 31, 31)`，provider card 和 settings input 值与既有 selector 一致。
 - distribution / plugin：passed，16 tools、无 node_modules/cache，plugin validator passed。
 - Agent Team validator：因既有 legacy 根报告缺 frontmatter、旧模板 schema 和 QUEUE 债务失败；本轮新增报告字段完整，未改写这些历史文件。
 
