@@ -38,6 +38,62 @@ try {
   const parts = parseRichNodeContent(body, undefined, []);
   assert.equal(serializeRichNodeParts(parts), body, "semantic parsing must preserve the body byte-for-byte");
   assert.equal(parts.filter((part) => part.type === "code").length, 1, "only closed fences become code blocks");
+  const fullWidthFenceBody = ["｀｀｀ts", "const 全角 = true;", "｀｀｀"].join("\n");
+  const fullWidthFenceParts = parseRichNodeContent(fullWidthFenceBody, undefined, []);
+  assert.equal(
+    fullWidthFenceParts.filter((part) => part.type === "code").length,
+    1,
+    "full-width backticks form a fenced code block"
+  );
+  assert.equal(
+    serializeRichNodeParts(fullWidthFenceParts),
+    fullWidthFenceBody,
+    "full-width fences preserve the original body text"
+  );
+  for (const mixedFenceBody of [
+    ["```js", "const mixed = true;", "｀｀｀"].join("\n"),
+    ["｀｀｀js", "const reversed = true;", "```"].join("\n")
+  ]) {
+    const mixedFenceParts = parseRichNodeContent(mixedFenceBody, undefined, []);
+    assert.equal(
+      mixedFenceParts.filter((part) => part.type === "code").length,
+      1,
+      "ASCII and full-width opening/closing fences form one code block in either direction"
+    );
+    assert.equal(
+      serializeRichNodeParts(mixedFenceParts),
+      mixedFenceBody,
+      "mixed fences preserve the original body text"
+    );
+  }
+  for (const internallyMixedFence of [
+    ["｀`｀js", "const invalidOpening = true;", "```"].join("\n"),
+    ["```js", "const invalidClosing = true;", "``｀"].join("\n")
+  ]) {
+    const internallyMixedParts = parseRichNodeContent(internallyMixedFence, undefined, []);
+    assert.equal(
+      internallyMixedParts.every((part) => part.type === "text"),
+      true,
+      "a fence line with internally mixed backticks remains plain text"
+    );
+    assert.equal(
+      serializeRichNodeParts(internallyMixedParts),
+      internallyMixedFence,
+      "an internally mixed fence preserves the original body text"
+    );
+  }
+  const unclosedFullWidthFence = "｀｀｀swift\nlet value = 1";
+  const unclosedFullWidthParts = parseRichNodeContent(unclosedFullWidthFence, undefined, []);
+  assert.equal(
+    unclosedFullWidthParts.every((part) => part.type === "text"),
+    true,
+    "an unclosed full-width fence remains plain text"
+  );
+  assert.equal(
+    serializeRichNodeParts(unclosedFullWidthParts),
+    unclosedFullWidthFence,
+    "an unclosed full-width fence preserves the original body text"
+  );
   assert.deepEqual(
     parts.filter((part) => part.type === "mention").map((part) => [part.raw, part.mentionKind]),
     [["@canvasight", "plugin"], ["$canvasight-agent-team", "skill"]]

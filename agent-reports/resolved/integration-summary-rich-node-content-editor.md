@@ -6,13 +6,14 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 5
+version: 7
 agent_id: /root
 thread_id: 019f6962-a3bf-76c3-b08d-a8d81c6134d9
 created_at: 2026-07-16T06:45:45Z
-updated_at: 2026-07-16T07:16:37Z
+updated_at: 2026-07-16T08:01:47Z
 depends_on:
   - issue-rich-node-content-editor
+  - solution-rich-node-content-fullwidth-fence
 related_files:
   - design.md
   - plugins/canvasight/README.md
@@ -36,8 +37,10 @@ verification_evidence:
   - The integration summary was reconciled against issue-rich-node-content-editor v6 and all linked role solution reports.
   - Automated, build, plugin, browser-visible, native-host, and Git evidence are recorded separately without promoting the failed native gate to a passed delivery.
   - The authoritative issue remains assigned with verification_status failed because accepted-instance native Widget evidence is missing.
-  - Project Management re-reviewed the installed 0.4.22 scope, confirmed an empty index, and retained the documented no-commit exception because lifecycle has zero 0.4.22 ready records.
-  - Final git diff --check and unmerged-path checks passed, the index remained empty, and the repository-wide Agent Team validator still failed only on pre-existing legacy reports/templates and the legacy QUEUE list format.
+  - After explicit user authorization, Project Management completed a three-commit split with selective staging and cached name/stat/check review before every commit.
+  - output/, .playwright-cli/, and the unrelated AGENTS.md Agent Team block remained unstaged; the repository-wide Agent Team validator still failed only on pre-existing legacy reports/templates and the legacy QUEUE list format.
+  - User-confirmed full-width fence compatibility was implemented, documented, browser-verified, packaged and installed as 0.4.23 without changing the original body or Run text.
+  - Exact-version 0.4.23 native-host acceptance remains unverified until Codex Desktop is fully restarted, so the authoritative issue remains assigned / failed.
 ---
 
 # 节点富内容所见即所得集成总结
@@ -57,7 +60,7 @@ verification_evidence:
 - Test Supervisor Agent：完成测试矩阵、浏览器可见验收和 `0.4.22` 安装缓存校验；重启后的原生 accepted-instance 仍未执行。
 - Customer Support Agent：已更新中英文 README，说明新能力、legacy 图片 chip、最低版本、自动触发和旧快照排障。
 - Development Standards Lead：确认无需新增 durable 工程规则；`AGENTS.md` 的既有用户改动保持在任务范围之外。
-- Project Management Agent：在 `0.4.22` 安装后重新审查完整候选；因原生门禁仍未完成，继续采用允许的不提交闭环，暂存区为空且没有 commit。
+- Project Management Agent：在用户明确授权后完成三个定向提交，并保护验证工件与无关用户改动。
 - Skill Expert Agent：本轮没有修改 Canvasight Skill 文件；Main Thread 仅按节点映射应用 Skill 边界，没有扩展到其他节点。
 
 ## Agent 输入
@@ -115,7 +118,7 @@ verification_evidence:
 - `issue-rich-node-content-editor`：保持 `assigned`，已由 Development Agent 乐观更新至 v6。
 - product、design、design-baseline、development、versioned-snapshot、test-plan、verification、0.4.22 verification、docs、version-trigger docs 与 development-standards solution reports：均为 `resolved`。
 - 本 integration summary：`resolved`，只表示集成证据已准确汇总，不表示权威 issue 或 native gate 已关闭。
-- `solution-rich-node-content-git-closure` 已乐观更新至 v2，记录安装后范围与 no-commit 终态。
+- `solution-rich-node-content-git-closure` v2 保留用户提交授权前的历史 no-commit 决策；本 integration summary 记录后续三提交闭环。
 
 ## 回写状态
 
@@ -127,5 +130,14 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `bfc95f3019f1847be94f850acca0bbfd81e4d670`
-- commit: 无；Project Management Agent 已完成安装后复审，因 native 门禁仍未完成而保持空暂存区。
-- worktree: task-owned 实现、报告、设计、README 与构建产物均未暂存；pre-existing `AGENTS.md` 和 Playwright 工件明确排除。
+- commits: `c383384ace5f741a27e8d513006f4202d51412e9` (主体实现)、`74826dc38f147aed973c3ae0d488aae116bbe3df` (0.4.22 快照)、以及本 summary 所在的第三个中英文围栏兼容提交；第三个最终 hash 由交付消息记录。
+- worktree: task-owned 改动已提交；`output/`、`plugins/canvasight/.playwright-cli/` 与 `AGENTS.md` 无关 Agent Team block 明确排除。
+
+## 0.4.23 输入法兼容补充
+
+- 用户确认中文输入法不应成为代码围栏的使用障碍；三个 ASCII 反引号与三个全角反引号现在都属于显式围栏语法。
+- 每一条围栏行内部必须使用三个同形字符，开启与关闭行允许跨半角/全角样式；内部混排和未闭合输入无损回退纯文本。
+- 解析只驱动所见即所得呈现，保存、Run、导出、复制和撤销/重做均保留原始字符，不做半角/全角归一化。
+- Product、Development、Test、Customer Support、Design Standards 与 Development Standards 角色完成本轮审查；Skill 文件未变化，Design Agent 的既有视觉合同不受影响。
+- `test:rich-content`、typecheck、build、Markdown/导出/Skill/并发/widget supporting smoke、MCP bundle、`release:verify -- 0.4.23`、clean distribution 与 Playwright 即时渲染验证均通过。
+- `canvasight@canvasight-local 0.4.23` 已安装；运行中的 Desktop 不能热刷新该版本，因此 issue v7 继续等待重启后的 exact-version native accepted-instance。

@@ -68,7 +68,7 @@ function parseInline(value: string): RichNodePart[] {
 
 function parseTextAndCode(value: string): RichNodePart[] {
   const parts: RichNodePart[] = [];
-  const openingFence = /^```([^\n`]*)\r?\n/gmu;
+  const openingFence = /^(?:```|｀｀｀)([^\n`｀]*)\r?\n/gmu;
   let offset = 0;
 
   while (offset < value.length) {
@@ -80,7 +80,7 @@ function parseTextAndCode(value: string): RichNodePart[] {
     }
 
     if (opening.index > offset) parts.push(...parseInline(value.slice(offset, opening.index)));
-    const closingFence = /^```[ \t]*(?:\r?\n|$)/gmu;
+    const closingFence = /^(?:```|｀｀｀)[ \t]*(?:\r?\n|$)/gmu;
     closingFence.lastIndex = openingFence.lastIndex;
     const closing = closingFence.exec(value);
     if (!closing) {

@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-rich-node-content-editor` | assigned | high | Development Agent | 节点富内容所见即所得 | `agent-reports/assigned/issue-rich-node-content-editor.md` | 6 | 2026-07-16T07:16:37Z
+- `issue-rich-node-content-editor` | assigned | high | Development Agent | 节点富内容所见即所得 | `agent-reports/assigned/issue-rich-node-content-editor.md` | 8 | 2026-07-16T08:01:47Z
 - `issue-inline-framework-questions` | blocked | high | Test Supervisor Agent | 消息内框架确认组件 | `agent-reports/assigned/issue-inline-framework-questions.md` | 3 | 2026-07-14T05:56:32Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z

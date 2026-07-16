@@ -78,6 +78,7 @@ The node body is one lightweight rich-content surface for both reading and editi
 #### Fenced Code Blocks
 
 - A complete triple-backtick fence becomes an independent `pre > code` block with a sunken surface, divider border, medium radius, a system monospace stack, and preserved whitespace. An optional language label is quiet metadata, not syntax highlighting or an IDE toolbar.
+- Fence recognition must be independent of the active Chinese or English input method: three ASCII backticks (`` ` ``) or three full-width backticks (`｀`) form a fence. The three characters within each opening or closing marker must use one form, but the opening and closing markers may use different forms so switching input methods while editing remains valid. Recognition must not normalize, replace, or otherwise alter the user-authored marker characters in stored body text, Run output, export, copy, undo/redo, or fallback rendering.
 - Code remains directly editable in the same surface. Decorative language labels and controls must not enter copied code. Long lines use code-local horizontal scrolling with `white-space: pre`; they must not expand the node or create page-level overflow.
 - Empty blocks, multiple blocks, backticks inside code, and text adjacent to IME input remain lossless. An incomplete fence stays ordinary editable text rather than becoming a partial component.
 
