@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 3
+version: 4
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:01:20Z
-updated_at: 2026-07-16T12:16:49Z
+updated_at: 2026-07-16T12:19:54Z
 depends_on:
   - issue-framework-questions-visual-redesign
   - solution-framework-questions-visual-redesign
@@ -43,7 +43,7 @@ verification_evidence:
 - Customer Support Agent：Main Thread 代行，判断 README 无需更新。
 - Design Standards Expert：Main Thread 结合 Design Agent 结论代行，`design.md` 无需更新。
 - Development Standards Lead：Main Thread 代行，本轮没有 durable process change，`AGENTS.md` 无需更新。
-- Project Management Agent：完成 12 个批准路径的只读审查、选择性暂存、staged diff 检查和实现提交。
+- Project Management Agent：完成纠正轮 12 个批准路径的只读审查、选择性暂存、staged diff 检查和实现提交。
 - Skill Expert Agent：Main Thread 代行，未改 Skills。
 
 ## Agent 输入
@@ -131,5 +131,6 @@ verification_evidence:
 - branch: `main`
 - baseline: `67408c6b9f0d0d08b75762ba2b668adb8f72470b`
 - implementation commit: `5ab3345467e29138ca54bfcad7535cc94c82fe9a` (`fix: 优化框架提问表单样式`)
+- corrective implementation commit: `1e63625f7bbbb916eb43c84df8a6240479602332` (`fix: 复用 Canvasight 框架提问组件样式`)
 - staged verification: explicit pathspec, name-only/stat/check passed
-- post-implementation worktree: clean before this evidence write-back
+- post-corrective-implementation worktree: clean before this evidence write-back
