@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T13:19:57Z
-    handoff_source: integration-summary-replace-brand-logo
-    last_report: integration-summary-replace-brand-logo
+    last_seen: 2026-07-16T08:35:27Z
+    handoff_source: issue-publish-stable-release-0-4-24
+    last_report: integration-summary-canvasight-0-4-24-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed the minimal PNG asset replacement and generated favicon scope; no runtime or manifest contract changed
+    notes: Audited the normal-history rollback and exact 0.4.24 versioned snapshot scope; runtime thread id unavailable
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T13:19:57Z
-    handoff_source: integration-summary-replace-brand-logo
-    last_report: integration-summary-replace-brand-logo
+    last_seen: 2026-07-16T08:35:27Z
+    handoff_source: issue-publish-stable-release-0-4-24
+    last_report: integration-summary-canvasight-0-4-24-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined build, plugin validation, asset integrity, and browser-visible favicon checks for the logo replacement
+    notes: Passed the 0.4.24 Node 20.19 local release matrix and defined native plus post-publication acceptance; runtime thread id unavailable
   - role: Customer Support Agent
     status: inactive
     agent_id: /root/customer_support_agent
@@ -85,9 +85,9 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T08:27:13Z
+    last_seen: 2026-07-16T08:35:27Z
     handoff_source: issue-publish-stable-release-0-4-24
-    last_report: issue-publish-stable-release-0-4-24
+    last_report: integration-summary-canvasight-0-4-24-release-candidate
     rebuild_on_new_thread: true
     replaced_by: null
     notes: Owns scoped Git closure and remote release sequencing for the user-authorized 0.4.24 rollback release; runtime thread id unavailable
