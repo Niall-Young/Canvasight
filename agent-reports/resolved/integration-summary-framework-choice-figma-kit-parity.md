@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 8
+version: 9
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:42:15Z
-updated_at: 2026-07-16T12:58:54Z
+updated_at: 2026-07-16T13:00:27Z
 depends_on:
   - issue-framework-choice-figma-kit-parity
   - solution-framework-choice-figma-kit-parity
@@ -139,4 +139,6 @@ verification_evidence:
 - staged verification: 13 approved physical paths, explicit pathspec, cached name-only/stat/check passed; Playwright output excluded
 - post-implementation worktree: clean before this evidence write-back
 - follow-up textarea baseline: `aa223801bf66adab12515949a61939fae07e87e5`
-- follow-up planned commit: `fix: 修正框架提问输入框背景`
+- textarea follow-up commit: `c895c6a5de20421614d3e91892b5d8716e3f2a77` (`fix: 修正框架提问输入框背景`)
+- textarea staged verification: 12 approved physical paths, explicit pathspec, cached name-only/stat/check passed; Playwright output excluded
+- post-textarea-implementation worktree: clean before this evidence write-back
