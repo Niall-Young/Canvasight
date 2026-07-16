@@ -371,7 +371,7 @@ try {
         question: "Which scope should the framework cover?",
         selectionMode: "single",
         options: [
-          { id: "product", label: "Product only", recommended: true },
+          { id: "product", label: "Product only", description: "Keep the framework focused on product responsibilities.", recommended: true },
           { id: "delivery", label: "Product and delivery" }
         ],
         customAnswerLabel: "Another scope"
@@ -380,7 +380,7 @@ try {
         question: "Which dimensions must stay explicit?",
         selectionMode: "multiple",
         options: [
-          { id: "roles", label: "Roles", recommended: true },
+          { id: "roles", label: "Roles", description: "Keep ownership explicit across the framework.", recommended: true },
           { id: "stages", label: "Stages" },
           { id: "risks", label: "Risks" }
         ],
@@ -493,6 +493,70 @@ try {
     settingsInputs: true,
     kitControls: true
   });
+  const figmaChoiceContract = await waitForEvaluation(cdp, `(() => {
+    const doc = document.getElementById('widget').contentDocument;
+    const resolveColor = (variable) => {
+      const probe = doc.createElement('span');
+      probe.style.color = \`var(\${variable})\`;
+      doc.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    const inspect = (type) => {
+      const input = doc.querySelector(\`input[type="\${type}"]\`);
+      const item = input.closest('.framework-question-option');
+      const control = item.querySelector('.framework-question-control');
+      const content = item.querySelector('.framework-question-option-copy');
+      const heading = item.querySelector('.framework-question-option-title');
+      const description = item.querySelector('.framework-question-option-description');
+      const itemStyle = getComputedStyle(item);
+      const controlStyle = getComputedStyle(control);
+      return {
+        itemBackground: itemStyle.backgroundColor,
+        itemBorder: [itemStyle.borderTopWidth, itemStyle.borderTopColor],
+        itemRadius: itemStyle.borderRadius,
+        itemPadding: [itemStyle.paddingTop, itemStyle.paddingRight, itemStyle.paddingBottom, itemStyle.paddingLeft],
+        itemGap: itemStyle.gap,
+        itemShadow: itemStyle.boxShadow,
+        controlSize: [controlStyle.width, controlStyle.height],
+        controlBorder: controlStyle.borderTopWidth,
+        controlBorderColor: controlStyle.borderTopColor,
+        controlRadius: controlStyle.borderRadius,
+        controlTopOffset: controlStyle.marginTop,
+        contentGap: getComputedStyle(content).gap,
+        headingType: [getComputedStyle(heading).fontSize, getComputedStyle(heading).lineHeight],
+        descriptionType: [getComputedStyle(description).fontSize, getComputedStyle(description).lineHeight]
+      };
+    };
+    return {
+      colors: {
+        input: resolveColor('--color-background-input'),
+        connecting: resolveColor('--color-border-connecting'),
+        dark: resolveColor('--color-background-dark'),
+        inverted: resolveColor('--color-inverted')
+      },
+      checkbox: inspect('checkbox'),
+      radio: inspect('radio')
+    };
+  })()`, "Figma choice item contract");
+  for (const choice of [figmaChoiceContract.checkbox, figmaChoiceContract.radio]) {
+    assert.equal(choice.itemBackground, figmaChoiceContract.colors.input);
+    assert.deepEqual(choice.itemBorder, ["1px", "rgba(0, 0, 0, 0)"]);
+    assert.equal(choice.itemRadius, "12px");
+    assert.deepEqual(choice.itemPadding, ["12px", "16px", "12px", "16px"]);
+    assert.equal(choice.itemGap, "12px");
+    assert.equal(choice.itemShadow, "none");
+    assert.deepEqual(choice.controlSize, ["16px", "16px"]);
+    assert.equal(choice.controlBorder, "2px");
+    assert.equal(choice.controlBorderColor, figmaChoiceContract.colors.connecting);
+    assert.equal(choice.controlTopOffset, "3px");
+    assert.equal(choice.contentGap, "2px");
+    assert.deepEqual(choice.headingType, ["14px", "22px"]);
+    assert.deepEqual(choice.descriptionType, ["14px", "22px"]);
+  }
+  assert.equal(figmaChoiceContract.checkbox.controlRadius, "6px");
+  assert.equal(figmaChoiceContract.radio.controlRadius, "99999px");
   const responsiveLayout = await waitForEvaluation(cdp, `(() => {
     const frame = document.getElementById('widget');
     const doc = frame && frame.contentDocument;
@@ -572,6 +636,136 @@ try {
   await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space" });
   const keyboardSelection = await waitForEvaluation(cdp, `(() => document.getElementById('widget').contentDocument.querySelector('input[type="checkbox"]').checked)()`, "keyboard checkbox selection");
   assert.equal(keyboardSelection, true);
+  const keyboardFocusContract = await waitForEvaluation(cdp, `(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const doc = document.getElementById('widget').contentDocument;
+    const input = doc.querySelector('input[type="checkbox"]');
+    const item = input.closest('.framework-question-option');
+    const probe = doc.createElement('span');
+    probe.style.color = 'var(--color-border-focus)';
+    doc.body.appendChild(probe);
+    const focus = getComputedStyle(probe).color;
+    probe.remove();
+    return input.matches(':focus-visible') ? { border: getComputedStyle(item).borderTopColor, focus } : false;
+  })()`, "keyboard-visible Figma choice focus");
+  assert.equal(keyboardFocusContract.border, keyboardFocusContract.focus);
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.getElementById('widget').contentDocument.activeElement.blur()`,
+    returnByValue: true
+  });
+  const selectedChoiceContract = await waitForEvaluation(cdp, `(async () => {
+    const doc = document.getElementById('widget').contentDocument;
+    const resolveColor = (variable) => {
+      const probe = doc.createElement('span');
+      probe.style.color = \`var(\${variable})\`;
+      doc.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    const inspectSelected = (input) => {
+      const item = input.closest('.framework-question-option');
+      const control = item.querySelector('.framework-question-control');
+      const itemStyle = getComputedStyle(item);
+      const controlStyle = getComputedStyle(control);
+      return {
+        itemBorder: [itemStyle.borderTopWidth, itemStyle.borderTopColor],
+        itemShadow: itemStyle.boxShadow,
+        controlBackground: controlStyle.backgroundColor,
+        controlColor: controlStyle.color,
+        checkOpacity: control.classList.contains('is-radio') ? null : getComputedStyle(control.querySelector('path')).opacity,
+        dot: control.classList.contains('is-radio') ? [
+          getComputedStyle(control, '::after').width,
+          getComputedStyle(control, '::after').height,
+          getComputedStyle(control, '::after').backgroundColor
+        ] : null
+      };
+    };
+    const radio = doc.querySelector('input[type="radio"]');
+    radio.click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return {
+      colors: {
+        connecting: resolveColor('--color-border-connecting'),
+        dark: resolveColor('--color-background-dark'),
+        inverted: resolveColor('--color-inverted')
+      },
+      checkbox: inspectSelected(doc.querySelector('input[type="checkbox"]')),
+      radio: inspectSelected(radio)
+    };
+  })()`, "selected Figma choice states");
+  for (const choice of [selectedChoiceContract.checkbox, selectedChoiceContract.radio]) {
+    assert.deepEqual(choice.itemBorder, ["1px", selectedChoiceContract.colors.connecting]);
+    assert.equal(choice.itemShadow, "none");
+    assert.equal(choice.controlBackground, selectedChoiceContract.colors.dark);
+    assert.equal(choice.controlColor, selectedChoiceContract.colors.inverted);
+  }
+  assert.equal(selectedChoiceContract.checkbox.checkOpacity, "1");
+  assert.deepEqual(selectedChoiceContract.radio.dot, ["8px", "8px", selectedChoiceContract.colors.inverted]);
+  await waitForEvaluation(cdp, `(() => {
+    window.__HOST_SET_THEME__('dark');
+    return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'dark';
+  })()`, "dark theme applied for Figma state check");
+  const darkSelectedChoiceContract = await waitForEvaluation(cdp, `(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const doc = document.getElementById('widget').contentDocument;
+    const resolveColor = (variable) => {
+      const probe = doc.createElement('span');
+      probe.style.color = \`var(\${variable})\`;
+      doc.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    const inspect = (type) => {
+      const input = doc.querySelector(\`input[type="\${type}"]:checked\`);
+      const item = input.closest('.framework-question-option');
+      const control = item.querySelector('.framework-question-control');
+      const itemStyle = getComputedStyle(item);
+      const controlStyle = getComputedStyle(control);
+      return {
+        itemBackground: itemStyle.backgroundColor,
+        itemBorder: itemStyle.borderTopColor,
+        controlBackground: controlStyle.backgroundColor,
+        controlColor: controlStyle.color,
+        markBackground: type === 'radio' ? getComputedStyle(control, '::after').backgroundColor : null
+      };
+    };
+    const checkbox = inspect('checkbox');
+    const radio = inspect('radio');
+    const radioInput = doc.querySelector('input[type="radio"]');
+    const radioItem = radioInput.closest('.framework-question-option');
+    radioInput.focus();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const keyboardFocus = radioInput.matches(':focus-visible') ? getComputedStyle(radioItem).borderTopColor : null;
+    radioInput.blur();
+    return {
+      theme: doc.documentElement.getAttribute('data-theme'),
+      colors: {
+        input: resolveColor('--color-background-input'),
+        connecting: resolveColor('--color-border-connecting'),
+        focus: resolveColor('--color-border-focus'),
+        dark: resolveColor('--color-background-dark'),
+        inverted: resolveColor('--color-inverted')
+      },
+      checkbox,
+      radio,
+      keyboardFocus
+    };
+  })()`, "dark Figma selected choice states");
+  assert.equal(darkSelectedChoiceContract.theme, "dark");
+  for (const choice of [darkSelectedChoiceContract.checkbox, darkSelectedChoiceContract.radio]) {
+    assert.equal(choice.itemBackground, darkSelectedChoiceContract.colors.input);
+    assert.equal(choice.itemBorder, darkSelectedChoiceContract.colors.connecting);
+    assert.equal(choice.controlBackground, darkSelectedChoiceContract.colors.dark);
+    assert.equal(choice.controlColor, darkSelectedChoiceContract.colors.inverted);
+  }
+  assert.equal(darkSelectedChoiceContract.radio.markBackground, darkSelectedChoiceContract.colors.inverted);
+  assert.equal(darkSelectedChoiceContract.keyboardFocus, darkSelectedChoiceContract.colors.focus);
+  await waitForEvaluation(cdp, `(() => {
+    window.__HOST_SET_THEME__('light');
+    return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'light';
+  })()`, "light theme restored after Figma state check");
 
   const firstSubmit = await waitForEvaluation(cdp, `(async () => {
     const doc = document.getElementById('widget').contentDocument;

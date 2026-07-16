@@ -276,9 +276,19 @@ button {
   gap: 12px;
   min-height: 56px;
   padding: 12px 16px;
+  border-color: transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-background-input);
+  box-shadow: none;
 }
 
-.framework-question-option:focus-within {
+.assistant-provider-card.framework-question-option.is-selected {
+  border-color: var(--color-border-connecting);
+  background: var(--color-background-input);
+  box-shadow: none;
+}
+
+.assistant-provider-card.framework-question-option:has(> input:focus-visible) {
   outline: none;
   border-color: var(--color-border-focus);
 }
@@ -292,7 +302,7 @@ button {
 
 .framework-question-control {
   flex: 0 0 16px;
-  margin-top: 1px;
+  margin-top: 3px;
 }
 
 .framework-question-control.is-radio {
@@ -304,8 +314,8 @@ button {
 }
 
 .framework-question-control.is-radio.is-checked::after {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   content: "";
   border-radius: var(--radius-full);
   background: var(--color-inverted);
@@ -313,22 +323,43 @@ button {
 
 .assistant-provider-card-copy.framework-question-option-copy {
   flex: 1 1 auto;
+  gap: 2px;
 }
 
 .assistant-provider-card-title.framework-question-option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   overflow: visible;
+  color: var(--color-text);
+  font-size: var(--text-14);
+  font-weight: 400;
+  line-height: var(--line-14);
   white-space: normal;
 }
 
 .assistant-provider-card-description.framework-question-option-description {
   overflow: visible;
+  color: var(--color-text-subtlest);
+  font-size: var(--text-14);
+  font-weight: 400;
+  line-height: var(--line-14);
   white-space: normal;
 }
 
 .framework-question-recommended {
-  color: var(--color-text-subtlest);
-  font-size: var(--text-12);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  color: var(--color-primary);
+  border: var(--border-weight-sm) solid var(--color-primary);
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-subtle);
+  font-size: var(--text-14);
   font-weight: 400;
+  line-height: var(--line-14);
 }
 
 .framework-question-custom {

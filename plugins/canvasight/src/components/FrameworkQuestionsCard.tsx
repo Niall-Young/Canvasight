@@ -163,7 +163,7 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
                           </svg>
                         </span>
                         <span className="assistant-provider-card-copy framework-question-option-copy">
-                          <span className="assistant-provider-card-title framework-question-option-title">{option.label}{option.recommended ? <span className="framework-question-recommended"> · {copy.recommended}</span> : null}</span>
+                          <span className="assistant-provider-card-title framework-question-option-title">{option.label}{option.recommended ? <span className="framework-question-recommended">{copy.recommended}</span> : null}</span>
                           {option.description ? <span className="assistant-provider-card-description framework-question-option-description">{option.description}</span> : null}
                         </span>
                       </label>

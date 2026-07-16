@@ -123,6 +123,8 @@ Use the existing compact Canvasight spacing and radius scale: the card should re
 
 - Single-select questions use radio semantics. Selecting a preset clears that question's custom answer; entering a non-empty custom answer clears its preset selection.
 - Multi-select questions use checkbox semantics. Multiple presets and a non-empty custom answer may be submitted together.
+- Preset choice items follow the Scatter UI kit project-select pattern in both themes: input-surface background, 12px radius, 12px vertical and 16px horizontal padding, 12px control-to-copy gap, and 14px/22px regular label and description text. A persistent selected item adds only the 1px connecting-border and no shadow; the focus token is reserved for actual keyboard focus.
+- Checkbox and radio controls remain 16px square with a 2px connecting-border. Checkbox corners use the 6px radius and radio controls are fully round. Selected controls use the theme's dark-background token with the inverted-token check or centered 8px radio dot; never hard-code black or white, so the same component reverses correctly in dark mode.
 - Custom-answer labels must name their purpose, such as `自定义答案`; placeholder text alone is not a label. Whitespace-only input is not a valid answer.
 - Before submission, validation stays local to the unanswered question and uses both text and state, never color alone. Do not show errors merely because the card first rendered.
 - While sending, keep the selected values visible, disable editable controls and duplicate submission, and give the action a compact progress state.
