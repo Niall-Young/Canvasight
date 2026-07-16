@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: medium
-version: 2
+version: 3
 agent_id: /root/development_agent
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:42:15Z
-updated_at: 2026-07-16T12:47:49Z
+updated_at: 2026-07-16T12:58:28Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/components/FrameworkQuestionsCard.tsx
@@ -22,6 +22,7 @@ verification_evidence:
   - Production build and composed widget runtime passed with light and dark token-resolved geometry assertions.
   - Playwright verified selected and unselected radio and checkbox states at 760px and 360px with no horizontal overflow.
   - Runtime verifies selected keyboard focus uses the active theme focus token and returns to connecting-border with no shadow after blur.
+  - Follow-up runtime and Playwright evidence confirms custom-answer textareas resolve to background-input instead of background-raised in light and dark themes.
 solution_report: agent-reports/resolved/solution-framework-choice-figma-kit-parity.md
 ---
 
@@ -105,7 +106,7 @@ resolved
 
 ## 处理结果
 
-已按四个 Figma 状态节点完成还原，并补齐 light/dark 与 360px 回归。
+已按四个 Figma 状态节点完成还原，并补齐 light/dark 与 360px 回归；后续按用户截图纠正 textarea 的级联覆盖，使自定义答案输入框也使用 background-input。
 
 ## 修改文件
 

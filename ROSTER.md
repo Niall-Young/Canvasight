@@ -19,7 +19,7 @@ roles:
     agent_id: /root/design_agent
     thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:48:42Z
+    last_seen: 2026-07-16T12:58:54Z
     handoff_source: issue-framework-choice-figma-kit-parity
     last_report: integration-summary-framework-choice-figma-kit-parity
     rebuild_on_new_thread: true
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:47:49Z
+    last_seen: 2026-07-16T12:58:28Z
     handoff_source: issue-framework-choice-figma-kit-parity
     last_report: integration-summary-framework-choice-figma-kit-parity
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented Figma exact-node checkbox and radio states while preserving native form semantics and the inline question bridge contract
+    notes: Fixed the framework custom-answer textarea cascade to use background-input in light and dark themes without changing selection or bridge behavior
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:50:33Z
+    last_seen: 2026-07-16T12:58:54Z
     handoff_source: issue-framework-choice-figma-kit-parity
     last_report: integration-summary-framework-choice-figma-kit-parity
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed the final Figma geometry, light-dark token, persistent-selection versus focus-visible, and responsive browser acceptance review
+    notes: Passed the custom textarea background-input cascade, light-dark focus-disabled geometry, 360px containment, and existing Figma choice regression review
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

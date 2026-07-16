@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 6
+version: 8
 agent_id: /root
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:42:15Z
-updated_at: 2026-07-16T12:50:33Z
+updated_at: 2026-07-16T12:58:54Z
 depends_on:
   - issue-framework-choice-figma-kit-parity
   - solution-framework-choice-figma-kit-parity
@@ -50,6 +50,7 @@ verification_evidence:
 - Development Agent：使用 framework-specific override，保留原生 input、fieldset、bridge 与 sessionStorage。
 - Test Supervisor Agent：持久 selected 必须是 connecting border 且无 shadow，focus token 只属于真实键盘焦点。
 - Test Supervisor Agent：最终复核 passed；focus-visible specificity、light/dark focus restoration 与 Figma 四节点合同均满足。
+- Test Supervisor Agent：textarea follow-up 最终复核 passed；background-input cascade、default/focus/disabled、geometry、dark theme 与 360px 均满足。
 - Main Thread Design：以 Figma 347:1435、347:1453、347:1444、347:1462 为唯一视觉基准。
 
 ## 报告状态变更
@@ -80,6 +81,7 @@ verification_evidence:
 - 12px item radius、12x16 padding、12px gap、14/22 typography 与 Figma recommendation tag。
 - 双主题 computed-style matrix、360px geometry 和浏览器截图。
 - selected 与 keyboard focus 分离：鼠标/持久选中保持 connecting border，原生 input 的 focus-visible 使用 focus token，blur 后恢复。
+- 自定义答案 textarea 从通用 background-raised 级联纠正为 background-input，并覆盖 light/dark、focus、disabled 与 360px containment。
 - `design.md` 写入 Scatter project-select choice baseline。
 
 ## 处理结果
@@ -115,6 +117,7 @@ verification_evidence:
 - widget runtime passed，覆盖 light/dark selected keyboard focus 与 blur 后 persistent selection restoration。
 - dark browser computed values：connecting `rgb(122,122,122)`、selected fill `rgb(249,249,250)`、mark `rgb(21,21,21)`、no shadow。
 - 360px：viewport 与 scrollWidth 均为 360，全部 controls 保持 16x16，option padding 保持 12px 16px。
+- custom textarea：light `rgb(245,245,245)`、dark `rgb(28,28,28)` 均与各主题 background-input 一致；64px/8px/1px/9px/22px geometry 与 focus/disabled 回归 passed。
 - clean distribution passed（16 tools，无 node_modules/cache）；plugin validator passed。
 - Agent Team validator 已执行并因既有 legacy 根报告、旧 schema/template 与 QUEUE 债务失败；本轮三份新报告未出现在错误证据中。
 
@@ -135,3 +138,5 @@ verification_evidence:
 - implementation commit: `8e443169333ec8782f95bf85050d2ee1644b53cf` (`fix: 按 Figma 还原框架提问选择控件`)
 - staged verification: 13 approved physical paths, explicit pathspec, cached name-only/stat/check passed; Playwright output excluded
 - post-implementation worktree: clean before this evidence write-back
+- follow-up textarea baseline: `aa223801bf66adab12515949a61939fae07e87e5`
+- follow-up planned commit: `fix: 修正框架提问输入框背景`

@@ -115,6 +115,7 @@ The card reuses the same React component language, centralized design tokens, fo
 - Question groups use a clear prompt followed by two or three preset choices. Keep labels scannable and descriptions secondary; avoid repeating the prompt inside every option.
 - Mark at most one recommended option per question with a quiet `推荐` or `Recommended` badge. Recommendation may guide attention, but must not preselect an answer or visually overpower the user's alternatives.
 - Every question exposes one custom-answer field. The field belongs to that question and stays visually connected to its preset choices.
+- Custom-answer textareas use the same `background-input` surface token as other editable input controls in both light and dark themes; they must not fall back to the raised or card surface.
 - The primary footer action is `确认并继续` in Chinese or `Confirm and continue` in English. It is disabled until every question has a valid answer.
 
 Use the existing compact Canvasight spacing and radius scale: the card should read as a dense work control, not as a settings page. Separate question groups with spacing or a light divider rather than nested cards. Keep the footer stable so validation messages do not move the submit action unexpectedly.

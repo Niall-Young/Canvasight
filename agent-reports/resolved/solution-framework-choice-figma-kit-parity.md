@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Development Agent
 priority: medium
-version: 2
+version: 3
 agent_id: /root/development_agent
 thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
 created_at: 2026-07-16T12:42:15Z
-updated_at: 2026-07-16T12:47:49Z
+updated_at: 2026-07-16T12:58:28Z
 depends_on:
   - issue-framework-choice-figma-kit-parity
 related_files:
@@ -22,6 +22,7 @@ verification_evidence:
   - Runtime smoke resolves every color against the active theme token rather than fixed RGB values.
   - Browser evidence confirms 16px controls, 8px radio dot, 6px checkbox radius, selected connecting border, no shadow, and responsive stability.
   - Light and dark runtime checks distinguish persistent selection from native input keyboard focus through focus-visible.
+  - Custom-answer textarea default, focus, disabled, geometry, dark theme, and 360px containment checks resolve against background-input.
 ---
 
 # 框架提问选择控件按 Scatter Figma Kit 还原
@@ -60,6 +61,7 @@ Development Agent；Main Thread 代行 Design Agent 与 Design Standards Expert�
 3. 覆盖 framework selected card 为 connecting border、input background、no shadow。
 4. 为 light/dark、selected/unselected、760px/360px 增加 runtime 和浏览器验证。
 5. 用原生 input `:focus-visible` 覆盖 selected border，仅在键盘聚焦时使用 focus token，blur 后恢复 connecting border。
+6. 在 framework textarea 组合 selector 上覆盖通用 settings input 的 raised surface，明确使用 background-input，不影响其他 settings consumers。
 
 ## 风险与回滚
 

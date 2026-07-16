@@ -493,6 +493,73 @@ try {
     settingsInputs: true,
     kitControls: true
   });
+  const lightCustomInput = await waitForEvaluation(cdp, `(async () => {
+    const doc = document.getElementById('widget').contentDocument;
+    const input = doc.querySelector('.framework-question-custom-input');
+    const custom = input.closest('.framework-question-custom');
+    const resolveColor = (variable) => {
+      const probe = doc.createElement('span');
+      probe.style.color = \`var(\${variable})\`;
+      doc.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    const baseStyle = getComputedStyle(input);
+    const inputRect = input.getBoundingClientRect();
+    const customRect = custom.getBoundingClientRect();
+    const base = {
+      background: baseStyle.backgroundColor,
+      minHeight: baseStyle.minHeight,
+      height: inputRect.height,
+      padding: [baseStyle.paddingTop, baseStyle.paddingRight, baseStyle.paddingBottom, baseStyle.paddingLeft],
+      border: baseStyle.borderTopWidth,
+      radius: baseStyle.borderRadius,
+      lineHeight: baseStyle.lineHeight,
+      resize: baseStyle.resize,
+      boxSizing: baseStyle.boxSizing,
+      contained: inputRect.left >= customRect.left && inputRect.right <= customRect.right && inputRect.width <= customRect.width
+    };
+    input.focus();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const focusStyle = getComputedStyle(input);
+    const focus = {
+      visible: input.matches(':focus-visible'),
+      background: focusStyle.backgroundColor,
+      outlineWidth: focusStyle.outlineWidth,
+      outlineColor: focusStyle.outlineColor,
+      outlineOffset: focusStyle.outlineOffset
+    };
+    input.blur();
+    input.disabled = true;
+    const disabled = { matches: input.matches(':disabled'), background: getComputedStyle(input).backgroundColor, height: input.getBoundingClientRect().height };
+    input.disabled = false;
+    return {
+      tokens: { input: resolveColor('--color-background-input'), raised: resolveColor('--color-background-raised'), focus: resolveColor('--color-border-focus') },
+      base,
+      focus,
+      disabled
+    };
+  })()`, "light custom-answer input background");
+  assert.equal(lightCustomInput.base.background, lightCustomInput.tokens.input, "light custom-answer input must use the input background token");
+  assert.notEqual(lightCustomInput.base.background, lightCustomInput.tokens.raised, "light custom-answer input must not fall back to the raised white surface");
+  assert.equal(lightCustomInput.base.minHeight, "64px");
+  assert.ok(lightCustomInput.base.height >= 64);
+  assert.deepEqual(lightCustomInput.base.padding, ["8px", "8px", "8px", "8px"]);
+  assert.equal(lightCustomInput.base.border, "1px");
+  assert.equal(lightCustomInput.base.radius, "9px");
+  assert.equal(lightCustomInput.base.lineHeight, "22px");
+  assert.equal(lightCustomInput.base.resize, "none");
+  assert.equal(lightCustomInput.base.boxSizing, "border-box");
+  assert.equal(lightCustomInput.base.contained, true);
+  assert.deepEqual(lightCustomInput.focus, {
+    visible: true,
+    background: lightCustomInput.tokens.input,
+    outlineWidth: "2px",
+    outlineColor: lightCustomInput.tokens.focus,
+    outlineOffset: "2px"
+  });
+  assert.deepEqual(lightCustomInput.disabled, { matches: true, background: lightCustomInput.tokens.input, height: lightCustomInput.base.height });
   const figmaChoiceContract = await waitForEvaluation(cdp, `(() => {
     const doc = document.getElementById('widget').contentDocument;
     const resolveColor = (variable) => {
@@ -589,7 +656,9 @@ try {
         scrollWidth: doc.documentElement.scrollWidth,
         bodyScrollWidth: doc.body.scrollWidth,
         submitWidth: submit.getBoundingClientRect().width,
-        footerWidth: footer.getBoundingClientRect().width
+        footerWidth: footer.getBoundingClientRect().width,
+        customInputWidth: doc.querySelector('.framework-question-custom-input').getBoundingClientRect().width,
+        customWidth: doc.querySelector('.framework-question-custom').getBoundingClientRect().width
       };
       frame.style.width = '760px';
       resolve({ wide, narrow });
@@ -605,19 +674,43 @@ try {
   assert.equal(responsiveLayout.narrow.scrollWidth, responsiveLayout.narrow.viewport, "narrow inline document must not overflow horizontally");
   assert.equal(responsiveLayout.narrow.bodyScrollWidth, responsiveLayout.narrow.viewport, "narrow inline body must not overflow horizontally");
   assert.ok(responsiveLayout.narrow.submitWidth >= responsiveLayout.narrow.footerWidth - 34, "narrow submit action must expand to the footer width");
+  assert.ok(responsiveLayout.narrow.customInputWidth <= responsiveLayout.narrow.customWidth, "narrow custom-answer input must stay inside its label");
   const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
     const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');
     return notices.length > 0 && notices.at(-1).params.height > 0 ? notices.at(-1).params : false;
   })()`, "inline widget auto-resize notification");
   assert.ok(autoResizeNotice.width > 0 && autoResizeNotice.height > 0);
-  const darkTheme = await waitForEvaluation(cdp, `(() => {
+  const darkTheme = await waitForEvaluation(cdp, `(async () => {
     window.__HOST_SET_THEME__('dark');
     const doc = document.getElementById('widget').contentDocument;
-    return doc.documentElement.getAttribute('data-theme') === 'dark'
-      ? { theme: doc.documentElement.getAttribute('data-theme'), colorScheme: doc.documentElement.style.colorScheme }
-      : false;
+    if (doc.documentElement.getAttribute('data-theme') !== 'dark') return false;
+    const input = doc.querySelector('.framework-question-custom-input');
+    const probe = doc.createElement('span');
+    probe.style.color = 'var(--color-background-input)';
+    doc.body.appendChild(probe);
+    const inputToken = getComputedStyle(probe).color;
+    probe.remove();
+    input.focus();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const focusBackground = getComputedStyle(input).backgroundColor;
+    input.blur();
+    input.disabled = true;
+    const disabledBackground = getComputedStyle(input).backgroundColor;
+    input.disabled = false;
+    return {
+      theme: doc.documentElement.getAttribute('data-theme'),
+      colorScheme: doc.documentElement.style.colorScheme,
+      inputBackground: getComputedStyle(input).backgroundColor,
+      inputToken,
+      focusBackground,
+      disabledBackground
+    };
   })()`, "inline dark theme update");
-  assert.deepEqual(darkTheme, { theme: "dark", colorScheme: "dark" });
+  assert.equal(darkTheme.theme, "dark");
+  assert.equal(darkTheme.colorScheme, "dark");
+  assert.equal(darkTheme.inputBackground, darkTheme.inputToken, "dark custom-answer input must use the input background token");
+  assert.equal(darkTheme.focusBackground, darkTheme.inputToken, "dark focused custom-answer input must keep the input background token");
+  assert.equal(darkTheme.disabledBackground, darkTheme.inputToken, "dark disabled custom-answer input must keep the input background token");
   await waitForEvaluation(cdp, `(() => {
     window.__HOST_SET_THEME__('light');
     return document.getElementById('widget').contentDocument.documentElement.getAttribute('data-theme') === 'light';

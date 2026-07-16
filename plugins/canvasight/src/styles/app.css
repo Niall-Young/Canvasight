@@ -379,6 +379,7 @@ button {
   resize: none;
   padding: 8px;
   line-height: var(--line-14);
+  background: var(--color-background-input);
 }
 
 .framework-questions-footer {
