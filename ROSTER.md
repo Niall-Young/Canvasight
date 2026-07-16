@@ -6,14 +6,14 @@ roles:
   - role: Product Agent
     status: active
     agent_id: /root/product_agent
-    thread_id: null
+    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T07:31:10Z
-    handoff_source: issue-agent-team-only-agents-guidance
-    last_report: integration-summary-agent-team-only-agents-guidance
+    last_seen: 2026-07-16T14:42:48Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-native-acceptance-0-4-28
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed missing, Agent-Team-managed-only, and substantive AGENTS.md product semantics
+    notes: Froze v0.4.28 acceptance and confirmed native-host evidence is the final pre-release gate
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: null
+    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:13:27Z
+    last_seen: 2026-07-16T14:42:48Z
     handoff_source: issue-inline-framework-questions
-    last_report: issue-inline-framework-questions
+    last_report: solution-inline-framework-native-acceptance-0-4-28
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Automated and complete light/dark visual evidence passed for 0.4.28; owns the remaining restarted native-host acceptance blocker
+    notes: Exact 0.4.28 inline submit, fullscreen instance-bound ready, canvas control, same-task Run, and late-metadata acceptance passed
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
+    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:13:27Z
+    last_seen: 2026-07-16T14:42:48Z
     handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-fill-container
+    last_report: integration-summary-inline-framework-native-acceptance-0-4-28
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline 0202387 and owns selective staging plus commit closure for the verified 0.4.28 inline form delivery
+    notes: Recorded clean baseline 5d0dd49 and owns selective staging plus release-report commit closure for v0.4.28
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

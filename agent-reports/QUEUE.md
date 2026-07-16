@@ -10,7 +10,6 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-inline-framework-questions` | blocked | high | Test Supervisor Agent | 消息内框架确认组件 | `agent-reports/assigned/issue-inline-framework-questions.md` | 7 | 2026-07-16T14:13:27Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
 - `issue-duplicate-native-canvas-open` | assigned | high | Development Agent | 重复原生 Widget 的无内容保存阻断 AI 写图 | `agent-reports/assigned/issue-duplicate-native-canvas-open.md` | 2 | 2026-07-13T13:57:26Z
@@ -26,6 +25,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/issue-inline-framework-questions.md` - exact 0.4.28 inline submit, fullscreen ready, canvas control, same-task Run, and late-metadata acceptance passed.
+- `agent-reports/resolved/solution-inline-framework-native-acceptance-0-4-28.md` - records the instance-bound Codex Desktop acceptance evidence that clears the release blocker.
+- `agent-reports/resolved/integration-summary-inline-framework-native-acceptance-0-4-28.md` - freezes the verified v0.4.28 release candidate and Git closure scope.
 - `agent-reports/resolved/integration-summary-canvasight-0-4-24-release.md` - records the verified rollback Release, assets, refs, native acceptance, and residual risks.
 - `agent-reports/resolved/solution-release-stable-0-4-24.md` - publishes the rollback snapshot and advances stable without rewriting history.
 - `agent-reports/resolved/issue-publish-stable-release-0-4-24.md` - resolves the 0.4.24 rollback Release and update-channel closure.

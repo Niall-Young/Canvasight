@@ -2,15 +2,15 @@
 schema_version: 1
 report_id: issue-inline-framework-questions
 report_type: issue
-status: blocked
+status: resolved
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: high
-version: 7
+version: 8
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-07-14T05:38:01Z
-updated_at: 2026-07-16T14:13:27Z
+updated_at: 2026-07-16T14:42:48Z
 depends_on: []
 related_files:
   - plugins/canvasight/mcp/server.source.mjs
@@ -20,7 +20,7 @@ related_files:
   - plugins/canvasight/tests/widget-runtime-smoke.mjs
   - design.md
   - plugins/canvasight/skills/canvasight-graph-writer/SKILL.md
-verification_status: failed
+verification_status: passed
 verification_evidence:
   - The user supplied real Codex Desktop inline-host screenshots on 2026-07-16; the component renders, but dark-theme visual acceptance fails because the outer card duplicates the host container and unselected choices merge into the background.
   - Version 0.4.27 build, release verification, composed widget runtime, clean distribution, bundle freshness, plugin validation, light/dark computed styles, and four visual snapshots passed after the correction.
@@ -28,6 +28,9 @@ verification_evidence:
   - The user supplied a second real-host screenshot on 2026-07-16 and explicitly rejected the flat outer form: the component must own a fill-width outer container with 24px padding, 16px radius, a light-gray border, and no horizontal scrolling or clipping.
   - Version 0.4.28 build, release verification, composed widget runtime, clean distribution, bundle freshness, plugin validation, complete light/dark captures, and installed-cache byte comparisons passed for the restored outer container.
   - The Agent Team validator still fails on pre-existing legacy root reports, old templates, and queue-format debt unrelated to this UI change.
+  - In a new Codex task with exact 0.4.28 loaded, confirmation framework-confirmation-9e9d3e65-eaec-4208-8212-86bb4dd36fa6 rendered and submitted back to thread 019f6b57-ef6d-7ee0-85cd-ad572eb95bec.
+  - Fullscreen attempt open-mrnm36m6-75f9d6e6138c reached verified ready on widget-284c7d5f-844c-44a3-89b7-a01fd41d304a with React, project hydration, canvas rendering, visibility, and non-zero 758x793 canvas evidence.
+  - The user exercised a canvas zoom control and the node Run message returned to the same Codex task without a Connecting regression.
 solution_report: agent-reports/resolved/solution-inline-framework-fill-container.md
 ---
 
@@ -115,15 +118,15 @@ Development Agent
 - [x] 外层容器按最新验收恢复 24px padding、16px radius 和浅灰描边
 - [x] 容器 fill 宿主可用宽度，padding 计入总宽，窄宽无水平滚动或裁切
 - [x] 自动高度覆盖完整 document、外框和上下 padding，完整亮暗截图显示四边和底部按钮
-- [ ] 重启后的 Codex Desktop 新任务完成 exact 0.4.28 inline 提交与 fullscreen 回归
+  - [x] 重启后的 Codex Desktop 新任务完成 exact 0.4.28 inline 提交与 fullscreen 回归
 
 ## 当前状态
 
-blocked：0.4.28 已完成 fill-width 外框、自动高度、自动化、完整截图、版本化安装和快照一致性检查；等待重启 Codex Desktop 后在新任务完成真实 inline 提交与 fullscreen 回归。
+resolved：0.4.28 已完成 fill-width 外框、自动高度、自动化、完整截图、版本化安装、快照一致性与真实 Codex Desktop inline/fullscreen/control/Run 验收。
 
 ## 处理结果
 
-按用户最新截图恢复透明 outer boundary：24px padding、16px radius、语义浅灰描边、fill 宿主宽度且无横向滚动；内部 Scatter Figma Kit 选择控件保持不变。0.4.28 已安装；真实宿主复验待重启。
+按用户最新截图恢复透明 outer boundary：24px padding、16px radius、语义浅灰描边、fill 宿主宽度且无横向滚动；内部 Scatter Figma Kit 选择控件保持不变。0.4.28 已通过真实宿主复验。
 
 ## 修改文件
 
@@ -138,7 +141,8 @@ blocked：0.4.28 已完成 fill-width 外框、自动高度、自动化、完整
 - `npm run check:mcp-bundle`
 - plugin validator、四态 CDP 截图与安装缓存字节一致性检查
 - 安装新版本并重启 Codex Desktop 后，在新任务调用 `ask_canvasight_framework_questions`，确认消息内渲染、同任务续跑及 fullscreen open/Run 回归。
+- `ask_canvasight_framework_questions` 的确认消息回到同一任务；`open_canvasight` + `await_canvasight_widget_ready` 返回 exact fullscreen instance-bound ready；用户完成缩放与节点 Run。
 
 ## 后续风险
 
-当前任务仍持有旧插件资源快照；在重启后 exact 0.4.28 真实宿主复验前，不得宣称 native inline 已完全验收。
+原生验收已闭环；发布后仍需核对 Tag workflow 三平台结果、Release 资产、校验和与 `stable` 指向。
