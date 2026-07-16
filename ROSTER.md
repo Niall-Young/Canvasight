@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
+    thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T08:55:38Z
-    handoff_source: issue-publish-stable-release-0-4-24
-    last_report: integration-summary-canvasight-0-4-24-release
+    last_seen: 2026-07-16T12:05:03Z
+    handoff_source: issue-framework-questions-visual-redesign
+    last_report: integration-summary-framework-questions-visual-redesign
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified tag, Release, stable, assets, and scoped closure for the completed 0.4.24 rollback release; runtime thread id unavailable
+    notes: Reviewed the frozen 12-path scope and completed selective staging and the Chinese conventional implementation commit
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
