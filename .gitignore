@@ -1,6 +1,8 @@
 node_modules/
 .scatter/
 /.playwright-cli/
+/plugins/canvasight/.playwright-cli/
+/output/
 .DS_Store
 *.log
 .env
