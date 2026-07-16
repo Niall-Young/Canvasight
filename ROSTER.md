@@ -63,34 +63,34 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T08:35:27Z
+    last_seen: 2026-07-16T08:55:38Z
     handoff_source: issue-publish-stable-release-0-4-24
-    last_report: integration-summary-canvasight-0-4-24-release-candidate
+    last_report: integration-summary-canvasight-0-4-24-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed the 0.4.24 Node 20.19 local release matrix and defined native plus post-publication acceptance; runtime thread id unavailable
+    notes: Passed exact 0.4.24 native, candidate CI, release workflow, asset, ref, and Windows rerun acceptance; runtime thread id unavailable
   - role: Customer Support Agent
-    status: inactive
+    status: active
     agent_id: /root/customer_support_agent
     thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-15T07:53:13Z
-    handoff_source: issue-publish-stable-release-0-4-21
-    last_report: integration-summary-canvasight-0-4-21-release
+    last_seen: 2026-07-16T08:55:38Z
+    handoff_source: issue-publish-stable-release-0-4-24
+    last_report: integration-summary-canvasight-0-4-24-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed and synchronized the 0.4.21 bilingual README examples and Release notes
+    notes: Confirmed README remains accurate and supplied bilingual rollback Release notes for 0.4.24; runtime thread id unavailable
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: 019f65eb-2faa-7472-a921-e13718e24c3a
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T08:35:27Z
+    last_seen: 2026-07-16T08:55:38Z
     handoff_source: issue-publish-stable-release-0-4-24
-    last_report: integration-summary-canvasight-0-4-24-release-candidate
+    last_report: integration-summary-canvasight-0-4-24-release
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns scoped Git closure and remote release sequencing for the user-authorized 0.4.24 rollback release; runtime thread id unavailable
+    notes: Verified tag, Release, stable, assets, and scoped closure for the completed 0.4.24 rollback release; runtime thread id unavailable
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

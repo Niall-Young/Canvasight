@@ -10,7 +10,6 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-24` | assigned | high | Project Management Agent | 发布回退后的 Canvasight 0.4.24 | `agent-reports/assigned/issue-publish-stable-release-0-4-24.md` | 1 | 2026-07-16T08:27:13Z
 - `issue-inline-framework-questions` | blocked | high | Test Supervisor Agent | 消息内框架确认组件 | `agent-reports/assigned/issue-inline-framework-questions.md` | 3 | 2026-07-14T05:56:32Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
@@ -27,6 +26,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-canvasight-0-4-24-release.md` - records the verified rollback Release, assets, refs, native acceptance, and residual risks.
+- `agent-reports/resolved/solution-release-stable-0-4-24.md` - publishes the rollback snapshot and advances stable without rewriting history.
+- `agent-reports/resolved/issue-publish-stable-release-0-4-24.md` - resolves the 0.4.24 rollback Release and update-channel closure.
 - `agent-reports/resolved/integration-summary-skill-led-project-guidance-omission.md` - restored missing project-guidance nodes for skill-led software-product writes.
 - `agent-reports/resolved/solution-skill-led-project-guidance-omission.md` - decoupled project governance from content mode and exempted only generated guidance ids from Skill coverage.
 - `agent-reports/resolved/issue-skill-led-project-guidance-omission.md` - resolved the missing AGENTS.md creation node regression in skill-led software-product graphs.
