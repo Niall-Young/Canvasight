@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
+    thread_id: 019f6b0a-d214-7933-a56c-05cff971639b
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:58:28Z
-    handoff_source: issue-framework-choice-figma-kit-parity
-    last_report: integration-summary-framework-choice-figma-kit-parity
+    last_seen: 2026-07-16T13:22:08Z
+    handoff_source: issue-framework-form-stale-installed-snapshot
+    last_report: solution-framework-form-stale-installed-snapshot
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Fixed the framework custom-answer textarea cascade to use background-input in light and dark themes without changing selection or bridge behavior
+    notes: Prepared and verified the 0.4.25 immutable snapshot; Main Thread installed an SHA-1-identical cache and confirmed installed/enabled, while restart and native-host acceptance remain outstanding
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
+    thread_id: 019f6b11-e89a-7ee3-a880-3716dcf1f79c
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T12:58:54Z
-    handoff_source: issue-framework-choice-figma-kit-parity
-    last_report: integration-summary-framework-choice-figma-kit-parity
+    last_seen: 2026-07-16T13:20:56Z
+    handoff_source: issue-framework-form-stale-installed-snapshot
+    last_report: solution-framework-form-stale-installed-snapshot-test
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed the custom textarea background-input cascade, light-dark focus-disabled geometry, 360px containment, and existing Figma choice regression review
+    notes: Independently passed 0.4.25 release, composed widget, clean distribution, plugin validation, and candidate snapshot resource hash checks without installing
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
