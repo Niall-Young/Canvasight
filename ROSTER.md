@@ -19,34 +19,34 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:50:05Z
+    last_seen: 2026-07-16T14:13:27Z
     handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-flat-form-contrast
+    last_report: integration-summary-inline-framework-fill-container
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Approved flat outer form while preserving the existing Scatter Figma Kit neutral selected state with no blue row fill
+    notes: Approved the user-requested transparent fill-width outer boundary with 24px padding, 16px radius, themed divider border, and no horizontal overflow
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-14T02:34:38Z
-    handoff_source: issue-skill-picker-completeness-position
-    last_report: integration-summary-skill-picker-caret-combobox
+    last_seen: 2026-07-16T14:13:27Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-fill-container
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to align design.md with the caret-anchored compact combobox contract
+    notes: Updated design.md with the fill-width framed inline form and complete auto-height contract
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:50:05Z
+    last_seen: 2026-07-16T14:13:27Z
     handoff_source: issue-inline-framework-questions
-    last_report: solution-inline-framework-flat-form-contrast
+    last_report: solution-inline-framework-fill-container
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Restored the existing Figma choice contract, removed the duplicate outer card, and prepared the installed 0.4.27 snapshot
+    notes: Implemented the fill-width outer form container, responsive min-width chain, and themed border contract for 0.4.28
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:50:05Z
+    last_seen: 2026-07-16T14:13:27Z
     handoff_source: issue-inline-framework-questions
     last_report: issue-inline-framework-questions
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Automated and visual evidence passed for 0.4.27; owns the remaining restarted native-host acceptance blocker
+    notes: Automated and complete light/dark visual evidence passed for 0.4.28; owns the remaining restarted native-host acceptance blocker
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f6ac3-8c21-7063-9a57-4a45a3848e79
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T13:00:27Z
-    handoff_source: issue-framework-choice-figma-kit-parity
-    last_report: integration-summary-framework-choice-figma-kit-parity
+    last_seen: 2026-07-16T14:13:27Z
+    handoff_source: issue-inline-framework-questions
+    last_report: integration-summary-inline-framework-fill-container
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed the 12-path textarea background-input follow-up and completed selective staging plus implementation commit c895c6a without Playwright output
+    notes: Recorded clean baseline 0202387 and owns selective staging plus commit closure for the verified 0.4.28 inline form delivery
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

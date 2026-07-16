@@ -258,7 +258,7 @@ function hostHtml(widgetData) {
 }
 
 function frameworkQuestionsHostHtml(toolResult) {
-  return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/framework-widget" style="width:760px;height:720px;border:0"></iframe><script>
+  return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/framework-widget" style="display:block;width:100%;height:720px;border:0"></iframe><script>
   const toolResult = ${JSON.stringify(toolResult)};
   window.__HOST_RECORDS__ = { displayRequests: [], errors: [], messageAttempts: 0, messages: [], sentMessages: [], toolCalls: [] };
   const frame = document.getElementById('widget');
@@ -270,6 +270,11 @@ function frameworkQuestionsHostHtml(toolResult) {
     if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
     const message = event.data;
     window.__HOST_RECORDS__.messages.push(message);
+    if (message.method === 'ui/notifications/size-changed') {
+      const height = Number(message.params && message.params.height);
+      if (Number.isFinite(height) && height > 0) frame.style.height = Math.ceil(height) + 'px';
+      return;
+    }
     if (message.method === 'ui/initialize') {
       result(message.id, {
         protocolVersion: '2026-01-26',
@@ -357,7 +362,7 @@ async function waitForEvaluation(cdp, expression, label, timeoutMs = 20_000) {
 
 async function captureFrameworkQuestions(cdp, filename) {
   await fsp.mkdir(visualOutputPath, { recursive: true });
-  const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  const screenshot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: true });
   await fsp.writeFile(path.join(visualOutputPath, filename), Buffer.from(screenshot.data, "base64"));
 }
 
@@ -635,6 +640,7 @@ try {
     const frame = document.getElementById('widget');
     const doc = frame && frame.contentDocument;
     if (!doc) return false;
+    const shell = doc.querySelector('.framework-questions-shell');
     const card = doc.querySelector('.framework-questions-card');
     const options = doc.querySelector('.framework-question-options');
     const firstQuestion = doc.querySelector('.framework-question');
@@ -645,9 +651,20 @@ try {
     const legendRect = firstLegend.getBoundingClientRect();
     const legendTextRect = legendTextRange.getBoundingClientRect();
     const optionsRect = options.getBoundingClientRect();
+    const borderProbe = doc.createElement('span');
+    borderProbe.style.color = 'var(--color-border-divider)';
+    doc.body.appendChild(borderProbe);
+    const dividerColor = getComputedStyle(borderProbe).color;
+    borderProbe.remove();
     const wide = {
       viewport: doc.documentElement.clientWidth,
       scrollWidth: doc.documentElement.scrollWidth,
+      shellWidth: shell.getBoundingClientRect().width,
+      shellPadding: [getComputedStyle(shell).paddingTop, getComputedStyle(shell).paddingRight, getComputedStyle(shell).paddingBottom, getComputedStyle(shell).paddingLeft],
+      shellBorder: [getComputedStyle(shell).borderTopWidth, getComputedStyle(shell).borderTopColor],
+      dividerColor,
+      shellRadius: getComputedStyle(shell).borderRadius,
+      shellBoxSizing: getComputedStyle(shell).boxSizing,
       cardWidth: card.getBoundingClientRect().width,
       cardBorder: getComputedStyle(card).borderTopWidth,
       cardRadius: getComputedStyle(card).borderRadius,
@@ -666,17 +683,24 @@ try {
         viewport: doc.documentElement.clientWidth,
         scrollWidth: doc.documentElement.scrollWidth,
         bodyScrollWidth: doc.body.scrollWidth,
+        shellWidth: shell.getBoundingClientRect().width,
+        shellRight: shell.getBoundingClientRect().right,
         submitWidth: submit.getBoundingClientRect().width,
         footerWidth: footer.getBoundingClientRect().width,
         customInputWidth: doc.querySelector('.framework-question-custom-input').getBoundingClientRect().width,
         customWidth: doc.querySelector('.framework-question-custom').getBoundingClientRect().width
       };
-      frame.style.width = '760px';
+      frame.style.width = '100%';
       resolve({ wide, narrow });
     })));
   })()`, "inline responsive layout");
   assert.equal(responsiveLayout.wide.scrollWidth, responsiveLayout.wide.viewport, "wide inline card must not overflow horizontally");
-  assert.equal(responsiveLayout.wide.cardWidth, responsiveLayout.wide.viewport, "inline form must use the message surface width instead of creating a narrow nested card");
+  assert.equal(responsiveLayout.wide.shellWidth, responsiveLayout.wide.viewport, "inline form shell must fill the message surface width");
+  assert.deepEqual(responsiveLayout.wide.shellPadding, ["24px", "24px", "24px", "24px"], "inline form shell must keep 24px inner spacing");
+  assert.deepEqual(responsiveLayout.wide.shellBorder, ["1px", responsiveLayout.wide.dividerColor], "inline form shell must use the divider border token");
+  assert.equal(responsiveLayout.wide.shellRadius, "16px", "inline form shell must use the requested outer radius");
+  assert.equal(responsiveLayout.wide.shellBoxSizing, "border-box", "inline form shell padding must be included in its full width");
+  assert.ok(responsiveLayout.wide.cardWidth < responsiveLayout.wide.viewport, "inline form content must fit inside the padded shell");
   assert.equal(responsiveLayout.wide.cardBorder, "0px", "inline form must not draw a second outer border");
   assert.equal(responsiveLayout.wide.cardRadius, "0px", "inline form must not draw a second outer radius");
   assert.equal(responsiveLayout.wide.cardShadow, "none", "inline form must not draw a second outer shadow");
@@ -688,25 +712,43 @@ try {
   assert.ok(responsiveLayout.narrow.viewport <= 360 && responsiveLayout.narrow.viewport >= 320, "narrow inline viewport must stay within the supported message width");
   assert.equal(responsiveLayout.narrow.scrollWidth, responsiveLayout.narrow.viewport, "narrow inline document must not overflow horizontally");
   assert.equal(responsiveLayout.narrow.bodyScrollWidth, responsiveLayout.narrow.viewport, "narrow inline body must not overflow horizontally");
+  assert.equal(responsiveLayout.narrow.shellWidth, responsiveLayout.narrow.viewport, "narrow inline shell must remain fluid");
+  assert.ok(responsiveLayout.narrow.shellRight <= responsiveLayout.narrow.viewport, "narrow inline shell must stay fully visible");
   assert.ok(responsiveLayout.narrow.submitWidth >= responsiveLayout.narrow.footerWidth - 34, "narrow submit action must expand to the footer width");
   assert.ok(responsiveLayout.narrow.customInputWidth <= responsiveLayout.narrow.customWidth, "narrow custom-answer input must stay inside its label");
-  await captureFrameworkQuestions(cdp, "framework-questions-flat-light-unselected.png");
   const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
     const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');
-    return notices.length > 0 && notices.at(-1).params.height > 0 ? notices.at(-1).params : false;
+    const latest = notices.at(-1);
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const shell = doc && doc.querySelector('.framework-questions-shell');
+    if (!latest || latest.params.height <= 0 || !shell) return false;
+    const shellBottom = shell.getBoundingClientRect().bottom;
+    const documentHeight = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight, shellBottom);
+    const frameHeight = frame.getBoundingClientRect().height;
+    return frameHeight + 1 >= latest.params.height
+      ? { ...latest.params, shellBottom, documentHeight, frameHeight }
+      : false;
   })()`, "inline widget auto-resize notification");
   assert.ok(autoResizeNotice.width > 0 && autoResizeNotice.height > 0);
+  assert.ok(autoResizeNotice.height + 1 >= autoResizeNotice.shellBottom, "inline auto-resize height must include the shell border and padding");
+  assert.ok(autoResizeNotice.height + 1 >= autoResizeNotice.documentHeight, "inline auto-resize height must cover the complete document");
+  assert.ok(autoResizeNotice.frameHeight + 1 >= autoResizeNotice.height, "fake host must apply the requested inline height before visual capture");
+  await captureFrameworkQuestions(cdp, "framework-questions-flat-light-unselected.png");
   const darkTheme = await waitForEvaluation(cdp, `(async () => {
     window.__HOST_SET_THEME__('dark');
     const doc = document.getElementById('widget').contentDocument;
     if (doc.documentElement.getAttribute('data-theme') !== 'dark') return false;
     const input = doc.querySelector('.framework-question-custom-input');
     const option = doc.querySelector('.framework-question-option:not(.is-selected)');
+    const shell = doc.querySelector('.framework-questions-shell');
     const optionStyle = getComputedStyle(option);
     const probe = doc.createElement('span');
     probe.style.color = 'var(--color-background-input)';
     doc.body.appendChild(probe);
     const inputToken = getComputedStyle(probe).color;
+    probe.style.color = 'var(--color-border-divider)';
+    const dividerToken = getComputedStyle(probe).color;
     probe.remove();
     input.focus();
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -720,6 +762,8 @@ try {
       colorScheme: doc.documentElement.style.colorScheme,
       inputBackground: getComputedStyle(input).backgroundColor,
       inputToken,
+      shellBorder: getComputedStyle(shell).borderTopColor,
+      dividerToken,
       unselectedOption: {
         background: optionStyle.backgroundColor,
         border: optionStyle.borderTopColor
@@ -731,6 +775,7 @@ try {
   assert.equal(darkTheme.theme, "dark");
   assert.equal(darkTheme.colorScheme, "dark");
   assert.equal(darkTheme.inputBackground, darkTheme.inputToken, "dark custom-answer input must use the input background token");
+  assert.equal(darkTheme.shellBorder, darkTheme.dividerToken, "dark inline form shell must use the themed divider border token");
   assert.equal(darkTheme.unselectedOption.background, darkTheme.inputToken, "dark unselected choice must retain the established input surface");
   assert.equal(darkTheme.unselectedOption.border, "rgba(0, 0, 0, 0)", "dark unselected choice must retain the established borderless row state");
   assert.equal(darkTheme.focusBackground, darkTheme.inputToken, "dark focused custom-answer input must keep the input background token");

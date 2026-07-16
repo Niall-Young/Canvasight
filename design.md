@@ -107,11 +107,11 @@ Browser and bare-dev fallback surfaces are clearly labeled diagnostic or fallbac
 
 Framework confirmation is a compact MCP UI embedded directly below the current Codex tool response. It is a conversation component, not a reduced canvas workspace. It uses its own inline widget resource and startup path; rendering it must never open or attach the fullscreen Canvasight widget, request fullscreen display mode, switch a Page, show the topbar or canvas, start a project session, connect to the daemon, or read and write `.scatter` state.
 
-The form reuses the same React component language, centralized design tokens, form controls, typography, focus treatment, and theme rules as the Canvasight workspace. New visual rules belong in the shared `app.css` token system rather than in MCP server HTML or a second approximate stylesheet. The message surface supplies the only outer container and placement; the inline form itself has no outer border, radius, shadow, or opaque card background, and must not imitate a desktop window, add browser chrome, or use ornamental canvas imagery.
+The form reuses the same React component language, centralized design tokens, form controls, typography, focus treatment, and theme rules as the Canvasight workspace. New visual rules belong in the shared `app.css` token system rather than in MCP server HTML or a second approximate stylesheet. The inline form's outermost container is a transparent, fill-width boundary with `box-sizing: border-box`, 24px padding, 16px radius, and a 1px semantic light-gray border that adapts to the active theme. It has no shadow or opaque desktop-card background, and must not imitate a desktop window, add browser chrome, or use ornamental canvas imagery.
 
 ### Card Structure
 
-- Use one compact flat form containing a concise title, optional one- or two-line explanation, one to three question groups, and a single footer action. Do not draw a second card inside the Codex message container.
+- Use one compact flat form containing a concise title, optional one- or two-line explanation, one to three question groups, and a single footer action. The transparent outer boundary is the form itself; do not draw a second card inside it or the Codex message container.
 - Question groups use a clear prompt followed by two or three preset choices. Keep labels scannable and descriptions secondary; avoid repeating the prompt inside every option.
 - Mark at most one recommended option per question with a quiet `推荐` or `Recommended` badge. Recommendation may guide attention, but must not preselect an answer or visually overpower the user's alternatives.
 - Every question exposes one custom-answer field. The field belongs to that question and stays visually connected to its preset choices.
@@ -135,9 +135,9 @@ Use the existing compact Canvasight spacing and radius scale: the form should re
 
 ### Message-Surface Behavior
 
-The inline component requests content-driven height and reports size changes as validation, custom input, error, and submitted-summary states change. It must not create an internal page scrollbar at its normal supported widths. Height changes should be immediate and stable, without animated jumps that move the surrounding conversation unpredictably.
+The inline component fills the available host width and requests content-driven height that includes its border and padding. It reports size changes as validation, custom input, error, and submitted-summary states change. The outer container and all descendants must resolve within the available inline width; they must not impose a fixed or intrinsic minimum width that creates horizontal scrolling. It must not create an internal page scrollbar at its normal supported widths or clip the footer, bottom border, focus treatment, or final content row. Height changes should be immediate and stable, without animated jumps that move the surrounding conversation unpredictably.
 
-At narrow message widths, options stack vertically, text wraps naturally, and the primary action expands to the available width. At wider widths, keep a readable single-column question flow; do not turn separate questions into a dense grid. Long labels and user-authored custom answers wrap without clipping controls or pushing the card beyond its host width.
+At narrow message widths, the form remains fill-width with no horizontal scrolling: options stack vertically, text wraps naturally, and the primary action expands to the available content width. At wider widths, keep a readable single-column question flow; do not turn separate questions into a dense grid. Long labels and user-authored custom answers wrap without clipping controls or pushing the form beyond its host width.
 
 Light and dark themes use the same semantic surface, text, border, accent, success, error, and focus tokens as the main workspace. Host-provided theme changes must update the card without a reload. Contrast, disabled states, recommendation badges, and error states must remain distinguishable in both themes.
 
