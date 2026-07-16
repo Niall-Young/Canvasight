@@ -474,6 +474,40 @@ try {
     toolCalls: [],
     errors: []
   });
+  const responsiveLayout = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    if (!doc) return false;
+    const card = doc.querySelector('.framework-questions-card');
+    const options = doc.querySelector('.framework-question-options');
+    const wide = {
+      viewport: doc.documentElement.clientWidth,
+      scrollWidth: doc.documentElement.scrollWidth,
+      cardWidth: card.getBoundingClientRect().width,
+      optionTracks: getComputedStyle(options).gridTemplateColumns.split(' ').length
+    };
+    frame.style.width = '360px';
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const submit = doc.querySelector('[data-testid="framework-submit"]');
+      const footer = doc.querySelector('.framework-questions-footer');
+      const narrow = {
+        viewport: doc.documentElement.clientWidth,
+        scrollWidth: doc.documentElement.scrollWidth,
+        bodyScrollWidth: doc.body.scrollWidth,
+        submitWidth: submit.getBoundingClientRect().width,
+        footerWidth: footer.getBoundingClientRect().width
+      };
+      frame.style.width = '760px';
+      resolve({ wide, narrow });
+    })));
+  })()`, "inline responsive layout");
+  assert.equal(responsiveLayout.wide.scrollWidth, responsiveLayout.wide.viewport, "wide inline card must not overflow horizontally");
+  assert.ok(responsiveLayout.wide.cardWidth <= 660, "wide inline card must keep a compact readable measure");
+  assert.equal(responsiveLayout.wide.optionTracks, 1, "framework choices must remain a single-column reading flow");
+  assert.equal(responsiveLayout.narrow.viewport, 360);
+  assert.equal(responsiveLayout.narrow.scrollWidth, 360, "narrow inline document must not overflow horizontally");
+  assert.equal(responsiveLayout.narrow.bodyScrollWidth, 360, "narrow inline body must not overflow horizontally");
+  assert.ok(responsiveLayout.narrow.submitWidth >= responsiveLayout.narrow.footerWidth - 34, "narrow submit action must expand to the footer width");
   const autoResizeNotice = await waitForEvaluation(cdp, `(() => {
     const notices = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed');
     return notices.length > 0 && notices.at(-1).params.height > 0 ? notices.at(-1).params : false;

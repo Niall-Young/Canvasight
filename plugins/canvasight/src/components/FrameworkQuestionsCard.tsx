@@ -45,8 +45,8 @@ function restoredSubmission(payload: FrameworkQuestionsPayload): FrameworkQuesti
 
 export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestionsPayload }): ReactElement {
   const copy = payload.language === "en"
-    ? { custom: "Custom answer", recommended: "Recommended", submit: "Confirm and continue", retry: "Retry", sent: "Answers sent. Continuing in this task.", failed: "Could not send. Your selections are preserved; retry when ready." }
-    : { custom: "自定义答案", recommended: "推荐", submit: "确认并继续", retry: "重试", sent: "答案已发送，将在当前任务中继续。", failed: "发送失败，已保留选择，请重试。" };
+    ? { custom: "Custom answer", recommended: "Recommended", submit: "Confirm and continue", sending: "Sending…", retry: "Retry", sent: "Answers sent. Continuing in this task.", failed: "Could not send. Your selections are preserved; retry when ready.", questionCount: `${payload.questions.length} ${payload.questions.length === 1 ? "question" : "questions"}` }
+    : { custom: "自定义答案", recommended: "推荐", submit: "确认并继续", sending: "正在发送…", retry: "重试", sent: "答案已发送，将在当前任务中继续。", failed: "发送失败，已保留选择，请重试。", questionCount: `${payload.questions.length} 个问题` };
   const restoredRef = useRef<FrameworkQuestionAnswer[] | null>(restoredSubmission(payload));
   const [answers, setAnswers] = useState<Record<string, DraftAnswer>>(() => initialAnswers(payload, restoredRef.current));
   const [submittedAnswers, setSubmittedAnswers] = useState<FrameworkQuestionAnswer[] | null>(restoredRef.current);
@@ -132,19 +132,22 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
 
   return (
     <main className="framework-questions-shell" data-testid="framework-questions">
-      <form className="framework-questions-card" onSubmit={submit}>
+      <form className="framework-questions-card" data-state={submissionState} onSubmit={submit}>
         <header className="framework-questions-header">
-          <p className="framework-questions-eyebrow">Canvasight</p>
+          <div className="framework-questions-meta">
+            <p className="framework-questions-eyebrow"><span aria-hidden="true" />Canvasight</p>
+            <span className="framework-questions-count">{copy.questionCount}</span>
+          </div>
           <h2>{payload.title}</h2>
           {payload.description ? <p>{payload.description}</p> : null}
         </header>
-        <div className="framework-questions-list">
+        {submissionState !== "sent" ? <div className="framework-questions-list">
           {payload.questions.map((question, index) => {
             const answer = answers[question.id] ?? { selectedOptionIds: [], customAnswer: "" };
             const inputType = question.selectionMode === "single" ? "radio" : "checkbox";
             return (
-              <fieldset key={question.id} className="framework-question" data-testid={`framework-question-${question.id}`} disabled={submissionState === "sent" || submissionState === "sending"}>
-                <legend><span>{index + 1}</span>{question.question}</legend>
+              <fieldset key={question.id} className="framework-question" data-testid={`framework-question-${question.id}`} disabled={submissionState === "sending"}>
+                <legend><span>{String(index + 1).padStart(2, "0")}</span>{question.question}</legend>
                 <div className="framework-question-options">
                   {question.options.map((option) => {
                     const checked = answer.selectedOptionIds.includes(option.id);
@@ -178,7 +181,7 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
               </fieldset>
             );
           })}
-        </div>
+        </div> : null}
         <footer className="framework-questions-footer">
           <div className={`framework-questions-status is-${submissionState}`} data-testid="framework-status" role="status" aria-live="polite">
             {submissionState === "sent" ? (
@@ -189,8 +192,8 @@ export function FrameworkQuestionsCard({ payload }: { payload: FrameworkQuestion
             ) : submissionState === "failed" ? `${copy.failed}${error ? ` ${error}` : ""}` : ""}
           </div>
           {submissionState !== "sent" ? (
-            <Button type="submit" variant="primary" disabled={!isComplete || submissionState === "sending"} data-testid="framework-submit">
-              {submissionState === "failed" ? copy.retry : copy.submit}
+            <Button type="submit" variant="primary" disabled={!isComplete || submissionState === "sending"} aria-busy={submissionState === "sending"} data-testid="framework-submit">
+              {submissionState === "sending" ? copy.sending : submissionState === "failed" ? copy.retry : copy.submit}
             </Button>
           ) : null}
         </footer>
