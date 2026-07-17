@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: null
+    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:13:27Z
-    handoff_source: issue-inline-framework-questions
-    last_report: solution-inline-framework-fill-container
+    last_seen: 2026-07-17T12:45:51Z
+    handoff_source: issue-plugin-install-depends-on-project-directory
+    last_report: solution-plugin-independent-stable-install
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented the fill-width outer form container, responsive min-width chain, and themed border contract for 0.4.28
+    notes: Verified the completed repo-local to official Git stable installation conversion and protected Canvasight user data
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,36 +61,36 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
+    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:42:48Z
-    handoff_source: issue-inline-framework-questions
-    last_report: solution-inline-framework-native-acceptance-0-4-28
+    last_seen: 2026-07-17T12:45:51Z
+    handoff_source: issue-plugin-install-depends-on-project-directory
+    last_report: integration-summary-plugin-independent-stable-install
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Exact 0.4.28 inline submit, fullscreen instance-bound ready, canvas control, same-task Run, and late-metadata acceptance passed
+    notes: Verified both Codex CLIs resolve the independent 0.4.28 install from outside the repo; native-host refresh remains post-restart
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: 019f64b1-7048-7653-a457-6a130ca9a514
+    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T08:55:38Z
-    handoff_source: issue-publish-stable-release-0-4-24
-    last_report: integration-summary-canvasight-0-4-24-release
+    last_seen: 2026-07-17T12:45:51Z
+    handoff_source: issue-plugin-install-depends-on-project-directory
+    last_report: integration-summary-plugin-independent-stable-install
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Confirmed README remains accurate and supplied bilingual rollback Release notes for 0.4.24; runtime thread id unavailable
+    notes: Audited required sources and drove bilingual README clarification for stable independent versus local development installation
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
+    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:42:48Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-native-acceptance-0-4-28
+    last_seen: 2026-07-17T12:45:51Z
+    handoff_source: issue-plugin-install-depends-on-project-directory
+    last_report: integration-summary-plugin-independent-stable-install
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline 5d0dd49 and owns selective staging plus release-report commit closure for v0.4.28
+    notes: Recorded clean baseline 73ecda7 and owns selective report-only Git closure for the independent-install conversion
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

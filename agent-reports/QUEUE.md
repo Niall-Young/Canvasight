@@ -25,6 +25,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/issue-plugin-install-depends-on-project-directory.md` - resolves the repo-local marketplace dependency after official Git stable conversion.
+- `agent-reports/resolved/solution-plugin-independent-stable-install.md` - records the independent-install procedure, integrity checks, and restart boundary.
+- `agent-reports/resolved/integration-summary-plugin-independent-stable-install.md` - integrates installation conversion, bilingual documentation, verification, and Git closure scope.
 - `agent-reports/resolved/issue-inline-framework-questions.md` - exact 0.4.28 inline submit, fullscreen ready, canvas control, same-task Run, and late-metadata acceptance passed.
 - `agent-reports/resolved/solution-inline-framework-native-acceptance-0-4-28.md` - records the instance-bound Codex Desktop acceptance evidence that clears the release blocker.
 - `agent-reports/resolved/integration-summary-inline-framework-native-acceptance-0-4-28.md` - freezes the verified v0.4.28 release candidate and Git closure scope.
