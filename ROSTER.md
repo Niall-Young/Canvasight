@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
+    thread_id: 019f7415-32a4-7980-831d-146e54c7d842
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T02:46:35Z
-    handoff_source: issue-release-matrix-invalidates-native-session
-    last_report: solution-release-matrix-native-session-isolation
+    last_seen: 2026-07-18T07:43:51Z
+    handoff_source: issue-native-refresh-save-stalls-across-mcp-shim-restart
+    last_report: solution-native-refresh-save-recovery
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Resolved the widget-runtime cleanup home mismatch, added CLI-home isolation coverage, and prepared runtime 0.4.30
+    notes: Implemented canonical dirty tracking, retryable awaited save flush, transient React Flow isolation, cleanup-race regression coverage, and the 0.4.31 candidate; native acceptance remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
+    thread_id: 019f7415-32a4-7980-831d-146e54c7d842
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T02:50:46Z
-    handoff_source: issue-publish-stable-release-0-4-30
-    last_report: issue-publish-stable-release-0-4-30
+    last_seen: 2026-07-18T07:49:34Z
+    handoff_source: issue-publish-stable-release-0-4-31
+    last_report: issue-publish-stable-release-0-4-31
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns v0.4.30 exact-install, native-acceptance handoff, tag, Release, stable fast-forward, and updater closure; v0.4.29 remains blocked
+    notes: Owns the 0.4.31 candidate Git and release closure after Test Supervisor approval and Main Thread scope freeze; 0.4.29 and 0.4.30 remain prohibited with no remote release mutation
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

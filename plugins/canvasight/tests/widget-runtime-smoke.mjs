@@ -25,6 +25,29 @@ const thumbnailDataUrl = `data:image/png;base64,${thumbnailPng.toString("base64"
 const thumbnailGif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64");
 const thumbnailGifDataUrl = `data:image/gif;base64,${thumbnailGif.toString("base64")}`;
 
+async function terminateChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  child.kill("SIGTERM");
+  const graceful = await Promise.race([
+    exited.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 5000))
+  ]);
+  if (graceful) return;
+  child.kill("SIGKILL");
+  await exited;
+}
+
+function processIsAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function createMcpClient() {
   const child = spawn(process.execPath, [serverPath], {
     cwd: pluginRoot,
@@ -169,7 +192,9 @@ function hostHtml(widgetData) {
   });
   refreshed.document.nodes = refreshed.document.pages[0].nodes;
   window.__HOST_REFRESH_INSTANCE__ = null;
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  window.__HOST_FAIL_NEXT_SAVE__ = false;
+  window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], documentSaveCalls: 0, openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -229,16 +254,36 @@ function hostHtml(widgetData) {
       }
       else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
       else if (args.path && args.path.endsWith('/document')) {
+        window.__HOST_RECORDS__.documentSaveCalls += 1;
+        if (window.__HOST_FAIL_NEXT_SAVE__) {
+          window.__HOST_FAIL_NEXT_SAVE__ = false;
+          result(event.source, message.id, { content: [], isError: true, structuredContent: { ok: false, status: 503, data: null, error: 'Simulated save transport failure.', code: 'simulated_save_failure' } });
+          return;
+        }
+        const savedRevision = Math.max(2, Number(args.body.expectedRevision || 0) + 1);
         data = {
           status: 'written',
-          documentRevision: 2,
-          documentVersion: 'widget-document-v2',
+          documentRevision: savedRevision,
+          documentVersion: 'widget-document-v' + savedRevision,
           document: args.body.document
         };
+        opened.document = args.body.document;
+        opened.documentRevision = savedRevision;
+        opened.documentVersion = 'widget-document-v' + savedRevision;
+        const delayMs = window.__HOST_DELAY_NEXT_SAVE_MS__;
+        window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
+        if (delayMs > 0) {
+          setTimeout(() => result(event.source, message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } }), delayMs);
+          return;
+        }
       }
       else if (args.path && args.path.endsWith('/open-project')) {
         window.__HOST_RECORDS__.openProjectCalls += 1;
         const manualRefresh = window.__HOST_REFRESH_INSTANCE__ && window.__HOST_REFRESH_INSTANCE__ === args.widgetInstanceId;
+        if (manualRefresh && refreshed.documentRevision <= opened.documentRevision) {
+          refreshed.documentRevision = opened.documentRevision + 1;
+          refreshed.documentVersion = 'widget-document-v' + refreshed.documentRevision;
+        }
         data = manualRefresh ? refreshed : opened;
         if (manualRefresh) window.__HOST_REFRESH_INSTANCE__ = null;
       }
@@ -1121,6 +1166,124 @@ try {
   assert.equal(evidence.workspaceSizeNotices, 0, "fullscreen workspace must not start ext-apps auto ResizeObserver");
   assert.deepEqual(evidence.errors, []);
 
+  const cleanImmediateRefresh = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const refreshButton = doc.querySelector('.canvas-refresh-button');
+    if (!refreshButton) return false;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const savesAfterMeasurement = window.__HOST_RECORDS__.documentSaveCalls;
+    const sourceNode = doc.querySelector('.react-flow__node[data-id="node-a"]');
+    sourceNode.click();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const savesAfterSelection = window.__HOST_RECORDS__.documentSaveCalls;
+    const callsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    refreshButton.click();
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.openProjectCalls === callsBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    return {
+      callsBefore,
+      callsAfter: window.__HOST_RECORDS__.openProjectCalls,
+      savesAfterMeasurement,
+      savesAfterSelection,
+      status: doc.body.textContent
+    };
+  })()`, "clean immediate refresh without synthetic dirty state");
+  assert.equal(cleanImmediateRefresh.savesAfterMeasurement, 0, "initial node measurement must not schedule a document save");
+  assert.equal(cleanImmediateRefresh.savesAfterSelection, 0, "selection-only node changes must not schedule a document save");
+  assert.equal(cleanImmediateRefresh.callsAfter, cleanImmediateRefresh.callsBefore + 1);
+  assert.match(cleanImmediateRefresh.status, /Canvas is already at the latest version|画布已是最新版本/);
+
+  const failedSaveRetry = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    const refreshButton = doc.querySelector('.canvas-refresh-button');
+    if (!title || !refreshButton) return false;
+    title.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    title.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const valueSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+    window.__HOST_FAIL_NEXT_SAVE__ = true;
+    const savesBefore = window.__HOST_RECORDS__.documentSaveCalls;
+    const opensBefore = window.__HOST_RECORDS__.openProjectCalls;
+    valueSetter.call(title, 'Retry-safe title');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    refreshButton.click();
+    let deadline = Date.now() + 3000;
+    while (Date.now() < deadline && !/Saving current changes failed|保存当前更改失败/.test((doc.querySelector('.kit-toast-message') || {}).textContent || '')) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const failedStatus = (doc.querySelector('.kit-toast-message') || {}).textContent || '';
+    const savesAfterFailure = window.__HOST_RECORDS__.documentSaveCalls;
+    const opensAfterFailure = window.__HOST_RECORDS__.openProjectCalls;
+    refreshButton.click();
+    deadline = Date.now() + 4000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.openProjectCalls === opensAfterFailure) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const saveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).slice(savesBefore);
+    return {
+      failedStatus,
+      opensBefore,
+      opensAfterFailure,
+      opensAfterRetry: window.__HOST_RECORDS__.openProjectCalls,
+      savesBefore,
+      savesAfterFailure,
+      savesAfterRetry: window.__HOST_RECORDS__.documentSaveCalls,
+      mutationIds: saveCalls.map((call) => call.body.clientMutationId)
+    };
+  })()`, "failed save remains retryable before refresh");
+  assert.match(failedSaveRetry.failedStatus, /Saving current changes failed|保存当前更改失败/);
+  assert.equal(failedSaveRetry.savesAfterFailure, failedSaveRetry.savesBefore + 1);
+  assert.equal(failedSaveRetry.opensAfterFailure, failedSaveRetry.opensBefore, "failed save must prevent refresh from loading over local content");
+  assert.equal(failedSaveRetry.savesAfterRetry, failedSaveRetry.savesAfterFailure + 1, "the next refresh must retry the pending save");
+  assert.equal(new Set(failedSaveRetry.mutationIds).size, 1, "a transport retry of the same save generation must reuse its mutation id");
+  assert.equal(failedSaveRetry.opensAfterRetry, failedSaveRetry.opensAfterFailure + 1);
+
+  const editDuringSave = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const sourceNode = doc.querySelector('.react-flow__node[data-id="node-a"]');
+    sourceNode.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    title.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    title.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const valueSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+    const refreshButton = doc.querySelector('.canvas-refresh-button');
+    const savesBefore = window.__HOST_RECORDS__.documentSaveCalls;
+    const opensBefore = window.__HOST_RECORDS__.openProjectCalls;
+    window.__HOST_DELAY_NEXT_SAVE_MS__ = 300;
+    valueSetter.call(title, 'First in-flight title');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    refreshButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    valueSetter.call(title, 'Preserved newer title');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.openProjectCalls === opensBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const saveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).slice(savesBefore);
+    return {
+      opensAfter: window.__HOST_RECORDS__.openProjectCalls,
+      opensBefore,
+      saveTitles: saveCalls.map((call) => call.body.document.nodes.find((node) => node.id === 'node-a').data.title),
+      visibleTitle: doc.querySelector('.react-flow__node[data-id="node-a"] .task-title').value
+    };
+  })()`, "new local edit is preserved while refresh waits for save");
+  assert.deepEqual(editDuringSave.saveTitles, ['First in-flight title', 'Preserved newer title']);
+  assert.equal(editDuringSave.opensAfter, editDuringSave.opensBefore + 1, "refresh must wait for both save generations");
+  assert.equal(editDuringSave.visibleTitle, 'Preserved newer title');
+
   const manualRefresh = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
     const win = frame.contentWindow;
@@ -1520,14 +1683,24 @@ try {
   cdp.close();
   console.log("Canvasight composed production widget smoke passed.");
 } finally {
-  if (chrome && !chrome.killed) chrome.kill("SIGTERM");
+  await terminateChild(chrome);
   if (webServer) await new Promise((resolve) => webServer.close(resolve));
-  if (mcp.child && !mcp.child.killed) mcp.child.kill("SIGTERM");
+  await terminateChild(mcp.child);
+  const daemonState = await fsp.readFile(path.join(canvasightHome, "daemon.json"), "utf8")
+    .then((value) => JSON.parse(value))
+    .catch(() => null);
   const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${canvasightHome}`], {
     cwd: pluginRoot,
     env: { ...process.env, CANVASIGHT_HOME: canvasightHome },
     stdio: "ignore"
   });
-  await new Promise((resolve) => stopper.on("exit", resolve));
+  const stopperExitCode = await new Promise((resolve) => stopper.once("exit", resolve));
+  assert.equal(stopperExitCode, 0, "isolated widget daemon stopper must exit successfully");
+  const daemonPid = Number(daemonState?.pid);
+  const daemonExitDeadline = Date.now() + 5000;
+  while (processIsAlive(daemonPid) && Date.now() < daemonExitDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(processIsAlive(daemonPid), false, `isolated widget daemon must exit before cleanup: ${daemonPid}`);
   await fsp.rm(tempRoot, { recursive: true, force: true });
 }

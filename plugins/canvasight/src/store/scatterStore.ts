@@ -443,8 +443,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
       if (snapshotsEqual(currentSnapshot, nextSnapshot)) {
         set({
           nodes: nextNodes,
-          edges: nextEdges,
-          pages: mergeCanvasIntoPages(state, nextNodes, nextEdges)
+          edges: nextEdges
         });
         return;
       }

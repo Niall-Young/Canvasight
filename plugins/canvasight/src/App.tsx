@@ -583,6 +583,59 @@ function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePag
   };
 }
 
+function persistentNodeValue(node: ScatterNode): Omit<ScatterNode, "selected" | "width" | "height"> {
+  const transientNode = node as ScatterNode & {
+    dragging?: boolean;
+    measured?: unknown;
+    resizing?: boolean;
+  };
+  const {
+    dragging: _dragging,
+    height: _height,
+    measured: _measured,
+    resizing: _resizing,
+    selected: _selected,
+    width: _width,
+    ...persisted
+  } = transientNode;
+  const { lastRunAt: _lastRunAt, ...persistedData } = persisted.data;
+  return {
+    ...persisted,
+    type: "task",
+    data: persistedData
+  };
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stableValue(entry)])
+  );
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(stableValue(value));
+}
+
+function persistentDocumentValue(document: ScatterDocument): string {
+  const persistentPage = (page: ScatterPage) => ({
+    ...page,
+    updatedAt: undefined,
+    nodes: page.nodes.map(persistentNodeValue)
+  });
+
+  return stableStringify({
+    ...document,
+    updatedAt: undefined,
+    pages: document.pages.map(persistentPage),
+    nodes: document.nodes.map(persistentNodeValue)
+  });
+}
+
 function sameDocumentValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -885,11 +938,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const documentRevisionRef = useRef<number | null>(null);
   const documentVersionRef = useRef<string | null>(null);
   const baseDocumentRef = useRef<{ revision: number; version: string; document: ScatterDocument } | null>(null);
+  const observedPersistentDocumentRef = useRef<string | null>(null);
   const localMutationGenerationRef = useRef(0);
   const acknowledgedMutationGenerationRef = useRef(0);
+  const saveMutationIdsRef = useRef(new Map<number, string>());
   const saveRequestCountRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const saveQueuedRef = useRef(false);
+  const saveFlushRequestedRef = useRef(false);
+  const saveFlushWaitersRef = useRef<Array<{ resolve: () => void; reject: (error: Error) => void }>>([]);
   const skipNextSaveRef = useRef(false);
   const reloadingExternalDocumentRef = useRef(false);
   const refreshDocumentPromiseRef = useRef<Promise<void> | null>(null);
@@ -1199,6 +1256,46 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [language, setStatus, t]
   );
 
+  const hasPendingLocalSave = useCallback(() => {
+    const currentState = useScatterStore.getState();
+    const hasUnobservedPersistentChange = Boolean(
+      currentState.project &&
+      observedPersistentDocumentRef.current !== persistentDocumentValue(toDocument(
+        currentState.project,
+        currentState.pages,
+        currentState.activePageId,
+        currentState.nodes,
+        currentState.edges
+      ))
+    );
+    return hasUnobservedPersistentChange ||
+      localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current ||
+      saveRequestCountRef.current > 0 ||
+      saveInFlightRef.current;
+  }, []);
+
+  const settleSaveFlushWaiters = useCallback((error?: Error) => {
+    const waiters = saveFlushWaitersRef.current.splice(0);
+    for (const waiter of waiters) {
+      if (error) waiter.reject(error);
+      else waiter.resolve();
+    }
+  }, []);
+
+  const flushPendingSave = useCallback(async (): Promise<void> => {
+    if (!hasPendingLocalSave()) return;
+    const completion = new Promise<void>((resolve, reject) => {
+      saveFlushWaitersRef.current.push({ resolve, reject });
+    });
+    saveFlushRequestedRef.current = true;
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    setSaveFlushNonce((value) => value + 1);
+    await completion;
+  }, [hasPendingLocalSave]);
+
   const applyOpenedProject = useCallback(
     async (
       projectPath: string,
@@ -1259,7 +1356,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         version: result.documentVersion,
         document
       };
+      observedPersistentDocumentRef.current = persistentDocumentValue(document);
       acknowledgedMutationGenerationRef.current = localMutationGenerationRef.current;
+      saveMutationIdsRef.current.clear();
+      settleSaveFlushWaiters();
       skipNextSaveRef.current = true;
       setProjectDocument(result.project, displayDocument);
       if (
@@ -1274,7 +1374,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       setStatus(status ?? t("app.openedProject", { name: result.project.name }));
       await claimUrlThreadForProject(result.project.path);
     },
-    [claimUrlThreadForProject, selectNode, setProjectDocument, setStatus, t]
+    [claimUrlThreadForProject, selectNode, setProjectDocument, setStatus, settleSaveFlushWaiters, t]
   );
 
   const openProjectPath = useCallback(
@@ -1298,11 +1398,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           path: trimmedPath,
           updatedAt: new Date().toISOString()
         };
+        const fallbackDocument = emptyDocument(trimmedPath);
         documentRevisionRef.current = null;
         documentVersionRef.current = null;
         baseDocumentRef.current = null;
+        observedPersistentDocumentRef.current = persistentDocumentValue(fallbackDocument);
         skipNextSaveRef.current = true;
-        setProjectDocument(fallbackProject, emptyDocument(trimmedPath));
+        setProjectDocument(fallbackProject, fallbackDocument);
         hydratedRef.current = true;
         setStatus(error instanceof Error ? error.message : t("app.genericError"));
       } finally {
@@ -1318,19 +1420,16 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     const projectPath = project.path;
     const refreshPromise = (async () => {
       setRefreshingDocument(true);
+      let saveFailed = false;
       try {
-        const saveDeadline = Date.now() + 12_000;
-        const hasPendingLocalSave = () =>
-          localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current ||
-          saveRequestCountRef.current > 0 ||
-          saveInFlightRef.current;
-
         if (hasPendingLocalSave()) setStatus(t("status.refreshWaitingForSave"));
-        while (hasPendingLocalSave()) {
-          if (useScatterStore.getState().project?.path !== projectPath) return;
-          if (Date.now() >= saveDeadline) throw new Error(t("status.refreshSaveTimeout"));
-          await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+        try {
+          await flushPendingSave();
+        } catch {
+          saveFailed = true;
+          throw new Error(t("status.refreshSaveFailed"));
         }
+        if (useScatterStore.getState().project?.path !== projectPath) return;
 
         const revisionBeforeRefresh = documentRevisionRef.current;
         const mutationGenerationAtRequest = localMutationGenerationRef.current;
@@ -1365,7 +1464,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         showRunFeedback(refreshMessage, refreshed ? "positive" : "information");
       } catch (error) {
         setRunStatus(
-          error instanceof Error && error.message === t("status.refreshSaveTimeout")
+          saveFailed
+            ? t("status.refreshSaveFailed")
+            : error instanceof Error && error.message === t("status.refreshSaveTimeout")
             ? error.message
             : t("status.documentRefreshFailed"),
           "negative"
@@ -1377,7 +1478,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     })();
 
     refreshDocumentPromiseRef.current = refreshPromise;
-  }, [applyOpenedProject, project, setRunStatus, setStatus, showRunFeedback, t]);
+  }, [applyOpenedProject, flushPendingSave, hasPendingLocalSave, project, setRunStatus, setStatus, showRunFeedback, t]);
 
   useEffect(() => {
     if (startupInitializedRef.current) return;
@@ -1555,24 +1656,64 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     if (!hydratedRef.current || !project) return;
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
+      const hydratedState = useScatterStore.getState();
+      if (hydratedState.project?.path === project.path) {
+        observedPersistentDocumentRef.current = persistentDocumentValue(toDocument(
+          hydratedState.project,
+          hydratedState.pages,
+          hydratedState.activePageId,
+          hydratedState.nodes,
+          hydratedState.edges
+        ));
+      }
       return;
     }
-    const mutationGeneration = ++localMutationGenerationRef.current;
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    const stateAtObservation = useScatterStore.getState();
+    if (!stateAtObservation.project || stateAtObservation.project.path !== project.path) return;
+    const observedDocument = toDocument(
+      stateAtObservation.project,
+      stateAtObservation.pages,
+      stateAtObservation.activePageId,
+      stateAtObservation.nodes,
+      stateAtObservation.edges
+    );
+    const observedPersistentValue = persistentDocumentValue(observedDocument);
+    const hasNewPersistentChange = observedPersistentDocumentRef.current !== observedPersistentValue;
+    if (hasNewPersistentChange) {
+      observedPersistentDocumentRef.current = observedPersistentValue;
+      localMutationGenerationRef.current += 1;
+    }
+    const mutationGeneration = localMutationGenerationRef.current;
+    if (!hasNewPersistentChange && !hasPendingLocalSave()) {
+      saveFlushRequestedRef.current = false;
+      settleSaveFlushWaiters();
+      return;
+    }
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+    const flushRequested = saveFlushRequestedRef.current;
     saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      saveFlushRequestedRef.current = false;
       if (saveInFlightRef.current) {
         saveQueuedRef.current = true;
         return;
       }
       const base = baseDocumentRef.current;
-      if (!base) return;
+      if (!base) {
+        settleSaveFlushWaiters(new Error("Canvasight cannot save before the project revision is available."));
+        return;
+      }
       const currentState = useScatterStore.getState();
-      if (!currentState.project || currentState.project.path !== project.path) return;
+      if (!currentState.project || currentState.project.path !== project.path) {
+        settleSaveFlushWaiters(new Error("Canvasight project changed before the pending save completed."));
+        return;
+      }
       const document = toDocument(currentState.project, currentState.pages, currentState.activePageId, currentState.nodes, currentState.edges);
       const deletedPageSnapshots = Object.fromEntries(
         base.document.pages.filter((page) => !document.pages.some((candidate) => candidate.id === page.id)).map((page) => [page.id, page])
       );
-      const clientMutationId = crypto.randomUUID();
+      const clientMutationId = saveMutationIdsRef.current.get(mutationGeneration) ?? crypto.randomUUID();
+      saveMutationIdsRef.current.set(mutationGeneration, clientMutationId);
       saveInFlightRef.current = true;
       saveRequestCountRef.current += 1;
       setSaving(true);
@@ -1587,6 +1728,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           language
         })
         .then((result) => {
+          saveMutationIdsRef.current.delete(mutationGeneration);
           documentRevisionRef.current = Math.max(documentRevisionRef.current ?? 0, result.documentRevision);
           documentVersionRef.current = result.documentVersion;
           const hasNewerLocalChanges = localMutationGenerationRef.current !== mutationGeneration;
@@ -1609,6 +1751,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
               const appliedDocument = preservedPage
                 ? { ...normalizedResult, activePageId: preservedPage.id, viewport: preservedPage.viewport, nodes: preservedPage.nodes, edges: preservedPage.edges }
                 : normalizedResult;
+              observedPersistentDocumentRef.current = persistentDocumentValue(appliedDocument);
               skipNextSaveRef.current = true;
               setProjectDocument(project, appliedDocument);
               if (previousSelectedNodeId && appliedDocument.nodes.some((node) => node.id === previousSelectedNodeId)) {
@@ -1627,6 +1770,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
               );
               const rebasedDocument = rebaseLocalChangesAfterSave(project.path, document, latestLocalDocument, normalizedResult, result.merge);
               const previousSelectedNodeId = latestState.selectedNodeId;
+              observedPersistentDocumentRef.current = persistentDocumentValue(rebasedDocument);
               setProjectDocument(project, rebasedDocument);
               if (previousSelectedNodeId && rebasedDocument.nodes.some((node) => node.id === previousSelectedNodeId)) {
                 setSelectedNodeId(previousSelectedNodeId);
@@ -1680,6 +1824,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             return;
           }
           setStatus(error instanceof Error ? error.message : t("status.saveFailed"));
+          settleSaveFlushWaiters(error instanceof Error ? error : new Error(t("status.saveFailed")));
         })
         .finally(() => {
           saveInFlightRef.current = false;
@@ -1688,14 +1833,16 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           if (saveQueuedRef.current) {
             saveQueuedRef.current = false;
             setSaveFlushNonce((value) => value + 1);
+          } else if (!hasPendingLocalSave()) {
+            settleSaveFlushWaiters();
           }
         });
-    }, saveDebounceMs);
+    }, flushRequested ? 0 : saveDebounceMs);
 
     return () => {
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
-  }, [activePageId, edges, language, nodes, openProjectPath, pages, project, saveFlushNonce, setProjectDocument, setSaving, setSelectedNodeId, setStatus, t]);
+  }, [activePageId, edges, hasPendingLocalSave, language, nodes, openProjectPath, pages, project, saveFlushNonce, setProjectDocument, setSaving, setSelectedNodeId, setStatus, settleSaveFlushWaiters, t]);
 
   useEffect(() => {
     if (!hydratedRef.current || !project) return;
@@ -2404,11 +2551,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     (changes: NodeChange[]) => {
       const currentNodes = useScatterStore.getState().nodes;
       const nextNodes = applyNodeChanges(changes, currentNodes as Node[]) as ScatterNode[];
-      commitCanvasChange({ nodes: nextNodes });
+      const hasPersistentChange = stableStringify(currentNodes.map(persistentNodeValue)) !== stableStringify(nextNodes.map(persistentNodeValue));
+      if (hasPersistentChange) commitCanvasChange({ nodes: nextNodes });
+      else replaceCanvasLive({ nodes: nextNodes });
       const selected = nextNodes.find((node) => node.selected)?.id ?? null;
       if (selected !== selectedNodeId) setSelectedNodeId(selected);
     },
-    [commitCanvasChange, selectedNodeId, setSelectedNodeId]
+    [commitCanvasChange, replaceCanvasLive, selectedNodeId, setSelectedNodeId]
   );
 
   const onEdgesChange = useCallback(

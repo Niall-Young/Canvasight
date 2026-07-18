@@ -10,7 +10,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-30` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 2 | 2026-07-18T02:50:46Z
+- `issue-publish-stable-release-0-4-31` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 1 | 2026-07-18T07:49:34Z
+- `issue-publish-stable-release-0-4-30` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 3 | 2026-07-18T07:24:45Z
 - `issue-publish-stable-release-0-4-29` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.29 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-29.md` | 2 | 2026-07-18T02:41:35Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
@@ -27,6 +28,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-native-refresh-save-recovery-0-4-31.md` - freezes the independently verified 0.4.31 commit/install candidate while keeping native acceptance and Release pending.
+- `agent-reports/resolved/issue-native-refresh-save-stalls-across-mcp-shim-restart.md` - resolves synthetic dirty state and failed-save recovery in 0.4.31; native release acceptance remains owned by the separate publish gate.
+- `agent-reports/resolved/solution-native-refresh-save-recovery.md` - separates transient React Flow state from persistent dirty state, adds awaited retryable save flush, prepares 0.4.31, and keeps native acceptance pending.
 - `agent-reports/resolved/integration-summary-release-matrix-native-session-isolation.md` - integrates the 0.4.30 daemon-home isolation fix, clean matrix evidence, and exact-install handoff.
 - `agent-reports/resolved/issue-release-matrix-invalidates-native-session.md` - resolves the widget-runtime cleanup home mismatch that invalidated the native acceptance session.
 - `agent-reports/resolved/solution-release-matrix-native-session-isolation.md` - parses CLI daemon homes, adds cleanup defense in depth, and records 0.4.30 isolation verification.
