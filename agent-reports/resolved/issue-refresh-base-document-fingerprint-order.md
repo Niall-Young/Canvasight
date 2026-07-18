@@ -2,15 +2,15 @@
 schema_version: 1
 report_id: issue-refresh-base-document-fingerprint-order
 report_type: issue
-status: assigned
+status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 3
+version: 4
 agent_id: /root/development_agent
 thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
 created_at: 2026-07-18T08:40:39Z
-updated_at: 2026-07-18T09:02:34Z
+updated_at: 2026-07-18T09:57:09Z
 depends_on:
   - issue-publish-stable-release-0-4-31
 related_files:
@@ -26,6 +26,8 @@ verification_evidence:
   - Strict composed-widget coverage rejects any key-order or extension-field drift across a two-Page conflict document; clean Refresh, viewport-save Refresh, retry, remount and multi-instance paths pass.
   - MCP smoke proves failed widget API diagnostics retain pathname, method, status and code without leaking projectPath or query text.
   - The complete local 0.4.32 candidate matrix and plugin validation pass.
+  - Exact 0.4.32 native clean Refresh and zoom 20 to 50 followed by Refresh both completed without invalid_document_base; the valid unchanged receipt retained the session-local 50 percent navigation as designed.
+solution_report: agent-reports/resolved/solution-refresh-base-document-fingerprint-order.md
 ---
 
 # Refresh 保存基准文档因字段顺序被判版本不匹配
@@ -87,15 +89,15 @@ Development Agent
 - [x] key-order mismatch 的真实多页保存回归通过
 - [x] clean Refresh 不发起保存；真实 pending change 可保存后刷新
 - [x] remount、多实例和 shim restart 组合覆盖通过
-- [ ] 使用 0.4.32+ 新身份完成完整矩阵、exact install、重启和 native acceptance
+- [x] 使用 0.4.32 新身份完成完整矩阵、exact install、重启和 native Refresh acceptance
 
 ## 当前状态
 
-0.4.32 本地实现与自动化矩阵通过；保持 assigned，等待 exact install、Codex Desktop 重启与真实 native acceptance。
+resolved。0.4.32 exact native Refresh 已证明 authoritative base 修复有效；后续 task-switch 白屏由独立 issue 管理。
 
 ## 处理结果
 
-0.4.31 已被真实 native Refresh 否决；0.4.32 已完成 authoritative raw base 分离、严格多页回归和脱敏失败诊断，本地门禁通过。
+0.4.31 已被真实 native Refresh 否决；0.4.32 完成 authoritative raw base 分离并通过本地矩阵与 exact native Refresh。session-local zoom 的 `unchanged` receipt 是预期合同，不要求 durable revision 推进。
 
 ## 修改文件
 
@@ -115,4 +117,4 @@ Development Agent
 
 ## 后续风险
 
-不得通过重复 Refresh、重新打开或手工清 dirty 覆盖失败证据；任何修复必须升 0.4.32+。
+authoritative base 与 display normalization 的边界继续由严格多页/key-order fixture 固定；不得重新合并两种所有权。

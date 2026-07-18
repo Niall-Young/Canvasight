@@ -211,7 +211,7 @@ function hostHtml(widgetData) {
   window.__HOST_FAIL_NEXT_SAVE__ = false;
   window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
   window.__HOST_LAST_DOCUMENT__ = null;
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], displayRequests: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -250,7 +250,20 @@ function hostHtml(widgetData) {
       return;
     }
     if (message.method === 'ui/request-display-mode') {
+      const sourceFrame = Array.from(document.querySelectorAll('iframe')).find((candidate) => candidate.contentWindow === event.source);
+      const frameId = sourceFrame && sourceFrame.id;
+      window.__HOST_RECORDS__.displayRequests.push({ frameId, params: message.params });
       result(event.source, message.id, { mode: 'fullscreen' });
+      const frameRequests = window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frameId).length;
+      if (sourceFrame && sourceFrame.dataset.presentationRetry === 'true' && frameRequests === 2) {
+        sourceFrame.style.width = '1200px';
+        sourceFrame.style.height = '800px';
+        send({
+          jsonrpc: '2.0',
+          method: 'ui/notifications/host-context-changed',
+          params: { displayMode: 'fullscreen', containerDimensions: { width: 1200, height: 800 } }
+        }, event.source);
+      }
       return;
     }
     if (message.method === 'ui/message') {
@@ -1637,6 +1650,115 @@ try {
     returnByValue: true
   });
   assert.equal(latePaintStallReady.result.value, false, "removed paint-stall instance must not send a late ready acknowledgement");
+
+  const presentationRetry = await waitForEvaluation(cdp, `(async () => {
+    const readyCountBefore = window.__HOST_RECORDS__.readyInstances.length;
+    const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    const sizeNoticesBefore = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length;
+    const frame = document.createElement('iframe');
+    frame.id = 'widget-presentation-retry';
+    frame.dataset.presentationRetry = 'true';
+    frame.src = '/widget';
+    frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.readyInstances.length === readyCountBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    while (
+      Date.now() < deadline &&
+      frame.contentDocument &&
+      frame.contentDocument.querySelector('.canvasight-startup-overlay')
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const widgetInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    const readyCall = window.__HOST_RECORDS__.toolCalls.find(
+      (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+    );
+    const canvas = frame.contentDocument && frame.contentDocument.querySelector('.canvas-shell');
+    const rect = canvas && canvas.getBoundingClientRect();
+    return readyCall ? {
+      widgetInstanceId,
+      displayRequests: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id),
+      openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      readyCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+      ).length,
+      readyIdentity: {
+        openAttemptId: readyCall.openAttemptId,
+        widgetInstanceId: readyCall.widgetInstanceId,
+        displayMode: readyCall.displayMode
+      },
+      canvas: rect && { width: rect.width, height: rect.height },
+      evidence: readyCall.body,
+      sizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length - sizeNoticesBefore,
+      overlay: Boolean(frame.contentDocument && frame.contentDocument.querySelector('.canvasight-startup-overlay'))
+    } : false;
+  })()`, "fresh widget fullscreen re-presentation retry", 7000);
+  assert.equal(presentationRetry.displayRequests.length, 2, "the second fullscreen request must restore the stalled fresh presentation");
+  assert.deepEqual(presentationRetry.displayRequests.map((request) => request.params), [{ mode: 'fullscreen' }, { mode: 'fullscreen' }]);
+  assert.equal(presentationRetry.openCalls, 1, "presentation retry must not rehydrate the project");
+  assert.equal(presentationRetry.readyCalls, 1, "the same fresh instance must acknowledge ready exactly once");
+  assert.equal(presentationRetry.readyIdentity.widgetInstanceId, presentationRetry.widgetInstanceId);
+  assert.equal(presentationRetry.readyIdentity.openAttemptId, widgetData.openAttemptId);
+  assert.equal(presentationRetry.readyIdentity.displayMode, "fullscreen");
+  assert.equal(presentationRetry.evidence.projectHydrated, true);
+  assert.equal(presentationRetry.evidence.canvasRendered, true);
+  assert.equal(presentationRetry.evidence.canvasVisible, true);
+  assert.ok(presentationRetry.canvas.width > 0 && presentationRetry.canvas.height > 0);
+  assert.equal(presentationRetry.sizeNotices, 0, "fullscreen re-presentation must not enable workspace auto-resize");
+  assert.equal(presentationRetry.overlay, false);
+
+  const permanentPresentationFailure = await waitForEvaluation(cdp, `(async () => {
+    const readyCountBefore = window.__HOST_RECORDS__.readyInstances.length;
+    const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    const sizeNoticesBefore = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length;
+    const frame = document.createElement('iframe');
+    frame.id = 'widget-presentation-permanent-zero';
+    frame.src = '/widget';
+    frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const requestDeadline = Date.now() + 5000;
+    while (
+      Date.now() < requestDeadline &&
+      window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length < 3
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const widgetInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    return {
+      widgetInstanceId,
+      displayRequests: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length,
+      openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      readyCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+      ).length,
+      readyDelta: window.__HOST_RECORDS__.readyInstances.length - readyCountBefore,
+      sizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length - sizeNoticesBefore
+    };
+  })()`, "bounded fullscreen re-presentation retries", 7000);
+  assert.equal(permanentPresentationFailure.displayRequests, 3, "one initial request plus two retries must be the hard presentation bound");
+  assert.equal(permanentPresentationFailure.openCalls, 1, "bounded presentation retries must not rehydrate the project");
+  assert.equal(permanentPresentationFailure.readyCalls, 0, "a permanently zero-size instance must never report ready");
+  assert.equal(permanentPresentationFailure.readyDelta, 0);
+  assert.equal(permanentPresentationFailure.sizeNotices, 0);
+
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      const removedInstanceIds = ${JSON.stringify([presentationRetry.widgetInstanceId, permanentPresentationFailure.widgetInstanceId])};
+      document.getElementById('widget-presentation-retry')?.remove();
+      document.getElementById('widget-presentation-permanent-zero')?.remove();
+      window.__HOST_RECORDS__.readyInstances = window.__HOST_RECORDS__.readyInstances.filter(
+        (widgetInstanceId) => !removedInstanceIds.includes(widgetInstanceId)
+      );
+      window.__HOST_RECORDS__.toolCalls = window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => !removedInstanceIds.includes(call.widgetInstanceId)
+      );
+      window.__HOST_RECORDS__.openProjectCalls -= 2;
+    })()`
+  });
 
   const historicalPolling = await waitForEvaluation(cdp, `(async () => {
     const original = document.getElementById('widget');

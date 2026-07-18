@@ -1548,6 +1548,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     });
     const waitForRenderableCanvas = async (bindingKey: string) => {
       const deadline = Date.now() + 30_000;
+      let nextPresentationRetryAt = Date.now() + 250;
+      let presentationRetryIndex = 0;
+      const presentationRetryDelays = [250, 1_000];
       while (Date.now() < deadline) {
         if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
         await nextPaint();
@@ -1567,6 +1570,18 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           hitTarget && appRoot?.contains(hitTarget)
         ) {
           return { canvas, rect };
+        }
+        if (presentationRetryIndex < presentationRetryDelays.length && Date.now() >= nextPresentationRetryAt) {
+          presentationRetryIndex += 1;
+          try {
+            await window.canvasightMcp?.requestFullscreenPresentation();
+          } catch {
+            // The strict renderability gate remains authoritative when the host
+            // cannot service a best-effort presentation retry.
+          }
+          if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
+          nextPresentationRetryAt = Date.now() + (presentationRetryDelays[presentationRetryIndex] ?? 1_000);
+          continue;
         }
         await waitForPresentationSignal(canvas);
       }

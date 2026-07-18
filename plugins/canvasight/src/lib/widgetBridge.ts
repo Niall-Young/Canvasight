@@ -61,6 +61,7 @@ type CanvasightMcpApi = {
   canSendFollowUpMessage: () => boolean;
   getBridgeState: () => CanvasightBridgeState;
   getHostCapabilities: () => unknown;
+  requestFullscreenPresentation: () => Promise<boolean>;
   setStartupStage: (stage: CanvasightStartupStage) => void;
   sendFollowUpMessage: (message: { content?: Array<Record<string, unknown>>; prompt?: string }) => Promise<unknown>;
   toolOutput: () => Record<string, unknown> | null;
@@ -84,6 +85,7 @@ declare global {
 
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const BRIDGE_TIMEOUT_MS = 8_000;
+const PRESENTATION_REQUEST_TIMEOUT_MS = 1_250;
 const STARTUP_STAGE_RANK: Record<CanvasightStartupStage, number> = {
   starting: 0,
   connecting_bridge: 1,
@@ -424,6 +426,18 @@ export function startCanvasightWidgetBridge(): void {
     );
   };
 
+  const requestFullscreenPresentation: CanvasightMcpApi["requestFullscreenPresentation"] = async () => {
+    if (!bridgeState.mcpInitialized) await waitForMcpReady();
+    if (!bridgeState.mcpInitialized || !app) throw new Error("Canvasight MCP Apps presentation bridge is not ready.");
+    const result = await withTimeout(
+      app.requestDisplayMode({ mode: "fullscreen" }),
+      PRESENTATION_REQUEST_TIMEOUT_MS,
+      "Canvasight fullscreen presentation request timed out."
+    );
+    updateDisplayMode(result?.mode);
+    return result?.mode === "fullscreen";
+  };
+
   window.canvasightMcp = {
     callServerTool,
     canSendFollowUpMessage: () => {
@@ -432,6 +446,7 @@ export function startCanvasightWidgetBridge(): void {
     },
     getBridgeState: () => ({ ...bridgeState }),
     getHostCapabilities: () => app?.getHostCapabilities() ?? null,
+    requestFullscreenPresentation,
     setStartupStage,
     sendFollowUpMessage,
     toolOutput: () => toolOutput
@@ -540,7 +555,7 @@ export function startCanvasightWidgetBridge(): void {
         if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
         if (context?.styles?.css?.fonts) applyHostFonts(context.styles.css.fonts);
         if (!isFrameworkQuestionsWidget) {
-          void app?.requestDisplayMode({ mode: "fullscreen" }).then((result) => updateDisplayMode(result?.mode)).catch((error) => {
+          void requestFullscreenPresentation().catch((error) => {
             updateBridgeState({ lastBridgeError: errorMessage(error, "Canvasight fullscreen request failed."), reason: "fullscreen_request_failed" });
           });
         }

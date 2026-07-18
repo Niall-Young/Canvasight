@@ -10,8 +10,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-32` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 1 | 2026-07-18T09:02:34Z
-- `issue-refresh-base-document-fingerprint-order` | assigned | high | Development Agent | Refresh 保存基准文档因字段顺序被判版本不匹配 | `agent-reports/assigned/issue-refresh-base-document-fingerprint-order.md` | 3 | 2026-07-18T09:02:34Z
+- `issue-publish-stable-release-0-4-33` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 1 | 2026-07-18T09:57:09Z
+- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 2 | 2026-07-18T09:57:09Z
+- `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
 - `issue-native-widget-zero-size-0-4-31` | assigned | high | Development Agent | 0.4.31 重启后原生 Widget 画布保持零尺寸 | `agent-reports/assigned/issue-native-widget-zero-size-0-4-31.md` | 3 | 2026-07-18T08:27:24Z
 - `issue-publish-stable-release-0-4-31` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 5 | 2026-07-18T08:42:24Z
 - `issue-publish-stable-release-0-4-30` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 3 | 2026-07-18T07:24:45Z
@@ -31,6 +32,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/issue-refresh-base-document-fingerprint-order.md` - exact 0.4.32 native clean and session-local zoom Refresh prove the authoritative raw save-base fix; unrelated remount blank remains separate.
+- `agent-reports/resolved/integration-summary-native-widget-representation-0-4-33.md` - integrates bounded fullscreen re-presentation, focused and complete local gates, and the remaining exact native-host/Release boundary.
+- `agent-reports/resolved/solution-native-widget-task-switch-remount-presentation-retry-0-4-33.md` - retries standard fullscreen presentation without rehydration, size notifications or relaxed ready evidence.
 - `agent-reports/resolved/integration-summary-refresh-base-fingerprint-0-4-32.md` - integrates the authoritative save-base fix, strict two-Page regression, sanitized diagnostics, 0.4.32 local gates and the remaining exact native/Release boundary.
 - `agent-reports/resolved/integration-summary-test-supervisor-0-4-32-local-matrix.md` - independently passes the final 0.4.32 local matrix, strict two-Page authoritative-base regression, sanitized MCP diagnostics, candidate hash audit and plugin validation while keeping exact native-host and Node 20.19 Release gates pending.
 - `agent-reports/resolved/integration-summary-0-4-31-native-foreground-ready.md` - preserves the first 0x0 host-presentation failure, records the controlled foreground 788x794 ready instance, and keeps user interaction and Release gates pending.
