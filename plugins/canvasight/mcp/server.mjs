@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.31";
+var SERVER_VERSION = "0.4.32";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -23511,6 +23511,16 @@ async function toolCanvasightWidgetApi(args) {
   }
   const error51 = response.ok ? null : payload && typeof payload === "object" && typeof payload.error === "string" ? payload.error : text || "Canvasight daemon request failed: ".concat(response.status);
   const code = payload && typeof payload === "object" && typeof payload.code === "string" ? payload.code : null;
+  if (!response.ok) {
+    appendMcpLifecycle("canvasight_widget_api_error", {
+      route: new URL(route, "http://canvasight.local").pathname,
+      method,
+      status: response.status,
+      code,
+      openAttemptId: openAttemptIdValue,
+      widgetInstanceId
+    });
+  }
   return toolResult(
     {
       ok: response.ok,

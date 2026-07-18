@@ -107,6 +107,7 @@ function hostHtml(widgetData) {
   const page = {
     id: "page-composed",
     name: "Page 1",
+    authoritativeMarker: "preserve-raw-save-base",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     viewport: { x: 80, y: 60, zoom: 0.8 },
@@ -154,15 +155,30 @@ function hostHtml(widgetData) {
     ],
     edges: [{ id: "edge-a-b", source: "node-a", target: "node-b" }]
   };
+  const conflictPage = {
+    id: "page-conflict-copy",
+    name: "Conflict copy",
+    authoritativeMarker: "preserve-conflict-metadata",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    viewport: { x: 0, y: 0, zoom: 1 },
+    nodes: [],
+    edges: [],
+    conflict: {
+      source: "manual",
+      copyKind: "conflict",
+      originalPageId: page.id
+    }
+  };
   const document = {
     version: 1,
     projectName: "Composed Widget Project",
     updatedAt: new Date().toISOString(),
-    activePageId: page.id,
-    pages: [page],
     viewport: page.viewport,
     nodes: page.nodes,
-    edges: page.edges
+    edges: page.edges,
+    activePageId: page.id,
+    pages: [page, conflictPage]
   };
   const session = {
     sessionId: widgetData.sessionId,
@@ -194,7 +210,8 @@ function hostHtml(widgetData) {
   window.__HOST_REFRESH_INSTANCE__ = null;
   window.__HOST_FAIL_NEXT_SAVE__ = false;
   window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], documentSaveCalls: 0, openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  window.__HOST_LAST_DOCUMENT__ = null;
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -255,6 +272,14 @@ function hostHtml(widgetData) {
       else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
       else if (args.path && args.path.endsWith('/document')) {
         window.__HOST_RECORDS__.documentSaveCalls += 1;
+        if (JSON.stringify(args.body && args.body.base && args.body.base.document) !== JSON.stringify(window.__HOST_LAST_DOCUMENT__)) {
+          window.__HOST_RECORDS__.documentBaseValidationFailures.push({
+            actualKeys: Object.keys((args.body && args.body.base && args.body.base.document) || {}),
+            expectedKeys: Object.keys(window.__HOST_LAST_DOCUMENT__ || {})
+          });
+          result(event.source, message.id, { content: [], isError: true, structuredContent: { ok: false, status: 409, data: null, error: 'The document base does not match its version.', code: 'invalid_document_base' } });
+          return;
+        }
         if (window.__HOST_FAIL_NEXT_SAVE__) {
           window.__HOST_FAIL_NEXT_SAVE__ = false;
           result(event.source, message.id, { content: [], isError: true, structuredContent: { ok: false, status: 503, data: null, error: 'Simulated save transport failure.', code: 'simulated_save_failure' } });
@@ -270,6 +295,7 @@ function hostHtml(widgetData) {
         opened.document = args.body.document;
         opened.documentRevision = savedRevision;
         opened.documentVersion = 'widget-document-v' + savedRevision;
+        window.__HOST_LAST_DOCUMENT__ = JSON.parse(JSON.stringify(args.body.document));
         const delayMs = window.__HOST_DELAY_NEXT_SAVE_MS__;
         window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
         if (delayMs > 0) {
@@ -285,6 +311,7 @@ function hostHtml(widgetData) {
           refreshed.documentVersion = 'widget-document-v' + refreshed.documentRevision;
         }
         data = manualRefresh ? refreshed : opened;
+        window.__HOST_LAST_DOCUMENT__ = JSON.parse(JSON.stringify(data.document));
         if (manualRefresh) window.__HOST_REFRESH_INSTANCE__ = null;
       }
       else if (args.path && args.path.endsWith('/widget-ready')) {
@@ -1236,7 +1263,8 @@ try {
       savesBefore,
       savesAfterFailure,
       savesAfterRetry: window.__HOST_RECORDS__.documentSaveCalls,
-      mutationIds: saveCalls.map((call) => call.body.clientMutationId)
+      mutationIds: saveCalls.map((call) => call.body.clientMutationId),
+      documentBaseValidationFailures: window.__HOST_RECORDS__.documentBaseValidationFailures
     };
   })()`, "failed save remains retryable before refresh");
   assert.match(failedSaveRetry.failedStatus, /Saving current changes failed|保存当前更改失败/);
@@ -1244,7 +1272,12 @@ try {
   assert.equal(failedSaveRetry.opensAfterFailure, failedSaveRetry.opensBefore, "failed save must prevent refresh from loading over local content");
   assert.equal(failedSaveRetry.savesAfterRetry, failedSaveRetry.savesAfterFailure + 1, "the next refresh must retry the pending save");
   assert.equal(new Set(failedSaveRetry.mutationIds).size, 1, "a transport retry of the same save generation must reuse its mutation id");
-  assert.equal(failedSaveRetry.opensAfterRetry, failedSaveRetry.opensAfterFailure + 1);
+  assert.deepEqual(failedSaveRetry.documentBaseValidationFailures, []);
+  assert.equal(
+    failedSaveRetry.opensAfterRetry,
+    failedSaveRetry.opensAfterFailure + 1,
+    JSON.stringify(failedSaveRetry)
+  );
 
   const editDuringSave = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
@@ -1489,6 +1522,7 @@ try {
       finalLabel: zoomLabel(),
       saveCallCount: saveCalls.length,
       savedViewport: savedPage && savedPage.viewport,
+      documentBaseValidationFailures: window.__HOST_RECORDS__.documentBaseValidationFailures,
       overlay: Boolean(doc.querySelector('.canvasight-startup-overlay')),
       errors: window.__HOST_RECORDS__.errors
     };
@@ -1512,6 +1546,11 @@ try {
   assert.equal(near(zoomRegression.finalZoom, 2), true);
   assert.equal(zoomRegression.finalLabel, 200);
   assert.ok(zoomRegression.saveCallCount > 0, "the final user viewport must schedule document persistence");
+  assert.deepEqual(
+    zoomRegression.documentBaseValidationFailures,
+    [],
+    "save bases must preserve the exact authoritative daemon document shape and property order"
+  );
   assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
   assert.equal(zoomRegression.overlay, false);
   assert.deepEqual(zoomRegression.errors, []);

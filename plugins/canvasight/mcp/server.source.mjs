@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.31";
+const SERVER_VERSION = "0.4.32";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -7091,6 +7091,16 @@ async function toolCanvasightWidgetApi(args) {
         ? payload.error
         : text || `Canvasight daemon request failed: ${response.status}`;
   const code = payload && typeof payload === "object" && typeof payload.code === "string" ? payload.code : null;
+  if (!response.ok) {
+    appendMcpLifecycle("canvasight_widget_api_error", {
+      route: new URL(route, "http://canvasight.local").pathname,
+      method,
+      status: response.status,
+      code,
+      openAttemptId: openAttemptIdValue,
+      widgetInstanceId
+    });
+  }
   return toolResult(
     {
       ok: response.ok,

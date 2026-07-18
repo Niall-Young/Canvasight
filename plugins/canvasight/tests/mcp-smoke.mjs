@@ -3488,6 +3488,27 @@ async function main() {
     });
     assert.equal(wrongAttemptProxy.structuredContent.ok, false);
     assert.equal(wrongAttemptProxy.structuredContent.code, "open_attempt_mismatch");
+    const sensitiveSkillsQuery = "private-search-must-not-enter-lifecycle";
+    const sensitiveSkillsPath = `/api/skills?projectPath=${encodeURIComponent(defaultProjectPath)}&query=${encodeURIComponent(sensitiveSkillsQuery)}`;
+    const rejectedSensitiveSkillsProxy = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: sensitiveSkillsPath,
+        method: "DELETE",
+        ...widgetIdentity()
+      }
+    });
+    assert.equal(rejectedSensitiveSkillsProxy.structuredContent.ok, false);
+    assert.equal(rejectedSensitiveSkillsProxy.structuredContent.status, 405);
+    const widgetApiErrorEvents = (await readMcpLifecycleLog()).filter(
+      (entry) => entry.event === "canvasight_widget_api_error" && entry.route === "/api/skills" && entry.method === "DELETE"
+    );
+    const sensitiveRouteEvent = widgetApiErrorEvents.at(-1);
+    assert.equal(sensitiveRouteEvent?.route, "/api/skills");
+    assert.equal(sensitiveRouteEvent?.method, "DELETE");
+    assert.equal(sensitiveRouteEvent?.status, 405);
+    assert.doesNotMatch(JSON.stringify(sensitiveRouteEvent), /private-search-must-not-enter-lifecycle/);
+    assert.doesNotMatch(JSON.stringify(sensitiveRouteEvent), new RegExp(defaultProjectPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     const wrongThreadProxy = await request("tools/call", {
       name: "canvasight_widget_api",
       arguments: {

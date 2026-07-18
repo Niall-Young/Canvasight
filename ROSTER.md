@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T08:28:05Z
-    handoff_source: issue-native-widget-zero-size-0-4-31
-    last_report: issue-native-widget-zero-size-0-4-31
+    last_seen: 2026-07-18T09:06:24Z
+    handoff_source: issue-refresh-base-document-fingerprint-order
+    last_report: integration-summary-test-supervisor-0-4-32-local-matrix
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Accepted the controlled foreground 0.4.31 ready evidence and requires real Refresh, control, Run, A-B-A, and late-metadata interaction before release
+    notes: Independently passed the final 0.4.32 local release matrix and candidate hash audit; exact install, restarted native acceptance, Node 20.19 CI and Release remain pending
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

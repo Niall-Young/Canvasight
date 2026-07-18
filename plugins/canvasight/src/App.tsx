@@ -1354,7 +1354,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       baseDocumentRef.current = {
         revision: result.documentRevision,
         version: result.documentVersion,
-        document
+        // The concurrent-save base is protocol data, not the display model.
+        // Preserve the daemon response verbatim so its order-sensitive
+        // documentVersion continues to describe this exact document.
+        document: result.document
       };
       observedPersistentDocumentRef.current = persistentDocumentValue(document);
       acknowledgedMutationGenerationRef.current = localMutationGenerationRef.current;
@@ -1737,7 +1740,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           baseDocumentRef.current = {
             revision: result.documentRevision,
             version: result.documentVersion,
-            document: normalizedResult
+            // Keep the next save base paired with the daemon version. The
+            // normalized copy is only for display/rebase work below.
+            document: result.document
           };
           if (!hasNewerLocalChanges) {
             acknowledgedMutationGenerationRef.current = mutationGeneration;
