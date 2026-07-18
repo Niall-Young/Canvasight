@@ -10,8 +10,6 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-35` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.35 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-35.md` | 2 | 2026-07-18T12:11:52Z
-- `issue-windows-cli-daemon-state-cleanup-0-4-34` | assigned | high | Development Agent | Windows CLI 停止 daemon 后残留目标状态 | `agent-reports/assigned/issue-windows-cli-daemon-state-cleanup-0-4-34.md` | 3 | 2026-07-18T12:01:22Z
 - `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
@@ -33,6 +31,10 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-release-closure-0-4-35.md` - closes the 0.4.35 three-platform Release, asset verification and stable fast-forward, with updater HTTP 403 recorded as unverified.
+- `agent-reports/resolved/issue-publish-stable-release-0-4-35.md` - exact native, release matrix, GitHub Release and stable closure passed.
+- `agent-reports/resolved/issue-windows-cli-daemon-state-cleanup-0-4-34.md` - Windows Node 20.19 confirms ownership-safe target/control/replacement daemon stop cleanup.
+- `agent-reports/resolved/solution-windows-cli-daemon-state-cleanup-0-4-35.md` - records the Windows SIGTERM root cause and replacement-safe cleanup solution.
 - `agent-reports/resolved/integration-summary-test-supervisor-0-4-35-native-acceptance.md` - independently passes exact 0.4.35 strict ready, task return, 50% Refresh, same-task Run and post-Run stability.
 - `agent-reports/resolved/integration-summary-windows-daemon-stop-candidate-0-4-35.md` - integrates ownership-safe stop completion, replacement-daemon regression, full local matrix, exact install and passed native gate (v3).
 - `agent-reports/resolved/integration-summary-release-rejection-windows-daemon-cleanup-0-4-34.md` - records the Windows Node 20.19 gate failure, absent Release, unchanged stable and immutable failed v0.4.34 tag.

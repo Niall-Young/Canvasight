@@ -41,18 +41,18 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:57:46Z
+    last_seen: 2026-07-18T12:19:00Z
     handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
-    last_report: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: solution-windows-cli-daemon-state-cleanup-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented ownership-safe Windows daemon-state cleanup; complete local 0.4.35 matrix passes pending Windows CI
+    notes: Ownership-safe Windows daemon-state cleanup passed local and Windows Node 20.19 target/control/replacement regression
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:57:46Z
+    last_seen: 2026-07-18T12:19:00Z
     handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
     last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
     rebuild_on_new_thread: true
@@ -68,7 +68,7 @@ roles:
     last_report: integration-summary-test-supervisor-0-4-35-native-acceptance
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently passed exact 0.4.35 native ready, task return, Refresh, Run and post-Run stability; Windows Node 20.19 remains authoritative
+    notes: Independently passed exact 0.4.35 native gate; Windows Node 20.19 and complete release matrix subsequently passed
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T12:11:52Z
+    last_seen: 2026-07-18T12:19:00Z
     handoff_source: issue-publish-stable-release-0-4-35
-    last_report: issue-publish-stable-release-0-4-35
+    last_report: integration-summary-release-closure-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Exact 0.4.35 native gate passed; owns guarded main/tag/workflow/Release asset and stable fast-forward closure while v0.4.34 remains frozen
+    notes: Completed guarded v0.4.35 tag, three-platform workflow, Release asset and stable fast-forward closure; v0.4.34 remains frozen
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
