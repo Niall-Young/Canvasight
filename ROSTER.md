@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f7415-32a4-7980-831d-146e54c7d842
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T07:49:34Z
+    last_seen: 2026-07-18T07:57:32Z
     handoff_source: issue-publish-stable-release-0-4-31
     last_report: issue-publish-stable-release-0-4-31
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns the 0.4.31 candidate Git and release closure after Test Supervisor approval and Main Thread scope freeze; 0.4.29 and 0.4.30 remain prohibited with no remote release mutation
+    notes: Owns restarted-host native acceptance and Release closure for exact installed 0.4.31 commit 64dd801e; 0.4.29 and 0.4.30 remain prohibited with no remote release mutation
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

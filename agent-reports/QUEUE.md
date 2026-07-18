@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-31` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 1 | 2026-07-18T07:49:34Z
+- `issue-publish-stable-release-0-4-31` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 2 | 2026-07-18T07:57:32Z
 - `issue-publish-stable-release-0-4-30` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 3 | 2026-07-18T07:24:45Z
 - `issue-publish-stable-release-0-4-29` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.29 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-29.md` | 2 | 2026-07-18T02:41:35Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z

@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: 019f7415-32a4-7980-831d-146e54c7d842
 created_at: 2026-07-18T07:54:53Z
-updated_at: 2026-07-18T07:54:53Z
+updated_at: 2026-07-18T07:57:32Z
 depends_on:
   - issue-publish-stable-release-0-4-30
   - issue-native-refresh-save-stalls-across-mcp-shim-restart
@@ -34,6 +34,7 @@ verification_evidence:
   - Independent Test Supervisor passed the full isolated 0.4.31 local release matrix and semantic diff review.
   - Default daemon state, installed 0.4.30 PID, and default lifecycle size/mtime were unchanged across the independent matrix.
   - The repaired widget smoke leaves no new test-owned temp daemon and covers clean Refresh, transient no-save, failed-save retry, stable mutation identity, in-flight edits, and duplicate clicks.
+  - Commit 64dd801e was installed exactly as 0.4.31 and all tracked plugin files plus key MCP/web hashes match the installed immutable cache.
 ---
 
 # 原生 Refresh 保存恢复与 0.4.31 候选集成总结
@@ -81,7 +82,7 @@ verification_evidence:
 
 ## 未解决 / 后续风险
 
-- exact 0.4.31 尚未安装；安装后必须重启 Codex Desktop，并在新任务完成 fullscreen ready、真实 Refresh、A→B→A、same-task Run 与 late metadata 验收。
+- exact 0.4.31 已安装；必须重启 Codex Desktop，并在新任务完成 fullscreen ready、真实 Refresh、A→B→A、same-task Run 与 late metadata 验收。
 - 安装后不得再改候选或运行 daemon/lifecycle 测试；任何变化都会使原生证据失效。
 - 正式 Release、三平台 workflow、资产、`stable` 与 updater 尚由 `issue-publish-stable-release-0-4-31` 持有。
 - Agent Team 全量 validator 仍受既有 legacy report/template/QUEUE 债务阻断；本轮新增报告无 task-owned schema 错误。
@@ -91,5 +92,5 @@ verification_evidence:
 - branch: `main`
 - baseline: `ad8cb3da327501dbbce1f0660955dc8cc5c360c3`
 - approved commit-ready scope: 本总结依赖的报告/roster/queue、0.4.31 source/tests/version fields/generated MCP/web artifacts。
-- planned subject: `fix: 恢复 Canvasight 原生刷新保存`
-- commit: 交由 Project Management Agent 选择性暂存、复核并创建；hash 作为后续 exact install 与发布证据回报。
+- implementation commit: `64dd801e11436e2f9b00b5df463b9d8a0aa58fd3` (`fix: 恢复 Canvasight 原生刷新保存`)
+- exact install: `canvasight@canvasight-local 0.4.31`，installed cache 与 candidate tracked files 全量一致。
