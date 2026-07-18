@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:11:42Z
+    last_seen: 2026-07-18T11:17:07Z
     handoff_source: issue-publish-stable-release-0-4-34
     last_report: issue-publish-stable-release-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Keeps 0.4.33 permanently blocked and owns scoped 0.4.34 commit/install closure; remote remains v0.4.28 pending exact native acceptance
+    notes: Scoped 0.4.34 implementation commit and exact immutable install are complete; remote remains v0.4.28 pending restarted-host native acceptance
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

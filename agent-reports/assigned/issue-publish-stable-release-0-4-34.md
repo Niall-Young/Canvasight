@@ -6,11 +6,11 @@ status: assigned
 owner: Project Management Agent
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root/project_management_agent
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T11:11:42Z
-updated_at: 2026-07-18T11:11:42Z
+updated_at: 2026-07-18T11:17:07Z
 depends_on:
   - issue-native-widget-task-switch-remount-blank-0-4-32
   - solution-native-widget-task-switch-remount-mode-pulse-0-4-34
@@ -26,6 +26,7 @@ verification_status: not_started
 verification_evidence:
   - Version 0.4.34 synchronizes manifest, package, lock, SERVER_VERSION, generated MCP bundle and web dist.
   - Complete local matrix, release verify, enhanced widget runtime and plugin validation pass.
+  - Scoped commit 5f69aeab6f109b492adcae818af155adf3c823b1 is installed as exact 0.4.34; all 582 tracked plugin files match the immutable cache snapshot with zero missing or mismatched files.
   - No v0.4.34 tag, push, GitHub Release, workflow or stable mutation has occurred.
 ---
 
@@ -38,7 +39,7 @@ verification_evidence:
 ## Closure Criteria
 
 - [x] 0.4.34 版本字段、MCP bundle、web dist、完整本地矩阵和 plugin validator 一致
-- [ ] scoped commit 与 exact 0.4.34 安装完成
+- [x] scoped commit 与 exact 0.4.34 安装完成
 - [ ] 重启 Codex Desktop 并取得首次 instance-bound fullscreen ready
 - [ ] 至少三轮 A→B→A 无需侧栏手工恢复，且无 inline 闪烁或 Connecting 回退
 - [ ] 控件、session-local zoom Refresh、same-task Run 与 late metadata 验收通过
@@ -46,11 +47,11 @@ verification_evidence:
 
 ## 当前状态
 
-assigned。等待 scoped commit、exact install、宿主重启与真实 native acceptance。
+assigned。scoped commit 与 exact install 已完成；等待宿主重启与真实 native acceptance。
 
 ## 处理结果
 
-本地候选矩阵通过；远端发布未开始，stable 保持 v0.4.28。
+本地候选矩阵、commit 与 exact 0.4.34 安装通过；远端发布未开始，stable 保持 v0.4.28。
 
 ## 修改文件
 
