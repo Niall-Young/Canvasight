@@ -22,6 +22,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 给节点添加图片、文件和上下文附件。
 - 节点始终通过 Chat 发送当前节点及其下游节点到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
+- AI 写入后可从画布右上角手动刷新到项目的最新画布版本，同时保护未保存的本地修改。
 - 梳理框架遇到会改变方向的关键歧义时，在当前 Codex 消息中直接显示 Canvasight 确认卡；提交后自动继续原 Graph Writer 请求，无需打开画布。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
@@ -82,7 +83,9 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
    继续完善当前 Canvasight Page：请保留未提及的节点和位置，只更新与“[在这里写要补充、修改或删除的内容]”有关的节点和连线。
    ```
 
-6. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。在节点正文输入 `$` 会搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务，并说明每个节点级 Skill 只负责对应节点。
+6. **刷新到最新版本。** 如果 AI 已完成写入，但当前画布没有及时显示新节点，点击画布右上角的刷新图标。Canvasight 会先等待当前修改保存，再加载项目的最新画布版本，并尽量保留当前 Page、视口和选中状态。如果本地修改尚未保存或刷新期间又发生了修改，刷新会取消并保留当前内容。
+
+7. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。在节点正文输入 `$` 会搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务，并说明每个节点级 Skill 只负责对应节点。
 
    ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
 
@@ -387,6 +390,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Add images, files, and contextual attachments to nodes.
 - Nodes always use Chat to send the selected node plus downstream nodes to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
+- After an AI write, manually refresh from the upper-right canvas controls to load the project's latest canvas version without discarding unsaved local changes.
 - Resolve consequential framework ambiguity through a Canvasight confirmation card embedded directly in the current Codex message, then continue the original Graph Writer request without opening the canvas.
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
 - Reopen recent Canvasight projects from a new Codex task.
@@ -447,7 +451,9 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
    Continue refining the current Canvasight Page. Preserve all nodes and positions I did not mention, and only update the nodes and edges related to “[describe what to add, change, or remove here].”
    ```
 
-6. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. Type `$` in a node body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. When ready, click Run. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task and scopes each node-level Skill to its mapped responsibility.
+6. **Refresh to the latest version.** If AI has finished writing but the open canvas does not yet show the new nodes, click the refresh icon in the upper-right canvas controls. Canvasight waits for current changes to save, then loads the project's latest canvas version while preserving the active Page, viewport, and selection where possible. If local changes are still unsaved or new edits occur during refresh, it cancels the refresh and preserves the current content.
+
+7. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. Type `$` in a node body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. When ready, click Run. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task and scopes each node-level Skill to its mapped responsibility.
 
    ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
 

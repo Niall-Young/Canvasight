@@ -151,13 +151,25 @@ function hostHtml(widgetData) {
   const opened = {
     project: { name: "Composed Widget Project", path: projectPath, updatedAt: document.updatedAt },
     document,
-    documentRevision: 1
+    documentRevision: 1,
+    documentVersion: "widget-document-v1"
   };
   return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/widget" style="width:1200px;height:800px;border:0"></iframe><script>
   const widgetData = ${JSON.stringify({ ...widgetData, apiBaseUrl: "http://127.0.0.1:1" })};
   const session = ${JSON.stringify(session)};
   const opened = ${JSON.stringify(opened)};
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  const refreshed = JSON.parse(JSON.stringify(opened));
+  refreshed.documentRevision = 3;
+  refreshed.documentVersion = 'widget-document-v3';
+  refreshed.document.pages[0].nodes.push({
+    id: 'node-ai-refresh',
+    type: 'task',
+    position: { x: 940, y: 360 },
+    data: { title: 'Latest AI canvas node', body: 'Loaded by the manual refresh action.', attachments: [], effort: 'xhigh', runMode: 'flow' }
+  });
+  refreshed.document.nodes = refreshed.document.pages[0].nodes;
+  window.__HOST_REFRESH_INSTANCE__ = null;
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -216,7 +228,20 @@ function hostHtml(widgetData) {
           : { dataBase64: ${JSON.stringify(thumbnailPng.toString("base64"))}, mime: 'image/png', size: ${thumbnailPng.length} };
       }
       else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
-      else if (args.path && args.path.endsWith('/open-project')) data = opened;
+      else if (args.path && args.path.endsWith('/document')) {
+        data = {
+          status: 'written',
+          documentRevision: 2,
+          documentVersion: 'widget-document-v2',
+          document: args.body.document
+        };
+      }
+      else if (args.path && args.path.endsWith('/open-project')) {
+        window.__HOST_RECORDS__.openProjectCalls += 1;
+        const manualRefresh = window.__HOST_REFRESH_INSTANCE__ && window.__HOST_REFRESH_INSTANCE__ === args.widgetInstanceId;
+        data = manualRefresh ? refreshed : opened;
+        if (manualRefresh) window.__HOST_REFRESH_INSTANCE__ = null;
+      }
       else if (args.path && args.path.endsWith('/widget-ready')) {
         window.__HOST_RECORDS__.ready = { identity: args, body: args.body };
         window.__HOST_RECORDS__.readyInstances.push(args.widgetInstanceId);
@@ -412,7 +437,27 @@ try {
   assert.equal(opened.structuredContent.targetDisplayMode, "fullscreen");
   const resource = await mcp.request("resources/read", { uri: "ui://widget/canvasight/canvas.html" });
   const widgetHtml = resource.contents[0].text;
+  const paintStallWidgetHtml = widgetHtml.replace(
+    '<script id="canvasightAppModule" type="module">',
+    `<script>
+      window.__CANVASIGHT_TEST_RAF_CALLS__ = 0;
+      window.__CANVASIGHT_TEST_CANCEL_RAF_CALLS__ = 0;
+      window.__CANVASIGHT_TEST_VISIBLE__ = false;
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => window.__CANVASIGHT_TEST_VISIBLE__ ? 'visible' : 'hidden'
+      });
+      window.requestAnimationFrame = () => {
+        window.__CANVASIGHT_TEST_RAF_CALLS__ += 1;
+        return window.__CANVASIGHT_TEST_RAF_CALLS__;
+      };
+      window.cancelAnimationFrame = () => {
+        window.__CANVASIGHT_TEST_CANCEL_RAF_CALLS__ += 1;
+      };
+    </script><script id="canvasightAppModule" type="module">`
+  );
   assert.match(widgetHtml, /id="canvasightAppModule" type="module"/);
+  assert.notEqual(paintStallWidgetHtml, widgetHtml, "paint-stall fixture must suppress requestAnimationFrame before the app module starts");
   assert.ok(widgetHtml.length > 100_000, "generated widget must contain the production bundle, not a shell stub");
 
   const widgetData = opened._meta.widgetData;
@@ -423,6 +468,7 @@ try {
     } else {
       res.setHeader("content-type", "text/html; charset=utf-8");
       if (req.url === "/widget") res.end(widgetHtml);
+      else if (req.url === "/widget-paint-stall") res.end(paintStallWidgetHtml);
       else if (req.url === "/framework-widget") res.end(frameworkWidgetHtml);
       else if (req.url === "/framework-host") res.end(frameworkQuestionsHostHtml(frameworkQuestions));
       else res.end(hostHtml(widgetData));
@@ -1075,6 +1121,49 @@ try {
   assert.equal(evidence.workspaceSizeNotices, 0, "fullscreen workspace must not start ext-apps auto ResizeObserver");
   assert.deepEqual(evidence.errors, []);
 
+  const manualRefresh = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const sourceNode = doc.querySelector('.react-flow__node[data-id="node-a"]');
+    const refreshButton = doc.querySelector('.canvas-refresh-button');
+    const viewport = doc.querySelector('.react-flow__viewport');
+    if (!sourceNode || !refreshButton || !viewport) return false;
+    sourceNode.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const transformBefore = getComputedStyle(viewport).transform;
+    const callsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    window.__HOST_REFRESH_INSTANCE__ = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    refreshButton.click();
+    refreshButton.click();
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && !doc.querySelector('.react-flow__node[data-id="node-ai-refresh"]')) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const latestNode = doc.querySelector('.react-flow__node[data-id="node-ai-refresh"]');
+    const latestTitle = latestNode && latestNode.querySelector('.task-title');
+    const currentViewport = doc.querySelector('.react-flow__viewport');
+    const selectedSource = doc.querySelector('.react-flow__node[data-id="node-a"].selected');
+    return latestNode ? {
+      callsBefore,
+      callsAfter: window.__HOST_RECORDS__.openProjectCalls,
+      nodeCount: doc.querySelectorAll('.react-flow__node').length,
+      latestTitle: latestTitle && latestTitle.value,
+      selectedSource: Boolean(selectedSource),
+      transformBefore,
+      transformAfter: currentViewport && getComputedStyle(currentViewport).transform,
+      buttonBusy: refreshButton.getAttribute('aria-busy'),
+      status: doc.body.textContent
+    } : false;
+  })()`, "manual latest-version canvas refresh");
+  assert.equal(manualRefresh.callsAfter, manualRefresh.callsBefore + 1, "duplicate clicks must share one refresh request");
+  assert.equal(manualRefresh.nodeCount, 3);
+  assert.match(manualRefresh.latestTitle, /Latest AI canvas node/);
+  assert.equal(manualRefresh.selectedSource, true, "manual refresh must preserve the selected node when it still exists");
+  assert.equal(manualRefresh.transformAfter, manualRefresh.transformBefore, "manual refresh must preserve the active Page viewport");
+  assert.equal(manualRefresh.buttonBusy, "false");
+  assert.match(manualRefresh.status, /Updated to the latest canvas version/);
+
   const proxiedThumbnail = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
     const doc = frame.contentDocument;
@@ -1088,9 +1177,9 @@ try {
   })()`, "attachment thumbnail loaded through the native widget asset proxy");
   assert.deepEqual(proxiedThumbnail.images.map((image) => image.src).sort(), [thumbnailDataUrl, thumbnailGifDataUrl].sort());
   assert.equal(proxiedThumbnail.images.every((image) => image.naturalWidth === 1 && image.naturalHeight === 1), true);
-  assert.equal(proxiedThumbnail.assetCalls.length, 2);
+  assert.ok(proxiedThumbnail.assetCalls.length >= 2, "both attachment previews must load through the widget proxy");
   assert.equal(proxiedThumbnail.assetCalls.every((call) => /^\/api\/sessions\/[^/]+\/attachment-preview$/.test(call.path)), true);
-  assert.deepEqual(proxiedThumbnail.assetCalls.map((call) => call.body.storedPath).sort(), [
+  assert.deepEqual([...new Set(proxiedThumbnail.assetCalls.map((call) => call.body.storedPath))].sort(), [
     path.join(projectPath, ".scatter", "assets", "thumbnail.gif"),
     path.join(projectPath, ".scatter", "assets", "thumbnail.png")
   ]);
@@ -1121,11 +1210,11 @@ try {
     const afterSaveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
     const bridgeStage = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.startupStage;
     const overlay = Boolean(doc.querySelector('.canvasight-startup-overlay'));
-    return canvasRect && canvasRect.width > 0 && canvasRect.height > 0 && nodeEls.length === 2 && edgeEls.length === 1 && visibleNodes.length > 0 && transform && transform !== 'none'
+    return canvasRect && canvasRect.width > 0 && canvasRect.height > 0 && nodeEls.length >= 2 && edgeEls.length === 1 && visibleNodes.length > 0 && transform && transform !== 'none'
       ? { nodeCount: nodeEls.length, edgeCount: edgeEls.length, visibleNodeCount: visibleNodes.length, transform, beforeCalls, afterCalls, beforeSaveCalls, afterSaveCalls, bridgeStage, overlay }
       : false;
   })()`, "same-binding canvas after host hide and restore");
-  assert.equal(restored.nodeCount, 2);
+  assert.ok(restored.nodeCount >= 2);
   assert.equal(restored.edgeCount, 1);
   assert.ok(restored.visibleNodeCount > 0);
   assert.match(restored.transform, /matrix|translate/);
@@ -1263,6 +1352,89 @@ try {
   assert.equal(near(zoomRegression.savedViewport?.zoom, 2), true, `saved viewport must match final zoom: ${JSON.stringify(zoomRegression.savedViewport)}`);
   assert.equal(zoomRegression.overlay, false);
   assert.deepEqual(zoomRegression.errors, []);
+
+  const paintStallRecovery = await waitForEvaluation(cdp, `(async () => {
+    const readyCountBefore = window.__HOST_RECORDS__.readyInstances.length;
+    const startedAt = Date.now();
+    const frame = document.createElement('iframe');
+    frame.id = 'widget-paint-stall';
+    frame.src = '/widget-paint-stall';
+    frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    const readyWhileHidden = window.__HOST_RECORDS__.readyInstances.length - readyCountBefore;
+    const hiddenInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    frame.style.width = '1200px';
+    frame.style.height = '800px';
+    frame.contentWindow.__CANVASIGHT_TEST_VISIBLE__ = true;
+    frame.contentDocument.dispatchEvent(new frame.contentWindow.Event('visibilitychange'));
+    frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('canvasight:host-context-changed', {
+      detail: { displayMode: 'fullscreen', containerDimensions: { width: 1200, height: 800 } }
+    }));
+    const restoredAt = Date.now();
+    const deadline = Date.now() + 1500;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.readyInstances.length === readyCountBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const readyCall = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/widget-ready')).at(-1);
+    const doc = frame.contentDocument;
+    const canvas = doc && doc.querySelector('.canvas-shell');
+    const rect = canvas && canvas.getBoundingClientRect();
+    return readyCall && readyCall.widgetInstanceId === frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId
+      ? {
+          elapsedMs: Date.now() - startedAt,
+          restoredReadyMs: Date.now() - restoredAt,
+          readyWhileHidden,
+          rafCalls: frame.contentWindow.__CANVASIGHT_TEST_RAF_CALLS__,
+          cancelRafCalls: frame.contentWindow.__CANVASIGHT_TEST_CANCEL_RAF_CALLS__,
+          hiddenInstanceId,
+          identity: {
+            openAttemptId: readyCall.openAttemptId,
+            widgetInstanceId: readyCall.widgetInstanceId,
+            displayMode: readyCall.displayMode
+          },
+          evidence: readyCall.body,
+          canvas: rect && { width: rect.width, height: rect.height },
+          bridgeStage: frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.startupStage,
+          overlay: Boolean(doc && doc.querySelector('.canvasight-startup-overlay'))
+        }
+      : false;
+  })()`, "fresh widget ready when requestAnimationFrame is suppressed", 5000);
+  assert.equal(paintStallRecovery.readyWhileHidden, 0, "a hidden zero-size widget must not report ready");
+  assert.ok(paintStallRecovery.restoredReadyMs < 1000, `visible recovery must remain bounded: ${JSON.stringify(paintStallRecovery)}`);
+  assert.ok(paintStallRecovery.rafCalls >= 2, "the fixture must suppress startup paint-frame requests");
+  assert.ok(paintStallRecovery.cancelRafCalls >= 2, "timeout fallback must cancel every unresolved animation frame");
+  assert.equal(paintStallRecovery.identity.widgetInstanceId, paintStallRecovery.hiddenInstanceId);
+  assert.equal(paintStallRecovery.identity.openAttemptId, widgetData.openAttemptId);
+  assert.match(paintStallRecovery.identity.widgetInstanceId, /^widget-/);
+  assert.equal(paintStallRecovery.identity.displayMode, "fullscreen");
+  assert.equal(paintStallRecovery.evidence.reactMounted, true);
+  assert.equal(paintStallRecovery.evidence.projectHydrated, true);
+  assert.equal(paintStallRecovery.evidence.canvasRendered, true);
+  assert.equal(paintStallRecovery.evidence.canvasVisible, true);
+  assert.ok(paintStallRecovery.evidence.canvasWidth > 0 && paintStallRecovery.evidence.canvasHeight > 0);
+  assert.ok(paintStallRecovery.canvas.width > 0 && paintStallRecovery.canvas.height > 0);
+  assert.equal(paintStallRecovery.bridgeStage, "ready");
+  assert.equal(paintStallRecovery.overlay, false);
+  await cdp.send("Runtime.evaluate", {
+    expression: `(() => {
+      const removedInstanceId = ${JSON.stringify(paintStallRecovery.identity.widgetInstanceId)};
+      document.getElementById('widget-paint-stall')?.remove();
+      window.__HOST_RECORDS__.readyInstances = window.__HOST_RECORDS__.readyInstances.filter(
+        (widgetInstanceId) => widgetInstanceId !== removedInstanceId
+      );
+      window.__HOST_RECORDS__.toolCalls = window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId !== removedInstanceId
+      );
+      window.__HOST_RECORDS__.openProjectCalls -= 1;
+    })()`
+  });
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  const latePaintStallReady = await cdp.send("Runtime.evaluate", {
+    expression: `window.__HOST_RECORDS__.readyInstances.includes(${JSON.stringify(paintStallRecovery.identity.widgetInstanceId)})`,
+    returnByValue: true
+  });
+  assert.equal(latePaintStallReady.result.value, false, "removed paint-stall instance must not send a late ready acknowledgement");
 
   const historicalPolling = await waitForEvaluation(cdp, `(async () => {
     const original = document.getElementById('widget');

@@ -2123,6 +2123,29 @@ button.achievement-card.is-unlocked:focus-visible {
   border-radius: var(--radius-lg);
 }
 
+.canvas-toolbar-divider {
+  width: var(--border-weight-sm);
+  height: 20px;
+  flex: 0 0 var(--border-weight-sm);
+  background: var(--color-border-divider);
+}
+
+.canvas-refresh-button.is-refreshing .app-icon {
+  animation: canvas-refresh-spin 0.8s linear infinite;
+}
+
+@keyframes canvas-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-refresh-button.is-refreshing .app-icon {
+    animation: none;
+  }
+}
+
 .canvas-tool-button,
 .canvas-toolbar-button,
 .canvas-page-button,
@@ -2160,6 +2183,15 @@ button.achievement-card.is-unlocked:focus-visible {
 .canvas-tool-button:disabled {
   color: var(--color-disabled);
   cursor: default;
+}
+
+.canvas-toolbar-button:disabled {
+  color: var(--color-disabled);
+  cursor: default;
+}
+
+.canvas-toolbar-button:disabled:hover {
+  background: transparent;
 }
 
 .canvas-tool-button:disabled:hover {

@@ -8,45 +8,45 @@ roles:
     agent_id: /root/product_agent
     thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:42:48Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-native-acceptance-0-4-28
+    last_seen: 2026-07-17T15:38:15Z
+    handoff_source: issue-manual-canvas-latest-revision-refresh
+    last_report: issue-manual-canvas-latest-revision-refresh
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Froze v0.4.28 acceptance and confirmed native-host evidence is the final pre-release gate
+    notes: Defined the manual latest-revision refresh boundary, dirty-save safety, and acceptance criteria
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:13:27Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-fill-container
+    last_seen: 2026-07-17T15:38:15Z
+    handoff_source: issue-manual-canvas-latest-revision-refresh
+    last_report: issue-manual-canvas-latest-revision-refresh
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Approved the user-requested transparent fill-width outer boundary with 24px padding, 16px radius, themed divider border, and no horizontal overflow
+    notes: Specified the right global toolbar refresh action, busy feedback, safe-save wording, and accessibility states
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-16T14:13:27Z
-    handoff_source: issue-inline-framework-questions
-    last_report: integration-summary-inline-framework-fill-container
+    last_seen: 2026-07-17T15:59:50Z
+    handoff_source: issue-manual-canvas-latest-revision-refresh
+    last_report: integration-summary-manual-canvas-latest-revision-refresh
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Updated design.md with the fill-width framed inline form and complete auto-height contract
+    notes: Added the Manual Canvas Refresh placement, safety, feedback, and navigation-preservation contract
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
     thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T12:45:51Z
-    handoff_source: issue-plugin-install-depends-on-project-directory
-    last_report: solution-plugin-independent-stable-install
+    last_seen: 2026-07-18T01:58:16Z
+    handoff_source: issue-native-widget-thread-return-paint-stall
+    last_report: integration-summary-native-widget-thread-return-paint-stall
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified the completed repo-local to official Git stable installation conversion and protected Canvasight user data
+    notes: Implemented bounded paint and presentation readiness; user confirmed the original thread-return white-screen symptom is resolved and the issue is closed
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,34 +63,34 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T12:45:51Z
-    handoff_source: issue-plugin-install-depends-on-project-directory
-    last_report: integration-summary-plugin-independent-stable-install
+    last_seen: 2026-07-18T01:58:16Z
+    handoff_source: issue-native-widget-thread-return-paint-stall
+    last_report: integration-summary-native-widget-thread-return-paint-stall
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified both Codex CLIs resolve the independent 0.4.28 install from outside the repo; native-host refresh remains post-restart
+    notes: Revalidated the combined 0.4.29 candidate; all automated gates passed and the user accepted the original native white-screen issue
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
     thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T12:45:51Z
-    handoff_source: issue-plugin-install-depends-on-project-directory
-    last_report: integration-summary-plugin-independent-stable-install
+    last_seen: 2026-07-17T15:59:50Z
+    handoff_source: issue-manual-canvas-latest-revision-refresh
+    last_report: integration-summary-manual-canvas-latest-revision-refresh
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Audited required sources and drove bilingual README clarification for stable independent versus local development installation
+    notes: Updated bilingual features and basic usage for safe latest-version canvas refresh
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T12:45:51Z
-    handoff_source: issue-plugin-install-depends-on-project-directory
-    last_report: integration-summary-plugin-independent-stable-install
+    last_seen: 2026-07-18T01:58:16Z
+    handoff_source: issue-native-widget-thread-return-paint-stall
+    last_report: integration-summary-native-widget-thread-return-paint-stall
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Recorded clean baseline 73ecda7 and owns selective report-only Git closure for the independent-install conversion
+    notes: Owns selective Git closure for the user-authorized combined 0.4.29 manual-refresh and thread-return paint-stall scope
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

@@ -849,6 +849,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     undo
   } = useScatterStore();
   const [loadingProject, setLoadingProject] = useState(true);
+  const [refreshingDocument, setRefreshingDocument] = useState(false);
   const nativeWidget = isNativeWidgetShell();
   const [startupStage, setStartupStageState] = useState<CanvasightStartupStage>(() =>
     nativeWidget ? getCanvasightStartupIdentity().stage : "ready"
@@ -891,6 +892,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const saveQueuedRef = useRef(false);
   const skipNextSaveRef = useRef(false);
   const reloadingExternalDocumentRef = useRef(false);
+  const refreshDocumentPromiseRef = useRef<Promise<void> | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const runFeedbackTimerRef = useRef<number | null>(null);
   const urlThreadIdRef = useRef(threadIdFromUrl());
@@ -1206,6 +1208,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     ): Promise<void> => {
       const document = normalizeDocument(projectPath, result.document);
       const currentState = useScatterStore.getState();
+      if (
+        currentState.project?.path === projectPath &&
+        documentRevisionRef.current !== null &&
+        result.documentRevision < documentRevisionRef.current
+      ) {
+        return;
+      }
       const currentActivePage = preserveLocalNavigation
         ? currentState.pages.find((page) => page.id === currentState.activePageId)
         : null;
@@ -1259,13 +1268,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         displayDocument.activePageId === currentState.activePageId &&
         displayDocument.nodes.some((node) => node.id === currentState.selectedNodeId)
       ) {
-        setSelectedNodeId(currentState.selectedNodeId);
+        selectNode(currentState.selectedNodeId);
       }
       hydratedRef.current = true;
       setStatus(status ?? t("app.openedProject", { name: result.project.name }));
       await claimUrlThreadForProject(result.project.path);
     },
-    [claimUrlThreadForProject, setProjectDocument, setSelectedNodeId, setStatus, t]
+    [claimUrlThreadForProject, selectNode, setProjectDocument, setStatus, t]
   );
 
   const openProjectPath = useCallback(
@@ -1303,6 +1312,73 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [applyOpenedProject, setProjectDocument, setStatus, t]
   );
 
+  const refreshLatestDocument = useCallback((): void => {
+    if (!project || !hydratedRef.current || refreshDocumentPromiseRef.current) return;
+
+    const projectPath = project.path;
+    const refreshPromise = (async () => {
+      setRefreshingDocument(true);
+      try {
+        const saveDeadline = Date.now() + 12_000;
+        const hasPendingLocalSave = () =>
+          localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current ||
+          saveRequestCountRef.current > 0 ||
+          saveInFlightRef.current;
+
+        if (hasPendingLocalSave()) setStatus(t("status.refreshWaitingForSave"));
+        while (hasPendingLocalSave()) {
+          if (useScatterStore.getState().project?.path !== projectPath) return;
+          if (Date.now() >= saveDeadline) throw new Error(t("status.refreshSaveTimeout"));
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+        }
+
+        const revisionBeforeRefresh = documentRevisionRef.current;
+        const mutationGenerationAtRequest = localMutationGenerationRef.current;
+        const result = await canvasightApi.openProject(projectPath);
+        const currentState = useScatterStore.getState();
+        const currentRevision = documentRevisionRef.current;
+        const localStateChangedWhileRefreshing =
+          currentState.project?.path !== projectPath ||
+          localMutationGenerationRef.current !== mutationGenerationAtRequest ||
+          localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current ||
+          saveRequestCountRef.current > 0 ||
+          saveInFlightRef.current;
+
+        if (localStateChangedWhileRefreshing) {
+          setRunStatus(t("status.refreshDeferredForLocalChanges"), "negative");
+          return;
+        }
+
+        if (currentRevision !== null && result.documentRevision < currentRevision) {
+          setRunStatus(t("status.documentAlreadyLatest"), "information");
+          return;
+        }
+
+        const refreshed = revisionBeforeRefresh === null || result.documentRevision > revisionBeforeRefresh;
+        const refreshMessage = refreshed ? t("status.documentRefreshed") : t("status.documentAlreadyLatest");
+        await applyOpenedProject(
+          projectPath,
+          result,
+          refreshMessage,
+          true
+        );
+        showRunFeedback(refreshMessage, refreshed ? "positive" : "information");
+      } catch (error) {
+        setRunStatus(
+          error instanceof Error && error.message === t("status.refreshSaveTimeout")
+            ? error.message
+            : t("status.documentRefreshFailed"),
+          "negative"
+        );
+      } finally {
+        setRefreshingDocument(false);
+        refreshDocumentPromiseRef.current = null;
+      }
+    })();
+
+    refreshDocumentPromiseRef.current = refreshPromise;
+  }, [applyOpenedProject, project, setRunStatus, setStatus, showRunFeedback, t]);
+
   useEffect(() => {
     if (startupInitializedRef.current) return;
     startupInitializedRef.current = true;
@@ -1325,7 +1401,73 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         });
     };
 
-    const nextPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    const nextPaint = () => new Promise<void>((resolve) => {
+      let settled = false;
+      let animationFrameId: number | null = null;
+      let timeoutId: number | null = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (animationFrameId !== null) {
+          window.cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        resolve();
+      };
+      timeoutId = window.setTimeout(finish, 200);
+      animationFrameId = window.requestAnimationFrame(finish);
+    });
+    const waitForPresentationSignal = (canvas: HTMLElement | null) => new Promise<void>((resolve) => {
+      let settled = false;
+      let timeoutId: number | null = null;
+      let observer: ResizeObserver | null = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
+        observer?.disconnect();
+        document.removeEventListener("visibilitychange", finish);
+        window.removeEventListener("canvasight:host-context-changed", finish);
+        resolve();
+      };
+      timeoutId = window.setTimeout(finish, 100);
+      document.addEventListener("visibilitychange", finish, { once: true });
+      window.addEventListener("canvasight:host-context-changed", finish, { once: true });
+      if (canvas) {
+        observer = new ResizeObserver(finish);
+        observer.observe(canvas);
+      }
+    });
+    const waitForRenderableCanvas = async (bindingKey: string) => {
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
+        await nextPaint();
+        const canvas = canvasShellRef.current;
+        const appRoot = canvas?.closest(".canvasight-app");
+        const rect = canvas?.getBoundingClientRect();
+        const style = canvas ? getComputedStyle(canvas) : null;
+        const centerX = rect ? Math.min(Math.max(rect.left + rect.width / 2, 0), Math.max(window.innerWidth - 1, 0)) : 0;
+        const centerY = rect ? Math.min(Math.max(rect.top + rect.height / 2, 0), Math.max(window.innerHeight - 1, 0)) : 0;
+        const hitTarget = rect && rect.width > 0 && rect.height > 0 ? document.elementFromPoint(centerX, centerY) : null;
+        if (
+          document.visibilityState === "visible" &&
+          getCanvasightStartupIdentity().displayMode === "fullscreen" &&
+          canvas?.isConnected &&
+          rect && rect.width > 0 && rect.height > 0 &&
+          style?.display !== "none" && style?.visibility !== "hidden" &&
+          hitTarget && appRoot?.contains(hitTarget)
+        ) {
+          return { canvas, rect };
+        }
+        await waitForPresentationSignal(canvas);
+      }
+      throw new Error("Canvasight canvas did not become visibly renderable within 30000ms.");
+    };
     const waitForFullscreen = async (): Promise<void> => {
       const deadline = Date.now() + 8_000;
       while (Date.now() < deadline) {
@@ -1357,14 +1499,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         }
 
         if (nativeWidget) {
-          await nextPaint();
-          await nextPaint();
           await waitForFullscreen();
-          const canvas = canvasShellRef.current;
-          const rect = canvas?.getBoundingClientRect();
-          if (!canvas || !rect || rect.width <= 0 || rect.height <= 0) {
-            throw new Error("Canvasight canvas did not render with a visible size.");
-          }
+          const { canvas, rect } = await waitForRenderableCanvas(startupBindingKey);
           await canvasightApi.reportWidgetReady({
             projectHydrated: hydratedRef.current,
             canvasRendered: canvas.isConnected,
@@ -2788,6 +2924,19 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 <Background gap={28} size={1} color="rgba(125, 125, 125, 0.22)" />
               </ReactFlow>
               <div className="canvas-run-toolbar" aria-label={t("topbar.windowActions")}>
+                <TooltipAnchor label={refreshingDocument ? t("canvas.refreshing") : t("canvas.refreshLatest")} side="bottom" align="end">
+                  <IconButton
+                    className={`canvas-toolbar-button canvas-refresh-button ${refreshingDocument ? "is-refreshing" : ""}`}
+                    filled={false}
+                    icon="arrow-rotate-cw"
+                    size="lg"
+                    aria-label={refreshingDocument ? t("canvas.refreshing") : t("canvas.refreshLatest")}
+                    aria-busy={refreshingDocument}
+                    disabled={refreshingDocument}
+                    onClick={refreshLatestDocument}
+                  />
+                </TooltipAnchor>
+                <span className="canvas-toolbar-divider" aria-hidden />
                 <TooltipAnchor label={t("topbar.runCurrentTask")} shortcut={shortcuts.runCurrentTask} side="bottom" align="end">
                   <IconButton
                     className="canvas-toolbar-button"

@@ -45,6 +45,17 @@ The active implementation is a Codex plugin workspace, not a landing page. The f
 
 Keep these regions stable. Opening drawers, changing node state, or hovering connected edges should clarify the current context without resizing the canvas unpredictably.
 
+### Manual Canvas Refresh
+
+The canvas has one global “Refresh to latest version” action in the upper-right canvas tool group. Use the shared rotate-arrow icon, keep it visually separated from Run and drawer commands with a quiet divider, and expose its meaning through a localized tooltip and accessible label. This is a project-document synchronization command, not a browser reload and not a Page-local reset.
+
+- Refresh is safe by default: wait for pending local autosaves to finish before reading the latest daemon-backed document. Never replace unsaved node text, positions, Pages, selection-related edits, or other local mutations with the fetched version.
+- If saving does not settle within the bounded wait, cancel refresh and preserve the current canvas. If new local changes appear while the refresh request is in flight, defer applying the fetched document, preserve the current canvas, and ask the user to save and retry.
+- While refresh is busy, keep the button in place, disable duplicate activation, set an accessible busy state, and rotate the icon. Respect reduced-motion preferences by communicating busy state without requiring animation.
+- Completion feedback must distinguish `up to date` from `updated`: report that the canvas is already current when the fetched revision did not advance, and report that the latest canvas version was applied only when a newer revision was loaded.
+- Failure feedback must say that refresh failed or was cancelled and that the current content was preserved. A failed refresh restores the action; it must not blank the canvas, fall back to an empty document, or imply that newer AI output was loaded.
+- Applying a successful refresh should preserve task-local navigation where it remains valid, including the active Page, viewport, and selection. Shared document content may update; refresh must not unnecessarily disorient the current task.
+
 ## Task Node Design
 
 Task nodes should feel like compact work objects rather than document cards:
