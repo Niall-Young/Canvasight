@@ -2,15 +2,15 @@
 schema_version: 1
 report_id: issue-native-widget-zero-size-0-4-31
 report_type: issue
-status: assigned
+status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 3
+version: 4
 agent_id: /root/development_agent
 thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
 created_at: 2026-07-18T08:21:54Z
-updated_at: 2026-07-18T08:27:24Z
+updated_at: 2026-07-18T11:33:53Z
 depends_on:
   - issue-publish-stable-release-0-4-31
 related_files:
@@ -19,10 +19,11 @@ related_files:
   - plugins/canvasight/src/lib/widgetBridge.ts
   - plugins/canvasight/mcp/server.source.mjs
   - plugins/canvasight/tests/widget-runtime-smoke.mjs
-verification_status: not_started
+verification_status: passed
 verification_evidence:
   - Native 0.4.31 open attempt reached fullscreen with React mounted, but project hydration and visible non-zero canvas evidence never completed within 30000ms.
   - After navigating the target task to the Codex main window, a fresh exact-0.4.31 attempt reached verified fullscreen ready with a visible 788 by 794 canvas; remaining in-widget acceptance is pending.
+  - Exact 0.4.34 restarted-host strict ready passed at fullscreen 788 by 794 with all render evidence true, then three real task round-trips, controls, Refresh, same-task Run and post-Run stability passed without sidebar recovery.
 solution_report: agent-reports/resolved/solution-native-widget-zero-size-0-4-31.md
 ---
 
@@ -82,19 +83,19 @@ Development Agent
 
 ## Closure Criteria
 
-- [ ] 根因明确并写入 solution report
-- [ ] 失败路径有针对性自动化覆盖
-- [ ] 若修改 runtime/web 工件则升级新版本并重新执行完整候选门禁
-- [ ] exact 新候选重启后完成完整原生宿主验收
-- [ ] 原发布 issue 明确记录 0.4.31 禁止发布或安全恢复依据
+- [x] 根因明确并写入 solution report
+- [x] 失败路径有针对性自动化覆盖
+- [x] 若修改 runtime/web 工件则升级新版本并重新执行完整候选门禁
+- [x] exact 新候选重启后完成完整原生宿主验收
+- [x] 原发布 issue 明确记录 0.4.31 禁止发布或安全恢复依据
 
 ## 当前状态
 
-assigned。Development Agent 已将首次失败定位到 native host presentation geometry，并给出受控前台重验方案；新实例已完成完整 ready，但真实 Refresh、A→B→A、同任务 Run、meaningful control 与 late metadata 验收仍待完成。
+resolved。历史 0.4.31 的零尺寸风险由 0.4.34 的严格 renderability gate、受控 presentation pulse 与完整真实 native 验收关闭；0.4.31 本身继续禁止发布。
 
 ## 处理结果
 
-完成只读归因并获得受控前台的新实例 ready 证据；关联验收尚未完成，0.4.31 发布继续停止，远端没有 tag、Release、workflow 或 stable mutation。
+完成根因、自动化与 exact 0.4.34 真实宿主闭环；0.4.31 发布继续永久停止，0.4.34 承担正式发布候选。
 
 ## 修改文件
 
@@ -105,9 +106,9 @@ assigned。Development Agent 已将首次失败定位到 native host presentatio
 
 - 原生 instance-bound ready 回执。
 - MCP 生命周期日志与 Desktop host 日志。
-- 修复后的隔离矩阵和真实原生宿主验收。
+- 0.4.34 修复后的隔离矩阵和真实原生宿主验收。
 - controlled foreground ready: `open-mrq3rbdl-e08223ec591e` / `widget-ba18b1b9-1986-40a8-84ff-c8f541ae2290`, verified 788×794 at `2026-07-18T08:26:07.557Z`.
 
 ## 后续风险
 
-首次 0×0 失败必须保留为宿主 presentation 风险；受控前台 ready 不能替代其余真实交互门禁。任何候选工件变化都会使 0.4.31 的既有安装和测试证据失效。
+首次 0×0 失败继续保留为宿主 presentation 历史证据；未来宿主能力变化时仍需 strict visible-ready 与真实任务往返门禁。

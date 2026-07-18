@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:11:42Z
+    last_seen: 2026-07-18T11:33:53Z
     handoff_source: issue-native-widget-task-switch-remount-blank-0-4-32
-    last_report: solution-native-widget-task-switch-remount-mode-pulse-0-4-34
+    last_report: issue-native-widget-task-switch-remount-blank-0-4-32
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented the 0.4.34 one-shot host-supported inline/fullscreen pulse and bounded presentation diagnostics; exact native acceptance remains pending
+    notes: 0.4.34 one-shot host-supported inline/fullscreen pulse and bounded diagnostics passed exact native release acceptance; remount issue is resolved
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:11:42Z
+    last_seen: 2026-07-18T11:33:53Z
     handoff_source: issue-native-widget-task-switch-remount-blank-0-4-32
-    last_report: integration-summary-native-widget-mode-pulse-0-4-34
+    last_report: integration-summary-test-supervisor-0-4-34-native-acceptance
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed enhanced 0.4.34 widget runtime including delayed inline, permanent zero-size and teardown rejection; allowed local release matrix only
+    notes: Independently accepted exact 0.4.34 strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability for release
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:17:07Z
+    last_seen: 2026-07-18T11:33:53Z
     handoff_source: issue-publish-stable-release-0-4-34
     last_report: issue-publish-stable-release-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Scoped 0.4.34 implementation commit and exact immutable install are complete; remote remains v0.4.28 pending restarted-host native acceptance
+    notes: Native gate passed; owns report-only release commit and guarded main/tag/workflow/Release/stable closure while remote remains v0.4.28
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

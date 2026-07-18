@@ -10,11 +10,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-34` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 2 | 2026-07-18T11:17:07Z
-- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 5 | 2026-07-18T11:11:42Z
+- `issue-publish-stable-release-0-4-34` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 3 | 2026-07-18T11:33:53Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
-- `issue-native-widget-zero-size-0-4-31` | assigned | high | Development Agent | 0.4.31 重启后原生 Widget 画布保持零尺寸 | `agent-reports/assigned/issue-native-widget-zero-size-0-4-31.md` | 3 | 2026-07-18T08:27:24Z
 - `issue-publish-stable-release-0-4-31` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 5 | 2026-07-18T08:42:24Z
 - `issue-publish-stable-release-0-4-30` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 3 | 2026-07-18T07:24:45Z
 - `issue-publish-stable-release-0-4-29` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.29 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-29.md` | 2 | 2026-07-18T02:41:35Z
@@ -33,8 +31,11 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
-- `agent-reports/resolved/integration-summary-native-widget-mode-pulse-0-4-34.md` - integrates the gated one-shot F,F,F,I,F pulse, diagnostics, enhanced rejection tests, complete local matrix, exact install and the remaining native gate (v3).
-- `agent-reports/resolved/solution-native-widget-task-switch-remount-mode-pulse-0-4-34.md` - records the capability-gated inline/fullscreen pulse while keeping the native issue open pending real host acceptance.
+- `agent-reports/resolved/integration-summary-test-supervisor-0-4-34-native-acceptance.md` - independently passes exact 0.4.34 strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability.
+- `agent-reports/resolved/issue-native-widget-zero-size-0-4-31.md` - closes the historical zero-size blocker through exact 0.4.34 strict ready, recovery and full native acceptance while keeping 0.4.31 forbidden.
+- `agent-reports/resolved/issue-native-widget-task-switch-remount-blank-0-4-32.md` - exact 0.4.34 passes strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability without sidebar recovery.
+- `agent-reports/resolved/integration-summary-native-widget-mode-pulse-0-4-34.md` - integrates the gated one-shot F,F,F,I,F pulse, diagnostics, complete local matrix, exact install and passed native release gate (v4).
+- `agent-reports/resolved/solution-native-widget-task-switch-remount-mode-pulse-0-4-34.md` - records the capability-gated inline/fullscreen pulse and exact 0.4.34 native acceptance that closes the remount issue.
 - `agent-reports/resolved/integration-summary-native-widget-representation-rejection-0-4-33.md` - exact restarted-host task switch rejects same-mode fullscreen retries; the same Widget only becomes ready after the Codex sidebar toggle.
 - `agent-reports/resolved/issue-refresh-base-document-fingerprint-order.md` - exact 0.4.32 native clean and session-local zoom Refresh prove the authoritative raw save-base fix; unrelated remount blank remains separate.
 - `agent-reports/resolved/integration-summary-native-widget-representation-0-4-33.md` - integrates bounded fullscreen re-presentation, focused and complete local gates, and the remaining exact native-host/Release boundary.
