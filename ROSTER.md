@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T01:58:16Z
-    handoff_source: issue-native-widget-thread-return-paint-stall
-    last_report: integration-summary-native-widget-thread-return-paint-stall
+    last_seen: 2026-07-18T02:08:02Z
+    handoff_source: issue-publish-stable-release-0-4-29
+    last_report: issue-publish-stable-release-0-4-29
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns selective Git closure for the user-authorized combined 0.4.29 manual-refresh and thread-return paint-stall scope
+    notes: Owns v0.4.29 tag, Release asset, stable fast-forward, and marketplace update-channel closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
