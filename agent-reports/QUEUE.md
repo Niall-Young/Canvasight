@@ -10,8 +10,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-33` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 2 | 2026-07-18T10:01:47Z
-- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 3 | 2026-07-18T10:01:47Z
+- `issue-publish-stable-release-0-4-34` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 1 | 2026-07-18T11:11:42Z
+- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 5 | 2026-07-18T11:11:42Z
+- `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
 - `issue-native-widget-zero-size-0-4-31` | assigned | high | Development Agent | 0.4.31 重启后原生 Widget 画布保持零尺寸 | `agent-reports/assigned/issue-native-widget-zero-size-0-4-31.md` | 3 | 2026-07-18T08:27:24Z
 - `issue-publish-stable-release-0-4-31` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 5 | 2026-07-18T08:42:24Z
@@ -32,6 +33,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-native-widget-mode-pulse-0-4-34.md` - integrates the gated one-shot F,F,F,I,F pulse, diagnostics, enhanced rejection tests, complete local matrix and the remaining exact native gate (v2).
+- `agent-reports/resolved/solution-native-widget-task-switch-remount-mode-pulse-0-4-34.md` - records the capability-gated inline/fullscreen pulse while keeping the native issue open pending real host acceptance.
+- `agent-reports/resolved/integration-summary-native-widget-representation-rejection-0-4-33.md` - exact restarted-host task switch rejects same-mode fullscreen retries; the same Widget only becomes ready after the Codex sidebar toggle.
 - `agent-reports/resolved/issue-refresh-base-document-fingerprint-order.md` - exact 0.4.32 native clean and session-local zoom Refresh prove the authoritative raw save-base fix; unrelated remount blank remains separate.
 - `agent-reports/resolved/integration-summary-native-widget-representation-0-4-33.md` - integrates bounded fullscreen re-presentation, focused and complete local gates, and the remaining exact native-host/Release boundary.
 - `agent-reports/resolved/solution-native-widget-task-switch-remount-presentation-retry-0-4-33.md` - retries standard fullscreen presentation without rehydration, size notifications or relaxed ready evidence.

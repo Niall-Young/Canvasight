@@ -1550,7 +1550,26 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const deadline = Date.now() + 30_000;
       let nextPresentationRetryAt = Date.now() + 250;
       let presentationRetryIndex = 0;
+      let presentationPulseAttempted = false;
       const presentationRetryDelays = [250, 1_000];
+      const presentationSnapshot = (
+        canvas: HTMLElement | null,
+        rect: DOMRect | undefined,
+        style: CSSStyleDeclaration | null,
+        hitTarget: Element | null,
+        appRoot: Element | null | undefined
+      ) => ({
+        documentVisibility: document.visibilityState,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        canvasConnected: Boolean(canvas?.isConnected),
+        canvasWidth: rect?.width ?? 0,
+        canvasHeight: rect?.height ?? 0,
+        canvasDisplay: style?.display ?? "missing",
+        canvasVisibility: style?.visibility ?? "missing",
+        hitTarget: hitTarget ? `${hitTarget.tagName.toLowerCase()}${hitTarget.id ? `#${hitTarget.id}` : ""}` : "none",
+        hitInsideApp: Boolean(hitTarget && appRoot?.contains(hitTarget))
+      });
       while (Date.now() < deadline) {
         if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
         await nextPaint();
@@ -1569,10 +1588,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           style?.display !== "none" && style?.visibility !== "hidden" &&
           hitTarget && appRoot?.contains(hitTarget)
         ) {
+          window.canvasightMcp?.recordPresentationDiagnostic("renderable", presentationSnapshot(canvas, rect, style, hitTarget, appRoot));
           return { canvas, rect };
         }
         if (presentationRetryIndex < presentationRetryDelays.length && Date.now() >= nextPresentationRetryAt) {
           presentationRetryIndex += 1;
+          window.canvasightMcp?.recordPresentationDiagnostic(
+            "fullscreen-retry-check",
+            { retryIndex: presentationRetryIndex, ...presentationSnapshot(canvas, rect, style, hitTarget, appRoot) }
+          );
           try {
             await window.canvasightMcp?.requestFullscreenPresentation();
           } catch {
@@ -1583,8 +1607,25 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           nextPresentationRetryAt = Date.now() + (presentationRetryDelays[presentationRetryIndex] ?? 1_000);
           continue;
         }
+        if (presentationRetryIndex >= presentationRetryDelays.length && !presentationPulseAttempted) {
+          presentationPulseAttempted = true;
+          window.canvasightMcp?.recordPresentationDiagnostic(
+            "pulse-check",
+            presentationSnapshot(canvas, rect, style, hitTarget, appRoot)
+          );
+          const pulseResult = await window.canvasightMcp?.requestPresentationPulse(bindingKey);
+          if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
+          window.canvasightMcp?.recordPresentationDiagnostic("pulse-result", {
+            result: pulseResult ?? "unavailable",
+            ...presentationSnapshot(canvas, rect, style, hitTarget, appRoot)
+          });
+          continue;
+        }
         await waitForPresentationSignal(canvas);
       }
+      window.canvasightMcp?.recordPresentationDiagnostic("renderability-timeout", {
+        elapsedMs: 30_000
+      });
       throw new Error("Canvasight canvas did not become visibly renderable within 30000ms.");
     };
     const waitForFullscreen = async (): Promise<void> => {
@@ -2922,7 +2963,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 `threadId=${threadIdFromUrl()}`,
                 `openAttemptId=${getCanvasightStartupIdentity().openAttemptId}`,
                 `widgetInstanceId=${getCanvasightStartupIdentity().widgetInstanceId}`,
-                `displayMode=${getCanvasightStartupIdentity().displayMode}`
+                `displayMode=${getCanvasightStartupIdentity().displayMode}`,
+                ...((window.canvasightMcp?.getPresentationDiagnostics() ?? []).map(
+                  (entry) => `presentation=${JSON.stringify(entry)}`
+                ))
               ].join("\n")}
               onRetry={() => window.location.reload()}
               onReopenInNewTask={reopenCanvasightInNewTask}

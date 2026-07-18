@@ -6,22 +6,23 @@ status: resolved
 owner: Development Agent
 created_by: Development Agent
 priority: high
-version: 1
+version: 2
 agent_id: /root/development_agent
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T09:57:09Z
-updated_at: 2026-07-18T09:57:09Z
+updated_at: 2026-07-18T10:50:41Z
 depends_on:
   - issue-native-widget-task-switch-remount-blank-0-4-32
 related_files:
   - plugins/canvasight/src/App.tsx
   - plugins/canvasight/src/lib/widgetBridge.ts
   - plugins/canvasight/tests/widget-runtime-smoke.mjs
-verification_status: passed
+verification_status: not_applicable
 verification_evidence:
   - Focused 0.4.33 widget runtime smoke restores a fresh zero-size instance on its second fullscreen request without rehydration or size notifications.
   - A permanently zero-size host receives exactly one initial request and two retries, never reports ready, and opens the project only once.
   - Test Supervisor independently passed the frozen 0.4.33 widget runtime, typecheck, build, MCP bundle, release verify and diff checks.
+  - Exact 0.4.33 native A to B to A failed: same-mode retries did not present the fresh Widget; only the Codex sidebar toggle restored it.
 ---
 
 # 用有界 fullscreen re-presentation 恢复 task-switch fresh Widget
@@ -60,7 +61,7 @@ bridge 暴露带 1250ms timeout 的 `requestFullscreenPresentation()`。App 在 
 
 ## 处理结果
 
-0.4.33 已实现有界 fullscreen re-presentation。fake host 第一次请求返回 fullscreen 但保持 0×0，第二次请求才布局；同一实例只 ready 一次且 project open 只有一次。永久 0×0 fixture 证明总请求严格为三次、ready 为零、size-changed 为零。
+0.4.33 已实现有界 fullscreen re-presentation。fake host 第一次请求返回 fullscreen 但保持 0×0，第二次请求才布局；同一实例只 ready 一次且 project open 只有一次。永久 0×0 fixture 证明总请求严格为三次、ready 为零、size-changed 为零。但 exact native 宿主不因同模式请求重新布局，因此该方案作为实现尝试保留审计，不能关闭父 issue 或进入 Release。
 
 ## 修改文件
 
@@ -79,4 +80,4 @@ bridge 暴露带 1250ms timeout 的 `requestFullscreenPresentation()`。App 在 
 
 ## 后续风险
 
-自动化只能证明标准 re-presentation 请求的边界，不能替代真实 Codex Desktop compositor/layout。issue 保持 assigned，直到 exact 0.4.33 重启后在不折叠侧边栏的条件下完成至少两轮 A→B→A。
+真实 Codex Desktop 已否决该方案。重复 fullscreen 只能重申状态，不能等价于侧栏 collapse/reopen；0.4.33 永久禁止发布。

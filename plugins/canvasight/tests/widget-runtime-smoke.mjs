@@ -253,9 +253,32 @@ function hostHtml(widgetData) {
       const sourceFrame = Array.from(document.querySelectorAll('iframe')).find((candidate) => candidate.contentWindow === event.source);
       const frameId = sourceFrame && sourceFrame.id;
       window.__HOST_RECORDS__.displayRequests.push({ frameId, params: message.params });
-      result(event.source, message.id, { mode: 'fullscreen' });
       const frameRequests = window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frameId).length;
-      if (sourceFrame && sourceFrame.dataset.presentationRetry === 'true' && frameRequests === 2) {
+      const pulseFixture = sourceFrame && (
+        sourceFrame.dataset.presentationPulse === 'true' ||
+        sourceFrame.dataset.presentationPermanentZero === 'true' ||
+        sourceFrame.dataset.presentationPulseTeardown === 'true'
+      );
+      if (pulseFixture && message.params && message.params.mode === 'inline') {
+        if (sourceFrame.dataset.presentationPulseTeardown === 'true') {
+          window.__HOST_TEARDOWN__(event.source);
+          result(event.source, message.id, { mode: 'inline' });
+          return;
+        }
+        result(event.source, message.id, { mode: 'inline' });
+        send({
+          jsonrpc: '2.0',
+          method: 'ui/notifications/host-context-changed',
+          params: { displayMode: 'inline', containerDimensions: { width: 0, height: 0 } }
+        }, event.source);
+        return;
+      }
+      result(event.source, message.id, { mode: 'fullscreen' });
+      const shouldRestore = sourceFrame && (
+        (sourceFrame.dataset.presentationRetry === 'true' && frameRequests === 2) ||
+        (sourceFrame.dataset.presentationPulse === 'true' && frameRequests === 5)
+      );
+      if (shouldRestore) {
         sourceFrame.style.width = '1200px';
         sourceFrame.style.height = '800px';
         send({
@@ -1710,19 +1733,101 @@ try {
   assert.equal(presentationRetry.sizeNotices, 0, "fullscreen re-presentation must not enable workspace auto-resize");
   assert.equal(presentationRetry.overlay, false);
 
+  const presentationPulse = await waitForEvaluation(cdp, `(async () => {
+    const readyCountBefore = window.__HOST_RECORDS__.readyInstances.length;
+    const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    const sizeNoticesBefore = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length;
+    const frame = document.createElement('iframe');
+    frame.id = 'widget-presentation-pulse';
+    frame.dataset.presentationPulse = 'true';
+    frame.src = '/widget';
+    frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const deadline = Date.now() + 7000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.readyInstances.length === readyCountBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const widgetInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    const requests = window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id);
+    const readyCalls = window.__HOST_RECORDS__.toolCalls.filter(
+      (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+    );
+    const canvas = frame.contentDocument && frame.contentDocument.querySelector('.canvas-shell');
+    const rect = canvas && canvas.getBoundingClientRect();
+    return readyCalls.length ? {
+      widgetInstanceId,
+      requests,
+      openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      saveCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/document')
+      ).length,
+      readyCalls: readyCalls.length,
+      readyIdentity: {
+        widgetInstanceId: readyCalls[0].widgetInstanceId,
+        displayMode: readyCalls[0].displayMode
+      },
+      canvas: rect && { width: rect.width, height: rect.height },
+      diagnostics: frame.contentWindow.__CANVASIGHT_PRESENTATION_DIAGNOSTICS__,
+      sizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length - sizeNoticesBefore
+    } : false;
+  })()`, "controlled inline fullscreen presentation pulse", 9000);
+  assert.deepEqual(
+    presentationPulse.requests.map((request) => request.params),
+    [{ mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'inline' }, { mode: 'fullscreen' }],
+    "a fresh stalled binding must use the fixed F,F,F,I,F upper bound"
+  );
+  assert.equal(presentationPulse.openCalls, 1, "presentation pulse must not rehydrate the project");
+  assert.equal(presentationPulse.saveCalls, 0, "presentation pulse must not persist presentation-only state");
+  assert.equal(presentationPulse.readyCalls, 1, "inline presentation must never acknowledge ready");
+  assert.equal(presentationPulse.readyIdentity.widgetInstanceId, presentationPulse.widgetInstanceId);
+  assert.equal(presentationPulse.readyIdentity.displayMode, "fullscreen");
+  assert.ok(presentationPulse.canvas.width > 0 && presentationPulse.canvas.height > 0);
+  assert.equal(presentationPulse.sizeNotices, 0, "presentation pulse must not send size-changed notifications");
+  assert.equal(presentationPulse.diagnostics.some((entry) => entry.event === 'pulse-inline-context' && entry.detail && entry.detail.matched === true), true);
+  assert.equal(presentationPulse.diagnostics.some((entry) => entry.event === 'renderable' && entry.detail && entry.detail.hitInsideApp === true), true);
+
+  const lateInlineAfterPulse = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget-presentation-pulse');
+    const requestsBefore = window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length;
+    const readyBefore = window.__HOST_RECORDS__.toolCalls.filter(
+      (call) => call.widgetInstanceId === frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+    ).length;
+    frame.contentWindow.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { displayMode: 'inline', containerDimensions: { width: 0, height: 0 } }
+    }, '*');
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return {
+      displayMode: frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.displayMode,
+      requestsAfter: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length,
+      requestsBefore,
+      readyAfter: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+      ).length,
+      readyBefore,
+      ignored: frame.contentWindow.__CANVASIGHT_PRESENTATION_DIAGNOSTICS__.some((entry) => entry.event === 'host-context-inline-ignored')
+    };
+  })()`, "late inline context cannot demote a completed pulse");
+  assert.equal(lateInlineAfterPulse.displayMode, 'fullscreen');
+  assert.equal(lateInlineAfterPulse.requestsAfter, lateInlineAfterPulse.requestsBefore);
+  assert.equal(lateInlineAfterPulse.readyAfter, lateInlineAfterPulse.readyBefore);
+  assert.equal(lateInlineAfterPulse.ignored, true);
+
   const permanentPresentationFailure = await waitForEvaluation(cdp, `(async () => {
     const readyCountBefore = window.__HOST_RECORDS__.readyInstances.length;
     const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
     const sizeNoticesBefore = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length;
     const frame = document.createElement('iframe');
     frame.id = 'widget-presentation-permanent-zero';
+    frame.dataset.presentationPermanentZero = 'true';
     frame.src = '/widget';
     frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
     document.body.appendChild(frame);
     const requestDeadline = Date.now() + 5000;
     while (
       Date.now() < requestDeadline &&
-      window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length < 3
+      window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length < 5
     ) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
@@ -1730,8 +1835,11 @@ try {
     const widgetInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
     return {
       widgetInstanceId,
-      displayRequests: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id).length,
+      displayRequests: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id),
       openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      saveCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/document')
+      ).length,
       readyCalls: window.__HOST_RECORDS__.toolCalls.filter(
         (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
       ).length,
@@ -1739,24 +1847,72 @@ try {
       sizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length - sizeNoticesBefore
     };
   })()`, "bounded fullscreen re-presentation retries", 7000);
-  assert.equal(permanentPresentationFailure.displayRequests, 3, "one initial request plus two retries must be the hard presentation bound");
+  assert.deepEqual(
+    permanentPresentationFailure.displayRequests.map((request) => request.params),
+    [{ mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'inline' }, { mode: 'fullscreen' }],
+    "a permanently zero-size binding must stop at the fixed F,F,F,I,F hard bound"
+  );
   assert.equal(permanentPresentationFailure.openCalls, 1, "bounded presentation retries must not rehydrate the project");
+  assert.equal(permanentPresentationFailure.saveCalls, 0, "a permanently zero-size presentation must not save");
   assert.equal(permanentPresentationFailure.readyCalls, 0, "a permanently zero-size instance must never report ready");
   assert.equal(permanentPresentationFailure.readyDelta, 0);
   assert.equal(permanentPresentationFailure.sizeNotices, 0);
 
+  const presentationPulseTeardown = await waitForEvaluation(cdp, `(async () => {
+    const teardownResponsesBefore = window.__HOST_RECORDS__.teardownResponses.length;
+    const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    const sizeNoticesBefore = window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length;
+    const frame = document.createElement('iframe');
+    frame.id = 'widget-presentation-pulse-teardown';
+    frame.dataset.presentationPulseTeardown = 'true';
+    frame.src = '/widget';
+    frame.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const deadline = Date.now() + 7000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.teardownResponses.length === teardownResponsesBefore) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const widgetInstanceId = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    return {
+      widgetInstanceId,
+      requests: window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frame.id),
+      openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      saveCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/document')
+      ).length,
+      readyCalls: window.__HOST_RECORDS__.toolCalls.filter(
+        (call) => call.widgetInstanceId === widgetInstanceId && call.path && call.path.endsWith('/widget-ready')
+      ).length,
+      sizeNotices: window.__HOST_RECORDS__.messages.filter((message) => message.method === 'ui/notifications/size-changed').length - sizeNoticesBefore,
+      teardownResponses: window.__HOST_RECORDS__.teardownResponses.length - teardownResponsesBefore
+    };
+  })()`, "teardown aborts an in-progress presentation pulse", 10000);
+  assert.deepEqual(
+    presentationPulseTeardown.requests.map((request) => request.params),
+    [{ mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'fullscreen' }, { mode: 'inline' }],
+    "teardown during the inline leg must prevent the final fullscreen request"
+  );
+  assert.equal(presentationPulseTeardown.openCalls, 1);
+  assert.equal(presentationPulseTeardown.saveCalls, 0);
+  assert.equal(presentationPulseTeardown.readyCalls, 0);
+  assert.equal(presentationPulseTeardown.sizeNotices, 0);
+  assert.equal(presentationPulseTeardown.teardownResponses, 1);
+
   await cdp.send("Runtime.evaluate", {
     expression: `(() => {
-      const removedInstanceIds = ${JSON.stringify([presentationRetry.widgetInstanceId, permanentPresentationFailure.widgetInstanceId])};
+      const removedInstanceIds = ${JSON.stringify([presentationRetry.widgetInstanceId, presentationPulse.widgetInstanceId, permanentPresentationFailure.widgetInstanceId, presentationPulseTeardown.widgetInstanceId])};
       document.getElementById('widget-presentation-retry')?.remove();
+      document.getElementById('widget-presentation-pulse')?.remove();
       document.getElementById('widget-presentation-permanent-zero')?.remove();
+      document.getElementById('widget-presentation-pulse-teardown')?.remove();
       window.__HOST_RECORDS__.readyInstances = window.__HOST_RECORDS__.readyInstances.filter(
         (widgetInstanceId) => !removedInstanceIds.includes(widgetInstanceId)
       );
       window.__HOST_RECORDS__.toolCalls = window.__HOST_RECORDS__.toolCalls.filter(
         (call) => !removedInstanceIds.includes(call.widgetInstanceId)
       );
-      window.__HOST_RECORDS__.openProjectCalls -= 2;
+      window.__HOST_RECORDS__.openProjectCalls -= 4;
     })()`
   });
 
@@ -1805,10 +1961,11 @@ try {
     const active = document.getElementById(${JSON.stringify("widget-history-3")});
     const activeWidgetInstanceId = active.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
     const beforePosts = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'POST').length;
+    const responseCountBefore = window.__HOST_RECORDS__.teardownResponses.length;
     window.__HOST_TEARDOWN__(active.contentWindow);
     window.__HOST_TEARDOWN__(active.contentWindow);
     const deadline = Date.now() + 3000;
-    while (Date.now() < deadline && window.__HOST_RECORDS__.teardownResponses.length < 2) {
+    while (Date.now() < deadline && window.__HOST_RECORDS__.teardownResponses.length < responseCountBefore + 2) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     await new Promise((resolve) => setTimeout(resolve, 5500));
@@ -1829,7 +1986,7 @@ try {
     return {
       beforePosts,
       afterPosts,
-      responseCount: window.__HOST_RECORDS__.teardownResponses.length,
+      responseCount: window.__HOST_RECORDS__.teardownResponses.length - responseCountBefore,
       deletes,
       activeWidgetInstanceId,
       nextWidgetInstanceId,

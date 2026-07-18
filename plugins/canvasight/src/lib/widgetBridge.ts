@@ -40,6 +40,30 @@ export type CanvasightStartupStage =
   | "ready"
   | "failed";
 
+type CanvasightDisplayMode = "inline" | "fullscreen" | "pip";
+
+export type CanvasightPresentationDiagnostic = {
+  at: number;
+  bindingKey: string;
+  event: string;
+  displayMode: CanvasightBridgeState["displayMode"];
+  hostDisplayMode: CanvasightBridgeState["displayMode"];
+  availableDisplayModes: CanvasightDisplayMode[];
+  viewport: { width: number; height: number };
+  detail?: Record<string, unknown>;
+};
+
+type CanvasightPresentationPulseResult =
+  | "completed"
+  | "unsupported"
+  | "already-attempted"
+  | "inline-rejected"
+  | "inline-context-timeout"
+  | "fullscreen-rejected"
+  | "binding-changed"
+  | "teardown"
+  | "failed";
+
 type CanvasightWidgetData = Record<string, unknown> & {
   apiBaseUrl?: string;
   browserUrl?: string;
@@ -61,7 +85,10 @@ type CanvasightMcpApi = {
   canSendFollowUpMessage: () => boolean;
   getBridgeState: () => CanvasightBridgeState;
   getHostCapabilities: () => unknown;
+  getPresentationDiagnostics: () => CanvasightPresentationDiagnostic[];
+  recordPresentationDiagnostic: (event: string, detail?: Record<string, unknown>) => void;
   requestFullscreenPresentation: () => Promise<boolean>;
+  requestPresentationPulse: (bindingKey: string) => Promise<CanvasightPresentationPulseResult>;
   setStartupStage: (stage: CanvasightStartupStage) => void;
   sendFollowUpMessage: (message: { content?: Array<Record<string, unknown>>; prompt?: string }) => Promise<unknown>;
   toolOutput: () => Record<string, unknown> | null;
@@ -77,6 +104,7 @@ declare global {
     __CANVASIGHT_WIDGET_SERVER_VERSION__?: string;
     __CANVASIGHT_WIDGET_SHELL__?: boolean;
     __CANVASIGHT_WIDGET_MODE__?: "workspace" | "framework-questions";
+    __CANVASIGHT_PRESENTATION_DIAGNOSTICS__?: CanvasightPresentationDiagnostic[];
     __CANVASIGHT_FRAMEWORK_QUESTIONS__?: FrameworkQuestionsPayload;
     canvasightMcp?: CanvasightMcpApi;
     openai?: OpenAiGlobals;
@@ -86,6 +114,8 @@ declare global {
 const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 10_000;
 const BRIDGE_TIMEOUT_MS = 8_000;
 const PRESENTATION_REQUEST_TIMEOUT_MS = 1_250;
+const PRESENTATION_CONTEXT_TIMEOUT_MS = 1_250;
+const PRESENTATION_DIAGNOSTIC_LIMIT = 40;
 const STARTUP_STAGE_RANK: Record<CanvasightStartupStage, number> = {
   starting: 0,
   connecting_bridge: 1,
@@ -189,6 +219,10 @@ export function startCanvasightWidgetBridge(): void {
   let reactMounted = false;
   let tearingDown = false;
   let metadataTimer: number | null = null;
+  let hostContextSequence = 0;
+  const lastHostModeSequence: Partial<Record<CanvasightDisplayMode, number>> = {};
+  const presentationPulseBindings = new Set<string>();
+  let suppressInlineHostContextForBinding = "";
   const removeWindowListeners: Array<() => void> = [];
   const isFrameworkQuestionsWidget = window.__CANVASIGHT_WIDGET_MODE__ === "framework-questions";
   const widgetInstanceId = createWidgetInstanceId();
@@ -202,6 +236,30 @@ export function startCanvasightWidgetBridge(): void {
     startupStage: "starting",
     widgetInstanceId,
     reason: "mcp_initialize_pending"
+  };
+
+  const currentBindingKey = (): string => {
+    const runtime = window.__CANVASIGHT_WIDGET_DATA__;
+    return `${runtime?.sessionId || ""}:${runtime?.openAttemptId || ""}:${runtime?.bindingIssuedAt || 0}`;
+  };
+
+  const presentationDiagnostics: CanvasightPresentationDiagnostic[] = [];
+  window.__CANVASIGHT_PRESENTATION_DIAGNOSTICS__ = presentationDiagnostics;
+  const recordPresentationDiagnostic = (event: string, detail?: Record<string, unknown>): void => {
+    const context = app?.getHostContext();
+    presentationDiagnostics.push({
+      at: Date.now(),
+      bindingKey: currentBindingKey(),
+      event,
+      displayMode: bridgeState.displayMode,
+      hostDisplayMode: context?.displayMode ?? "unknown",
+      availableDisplayModes: [...(context?.availableDisplayModes ?? [])],
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      ...(detail ? { detail } : {})
+    });
+    if (presentationDiagnostics.length > PRESENTATION_DIAGNOSTIC_LIMIT) {
+      presentationDiagnostics.splice(0, presentationDiagnostics.length - PRESENTATION_DIAGNOSTIC_LIMIT);
+    }
   };
 
   const updateBridgeState = (patch: Partial<CanvasightBridgeState>): void => {
@@ -313,6 +371,7 @@ export function startCanvasightWidgetBridge(): void {
       toolOutput = runtimeData;
       window.__CANVASIGHT_WIDGET_DATA__ = runtimeData;
       if (isRebind) {
+        suppressInlineHostContextForBinding = "";
         reactMounted = false;
         updateBridgeState({
           lastBridgeError: null,
@@ -429,13 +488,89 @@ export function startCanvasightWidgetBridge(): void {
   const requestFullscreenPresentation: CanvasightMcpApi["requestFullscreenPresentation"] = async () => {
     if (!bridgeState.mcpInitialized) await waitForMcpReady();
     if (!bridgeState.mcpInitialized || !app) throw new Error("Canvasight MCP Apps presentation bridge is not ready.");
-    const result = await withTimeout(
-      app.requestDisplayMode({ mode: "fullscreen" }),
-      PRESENTATION_REQUEST_TIMEOUT_MS,
-      "Canvasight fullscreen presentation request timed out."
-    );
+    recordPresentationDiagnostic("fullscreen-request");
+    const result = await withTimeout(app.requestDisplayMode({ mode: "fullscreen" }), PRESENTATION_REQUEST_TIMEOUT_MS, "Canvasight fullscreen presentation request timed out.");
     updateDisplayMode(result?.mode);
+    recordPresentationDiagnostic("fullscreen-result", { requestedMode: "fullscreen", resultMode: result?.mode ?? "unknown" });
     return result?.mode === "fullscreen";
+  };
+
+  const waitForHostDisplayModeAfter = async (
+    mode: CanvasightDisplayMode,
+    afterSequence: number
+  ): Promise<boolean> => {
+    if ((lastHostModeSequence[mode] ?? 0) > afterSequence) return true;
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (matched: boolean) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        window.removeEventListener("canvasight:host-context-observed", handleContext);
+        resolve(matched);
+      };
+      const handleContext = (event: Event) => {
+        const detail = (event as CustomEvent<{ mode?: CanvasightDisplayMode; sequence?: number }>).detail;
+        if (detail?.mode === mode && Number(detail.sequence) > afterSequence) finish(true);
+      };
+      const timer = window.setTimeout(() => finish(false), PRESENTATION_CONTEXT_TIMEOUT_MS);
+      window.addEventListener("canvasight:host-context-observed", handleContext);
+    });
+  };
+
+  const requestPresentationPulse: CanvasightMcpApi["requestPresentationPulse"] = async (bindingKey) => {
+    if (!bridgeState.mcpInitialized) await waitForMcpReady();
+    const bindingStatus = (): CanvasightPresentationPulseResult | null => {
+      if (tearingDown) return "teardown";
+      if (bindingKey !== currentBindingKey()) return "binding-changed";
+      return null;
+    };
+    const initialStatus = bindingStatus();
+    if (initialStatus) return initialStatus;
+    if (!bridgeState.mcpInitialized || !app) return "failed";
+    if (presentationPulseBindings.has(bindingKey)) return "already-attempted";
+    const availableModes = app.getHostContext()?.availableDisplayModes ?? [];
+    if (!availableModes.includes("inline") || !availableModes.includes("fullscreen")) {
+      recordPresentationDiagnostic("pulse-unsupported", { availableDisplayModes: [...availableModes] });
+      return "unsupported";
+    }
+    presentationPulseBindings.add(bindingKey);
+    const inlineContextAfterSequence = hostContextSequence;
+    try {
+      recordPresentationDiagnostic("pulse-inline-request");
+      const inlineResult = await withTimeout(
+        app.requestDisplayMode({ mode: "inline" }),
+        PRESENTATION_REQUEST_TIMEOUT_MS,
+        "Canvasight inline presentation request timed out."
+      );
+      const afterInlineRequest = bindingStatus();
+      if (afterInlineRequest) return afterInlineRequest;
+      updateDisplayMode(inlineResult?.mode);
+      recordPresentationDiagnostic("pulse-inline-result", { requestedMode: "inline", resultMode: inlineResult?.mode ?? "unknown" });
+      if (inlineResult?.mode !== "inline") return "inline-rejected";
+      const inlineContextMatched = await waitForHostDisplayModeAfter("inline", inlineContextAfterSequence);
+      const afterInlineContext = bindingStatus();
+      if (afterInlineContext) return afterInlineContext;
+      recordPresentationDiagnostic("pulse-inline-context", { matched: inlineContextMatched });
+      if (!inlineContextMatched) return "inline-context-timeout";
+
+      recordPresentationDiagnostic("pulse-fullscreen-request");
+      const fullscreenResult = await withTimeout(
+        app.requestDisplayMode({ mode: "fullscreen" }),
+        PRESENTATION_REQUEST_TIMEOUT_MS,
+        "Canvasight final fullscreen presentation request timed out."
+      );
+      const afterFullscreenRequest = bindingStatus();
+      if (afterFullscreenRequest) return afterFullscreenRequest;
+      updateDisplayMode(fullscreenResult?.mode);
+      recordPresentationDiagnostic("pulse-fullscreen-result", { requestedMode: "fullscreen", resultMode: fullscreenResult?.mode ?? "unknown" });
+      if (fullscreenResult?.mode !== "fullscreen") return "fullscreen-rejected";
+      suppressInlineHostContextForBinding = bindingKey;
+      return "completed";
+    } catch (error) {
+      recordPresentationDiagnostic("pulse-failed", { error: errorMessage(error, "Presentation pulse failed.") });
+      return bindingStatus() ?? "failed";
+    }
   };
 
   window.canvasightMcp = {
@@ -446,7 +581,10 @@ export function startCanvasightWidgetBridge(): void {
     },
     getBridgeState: () => ({ ...bridgeState }),
     getHostCapabilities: () => app?.getHostCapabilities() ?? null,
+    getPresentationDiagnostics: () => presentationDiagnostics.map((entry) => ({ ...entry, detail: entry.detail ? { ...entry.detail } : undefined })),
+    recordPresentationDiagnostic,
     requestFullscreenPresentation,
+    requestPresentationPulse,
     setStartupStage,
     sendFollowUpMessage,
     toolOutput: () => toolOutput
@@ -508,7 +646,17 @@ export function startCanvasightWidgetBridge(): void {
     window.__CANVASIGHT_MCP_APP__ = app;
     app.addEventListener("toolresult", handleToolResult);
     app.addEventListener("hostcontextchanged", (context) => {
-      updateDisplayMode(context.displayMode);
+      hostContextSequence += 1;
+      if (context.displayMode) lastHostModeSequence[context.displayMode] = hostContextSequence;
+      const ignoreDelayedInline = context.displayMode === "inline" && suppressInlineHostContextForBinding === currentBindingKey();
+      if (!ignoreDelayedInline) updateDisplayMode(context.displayMode);
+      recordPresentationDiagnostic(ignoreDelayedInline ? "host-context-inline-ignored" : "host-context", {
+        contextDisplayMode: context.displayMode ?? "unknown",
+        sequence: hostContextSequence
+      });
+      window.dispatchEvent(new CustomEvent("canvasight:host-context-observed", {
+        detail: { mode: context.displayMode, sequence: hostContextSequence }
+      }));
       try {
         if (context.theme) applyDocumentTheme(context.theme);
         if (context.styles?.variables) applyHostStyleVariables(context.styles.variables);
