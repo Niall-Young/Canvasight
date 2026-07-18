@@ -10,7 +10,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-29` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.29 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-29.md` | 1 | 2026-07-18T02:08:02Z
+- `issue-publish-stable-release-0-4-30` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.30 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-30.md` | 2 | 2026-07-18T02:50:46Z
+- `issue-publish-stable-release-0-4-29` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.29 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-29.md` | 2 | 2026-07-18T02:41:35Z
 - `issue-skill-picker-completeness-position` | assigned | high | Development Agent | Skill 选择器列表不完整且弹层遮挡画布 | `agent-reports/assigned/issue-skill-picker-completeness-position.md` | 4 | 2026-07-14T02:34:38Z
 - `issue-cross-thread-page-concurrent-edit` | assigned | high | Test Supervisor Agent | 不同 Codex Task 并发编辑同一 Page 会丢失后保存内容 | `agent-reports/assigned/issue-cross-thread-page-concurrent-edit.md` | 10 | 2026-07-13T15:02:38Z
 - `issue-duplicate-native-canvas-open` | assigned | high | Development Agent | 重复原生 Widget 的无内容保存阻断 AI 写图 | `agent-reports/assigned/issue-duplicate-native-canvas-open.md` | 2 | 2026-07-13T13:57:26Z
@@ -26,6 +27,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-release-matrix-native-session-isolation.md` - integrates the 0.4.30 daemon-home isolation fix, clean matrix evidence, and exact-install handoff.
+- `agent-reports/resolved/issue-release-matrix-invalidates-native-session.md` - resolves the widget-runtime cleanup home mismatch that invalidated the native acceptance session.
+- `agent-reports/resolved/solution-release-matrix-native-session-isolation.md` - parses CLI daemon homes, adds cleanup defense in depth, and records 0.4.30 isolation verification.
 - `agent-reports/resolved/issue-plugin-install-depends-on-project-directory.md` - resolves the repo-local marketplace dependency after official Git stable conversion.
 - `agent-reports/resolved/solution-plugin-independent-stable-install.md` - records the independent-install procedure, integrity checks, and restart boundary.
 - `agent-reports/resolved/integration-summary-plugin-independent-stable-install.md` - integrates installation conversion, bilingual documentation, verification, and Git closure scope.

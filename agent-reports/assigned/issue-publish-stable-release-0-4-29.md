@@ -2,18 +2,19 @@
 schema_version: 1
 report_id: issue-publish-stable-release-0-4-29
 report_type: issue
-status: assigned
+status: blocked
 owner: Project Management Agent
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root/project_management_agent
 thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
 created_at: 2026-07-18T02:08:02Z
-updated_at: 2026-07-18T02:08:02Z
+updated_at: 2026-07-18T02:41:35Z
 depends_on:
   - issue-manual-canvas-latest-revision-refresh
   - issue-native-widget-thread-return-paint-stall
+  - issue-release-matrix-invalidates-native-session
 related_files:
   - .github/workflows/canvasight-release.yml
   - plugins/canvasight/.codex-plugin/plugin.json
@@ -22,8 +23,10 @@ related_files:
   - plugins/canvasight/mcp/server.source.mjs
   - plugins/canvasight/mcp/server.mjs
   - plugins/canvasight/dist
-verification_status: not_started
-verification_evidence: []
+verification_status: failed
+verification_evidence:
+  - Exact 0.4.29 reached verified fullscreen ready, but widget-runtime cleanup stopped the default daemon and invalidated the accepted session before control and Run checks.
+  - User observed stage=session / Session not found for both required native interactions.
 ---
 
 # 发布 Canvasight 0.4.29 并推进 stable 更新通道
@@ -51,20 +54,21 @@ GitHub tag、Release 资产、`stable` 分支、Canvasight marketplace 完整快
 
 ## 当前状态
 
-assigned；等待发布前验证、标签推送与正式工作流闭环。
+blocked；0.4.29 原生验收失败且发现 daemon home 隔离缺陷，该版本禁止发布。
 
 ## 处理结果
 
-未发布。
+未发布；候选将由包含隔离修复的新版本取代。
 
 ## 修改文件
 
-- 本报告、ROSTER 与派生 QUEUE 状态。
+- 本报告、ROSTER 与派生 QUEUE 状态；修复范围见 `issue-release-matrix-invalidates-native-session`。
 
 ## 验证方式
 
-- 本地 release matrix、GitHub Actions、Release 资产校验、远端 refs 与 updater live check。
+- 0.4.29 本地矩阵通过，但真实宿主端到端验收失败；不得进入 GitHub Actions 发布阶段。
 
 ## 后续风险
 
 - 任何三平台、打包或 stable 快进失败都必须保持旧 stable，不得强推或回退保护分支。
+- 0.4.29 不得复用 tag；修复后必须使用新版本完成重装、宿主重启与全新任务验收。

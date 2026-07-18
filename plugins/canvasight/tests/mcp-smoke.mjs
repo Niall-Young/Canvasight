@@ -2785,6 +2785,64 @@ async function assertConcurrentDaemonSingleFlight() {
   }
 }
 
+async function assertCliCanvasightHomeIsolation() {
+  const controlHome = path.join(tempRoot, "cli-home-control");
+  const targetHome = path.join(tempRoot, "cli-home-target");
+  const daemons = [
+    { home: controlHome, token: "cli-home-control-token", child: null },
+    { home: targetHome, token: "cli-home-target-token", child: null }
+  ];
+
+  async function waitForState(home) {
+    const statePath = path.join(home, "daemon.json");
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      try {
+        return JSON.parse(await fsp.readFile(statePath, "utf8"));
+      } catch (error) {
+        if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+      }
+      await sleep(50);
+    }
+    throw new Error(`CLI home isolation daemon did not start: ${home}`);
+  }
+
+  try {
+    for (const daemon of daemons) {
+      daemon.child = spawn(process.execPath, [serverPath, "--daemon", `--canvasight-home=${daemon.home}`], {
+        cwd: pluginRoot,
+        env: { ...process.env, CANVASIGHT_HOME: daemon.home, CANVASIGHT_DAEMON_TOKEN: daemon.token },
+        stdio: "ignore"
+      });
+      await waitForState(daemon.home);
+    }
+
+    const targetState = await waitForState(targetHome);
+    const controlState = await waitForState(controlHome);
+    const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${targetHome}`], {
+      cwd: pluginRoot,
+      env: { ...process.env, CANVASIGHT_HOME: controlHome },
+      stdio: "ignore"
+    });
+    await new Promise((resolve) => stopper.once("exit", resolve));
+
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline && fs.existsSync(path.join(targetHome, "daemon.json"))) await sleep(50);
+    assert.equal(fs.existsSync(path.join(targetHome, "daemon.json")), false, "CLI-selected target daemon state must be removed");
+    assert.equal(fs.existsSync(path.join(controlHome, "daemon.json")), true, "env-selected control daemon state must remain");
+    assert.doesNotThrow(() => process.kill(controlState.pid, 0), "CLI stop must not terminate the env-selected control daemon");
+    await assert.rejects(
+      fetch(`${targetState.origin}/api/health`),
+      undefined,
+      "CLI-selected target daemon must stop"
+    );
+  } finally {
+    for (const daemon of daemons) {
+      if (daemon.child && daemon.child.exitCode === null) daemon.child.kill("SIGTERM");
+    }
+  }
+}
+
 async function assertDaemonNodeExecutableFallback() {
   const home = path.join(tempRoot, "daemon-node-fallback-home");
   const unavailableExecutable = "/definitely/missing/canvasight-node";
@@ -3213,6 +3271,7 @@ async function main() {
     );
 
     await assertStdoutClosureLifecycle();
+    await assertCliCanvasightHomeIsolation();
     await assertConcurrentDaemonSingleFlight();
     await assertDaemonNodeExecutableFallback();
 

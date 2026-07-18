@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.29";
+var SERVER_VERSION = "0.4.30";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17430,6 +17430,13 @@ var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([".apng", ".avif", ".gif", ".jpg"
 var DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 var DEFAULT_CHATGPT_APP_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 var DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+var CLI_CANVASIGHT_HOME = (() => {
+  let configured = "";
+  for (const argument of process.argv.slice(2)) {
+    if (argument.startsWith("--canvasight-home=")) configured = argument.slice("--canvasight-home=".length).trim();
+  }
+  return configured ? path.resolve(configured) : null;
+})();
 var CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = /* @__PURE__ */ new Set(["turn/started", "item/started", "turn/completed"]);
 var AGENT_TEAM_ROLE_IDS = /* @__PURE__ */ new Set([
   "product-agent",
@@ -17788,6 +17795,7 @@ function projectNameFromPath(projectPath) {
   return path.basename(projectPath) || projectPath;
 }
 function canvasightHome() {
+  if (CLI_CANVASIGHT_HOME) return CLI_CANVASIGHT_HOME;
   const configured = process.env.CANVASIGHT_HOME;
   return path.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
 }

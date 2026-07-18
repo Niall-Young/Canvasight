@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
+    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T01:58:16Z
-    handoff_source: issue-native-widget-thread-return-paint-stall
-    last_report: integration-summary-native-widget-thread-return-paint-stall
+    last_seen: 2026-07-18T02:46:35Z
+    handoff_source: issue-release-matrix-invalidates-native-session
+    last_report: solution-release-matrix-native-session-isolation
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented bounded paint and presentation readiness; user confirmed the original thread-return white-screen symptom is resolved and the issue is closed
+    notes: Resolved the widget-runtime cleanup home mismatch, added CLI-home isolation coverage, and prepared runtime 0.4.30
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
+    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T01:58:16Z
-    handoff_source: issue-native-widget-thread-return-paint-stall
-    last_report: integration-summary-native-widget-thread-return-paint-stall
+    last_seen: 2026-07-18T02:52:40Z
+    handoff_source: issue-publish-stable-release-0-4-30
+    last_report: integration-summary-release-matrix-native-session-isolation
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Revalidated the combined 0.4.29 candidate; all automated gates passed and the user accepted the original native white-screen issue
+    notes: Independently passed 0.4.30 daemon-home isolation and candidate commit/install gate; formal release remains blocked on restarted-host native acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
+    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T02:08:02Z
-    handoff_source: issue-publish-stable-release-0-4-29
-    last_report: issue-publish-stable-release-0-4-29
+    last_seen: 2026-07-18T02:50:46Z
+    handoff_source: issue-publish-stable-release-0-4-30
+    last_report: issue-publish-stable-release-0-4-30
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns v0.4.29 tag, Release asset, stable fast-forward, and marketplace update-channel closure
+    notes: Owns v0.4.30 exact-install, native-acceptance handoff, tag, Release, stable fast-forward, and updater closure; v0.4.29 remains blocked
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.29";
+const SERVER_VERSION = "0.4.30";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -83,6 +83,13 @@ const IMAGE_EXTENSIONS = new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".p
 const DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_CHATGPT_APP_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+const CLI_CANVASIGHT_HOME = (() => {
+  let configured = "";
+  for (const argument of process.argv.slice(2)) {
+    if (argument.startsWith("--canvasight-home=")) configured = argument.slice("--canvasight-home=".length).trim();
+  }
+  return configured ? path.resolve(configured) : null;
+})();
 const CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = new Set(["turn/started", "item/started", "turn/completed"]);
 const AGENT_TEAM_ROLE_IDS = new Set([
   "product-agent",
@@ -558,6 +565,7 @@ function projectNameFromPath(projectPath) {
 }
 
 function canvasightHome() {
+  if (CLI_CANVASIGHT_HOME) return CLI_CANVASIGHT_HOME;
   const configured = process.env.CANVASIGHT_HOME;
   return path.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
 }

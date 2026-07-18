@@ -1523,7 +1523,11 @@ try {
   if (chrome && !chrome.killed) chrome.kill("SIGTERM");
   if (webServer) await new Promise((resolve) => webServer.close(resolve));
   if (mcp.child && !mcp.child.killed) mcp.child.kill("SIGTERM");
-  const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${canvasightHome}`], { cwd: pluginRoot, stdio: "ignore" });
+  const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${canvasightHome}`], {
+    cwd: pluginRoot,
+    env: { ...process.env, CANVASIGHT_HOME: canvasightHome },
+    stdio: "ignore"
+  });
   await new Promise((resolve) => stopper.on("exit", resolve));
   await fsp.rm(tempRoot, { recursive: true, force: true });
 }
