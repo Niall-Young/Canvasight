@@ -10,7 +10,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-34` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 3 | 2026-07-18T11:33:53Z
+- `issue-windows-cli-daemon-state-cleanup-0-4-34` | assigned | high | Development Agent | Windows CLI 停止 daemon 后残留目标状态 | `agent-reports/assigned/issue-windows-cli-daemon-state-cleanup-0-4-34.md` | 1 | 2026-07-18T11:46:32Z
+- `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
 - `issue-publish-stable-release-0-4-31` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 5 | 2026-07-18T08:42:24Z
@@ -31,6 +32,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-release-rejection-windows-daemon-cleanup-0-4-34.md` - records the Windows Node 20.19 gate failure, absent Release, unchanged stable and immutable failed v0.4.34 tag.
 - `agent-reports/resolved/integration-summary-test-supervisor-0-4-34-native-acceptance.md` - independently passes exact 0.4.34 strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability.
 - `agent-reports/resolved/issue-native-widget-zero-size-0-4-31.md` - closes the historical zero-size blocker through exact 0.4.34 strict ready, recovery and full native acceptance while keeping 0.4.31 forbidden.
 - `agent-reports/resolved/issue-native-widget-task-switch-remount-blank-0-4-32.md` - exact 0.4.34 passes strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability without sidebar recovery.

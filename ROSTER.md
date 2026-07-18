@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:33:53Z
-    handoff_source: issue-native-widget-task-switch-remount-blank-0-4-32
-    last_report: issue-native-widget-task-switch-remount-blank-0-4-32
+    last_seen: 2026-07-18T11:46:32Z
+    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: issue-windows-cli-daemon-state-cleanup-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: 0.4.34 one-shot host-supported inline/fullscreen pulse and bounded diagnostics passed exact native release acceptance; remount issue is resolved
+    notes: Diagnosed Windows SIGTERM cleanup gap and implemented ownership-safe daemon-state cleanup for the 0.4.35 candidate
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:33:53Z
-    handoff_source: issue-native-widget-task-switch-remount-blank-0-4-32
-    last_report: integration-summary-test-supervisor-0-4-34-native-acceptance
+    last_seen: 2026-07-18T11:46:32Z
+    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: integration-summary-release-rejection-windows-daemon-cleanup-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently accepted exact 0.4.34 strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability for release
+    notes: Defined Windows stopper completion, dual-home isolation and replacement-daemon safety gates after 0.4.34 CI rejection
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:33:53Z
+    last_seen: 2026-07-18T11:46:32Z
     handoff_source: issue-publish-stable-release-0-4-34
     last_report: issue-publish-stable-release-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Native gate passed; owns report-only release commit and guarded main/tag/workflow/Release/stable closure while remote remains v0.4.28
+    notes: Froze failed v0.4.34 tag and Release/stable boundary; next eligible release is a fully reverified 0.4.35
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
