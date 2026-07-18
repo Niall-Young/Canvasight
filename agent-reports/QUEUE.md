@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-windows-cli-daemon-state-cleanup-0-4-34` | assigned | high | Development Agent | Windows CLI 停止 daemon 后残留目标状态 | `agent-reports/assigned/issue-windows-cli-daemon-state-cleanup-0-4-34.md` | 1 | 2026-07-18T11:46:32Z
+- `issue-windows-cli-daemon-state-cleanup-0-4-34` | assigned | high | Development Agent | Windows CLI 停止 daemon 后残留目标状态 | `agent-reports/assigned/issue-windows-cli-daemon-state-cleanup-0-4-34.md` | 2 | 2026-07-18T11:57:46Z
 - `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
@@ -32,6 +32,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-windows-daemon-stop-candidate-0-4-35.md` - integrates ownership-safe stop completion, replacement-daemon regression, 0.4.35 version sync and the full local candidate matrix.
 - `agent-reports/resolved/integration-summary-release-rejection-windows-daemon-cleanup-0-4-34.md` - records the Windows Node 20.19 gate failure, absent Release, unchanged stable and immutable failed v0.4.34 tag.
 - `agent-reports/resolved/integration-summary-test-supervisor-0-4-34-native-acceptance.md` - independently passes exact 0.4.34 strict ready, three task round-trips, controls, Refresh, same-task Run and post-Run stability.
 - `agent-reports/resolved/issue-native-widget-zero-size-0-4-31.md` - closes the historical zero-size blocker through exact 0.4.34 strict ready, recovery and full native acceptance while keeping 0.4.31 forbidden.

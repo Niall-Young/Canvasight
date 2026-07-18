@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.4.34";
+const SERVER_VERSION = "0.4.35";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -1150,6 +1150,20 @@ async function removeOwnedDaemonState() {
   return true;
 }
 
+async function removeMatchingDaemonState(expectedState) {
+  const state = await readDaemonState();
+  if (
+    !state ||
+    state.pid !== expectedState?.pid ||
+    state.token !== expectedState?.token ||
+    state.pluginRoot !== expectedState?.pluginRoot
+  ) {
+    return false;
+  }
+  await removeDaemonState();
+  return true;
+}
+
 function daemonHeaders(state, headers = {}) {
   return {
     ...(state?.token ? { "x-canvasight-token": state.token } : {}),
@@ -1551,9 +1565,17 @@ async function stopDaemonFromState() {
   try {
     process.kill(healthy.pid, "SIGTERM");
   } catch {
-    await removeDaemonState();
+    await removeMatchingDaemonState(healthy);
     return false;
   }
+  const exited = await waitForProcessExit(healthy.pid, 3000);
+  if (!exited) {
+    throw new Error(`Canvasight daemon did not exit after stop request (pid ${healthy.pid})`);
+  }
+  // POSIX daemons normally remove their own state in the SIGTERM handler.
+  // Windows terminates the process before that async cleanup can run, so the
+  // stopper removes only the exact state it originally targeted.
+  await removeMatchingDaemonState(healthy);
   return true;
 }
 

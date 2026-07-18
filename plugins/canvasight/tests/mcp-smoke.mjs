@@ -2807,6 +2807,39 @@ async function assertCliCanvasightHomeIsolation() {
     throw new Error(`CLI home isolation daemon did not start: ${home}`);
   }
 
+  async function waitForChildExit(child, label) {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label} did not exit`)), 5000);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
+  async function spawnStopper(home, expectedState) {
+    const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${home}`], {
+      cwd: pluginRoot,
+      env: { ...process.env, CANVASIGHT_HOME: controlHome },
+      stdio: "ignore"
+    });
+    const stopperExit = await new Promise((resolve, reject) => {
+      stopper.once("error", reject);
+      stopper.once("exit", (code, signal) => resolve({ code, signal }));
+    });
+    assert.deepEqual(stopperExit, { code: 0, signal: null }, "CLI-selected daemon stop must complete successfully");
+    assert.equal(
+      fs.existsSync(path.join(home, "daemon.json")),
+      false,
+      "successful CLI stop completion must mean the selected daemon state is already removed"
+    );
+    assert.throws(
+      () => process.kill(expectedState.pid, 0),
+      "successful CLI stop completion must mean the selected daemon PID has already exited"
+    );
+  }
+
   try {
     for (const daemon of daemons) {
       daemon.child = spawn(process.execPath, [serverPath, "--daemon", `--canvasight-home=${daemon.home}`], {
@@ -2819,23 +2852,46 @@ async function assertCliCanvasightHomeIsolation() {
 
     const targetState = await waitForState(targetHome);
     const controlState = await waitForState(controlHome);
-    const stopper = spawn(process.execPath, [serverPath, "--stop-daemon", `--canvasight-home=${targetHome}`], {
-      cwd: pluginRoot,
-      env: { ...process.env, CANVASIGHT_HOME: controlHome },
-      stdio: "ignore"
-    });
-    await new Promise((resolve) => stopper.once("exit", resolve));
+    const controlStatePath = path.join(controlHome, "daemon.json");
+    const controlStateBytes = await fsp.readFile(controlStatePath);
+    await spawnStopper(targetHome, targetState);
+    await waitForChildExit(daemons[1].child, "CLI-selected target daemon");
 
-    const deadline = Date.now() + 2000;
-    while (Date.now() < deadline && fs.existsSync(path.join(targetHome, "daemon.json"))) await sleep(50);
-    assert.equal(fs.existsSync(path.join(targetHome, "daemon.json")), false, "CLI-selected target daemon state must be removed");
-    assert.equal(fs.existsSync(path.join(controlHome, "daemon.json")), true, "env-selected control daemon state must remain");
+    assert.deepEqual(await fsp.readFile(controlStatePath), controlStateBytes, "env-selected control daemon state bytes must remain unchanged");
+    assert.deepEqual(JSON.parse(await fsp.readFile(controlStatePath, "utf8")), controlState, "env-selected control daemon identity must remain unchanged");
     assert.doesNotThrow(() => process.kill(controlState.pid, 0), "CLI stop must not terminate the env-selected control daemon");
     await assert.rejects(
       fetch(`${targetState.origin}/api/health`),
       undefined,
       "CLI-selected target daemon must stop"
     );
+
+    const replacementToken = "cli-home-target-replacement-token";
+    const replacementChild = spawn(process.execPath, [serverPath, "--daemon", `--canvasight-home=${targetHome}`], {
+      cwd: pluginRoot,
+      env: { ...process.env, CANVASIGHT_HOME: targetHome, CANVASIGHT_DAEMON_TOKEN: replacementToken },
+      stdio: "ignore"
+    });
+    daemons[1].child = replacementChild;
+    const replacementState = await waitForState(targetHome);
+    assert.notEqual(replacementState.pid, targetState.pid, "replacement daemon must use a new PID");
+    assert.equal(replacementState.token, replacementToken, "replacement daemon must publish its new token");
+    assert.notEqual(replacementState.token, targetState.token, "replacement daemon token must not reuse the stopped daemon token");
+    assert.doesNotThrow(() => process.kill(replacementState.pid, 0), "replacement daemon must remain alive after immediate restart");
+    const replacementHealth = await fetch(`${replacementState.origin}/api/health`).then((response) => response.json());
+    assert.equal(replacementHealth.pid, replacementState.pid, "replacement health must belong to the new daemon");
+    await sleep(250);
+    assert.deepEqual(
+      JSON.parse(await fsp.readFile(path.join(targetHome, "daemon.json"), "utf8")),
+      replacementState,
+      "the old stopper must not delete or replace the immediate replacement state"
+    );
+    assert.deepEqual(await fsp.readFile(controlStatePath), controlStateBytes, "replacement lifecycle must not mutate control state");
+
+    await spawnStopper(targetHome, replacementState);
+    await waitForChildExit(replacementChild, "replacement target daemon");
+    assert.equal(fs.existsSync(path.join(targetHome, "daemon.json")), false, "replacement daemon state must also be removed");
+    assert.deepEqual(await fsp.readFile(controlStatePath), controlStateBytes, "replacement stop must preserve control state bytes");
   } finally {
     for (const daemon of daemons) {
       if (daemon.child && daemon.child.exitCode === null) daemon.child.kill("SIGTERM");

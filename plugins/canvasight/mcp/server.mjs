@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.34";
+var SERVER_VERSION = "0.4.35";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -18290,6 +18290,14 @@ async function removeOwnedDaemonState() {
   await removeDaemonState();
   return true;
 }
+async function removeMatchingDaemonState(expectedState) {
+  const state = await readDaemonState();
+  if (!state || state.pid !== expectedState?.pid || state.token !== expectedState?.token || state.pluginRoot !== expectedState?.pluginRoot) {
+    return false;
+  }
+  await removeDaemonState();
+  return true;
+}
 function daemonHeaders(state, headers = {}) {
   return {
     ...state?.token ? { "x-canvasight-token": state.token } : {},
@@ -18637,9 +18645,14 @@ async function stopDaemonFromState() {
   try {
     process.kill(healthy.pid, "SIGTERM");
   } catch {
-    await removeDaemonState();
+    await removeMatchingDaemonState(healthy);
     return false;
   }
+  const exited = await waitForProcessExit(healthy.pid, 3e3);
+  if (!exited) {
+    throw new Error("Canvasight daemon did not exit after stop request (pid ".concat(healthy.pid, ")"));
+  }
+  await removeMatchingDaemonState(healthy);
   return true;
 }
 async function rememberProject(projectPath, project) {

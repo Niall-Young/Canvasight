@@ -6,14 +6,14 @@ roles:
   - role: Product Agent
     status: active
     agent_id: /root/product_agent
-    thread_id: 019f6b57-ef6d-7ee0-85cd-ad572eb95bec
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T15:38:15Z
-    handoff_source: issue-manual-canvas-latest-revision-refresh
-    last_report: issue-manual-canvas-latest-revision-refresh
+    last_seen: 2026-07-18T11:57:46Z
+    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined the manual latest-revision refresh boundary, dirty-save safety, and acceptance criteria
+    notes: Confirmed 0.4.35 only tightens internal daemon stop completion and adds no product-contract change
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
@@ -41,45 +41,45 @@ roles:
     agent_id: /root/development_agent
     thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:46:32Z
+    last_seen: 2026-07-18T11:57:46Z
     handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
     last_report: issue-windows-cli-daemon-state-cleanup-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Diagnosed Windows SIGTERM cleanup gap and implemented ownership-safe daemon-state cleanup for the 0.4.35 candidate
+    notes: Implemented ownership-safe Windows daemon-state cleanup; complete local 0.4.35 matrix passes pending Windows CI
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-13T14:46:58Z
-    handoff_source: issue-cross-thread-page-concurrent-edit
-    last_report: integration-summary-human-ai-concurrent-rebase
+    last_seen: 2026-07-18T11:57:46Z
+    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Rebuilt on the current thread to synchronize durable context-bound AI rebase and concurrent-save standards
+    notes: Confirmed the 0.4.35 lifecycle fix needs no AGENTS.md or command-reference update
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
     thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:46:32Z
+    last_seen: 2026-07-18T11:57:46Z
     handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
     last_report: integration-summary-release-rejection-windows-daemon-cleanup-0-4-34
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined Windows stopper completion, dual-home isolation and replacement-daemon safety gates after 0.4.34 CI rejection
+    notes: Expanded and passed target/control/replacement daemon lifecycle regression; Windows Node 20.19 remains authoritative
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
-    thread_id: 019f7012-d49e-73b2-9e4c-d65be95feeb1
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T15:59:50Z
-    handoff_source: issue-manual-canvas-latest-revision-refresh
-    last_report: integration-summary-manual-canvas-latest-revision-refresh
+    last_seen: 2026-07-18T11:57:46Z
+    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
+    last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Updated bilingual features and basic usage for safe latest-version canvas refresh
+    notes: Reviewed bilingual README and all seven Skills; no user documentation change is needed for the internal lifecycle fix
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
