@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:46:32Z
-    handoff_source: issue-publish-stable-release-0-4-34
-    last_report: issue-publish-stable-release-0-4-34
+    last_seen: 2026-07-18T12:01:22Z
+    handoff_source: issue-publish-stable-release-0-4-35
+    last_report: issue-publish-stable-release-0-4-35
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Froze failed v0.4.34 tag and Release/stable boundary; next eligible release is a fully reverified 0.4.35
+    notes: Owns guarded exact 0.4.35 native, tag, workflow, Release asset and stable fast-forward closure; v0.4.34 remains frozen
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T11:57:46Z
-updated_at: 2026-07-18T11:57:46Z
+updated_at: 2026-07-18T12:01:22Z
 depends_on:
   - issue-windows-cli-daemon-state-cleanup-0-4-34
   - issue-publish-stable-release-0-4-34
@@ -26,6 +26,7 @@ verification_evidence:
   - release:prepare and release:verify synchronize 0.4.35 across manifest, package, lock, SERVER_VERSION, generated MCP bundle and web dist.
   - typecheck, build, check:mcp-bundle, markdown, markdown-export, skills, widget-runtime, MCP, concurrency, dev-server, plugin-distribution, updater, diagnose:mcp and plugin validation pass locally.
   - Enhanced MCP regression proves target PID/state completion, control-home byte identity and immediate replacement-daemon safety.
+  - Commit 0ab416acf52918b59d5798ff00fae10d9c6495cb is installed into the immutable 0.4.35 cache with tracked=582, missing=0 and mismatch=0.
 ---
 
 # 0.4.35 Windows daemon stop 本地候选集成总结
@@ -55,7 +56,7 @@ verification_evidence:
 ## 未解决
 
 - Windows Node 20.19 的权威 GitHub Actions gate 尚未运行。
-- 版本改变后 exact 0.4.35 安装、Codex Desktop 重启和 native acceptance 尚未完成。
+- Exact 0.4.35 安装已完成；Codex Desktop 重启和 native acceptance 尚未完成。
 
 ## 已完成改动
 
@@ -80,6 +81,8 @@ verification_evidence:
 - `npm run test:update`
 - `npm run diagnose:mcp`
 - plugin validator passed
+- `codex plugin add canvasight@canvasight-local --json` → exact `0.4.35`
+- installed cache parity → `tracked=582 missing=0 mismatch=0`
 - Agent Team validator 已运行，但仍被既有 legacy 根报告、旧模板和 QUEUE 格式历史债务阻断；本轮新报告没有独立字段错误。
 
 ## 未解决 / 后续风险
@@ -91,4 +94,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline commit: `c985fbb5cd2903cb1a9876a707965ce9c4cb8421`
-- worktree: six candidate files plus this report/queue/roster update pending scoped commit
+- candidate commit: `0ab416acf52918b59d5798ff00fae10d9c6495cb` (`fix: 修复 Windows daemon 停止清理`)
+- worktree before exact-install report update: clean

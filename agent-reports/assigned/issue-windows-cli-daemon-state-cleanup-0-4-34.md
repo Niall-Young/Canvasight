@@ -6,11 +6,11 @@ status: assigned
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 2
+version: 3
 agent_id: /root/development_agent
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T11:46:32Z
-updated_at: 2026-07-18T11:57:46Z
+updated_at: 2026-07-18T12:01:22Z
 depends_on:
   - issue-publish-stable-release-0-4-34
 related_files:
@@ -24,6 +24,7 @@ verification_evidence:
   - Read-only diagnosis confirmed CLI --canvasight-home precedence is correct; Windows process.kill(pid, SIGTERM) can terminate before daemon asynchronous state cleanup runs.
   - 0.4.35 source waits for target PID exit and removes state only while pid, token and pluginRoot still match the original daemon.
   - Enhanced cross-platform regression proves successful-stop completion, target health loss, byte-identical control state, immediate replacement safety and replacement cleanup; npm run test:mcp passes locally.
+  - Commit 0ab416acf52918b59d5798ff00fae10d9c6495cb is installed as exact 0.4.35 with 582 tracked files, zero missing and zero mismatches.
 ---
 
 # Windows CLI 停止 daemon 后残留目标状态
