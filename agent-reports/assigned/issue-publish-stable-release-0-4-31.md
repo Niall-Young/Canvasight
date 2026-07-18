@@ -2,19 +2,20 @@
 schema_version: 1
 report_id: issue-publish-stable-release-0-4-31
 report_type: issue
-status: assigned
+status: blocked
 owner: Project Management Agent
 created_by: Main Thread
 priority: high
-version: 2
+version: 4
 agent_id: /root/project_management_agent
-thread_id: 019f7415-32a4-7980-831d-146e54c7d842
+thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T07:49:34Z
-updated_at: 2026-07-18T07:57:32Z
+updated_at: 2026-07-18T08:27:44Z
 depends_on:
   - issue-publish-stable-release-0-4-30
   - issue-native-refresh-save-stalls-across-mcp-shim-restart
   - solution-native-refresh-save-recovery
+  - issue-native-widget-zero-size-0-4-31
 related_files:
   - .github/workflows/canvasight-release.yml
   - plugins/canvasight/.codex-plugin/plugin.json
@@ -32,6 +33,8 @@ verification_evidence:
   - Development Agent prepared synchronized 0.4.31 artifacts and resolved the save-recovery implementation issue; independent Test Supervisor release approval and exact native-host acceptance remain pending.
   - Independent Test Supervisor passed the full isolated local release matrix and approved commit/install only.
   - Commit 64dd801e11436e2f9b00b5df463b9d8a0aa58fd3 was installed exactly as canvasight@canvasight-local 0.4.31; every tracked plugin file and the MCP/web hashes match the installed cache.
+  - Restarted-host native acceptance failed for open-mrq3iskg-315c191b8e1b: fullscreen and React mounted, but projectHydrated/canvas visibility remained false with zero dimensions until the 30000ms failure.
+  - Controlled foreground retry open-mrq3rbdl-e08223ec591e reached verified fullscreen ready on widget-ba18b1b9-1986-40a8-84ff-c8f541ae2290 with all readiness evidence true and a 788 by 794 visible canvas.
 ---
 
 # 发布 Canvasight 0.4.31 并推进 stable 更新通道
@@ -62,7 +65,7 @@ verification_evidence:
 
 ## 当前状态
 
-assigned 给 Project Management Agent。commit/install 门禁已通过，exact 0.4.31 已安装；等待 Codex Desktop 重启后在新任务完成完整原生验收。重启前不得 push、tag、创建 Release 或推进 `stable`。
+blocked。commit/install 门禁与 exact 安装仍有效；首次 0×0 失败已归因到非前台 native host presentation，新受控前台实例已完成完整 ready。仍等待真实 Refresh、meaningful control、A→B→A、同任务 Run 与 late metadata 验收。不得 push、tag、创建 Release 或推进 `stable`。
 
 ## Baseline 与 Dirty Scope
 
@@ -76,7 +79,7 @@ assigned 给 Project Management Agent。commit/install 门禁已通过，exact 0
 
 ## 处理结果
 
-已提交并安装 exact 0.4.31 候选，尚未发布。0.4.29 与 0.4.30 保持禁止发布；两者均无远端 tag、Release、workflow 或 stable mutation。
+已提交并安装 exact 0.4.31 候选，但真实原生门禁失败，当前禁止发布。0.4.29 与 0.4.30 同样保持禁止发布；三个版本均无远端 tag、Release、workflow 或 stable mutation。
 
 ## 修改文件
 
@@ -96,10 +99,17 @@ assigned 给 Project Management Agent。commit/install 门禁已通过，exact 0
 - dist index SHA-256: `a1e0ff22a4b9fde0be75e71808d0d6691380dc11874a25f538361de8ddfa2f5c`
 - dist JS SHA-256: `2bdfad87bd58fb5e157f6153b35554b15a7c082159d5412df4e0a4148a419acc`
 - installed-cache plugin validator: passed
+- failed native attempt: `open-mrq3iskg-315c191b8e1b`
+- failed widget instance: `widget-3f03522d-93d7-4bc6-8164-52d638083613`
+- failed native evidence: fullscreen + React mounted, but `projectHydrated=false`, `canvasVisible=false`, `canvasWidth=0`, `canvasHeight=0`
+- controlled foreground ready attempt: `open-mrq3rbdl-e08223ec591e`
+- controlled foreground ready widget: `widget-ba18b1b9-1986-40a8-84ff-c8f541ae2290`
+- controlled foreground ready evidence: verified fullscreen, all render evidence true, 788×794 at `2026-07-18T08:26:07.557Z`
 
 ## 后续风险
 
 - 任何候选代码或构建产物变化都会使 Test 放行、安装哈希和原生验收证据失效。
+- 已观察到的原生失败不可通过重复打开获得一次成功后忽略；若需 runtime/web 修复，必须使用新版本身份重新走完整门禁。
 - 所有 lifecycle 自动化必须在 exact 安装与原生验收之前完成；原生验收后不得再运行会启动或停止 daemon 的测试。
 - 不得复用 0.4.29/0.4.30 tag 身份，也不得通过浏览器 fallback、跳过 Refresh、手工清 dirty 或重复点击降格验收。
 - Release 必须先发布并验证，再以普通 fast-forward 推进 `stable`；失败时不得 force-push、回退或删除受保护的 `stable`。

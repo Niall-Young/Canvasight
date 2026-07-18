@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f7415-32a4-7980-831d-146e54c7d842
+    thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T07:43:51Z
-    handoff_source: issue-native-refresh-save-stalls-across-mcp-shim-restart
-    last_report: solution-native-refresh-save-recovery
+    last_seen: 2026-07-18T08:27:24Z
+    handoff_source: issue-native-widget-zero-size-0-4-31
+    last_report: solution-native-widget-zero-size-0-4-31
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented canonical dirty tracking, retryable awaited save flush, transient React Flow isolation, cleanup-race regression coverage, and the 0.4.31 candidate; native acceptance remains pending
+    notes: Diagnosed the first 0x0 native attempt as host presentation geometry, preserved candidate parity, and proposed the controlled foreground retest that reached verified ready
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f730b-0404-75f0-a460-3a080f0addd6
+    thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T02:52:40Z
-    handoff_source: issue-publish-stable-release-0-4-30
-    last_report: integration-summary-release-matrix-native-session-isolation
+    last_seen: 2026-07-18T08:28:05Z
+    handoff_source: issue-native-widget-zero-size-0-4-31
+    last_report: issue-native-widget-zero-size-0-4-31
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently passed 0.4.30 daemon-home isolation and candidate commit/install gate; formal release remains blocked on restarted-host native acceptance
+    notes: Accepted the controlled foreground 0.4.31 ready evidence and requires real Refresh, control, Run, A-B-A, and late-metadata interaction before release
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f7415-32a4-7980-831d-146e54c7d842
+    thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T07:57:32Z
+    last_seen: 2026-07-18T08:28:33Z
     handoff_source: issue-publish-stable-release-0-4-31
     last_report: issue-publish-stable-release-0-4-31
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns restarted-host native acceptance and Release closure for exact installed 0.4.31 commit 64dd801e; 0.4.29 and 0.4.30 remain prohibited with no remote release mutation
+    notes: Owns the blocked 0.4.31 release closure; controlled foreground ready passed, but user-performed native interactions and all remote release stages remain pending
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
