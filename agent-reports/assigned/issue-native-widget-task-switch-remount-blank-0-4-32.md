@@ -6,11 +6,11 @@ status: assigned
 owner: Development Agent
 created_by: Main Thread
 priority: high
-version: 2
+version: 3
 agent_id: /root/development_agent
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T09:45:36Z
-updated_at: 2026-07-18T09:57:09Z
+updated_at: 2026-07-18T10:01:47Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/App.tsx
@@ -21,6 +21,7 @@ verification_evidence:
   - Exact 0.4.32 started a fresh fullscreen widget instance after the Codex task switch, completed session and project hydration, but the visible native panel remained blank.
   - The same widget instance reached verified ready at 788 by 794 only after the user collapsed and reopened the Codex sidebar 17 seconds later.
   - 0.4.33 bounded fullscreen re-presentation implementation and focused fake-host regressions pass the complete local candidate matrix.
+  - Commit aca7efce7fb595a22b09a060a34ec37f1ae15490 is installed as exact 0.4.33; tracked cache parity is 582 of 582 with zero missing or mismatched files.
 solution_report: agent-reports/resolved/solution-native-widget-task-switch-remount-presentation-retry-0-4-33.md
 ---
 
@@ -73,7 +74,7 @@ Development Agent 实现最小修复；Test Supervisor Agent 独立定义并验�
 
 ## 当前状态
 
-assigned。0.4.33 本地候选通过；等待 exact install、Codex Desktop 重启和真实 task-switch native acceptance。
+assigned。0.4.33 本地候选、commit 与 exact install 通过；等待 Codex Desktop 重启和真实 task-switch native acceptance。
 
 ## 处理结果
 

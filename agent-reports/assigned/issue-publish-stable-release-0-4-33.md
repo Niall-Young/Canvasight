@@ -6,11 +6,11 @@ status: assigned
 owner: Project Management Agent
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root/project_management_agent
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T09:57:09Z
-updated_at: 2026-07-18T09:57:09Z
+updated_at: 2026-07-18T10:01:47Z
 depends_on:
   - issue-native-widget-task-switch-remount-blank-0-4-32
   - solution-native-widget-task-switch-remount-presentation-retry-0-4-33
@@ -28,6 +28,7 @@ verification_evidence:
   - Version 0.4.33 synchronizes manifest, package, lock, SERVER_VERSION, generated MCP bundle and web dist.
   - Complete local matrix, release verify and plugin validation pass.
   - No v0.4.33 tag, push, GitHub Release, workflow or stable mutation has occurred.
+  - Scoped commit aca7efce7fb595a22b09a060a34ec37f1ae15490 is clean and exact 0.4.33 is installed; all 582 tracked plugin files match the immutable cache snapshot.
 ---
 
 # 发布 Canvasight 0.4.33 并推进 stable 更新通道
@@ -39,7 +40,8 @@ verification_evidence:
 ## Closure Criteria
 
 - [x] 0.4.33 版本字段、MCP bundle、web dist、完整本地矩阵和 plugin validator 一致
-- [ ] scoped commit 与 exact 0.4.33 安装完成，重启 Codex Desktop 并新建/标记任务
+- [x] scoped commit 与 exact 0.4.33 安装完成
+- [ ] 重启 Codex Desktop 并新建/标记任务
 - [ ] instance-bound fullscreen ready、clean Refresh、session-local zoom Refresh、控件与 same-task Run 通过
 - [ ] 不折叠侧边栏完成至少两轮 A→B→A，画布自动恢复且 late metadata 不回退
 - [ ] v0.4.33 三平台 workflow、Release zip/SHA 和 ref 一致性通过
@@ -48,11 +50,11 @@ verification_evidence:
 
 ## 当前状态
 
-assigned。允许本地 Git closure 与 exact install；禁止 push、tag、Release 或 `stable` 变更，直到真实 native acceptance 通过。
+assigned。commit 与 exact install 已完成；等待 Codex Desktop 重启和真实 native acceptance。仍禁止 push、tag、Release 或 `stable` 变更，直到真实 native acceptance 通过。
 
 ## 处理结果
 
-本地候选通过，远端发布未开始。
+本地候选、提交和 exact 0.4.33 安装通过；远端发布未开始。
 
 ## 修改文件
 

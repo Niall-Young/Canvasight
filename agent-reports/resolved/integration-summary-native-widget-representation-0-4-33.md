@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: 019f744d-c7f1-7383-8195-7478c2cd835e
 created_at: 2026-07-18T09:57:09Z
-updated_at: 2026-07-18T09:57:09Z
+updated_at: 2026-07-18T10:01:47Z
 depends_on:
   - issue-native-widget-task-switch-remount-blank-0-4-32
   - solution-native-widget-task-switch-remount-presentation-retry-0-4-33
@@ -23,6 +23,7 @@ verification_evidence:
   - Development and independent Test Supervisor focused checks pass on the frozen 0.4.33 snapshot.
   - Complete local command matrix, release verify and plugin validator pass.
   - Exact native-host task-switch reacceptance remains pending after installation and host restart.
+  - Commit aca7efce7fb595a22b09a060a34ec37f1ae15490 and exact installed cache 0.4.33 have zero tracked-file parity differences.
 ---
 
 # 0.4.33 原生 Widget task-return re-presentation 集成总结
@@ -64,12 +65,14 @@ verification_evidence:
 
 ## 未解决 / 后续风险
 
-- exact 0.4.33 安装、Codex Desktop 重启和真实两轮 A→B→A 尚未执行，因此 native issue 和 publish issue 保持 assigned，不能声称白屏已在真实宿主修复。
+- exact 0.4.33 已安装；Codex Desktop 重启和真实两轮 A→B→A 尚未执行，因此 native issue 和 publish issue 保持 assigned，不能声称白屏已在真实宿主修复。
 - 远端 push/tag/Release/stable 均未发生。
 
 ## Git 状态
 
 - branch: main
 - baseline HEAD: 61aac2051c45d565e189554e1ddfd458700711c1
-- commit: pending scoped Project Management review
-- worktree: task-owned implementation、version、dist 与报告修改待选择性暂存
+- commit: `aca7efce7fb595a22b09a060a34ec37f1ae15490 fix: 修复任务切回画布白屏`
+- post-commit status: clean; main ahead of origin/main by 7
+- installed: exact 0.4.33 at `/Users/niallyoung/.codex/plugins/cache/canvasight-local/canvasight/0.4.33`, 582 tracked files, 0 missing, 0 mismatched
+- worktree: 本次安装证据回写待独立文档 commit

@@ -10,8 +10,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-33` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 1 | 2026-07-18T09:57:09Z
-- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 2 | 2026-07-18T09:57:09Z
+- `issue-publish-stable-release-0-4-33` | assigned | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 2 | 2026-07-18T10:01:47Z
+- `issue-native-widget-task-switch-remount-blank-0-4-32` | assigned | high | Development Agent | 0.4.32 切回任务后原生 Widget 白屏 | `agent-reports/assigned/issue-native-widget-task-switch-remount-blank-0-4-32.md` | 3 | 2026-07-18T10:01:47Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z
 - `issue-native-widget-zero-size-0-4-31` | assigned | high | Development Agent | 0.4.31 重启后原生 Widget 画布保持零尺寸 | `agent-reports/assigned/issue-native-widget-zero-size-0-4-31.md` | 3 | 2026-07-18T08:27:24Z
 - `issue-publish-stable-release-0-4-31` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.31 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-31.md` | 5 | 2026-07-18T08:42:24Z
