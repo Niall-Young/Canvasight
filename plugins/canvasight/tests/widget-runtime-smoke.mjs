@@ -211,7 +211,7 @@ function hostHtml(widgetData) {
   window.__HOST_FAIL_NEXT_SAVE__ = false;
   window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
   window.__HOST_LAST_DOCUMENT__ = null;
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], displayRequests: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], displayRequests: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], presentationRecoveryCalls: [], presentationRecoveryOwner: null, revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -256,6 +256,7 @@ function hostHtml(widgetData) {
       const frameRequests = window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frameId).length;
       const pulseFixture = sourceFrame && (
         sourceFrame.dataset.presentationPulse === 'true' ||
+        sourceFrame.dataset.presentationCompetition === 'true' ||
         sourceFrame.dataset.presentationPermanentZero === 'true' ||
         sourceFrame.dataset.presentationPulseTeardown === 'true'
       );
@@ -276,7 +277,7 @@ function hostHtml(widgetData) {
       result(event.source, message.id, { mode: 'fullscreen' });
       const shouldRestore = sourceFrame && (
         (sourceFrame.dataset.presentationRetry === 'true' && frameRequests === 2) ||
-        (sourceFrame.dataset.presentationPulse === 'true' && frameRequests === 5)
+        ((sourceFrame.dataset.presentationPulse === 'true' || sourceFrame.dataset.presentationCompetition === 'true') && frameRequests === 5)
       );
       if (shouldRestore) {
         sourceFrame.style.width = '1200px';
@@ -298,7 +299,24 @@ function hostHtml(widgetData) {
       const args = request.arguments || {};
       window.__HOST_RECORDS__.toolCalls.push(args);
       let data = null;
-      if (args.path === '/api/templates') data = [];
+      if (args.path && args.path.endsWith('/presentation-recovery')) {
+        const sourceFrame = Array.from(document.querySelectorAll('iframe')).find((candidate) => candidate.contentWindow === event.source);
+        const coordinatedFixture = sourceFrame?.dataset.presentationCompetition === 'true';
+        if (coordinatedFixture && !window.__HOST_RECORDS__.presentationRecoveryOwner) {
+          window.__HOST_RECORDS__.presentationRecoveryOwner = args.widgetInstanceId;
+        }
+        const owner = !coordinatedFixture || window.__HOST_RECORDS__.presentationRecoveryOwner === args.widgetInstanceId;
+        data = owner
+          ? { status: 'owner', owner: true, leaseExpiresAt: Date.now() + 2000 }
+          : { status: 'standby', owner: false, retryAfterMs: 2000 };
+        window.__HOST_RECORDS__.presentationRecoveryCalls.push({
+          frameId: sourceFrame?.id,
+          widgetInstanceId: args.widgetInstanceId,
+          status: data.status,
+          owner: data.owner
+        });
+      }
+      else if (args.path === '/api/templates') data = [];
       else if (args.path === '/api/preferences') data = { aiSkillAssignmentEnabled: false };
       else if (args.path && args.path.endsWith('/attachment-preview')) {
         data = args.body && args.body.storedPath === ${JSON.stringify(thumbnailGifPath)}
@@ -1915,6 +1933,110 @@ try {
       window.__HOST_RECORDS__.openProjectCalls -= 4;
     })()`
   });
+
+  const presentationCompetition = await waitForEvaluation(cdp, `(async () => {
+    const openCallsBefore = window.__HOST_RECORDS__.openProjectCalls;
+    const toolCallsBefore = window.__HOST_RECORDS__.toolCalls.length;
+    const frameIds = [
+      'widget-history-stalled-old',
+      'widget-history-stalled-middle',
+      'widget-history-stalled-current'
+    ];
+    for (const frameId of frameIds) {
+      const historical = document.createElement('iframe');
+      historical.id = frameId;
+      historical.dataset.presentationCompetition = 'true';
+      historical.src = '/widget';
+      historical.style.cssText = 'position:fixed;inset:0;width:0;height:0;border:0;';
+      document.body.appendChild(historical);
+    }
+    const deadline = Date.now() + 7000;
+    while (
+      Date.now() < deadline &&
+      (
+        frameIds.some((frameId) => window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frameId).length < 3) ||
+        frameIds.every((frameId) => window.__HOST_RECORDS__.displayRequests.filter((request) => request.frameId === frameId).length < 5)
+      )
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const requests = window.__HOST_RECORDS__.displayRequests.filter((request) => frameIds.includes(request.frameId));
+    const widgetInstanceIds = frameIds.map(
+      (frameId) => document.getElementById(frameId).contentWindow.__CANVASIGHT_BRIDGE_STATE__?.widgetInstanceId
+    );
+    const toolCalls = window.__HOST_RECORDS__.toolCalls.slice(toolCallsBefore).filter(
+      (call) => widgetInstanceIds.includes(call.widgetInstanceId)
+    );
+    const recoveryCalls = window.__HOST_RECORDS__.presentationRecoveryCalls.filter(
+      (call) => frameIds.includes(call.frameId)
+    );
+    return {
+      requests,
+      inlineRequests: requests.filter((request) => request.params?.mode === 'inline'),
+      fullscreenRequests: requests.filter((request) => request.params?.mode === 'fullscreen'),
+      recoveryCalls,
+      openCalls: window.__HOST_RECORDS__.openProjectCalls - openCallsBefore,
+      saveCalls: toolCalls.filter((call) => call.path?.endsWith('/document')).length,
+      readyCalls: toolCalls.filter((call) => call.path?.endsWith('/widget-ready')).length,
+      widgetInstanceIds
+    };
+  })()`, "historical widgets coordinate one presentation recovery", 9000);
+  assert.equal(
+    presentationCompetition.inlineRequests.length,
+    1,
+    `only one historical widget may pulse the shared task presentation: ${JSON.stringify(presentationCompetition)}`
+  );
+  assert.equal(presentationCompetition.recoveryCalls.length, 3, "every competing widget must ask the shared coordinator before pulsing");
+  assert.equal(
+    presentationCompetition.recoveryCalls.filter((call) => call.status === 'owner' && call.owner === true).length,
+    1,
+    "the shared coordinator must grant exactly one presentation recovery owner"
+  );
+  assert.equal(
+    presentationCompetition.recoveryCalls.filter((call) => call.status === 'standby' && call.owner === false).length,
+    2,
+    "non-owner historical widgets must wait without pulsing"
+  );
+  assert.ok(presentationCompetition.readyCalls >= 1, "the coordinated recovery owner must still reach strict ready");
+  assert.equal(presentationCompetition.openCalls, 3, "presentation coordination must not repeat project hydration");
+  assert.equal(presentationCompetition.saveCalls, 0, "presentation coordination must not persist presentation-only state");
+  await waitForEvaluation(cdp, `(async () => {
+    const frameIds = ${JSON.stringify([
+      "widget-history-stalled-old",
+      "widget-history-stalled-middle",
+      "widget-history-stalled-current"
+    ])};
+    const frames = frameIds.map((frameId) => document.getElementById(frameId));
+    const widgetInstanceIds = frames.map(
+      (frame) => frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__?.widgetInstanceId
+    );
+    const responseCountBefore = window.__HOST_RECORDS__.teardownResponses.length;
+    frames.forEach((frame) => window.__HOST_TEARDOWN__(frame.contentWindow));
+    const deadline = Date.now() + 2000;
+    while (
+      Date.now() < deadline &&
+      window.__HOST_RECORDS__.teardownResponses.length < responseCountBefore + frames.length
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    frames.forEach((frame) => frame.remove());
+    window.__HOST_RECORDS__.readyInstances = window.__HOST_RECORDS__.readyInstances.filter(
+      (widgetInstanceId) => !widgetInstanceIds.includes(widgetInstanceId)
+    );
+    window.__HOST_RECORDS__.toolCalls = window.__HOST_RECORDS__.toolCalls.filter(
+      (call) => !widgetInstanceIds.includes(call.widgetInstanceId)
+    );
+    window.__HOST_RECORDS__.displayRequests = window.__HOST_RECORDS__.displayRequests.filter(
+      (request) => !frameIds.includes(request.frameId)
+    );
+    window.__HOST_RECORDS__.presentationRecoveryCalls = window.__HOST_RECORDS__.presentationRecoveryCalls.filter(
+      (call) => !frameIds.includes(call.frameId)
+    );
+    window.__HOST_RECORDS__.presentationRecoveryOwner = null;
+    window.__HOST_RECORDS__.openProjectCalls -= 3;
+    return window.__HOST_RECORDS__.teardownResponses.length >= responseCountBefore + frames.length;
+  })()`, "historical presentation competition teardown");
 
   const historicalPolling = await waitForEvaluation(cdp, `(async () => {
     const original = document.getElementById('widget');

@@ -57,12 +57,24 @@ type CanvasightPresentationPulseResult =
   | "completed"
   | "unsupported"
   | "already-attempted"
+  | "standby"
+  | "cooldown"
+  | "stale-binding"
+  | "coordination-failed"
   | "inline-rejected"
   | "inline-context-timeout"
   | "fullscreen-rejected"
   | "binding-changed"
   | "teardown"
   | "failed";
+
+type CanvasightPresentationRecoveryDecision = {
+  status?: string;
+  owner?: boolean;
+  retryAfterMs?: number;
+  leaseExpiresAt?: string;
+  cooldownExpiresAt?: string;
+};
 
 type CanvasightWidgetData = Record<string, unknown> & {
   apiBaseUrl?: string;
@@ -535,6 +547,43 @@ export function startCanvasightWidgetBridge(): void {
       return "unsupported";
     }
     presentationPulseBindings.add(bindingKey);
+    let recoveryDecision: CanvasightPresentationRecoveryDecision | null = null;
+    try {
+      const runtime = window.__CANVASIGHT_WIDGET_DATA__;
+      const result = canonicalToolResult(await callServerTool({
+        name: "canvasight_widget_api",
+        arguments: {
+          path: `/api/sessions/${runtime?.sessionId || ""}/presentation-recovery`,
+          method: "POST",
+          body: null
+        }
+      }));
+      const envelope = result ? payloadFromToolResult(result).payload : null;
+      recoveryDecision =
+        envelope?.data && typeof envelope.data === "object"
+          ? (envelope.data as CanvasightPresentationRecoveryDecision)
+          : null;
+    } catch (error) {
+      recordPresentationDiagnostic("pulse-coordination-failed", {
+        error: errorMessage(error, "Presentation recovery coordination failed.")
+      });
+      return bindingStatus() ?? "coordination-failed";
+    }
+    const afterCoordination = bindingStatus();
+    if (afterCoordination) return afterCoordination;
+    recordPresentationDiagnostic("pulse-coordination-result", {
+      status: recoveryDecision?.status ?? "invalid",
+      owner: recoveryDecision?.owner === true,
+      retryAfterMs: recoveryDecision?.retryAfterMs ?? 0,
+      leaseExpiresAt: recoveryDecision?.leaseExpiresAt ?? null,
+      cooldownExpiresAt: recoveryDecision?.cooldownExpiresAt ?? null
+    });
+    if (recoveryDecision?.owner !== true || recoveryDecision.status !== "owner") {
+      if (recoveryDecision?.status === "standby") return "standby";
+      if (recoveryDecision?.status === "cooldown") return "cooldown";
+      if (recoveryDecision?.status === "stale-binding") return "stale-binding";
+      return "coordination-failed";
+    }
     const inlineContextAfterSequence = hostContextSequence;
     try {
       recordPresentationDiagnostic("pulse-inline-request");

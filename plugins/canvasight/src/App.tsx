@@ -1551,6 +1551,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       let nextPresentationRetryAt = Date.now() + 250;
       let presentationRetryIndex = 0;
       let presentationPulseAttempted = false;
+      let passivePresentationRecovery = false;
       const presentationRetryDelays = [250, 1_000];
       const presentationSnapshot = (
         canvas: HTMLElement | null,
@@ -1615,6 +1616,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           );
           const pulseResult = await window.canvasightMcp?.requestPresentationPulse(bindingKey);
           if (!isCanvasightBindingCurrent(bindingKey)) throw new Error("Canvasight widget binding changed during startup.");
+          passivePresentationRecovery =
+            pulseResult === "standby" ||
+            pulseResult === "cooldown" ||
+            pulseResult === "stale-binding";
           window.canvasightMcp?.recordPresentationDiagnostic("pulse-result", {
             result: pulseResult ?? "unavailable",
             ...presentationSnapshot(canvas, rect, style, hitTarget, appRoot)
@@ -1624,8 +1629,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         await waitForPresentationSignal(canvas);
       }
       window.canvasightMcp?.recordPresentationDiagnostic("renderability-timeout", {
-        elapsedMs: 30_000
+        elapsedMs: 30_000,
+        passivePresentationRecovery
       });
+      if (passivePresentationRecovery) return null;
       throw new Error("Canvasight canvas did not become visibly renderable within 30000ms.");
     };
     const waitForFullscreen = async (): Promise<void> => {
@@ -1660,7 +1667,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
         if (nativeWidget) {
           await waitForFullscreen();
-          const { canvas, rect } = await waitForRenderableCanvas(startupBindingKey);
+          const renderableCanvas = await waitForRenderableCanvas(startupBindingKey);
+          if (!renderableCanvas) return;
+          const { canvas, rect } = renderableCanvas;
           await canvasightApi.reportWidgetReady({
             projectHydrated: hydratedRef.current,
             canvasRendered: canvas.isConnected,

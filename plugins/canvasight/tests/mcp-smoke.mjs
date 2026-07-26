@@ -3806,6 +3806,74 @@ async function main() {
       arguments: { path: revisionPollPath, method: "POST", body: activePollBody, ...widgetIdentity({ startupStage: "ready" }) }
     });
     assert.equal(afterClosePoll.structuredContent.data.status, "owner", "closing a session releases its revision poll lease");
+
+    const recoveryOpened = await request("tools/call", {
+      name: "render_canvasight_canvas_widget",
+      arguments: { language: "zh" }
+    });
+    const recoveryData = widgetDataFor(recoveryOpened);
+    const recoveryPath = `/api/sessions/${recoveryOpened.structuredContent.sessionId}/presentation-recovery`;
+    const recoveryIdentity = (widgetInstanceId) => ({
+      openAttemptId: recoveryData.openAttemptId,
+      widgetInstanceId,
+      startupStage: "hydrating_project",
+      displayMode: "fullscreen",
+      threadId: "thread-smoke",
+      reactMounted: true
+    });
+    const recoveryOwner = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: recoveryPath,
+        method: "POST",
+        body: null,
+        ...recoveryIdentity("widget-presentation-owner")
+      }
+    });
+    assert.equal(recoveryOwner.structuredContent.data.status, "owner");
+    assert.equal(recoveryOwner.structuredContent.data.owner, true);
+    const recoveryStandby = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: recoveryPath,
+        method: "POST",
+        body: null,
+        ...recoveryIdentity("widget-presentation-standby")
+      }
+    });
+    assert.equal(recoveryStandby.structuredContent.data.status, "standby");
+    assert.equal(recoveryStandby.structuredContent.data.owner, false);
+    const staleRecovery = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: `/api/sessions/${widgetOpened.structuredContent.sessionId}/presentation-recovery`,
+        method: "POST",
+        body: null,
+        ...widgetIdentity({ widgetInstanceId: "widget-presentation-stale" })
+      }
+    });
+    assert.equal(staleRecovery.structuredContent.data.status, "stale-binding");
+    assert.equal(staleRecovery.structuredContent.data.owner, false);
+    const recoveryLeaseExpiresAt = Date.parse(recoveryOwner.structuredContent.data.leaseExpiresAt);
+    const recoveryCooldownExpiresAt = Date.parse(recoveryOwner.structuredContent.data.cooldownExpiresAt);
+    assert.ok(recoveryCooldownExpiresAt > recoveryLeaseExpiresAt, "presentation recovery cooldown must outlive its owner lease");
+    await sleep(Math.max(0, recoveryLeaseExpiresAt - Date.now() + 25));
+    const recoveryCooldown = await request("tools/call", {
+      name: "canvasight_widget_api",
+      arguments: {
+        path: recoveryPath,
+        method: "POST",
+        body: null,
+        ...recoveryIdentity("widget-presentation-after-lease")
+      }
+    });
+    assert.equal(recoveryCooldown.structuredContent.data.status, "cooldown");
+    assert.equal(recoveryCooldown.structuredContent.data.owner, false);
+    await request("tools/call", {
+      name: "close_canvasight",
+      arguments: { sessionId: recoveryOpened.structuredContent.sessionId }
+    });
+
     const widgetReadyWrongThread = await request("tools/call", {
       name: "await_canvasight_widget_ready",
       arguments: {
