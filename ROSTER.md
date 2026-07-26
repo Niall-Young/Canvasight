@@ -8,23 +8,23 @@ roles:
     agent_id: /root/product_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T12:11:52Z
-    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
-    last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
+    last_seen: 2026-07-26T03:10:31Z
+    handoff_source: issue-node-rich-text-editor
+    last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Confirmed 0.4.35 only tightens internal daemon stop completion and adds no product-contract change
+    notes: Reviewing rich-text v1 scope, Markdown compatibility, and acceptance boundaries
   - role: Design Agent
     status: active
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T15:38:15Z
-    handoff_source: issue-manual-canvas-latest-revision-refresh
-    last_report: issue-manual-canvas-latest-revision-refresh
+    last_seen: 2026-07-26T03:10:31Z
+    handoff_source: issue-node-rich-text-editor
+    last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Specified the right global toolbar refresh action, busy feedback, safe-save wording, and accessibility states
+    notes: Auditing toolbarless rich-text interaction and strict design.md token compliance
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
@@ -39,14 +39,14 @@ roles:
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
-    thread_id: 019f7450-40ec-7df0-81de-862b1f8af621
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T12:19:00Z
-    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
-    last_report: solution-windows-cli-daemon-state-cleanup-0-4-35
+    last_seen: 2026-07-26T03:10:31Z
+    handoff_source: issue-node-rich-text-editor
+    last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Ownership-safe Windows daemon-state cleanup passed local and Windows Node 20.19 target/control/replacement regression
+    notes: Implementing Tiptap rich-text node bodies with Markdown persistence and existing runtime compatibility
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead

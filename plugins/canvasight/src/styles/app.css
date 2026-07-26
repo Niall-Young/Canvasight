@@ -53,6 +53,7 @@
   --radius-xl: 24px;
   --radius-full: 99999px;
   --font-family-local: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-family-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
   --text-20: 20px;
   --line-20: 28px;
   --text-16: 16px;
@@ -61,6 +62,15 @@
   --line-14: 22px;
   --text-12: 12px;
   --line-12: 16px;
+  --space-1: 1px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --indent-rich-text-list: 22px;
+  --size-task-body-min-height: 96px;
+  --size-control-sm: 16px;
   --shadow-node: 0 2px 6px var(--color-shadow-sm);
   --shadow-hover: 0 8px 24px var(--color-shadow-md-primeter), 0 4px 10px var(--color-shadow-md-spread);
   --shadow-popover: 0 12px 48px var(--color-shadow-lg-primeter), 0 4px 24px var(--color-shadow-lg-spread);
@@ -2478,8 +2488,7 @@ button.achievement-card.is-unlocked:focus-visible {
   white-space: nowrap;
 }
 
-.task-title::placeholder,
-.task-body::placeholder {
+.task-title::placeholder {
   color: var(--color-text-subtlest);
 }
 
@@ -2517,7 +2526,7 @@ button.achievement-card.is-unlocked:focus-visible {
 .task-body {
   display: block;
   box-sizing: border-box;
-  min-height: 96px;
+  min-height: var(--size-task-body-min-height);
   height: auto;
   overflow: hidden;
   resize: none;
@@ -2535,6 +2544,215 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .task-body:focus {
   box-shadow: none;
+}
+
+.task-body > div,
+.task-body-content {
+  width: 100%;
+}
+
+.task-body-content {
+  position: relative;
+  min-height: var(--size-task-body-min-height);
+  padding: 0;
+  overflow-wrap: anywhere;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.task-body-content::selection,
+.task-body-content *::selection {
+  color: var(--color-text);
+  background: var(--color-primary-subtle);
+}
+
+.task-body-content > * {
+  margin: 0;
+}
+
+.task-body-content > * + * {
+  margin-top: var(--space-6);
+}
+
+.task-body-content h1 {
+  font-size: var(--text-16);
+  line-height: var(--line-16);
+  font-weight: 600;
+}
+
+.task-body-content h2,
+.task-body-content h3 {
+  font-size: var(--text-14);
+  line-height: var(--line-14);
+  font-weight: 600;
+}
+
+.task-body-content ul,
+.task-body-content ol {
+  margin: 0;
+  padding-inline-start: var(--indent-rich-text-list);
+}
+
+.task-body-content li {
+  margin: 0;
+  padding: 0;
+}
+
+.task-body-content li + li {
+  margin-top: var(--space-2);
+}
+
+.task-body-content li > p {
+  margin: 0;
+}
+
+.task-body-content ul[data-type="taskList"] {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.task-body-content li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+
+.task-body-content li[data-type="taskItem"] > label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: var(--line-14);
+}
+
+.task-body-content li[data-type="taskItem"] input {
+  width: var(--size-control-sm);
+  height: var(--size-control-sm);
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.task-body-content li[data-type="taskItem"] input:focus-visible {
+  outline: var(--border-weight-sm) solid var(--color-border-focus);
+  outline-offset: var(--space-2);
+}
+
+.task-body.is-readonly .task-body-content li[data-type="taskItem"] input {
+  accent-color: var(--color-icon-subtle);
+  pointer-events: none;
+}
+
+.task-body-content li[data-type="taskItem"] > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.task-body-content blockquote {
+  padding-inline-start: var(--space-10);
+  color: var(--color-text-subtle);
+  border-inline-start: var(--border-weight-lg) solid var(--color-border-connecting);
+}
+
+.task-body-content code {
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-xs);
+  background: var(--color-background-input);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.task-body-content pre {
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-8) var(--space-10);
+  overflow-x: auto;
+  color: var(--color-text);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-xs);
+  background: var(--color-background-input);
+  font-family: var(--font-family-mono);
+  white-space: pre;
+}
+
+.task-body-content pre code {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.task-body-raw-markdown.is-inline {
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-xs);
+  background: var(--color-background-input);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+}
+
+.task-body-raw-markdown {
+  color: var(--color-text-subtle);
+  border-color: var(--color-border-divider);
+}
+
+.task-body-content .ProseMirror-selectednode {
+  outline: var(--border-weight-sm) solid var(--color-border-focus);
+  outline-offset: var(--space-2);
+}
+
+.task-body-content .ProseMirror-gapcursor {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+
+.task-body-content.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.task-body-content .ProseMirror-gapcursor::after {
+  position: absolute;
+  top: calc(-1 * var(--space-2));
+  display: block;
+  width: var(--line-16);
+  content: "";
+  border-top: var(--border-weight-sm) solid var(--color-border-focus);
+}
+
+.task-body-content a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.task-body-content a:hover {
+  color: var(--color-primary-hover);
+}
+
+.task-body-content p.is-editor-empty:first-child::before {
+  height: 0;
+  float: left;
+  color: var(--color-text-subtlest);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.task-body.is-readonly .task-body-content {
+  cursor: grab;
+  user-select: none;
+}
+
+.task-body.is-readonly:active .task-body-content {
+  cursor: grabbing;
+}
+
+.task-body.is-editing .task-body-content {
+  cursor: text;
+  user-select: text;
 }
 
 .attachment-grid {

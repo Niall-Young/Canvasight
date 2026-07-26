@@ -2,13 +2,35 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from "react-dom";
 import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
+import type { Editor } from "@tiptap/core";
+import Blockquote from "@tiptap/extension-blockquote";
+import Bold from "@tiptap/extension-bold";
+import BulletList from "@tiptap/extension-bullet-list";
+import Code from "@tiptap/extension-code";
+import CodeBlock from "@tiptap/extension-code-block";
+import Document from "@tiptap/extension-document";
+import HardBreak from "@tiptap/extension-hard-break";
+import Heading from "@tiptap/extension-heading";
+import Italic from "@tiptap/extension-italic";
+import ListItem from "@tiptap/extension-list-item";
+import OrderedList from "@tiptap/extension-ordered-list";
+import Paragraph from "@tiptap/extension-paragraph";
+import Placeholder from "@tiptap/extension-placeholder";
+import Strike from "@tiptap/extension-strike";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
+import Text from "@tiptap/extension-text";
+import { Dropcursor, Gapcursor, UndoRedo } from "@tiptap/extensions";
+import { Markdown } from "@tiptap/markdown";
+import { EditorContent, useEditor } from "@tiptap/react";
 import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
-import { measureTextareaCaretRect, placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
+import { rawMarkdownExtensions, SafeLink } from "../lib/richTextExtensions";
+import { placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
 import { shortcuts } from "../lib/shortcuts";
-import { filterSkills, findSkillQuery, insertSkillToken, type SkillQueryRange } from "../lib/skills";
+import { filterSkills, findSkillQuery, type SkillQueryRange } from "../lib/skills";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
@@ -20,15 +42,7 @@ import { UploadChip } from "./ui/upload-chip";
 type TaskNodeProps = NodeProps<Node<ScatterNodeData, "task">>;
 type EditableField = "title" | "body";
 type ConnectedNodeSide = "left" | "right";
-
-function fitTextareaHeight(textarea: HTMLTextAreaElement | null): boolean {
-  if (!textarea) return false;
-  const previousHeight = textarea.style.height;
-  textarea.style.height = "auto";
-  const nextHeight = `${textarea.scrollHeight}px`;
-  textarea.style.height = nextHeight;
-  return previousHeight !== nextHeight;
-}
+type EditorSkillQuery = SkillQueryRange & { from: number; to: number };
 
 interface RuntimeActions {
   updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
@@ -99,21 +113,23 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const updateNodeInternals = useUpdateNodeInternals();
   const rootRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const skillPickerRef = useRef<HTMLDivElement>(null);
   const skillOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const pointerStartedSelectedRef = useRef(false);
+  const bodyPointerPositionRef = useRef<{ left: number; top: number } | null>(null);
   const suppressConnectButtonClickRef = useRef(false);
   const isComposingRef = useRef(false);
   const pendingFinishAfterCompositionRef = useRef(false);
-  const pendingNodeInternalsUpdateRef = useRef(false);
+  const bodyEditorRef = useRef<Editor | null>(null);
+  const resizeFrameRef = useRef(0);
   // Keep IME edits local until composition ends so store/autosave updates do not commit raw pinyin.
   const titleDraftRef = useRef(data.title);
   const bodyDraftRef = useRef(data.body);
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [titleDraft, setTitleDraft] = useState(data.title);
   const [bodyDraft, setBodyDraft] = useState(data.body);
-  const [skillQuery, setSkillQuery] = useState<SkillQueryRange | null>(null);
+  const [skillQuery, setSkillQuery] = useState<EditorSkillQuery | null>(null);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [skillStatus, setSkillStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [activeSkillIndex, setActiveSkillIndex] = useState(0);
@@ -142,13 +158,25 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     }
   }, []);
 
-  const syncSkillQuery = useCallback((value: string, textarea: HTMLTextAreaElement) => {
+  const syncSkillQuery = useCallback((editor: Editor) => {
     if (isComposingRef.current) {
       setSkillQuery(null);
       return;
     }
-    const nextQuery = findSkillQuery(value, textarea.selectionStart, textarea.selectionEnd);
-    setSkillQuery(nextQuery);
+    const { $from, empty } = editor.state.selection;
+    if (!empty || !$from.parent.isTextblock) {
+      setSkillQuery(null);
+      return;
+    }
+    const nextQuery = findSkillQuery($from.parent.textContent, $from.parentOffset, $from.parentOffset);
+    const nextEditorQuery = nextQuery
+      ? {
+          ...nextQuery,
+          from: $from.start() + nextQuery.start,
+          to: $from.start() + nextQuery.end
+        }
+      : null;
+    setSkillQuery(nextEditorQuery);
     if (nextQuery && skillStatus === "idle") void loadSkills();
   }, [loadSkills, skillStatus]);
 
@@ -173,11 +201,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     let frame = 0;
     const updatePosition = () => {
       frame = 0;
-      const anchor = bodyRef.current;
+      const bodyEditor = bodyEditorRef.current;
       const picker = skillPickerRef.current;
-      if (!anchor || !picker) return;
-      const caretRect = measureTextareaCaretRect(anchor);
-      if (!caretRect) return;
+      if (!bodyEditor || !picker || !bodyEditor.state.selection.empty) return;
+      const caretRect = bodyEditor.view.coordsAtPos(bodyEditor.state.selection.from);
       const nextPosition = placeSkillPicker({
         anchorRect: caretRect,
         pickerHeight: picker.offsetHeight,
@@ -211,19 +238,23 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     };
   }, [editingField, skillQuery, skillStatus, visibleSkills.length]);
 
-  const fitBodyTextarea = useCallback((deferNodeInternalsUpdate = false) => {
-    if (fitTextareaHeight(bodyRef.current)) {
-      if (deferNodeInternalsUpdate) {
-        pendingNodeInternalsUpdateRef.current = true;
-        return;
-      }
-      updateNodeInternals(id);
-    }
-  }, [id, updateNodeInternals]);
-
   useLayoutEffect(() => {
-    fitBodyTextarea(isComposingRef.current);
-  }, [bodyDraft, fitBodyTextarea]);
+    const body = bodyRef.current;
+    if (!body) return;
+    const observer = new ResizeObserver(() => {
+      if (resizeFrameRef.current) return;
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = 0;
+        updateNodeInternals(id);
+      });
+    });
+    observer.observe(body);
+    return () => {
+      observer.disconnect();
+      if (resizeFrameRef.current) window.cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = 0;
+    };
+  }, [id, updateNodeInternals]);
 
   useEffect(() => {
     if (editingField === "title") return;
@@ -231,14 +262,140 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     setTitleDraft(data.title);
   }, [data.title, editingField]);
 
+  const editorKeyDownRef = useRef<(editor: Editor, event: KeyboardEvent) => boolean>(() => false);
+  const bodyEditor = useEditor(
+    {
+      content: data.body,
+      contentType: "markdown",
+      editable: false,
+      injectCSS: false,
+      extensions: [
+        Blockquote,
+        Bold,
+        BulletList,
+        Code,
+        CodeBlock,
+        Document,
+        Dropcursor,
+        Gapcursor,
+        HardBreak,
+        Heading.configure({ levels: [1, 2, 3] }),
+        Italic,
+        SafeLink.configure({
+          autolink: true,
+          linkOnPaste: true,
+          openOnClick: false,
+          protocols: ["http", "https", "mailto"]
+        }),
+        ListItem,
+        OrderedList,
+        Paragraph,
+        Placeholder.configure({ placeholder: t("task.bodyPlaceholder") }),
+        Strike,
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        Text,
+        UndoRedo,
+        ...rawMarkdownExtensions,
+        Markdown
+      ],
+      editorProps: {
+        attributes: {
+          "aria-label": t("task.bodyPlaceholder"),
+          class: "task-body-content"
+        },
+        handleDOMEvents: {
+          click: (_view, event) => {
+            const target = event.target;
+            if (!(target instanceof Element) || !target.closest("a")) return false;
+            event.preventDefault();
+            return true;
+          },
+          compositionstart: () => {
+            isComposingRef.current = true;
+            pendingFinishAfterCompositionRef.current = false;
+            setSkillQuery(null);
+            return false;
+          },
+          compositionend: () => {
+            isComposingRef.current = false;
+            window.setTimeout(() => {
+              const currentEditor = bodyEditorRef.current;
+              if (!currentEditor) return;
+              const markdown = currentEditor.isEmpty ? "" : currentEditor.getMarkdown();
+              if (markdown !== bodyDraftRef.current) {
+                bodyDraftRef.current = markdown;
+                setBodyDraft(markdown);
+                taskNodeActions?.updateNodeData(id, { body: markdown });
+              }
+              syncSkillQuery(currentEditor);
+              if (pendingFinishAfterCompositionRef.current && !currentEditor.isFocused) {
+                pendingFinishAfterCompositionRef.current = false;
+                taskNodeActions?.commitNodeEdit();
+                setEditingField(null);
+              }
+            }, 0);
+            return false;
+          },
+          keydown: (_view, event) => editorKeyDownRef.current(bodyEditorRef.current!, event),
+          paste: (_view, event) => {
+            if (event.clipboardData && [...event.clipboardData.files].length > 0) {
+              event.preventDefault();
+              return true;
+            }
+            return false;
+          }
+        },
+        transformPastedHTML: (html) => {
+          const documentFragment = new DOMParser().parseFromString(html, "text/html");
+          documentFragment.querySelectorAll("script,style,img,video,audio,iframe,object,embed").forEach((element) => element.remove());
+          documentFragment.querySelectorAll("*").forEach((element) => {
+            for (const attribute of [...element.attributes]) {
+              if (attribute.name.startsWith("on") || attribute.name === "style") element.removeAttribute(attribute.name);
+            }
+          });
+          return documentFragment.body.innerHTML;
+        }
+      },
+      onCreate: ({ editor }) => {
+        bodyEditorRef.current = editor;
+      },
+      onDestroy: () => {
+        bodyEditorRef.current = null;
+      },
+      onSelectionUpdate: ({ editor }) => {
+        syncSkillQuery(editor);
+      },
+      onUpdate: ({ editor }) => {
+        if (isComposingRef.current || editor.view.composing) return;
+        const markdown = editor.isEmpty ? "" : editor.getMarkdown();
+        if (markdown === bodyDraftRef.current) return;
+        bodyDraftRef.current = markdown;
+        setBodyDraft(markdown);
+        taskNodeActions?.updateNodeData(id, { body: markdown });
+        syncSkillQuery(editor);
+      }
+    },
+    [id]
+  );
+
   useEffect(() => {
     if (editingField === "body") return;
     bodyDraftRef.current = data.body;
     setBodyDraft(data.body);
-  }, [data.body, editingField]);
+    if (bodyEditor && (bodyEditor.isEmpty ? "" : bodyEditor.getMarkdown()) !== data.body) {
+      bodyEditor.commands.setContent(data.body, { contentType: "markdown", emitUpdate: false });
+    }
+  }, [bodyEditor, data.body, editingField]);
+
+  useEffect(() => {
+    if (!bodyEditor) return;
+    bodyEditor.setEditable(editingField === "body", false);
+  }, [bodyEditor, editingField]);
 
   const isNodeEditableElement = useCallback(
-    (target: EventTarget | null) => target === titleRef.current || target === bodyRef.current,
+    (target: EventTarget | null) =>
+      target === titleRef.current || (target instanceof globalThis.Node && Boolean(bodyRef.current?.contains(target))),
     []
   );
 
@@ -293,14 +450,22 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     }
 
     if (editingField === "body") {
-      bodyRef.current?.focus();
-      const valueLength = bodyRef.current?.value.length ?? 0;
-      bodyRef.current?.setSelectionRange(valueLength, valueLength);
+      const pointer = bodyPointerPositionRef.current;
+      bodyPointerPositionRef.current = null;
+      const position = pointer ? bodyEditor?.view.posAtCoords(pointer) : null;
+      if (position) {
+        bodyEditor?.chain().focus().setTextSelection(position.pos).run();
+      } else {
+        bodyEditor?.commands.focus("end");
+      }
     }
-  }, [editingField]);
+  }, [bodyEditor, editingField]);
 
-  const handleEditablePointerDown = useCallback(() => {
+  const handleEditablePointerDown = useCallback((event: React.PointerEvent<HTMLElement>) => {
     pointerStartedSelectedRef.current = selected;
+    if (event.button === 0 && event.currentTarget === bodyRef.current && selected) {
+      bodyPointerPositionRef.current = { left: event.clientX, top: event.clientY };
+    }
   }, [selected]);
 
   const startEditing = useCallback(
@@ -312,14 +477,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     []
   );
 
-  const handleEditableFocus = useCallback((event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: EditableField) => {
+  const handleEditableFocus = useCallback((event: React.FocusEvent<HTMLElement>, field: EditableField) => {
     if (editingField !== field) {
       event.currentTarget.blur();
     }
   }, [editingField]);
 
   const handleEditableBlur = useCallback(
-    (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>, field: EditableField) => {
+    (event: React.FocusEvent<HTMLElement>, field: EditableField) => {
       if (editingField !== field) return;
       if (isNodeEditableElement(event.relatedTarget)) return;
       if (isComposingRef.current) {
@@ -337,30 +502,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     setSkillQuery(null);
   }, []);
 
-  const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const field = event.currentTarget === titleRef.current ? "title" : "body";
+  const handleCompositionEnd = useCallback((event: React.CompositionEvent<HTMLInputElement>) => {
+    const field = "title";
     const value = event.currentTarget.value;
-
-    if (field === "title") {
-      titleDraftRef.current = value;
-      setTitleDraft(value);
-    } else {
-      bodyDraftRef.current = value;
-      setBodyDraft(value);
-      if (fitTextareaHeight(event.currentTarget as HTMLTextAreaElement)) {
-        pendingNodeInternalsUpdateRef.current = true;
-      }
-      window.setTimeout(() => {
-        if (bodyRef.current) syncSkillQuery(bodyRef.current.value, bodyRef.current);
-      }, 0);
-    }
+    titleDraftRef.current = value;
+    setTitleDraft(value);
 
     isComposingRef.current = false;
     flushDraftToStore(field);
-    if (pendingNodeInternalsUpdateRef.current) {
-      pendingNodeInternalsUpdateRef.current = false;
-      updateNodeInternals(id);
-    }
     if (!pendingFinishAfterCompositionRef.current) return;
     window.setTimeout(() => {
       if (!isNodeEditableFocused()) {
@@ -369,57 +518,20 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       }
       pendingFinishAfterCompositionRef.current = false;
     }, 0);
-  }, [finishEditing, flushDraftToStore, id, isNodeEditableFocused, syncSkillQuery, updateNodeInternals]);
+  }, [finishEditing, flushDraftToStore, isNodeEditableFocused]);
 
   const isChangeDuringComposition = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    (event: React.ChangeEvent<HTMLInputElement>) =>
       isComposingRef.current || Boolean((event.nativeEvent as InputEvent).isComposing),
     []
   );
 
-  const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleEditableKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     if (isComposingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
-    if (event.currentTarget === bodyRef.current && skillQuery) {
-      if (event.key === "ArrowDown" && visibleSkills.length) {
-        event.preventDefault();
-        setActiveSkillIndex((current) => Math.min(visibleSkills.length - 1, current + 1));
-        return;
-      }
-      if (event.key === "ArrowUp" && visibleSkills.length) {
-        event.preventDefault();
-        setActiveSkillIndex((current) => Math.max(0, current - 1));
-        return;
-      }
-      if ((event.key === "PageDown" || event.key === "PageUp") && visibleSkills.length) {
-        event.preventDefault();
-        const direction = event.key === "PageDown" ? 1 : -1;
-        setActiveSkillIndex((current) => Math.max(0, Math.min(visibleSkills.length - 1, current + direction * 4)));
-        return;
-      }
-      if ((event.key === "Enter" || event.key === "Tab") && visibleSkills[activeSkillIndex]) {
-        event.preventDefault();
-        const selectedSkill = visibleSkills[activeSkillIndex];
-        const next = insertSkillToken(bodyDraftRef.current, skillQuery, selectedSkill.name);
-        bodyDraftRef.current = next.value;
-        setBodyDraft(next.value);
-        taskNodeActions?.updateNodeData(id, { body: next.value });
-        setSkillQuery(null);
-        window.requestAnimationFrame(() => {
-          bodyRef.current?.focus();
-          bodyRef.current?.setSelectionRange(next.caret, next.caret);
-        });
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setSkillQuery(null);
-        return;
-      }
-    }
     if (event.key === "Escape") {
       event.currentTarget.blur();
     }
-  }, [activeSkillIndex, id, skillQuery, visibleSkills]);
+  }, []);
 
   const handleTitleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -434,41 +546,72 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     [data.title, id, isChangeDuringComposition]
   );
 
-  const handleBodyChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = event.currentTarget.value;
-      const isComposing = isChangeDuringComposition(event);
-      bodyDraftRef.current = value;
-      setBodyDraft(value);
-
-      if (fitTextareaHeight(event.currentTarget)) {
-        if (isComposing) {
-          pendingNodeInternalsUpdateRef.current = true;
-        } else {
-          updateNodeInternals(id);
-        }
-      }
-
-      if (!isComposing && value !== data.body) {
-        taskNodeActions?.updateNodeData(id, { body: value });
-      }
-      if (!isComposing) syncSkillQuery(value, event.currentTarget);
-    },
-    [data.body, id, isChangeDuringComposition, syncSkillQuery, updateNodeInternals]
-  );
-
   const chooseSkill = useCallback((skill: SkillSummary) => {
-    if (!skillQuery) return;
-    const next = insertSkillToken(bodyDraftRef.current, skillQuery, skill.name);
-    bodyDraftRef.current = next.value;
-    setBodyDraft(next.value);
-    taskNodeActions?.updateNodeData(id, { body: next.value });
+    const editor = bodyEditorRef.current;
+    if (!skillQuery || !editor) return;
+    const token = `$${skill.name} `;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from: skillQuery.from, to: skillQuery.to }, { type: "text", text: token })
+      .setTextSelection(skillQuery.from + token.length)
+      .run();
     setSkillQuery(null);
-    window.requestAnimationFrame(() => {
-      bodyRef.current?.focus();
-      bodyRef.current?.setSelectionRange(next.caret, next.caret);
-    });
-  }, [id, skillQuery]);
+  }, [skillQuery]);
+
+  editorKeyDownRef.current = (editor, event) => {
+    if (isComposingRef.current || event.isComposing || event.keyCode === 229) return false;
+    if (skillQuery) {
+      if (event.key === "ArrowDown" && visibleSkills.length) {
+        event.preventDefault();
+        setActiveSkillIndex((current) => Math.min(visibleSkills.length - 1, current + 1));
+        return true;
+      }
+      if (event.key === "ArrowUp" && visibleSkills.length) {
+        event.preventDefault();
+        setActiveSkillIndex((current) => Math.max(0, current - 1));
+        return true;
+      }
+      if ((event.key === "PageDown" || event.key === "PageUp") && visibleSkills.length) {
+        event.preventDefault();
+        const direction = event.key === "PageDown" ? 1 : -1;
+        setActiveSkillIndex((current) => Math.max(0, Math.min(visibleSkills.length - 1, current + direction * 4)));
+        return true;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && visibleSkills[activeSkillIndex]) {
+        event.preventDefault();
+        chooseSkill(visibleSkills[activeSkillIndex]);
+        return true;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSkillQuery(null);
+        return true;
+      }
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      editor.commands.blur();
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    if (!bodyEditor) return;
+    const editorElement = bodyEditor.view.dom;
+    editorElement.setAttribute("role", "combobox");
+    editorElement.setAttribute("aria-autocomplete", "list");
+    editorElement.setAttribute("aria-haspopup", "listbox");
+    editorElement.setAttribute("aria-expanded", editingField === "body" && Boolean(skillQuery) ? "true" : "false");
+    if (skillQuery && visibleSkills[activeSkillIndex]) {
+      editorElement.setAttribute("aria-controls", skillPickerId);
+      editorElement.setAttribute("aria-activedescendant", `${skillPickerId}-option-${activeSkillIndex}`);
+    } else {
+      editorElement.removeAttribute("aria-controls");
+      editorElement.removeAttribute("aria-activedescendant");
+    }
+  }, [activeSkillIndex, bodyEditor, editingField, skillPickerId, skillQuery, visibleSkills]);
 
   const handleConnectButtonMouseDown = useCallback(
     (side: ConnectedNodeSide) => (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -611,32 +754,20 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       </div>
 
       <div className="task-node-card">
-        <div className="task-body-editor">
-          <textarea
+        <div
           ref={bodyRef}
-          className={`task-body ${hasBody ? "has-content" : ""} ${editingField === "body" ? "nodrag nowheel is-editing" : "is-readonly"}`}
-          value={bodyDraft}
-          placeholder={t("task.bodyPlaceholder")}
-          readOnly={editingField !== "body"}
-          tabIndex={editingField === "body" ? 0 : -1}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-activedescendant={skillQuery && visibleSkills[activeSkillIndex] ? `${skillPickerId}-option-${activeSkillIndex}` : undefined}
-          aria-controls={skillQuery && visibleSkills.length ? skillPickerId : undefined}
-          aria-expanded={editingField === "body" && Boolean(skillQuery)}
-          aria-haspopup="listbox"
+          className={`task-body-editor task-body ${hasBody ? "has-content" : ""} ${editingField === "body" ? "nodrag nowheel is-editing" : "is-readonly"}`}
           onPointerDown={handleEditablePointerDown}
           onClick={() => {
             if (editingField !== "body") startEditing("body");
           }}
           onFocus={(event) => handleEditableFocus(event, "body")}
           onBlur={(event) => handleEditableBlur(event, "body")}
-          onKeyDown={handleEditableKeyDown}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
-          onChange={handleBodyChange}
-          onSelect={(event) => syncSkillQuery(event.currentTarget.value, event.currentTarget)}
-          />
+          onWheelCapture={(event) => {
+            if (event.target instanceof Element && event.target.closest("pre")) event.stopPropagation();
+          }}
+        >
+          <EditorContent editor={bodyEditor} />
 
           {editingField === "body" && skillQuery ? createPortal(
             <div

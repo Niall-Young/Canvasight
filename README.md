@@ -17,6 +17,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 ### 主要功能
 
 - 创建、拖拽、复制、删除和连接任务节点。
+- 在节点内使用无工具栏富文本编辑：Markdown 快捷语法会直接呈现为紧凑的富文本，同时正文仍以 Markdown 保存，兼容模板、预览、导出和 Run。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
 - 多个 Codex 任务可以同时编辑同一项目：不同对象自动合并，同一对象冲突时保留完整冲突副本。
 - 给节点添加图片、文件和上下文附件。
@@ -85,7 +86,11 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 6. **刷新到最新版本。** 如果 AI 已完成写入，但当前画布没有及时显示新节点，点击画布右上角的刷新图标。Canvasight 会先等待当前修改保存，再加载项目的最新画布版本，并尽量保留当前 Page、视口和选中状态。如果本地修改尚未保存或刷新期间又发生了修改，刷新会取消并保留当前内容。
 
-7. **编辑并运行。** 你可以继续在画布中拖拽节点、修改文字、添加附件、连接节点或切换 Page。在节点正文输入 `$` 会搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Chat 消息发送到当前 Codex 任务，并说明每个节点级 Skill 只负责对应节点。
+7. **编辑并运行。** 你可以继续在画布中拖拽节点、编辑正文、添加附件、连接节点或切换 Page。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
+
+   正文支持通过 Markdown 快捷语法输入一级至三级标题、粗体、斜体、删除线、项目列表、编号列表、任务列表、引用、行内代码、围栏代码块和链接，也支持常用格式快捷键。显示虽然是所见即所得的富文本，底层仍保存 Markdown 字符串，因此已有纯文本节点、节点模板、Markdown 预览与导出、并发保存和 Run 保持兼容。
+
+   在正文输入 `$` 会继续搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。图片、文件和上下文附件继续显示在节点正文下方，不会转成正文内嵌图片。准备好后，在要执行的节点上点击 Run；Canvasight 会把该节点及其下游节点作为 Markdown Chat 消息发送到当前 Codex 任务，并说明每个节点级 Skill 只负责对应节点。
 
    ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
 
@@ -263,6 +268,7 @@ npm run daemon:stop
 npm run typecheck
 npm run build
 npm run test:markdown
+npm run test:rich-text
 npm run test:markdown-export
 npm run test:skills
 npm run test:dev-server
@@ -276,7 +282,7 @@ npm run release:prepare -- 0.4.24
 npm run release:verify -- 0.4.24
 ```
 
-`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
 
 `npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
 
@@ -385,6 +391,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 ### Main Features
 
 - Create, drag, copy, delete, and connect task nodes.
+- Edit node bodies as toolbarless rich text: Markdown shortcuts render directly as compact formatted content while the body remains stored as Markdown for templates, preview, export, and Run.
 - Use multiple Pages as isolated canvas workspaces within one project.
 - Edit one project from multiple Codex tasks: different objects merge automatically, while same-object conflicts preserve a complete conflict copy.
 - Add images, files, and contextual attachments to nodes.
@@ -453,7 +460,11 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 6. **Refresh to the latest version.** If AI has finished writing but the open canvas does not yet show the new nodes, click the refresh icon in the upper-right canvas controls. Canvasight waits for current changes to save, then loads the project's latest canvas version while preserving the active Page, viewport, and selection where possible. If local changes are still unsaved or new edits occur during refresh, it cancels the refresh and preserves the current content.
 
-7. **Edit and run.** You can keep dragging nodes, editing text, adding attachments, connecting nodes, or switching Pages directly on the canvas. Type `$` in a node body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. When ready, click Run. Canvasight sends that node and its downstream nodes as a Chat message to the current Codex task and scopes each node-level Skill to its mapped responsibility.
+7. **Edit and run.** You can keep dragging nodes, editing their bodies, adding attachments, connecting nodes, or switching Pages directly on the canvas. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
+
+   Node bodies support Markdown shortcuts for level-one through level-three headings, bold, italic, strikethrough, bullet lists, numbered lists, task lists, blockquotes, inline code, fenced code blocks, and links, along with common formatting keyboard shortcuts. The editing surface is rich text, but Canvasight still stores the body as a Markdown string, preserving compatibility with existing plain-text nodes, node templates, Markdown preview and export, concurrent saves, and Run.
+
+   Type `$` in the body to keep searching enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. Images, files, and contextual attachments remain below the node body rather than becoming inline images. When ready, click Run. Canvasight sends that node and its downstream nodes as a Markdown Chat message to the current Codex task and scopes each node-level Skill to its mapped responsibility.
 
    ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
 
@@ -629,6 +640,7 @@ npm run daemon:stop
 npm run typecheck
 npm run build
 npm run test:markdown
+npm run test:rich-text
 npm run test:markdown-export
 npm run test:skills
 npm run test:dev-server
@@ -642,7 +654,7 @@ npm run release:prepare -- 0.4.24
 npm run release:verify -- 0.4.24
 ```
 
-`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
 
 `npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
 
