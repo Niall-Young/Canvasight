@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:19:29Z
-    handoff_source: issue-codex-react-185-sidebar-recovery
-    last_report: solution-codex-react-185-sidebar-recovery
+    last_seen: 2026-07-26T06:47:19Z
+    handoff_source: issue-publish-stable-release-0-4-36
+    last_report: integration-summary-release-candidate-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: React 185 exact 0.4.36 candidate is implemented; maintainer release gate, publication, and reporter verification remain pending
+    notes: Exact 0.4.36 plugin bytes remain frozen and internally accepted; publication and reporter verification remain pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:34:35Z
+    last_seen: 2026-07-26T06:47:19Z
     handoff_source: issue-publish-stable-release-0-4-36
-    last_report: integration-summary-release-preflight-0-4-36
+    last_report: integration-summary-release-candidate-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed the v0.4.36 automated and byte-parity preflight; exact maintainer native interaction remains the only pre-tag blocker
+    notes: Approved the automated, byte-parity and maintainer native gates for the v0.4.36 release candidate; reporter verification remains post-release
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:34:35Z
+    last_seen: 2026-07-26T06:47:19Z
     handoff_source: issue-publish-stable-release-0-4-36
-    last_report: integration-summary-release-preflight-0-4-36
+    last_report: integration-summary-release-candidate-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns the guarded v0.4.36 tag, Release verification and final stable fast-forward authorized by the user
+    notes: Owns the exact candidate commit, guarded v0.4.36 tag trigger, Release verification and final stable identity audit
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

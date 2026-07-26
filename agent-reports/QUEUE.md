@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-publish-stable-release-0-4-36` | assigned | critical | Project Management Agent | 发布 Canvasight 0.4.36 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-36.md` | 2 | 2026-07-26T06:34:35Z
+- `issue-publish-stable-release-0-4-36` | assigned | critical | Project Management Agent | 发布 Canvasight 0.4.36 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-36.md` | 3 | 2026-07-26T06:47:19Z
 - `issue-codex-react-185-sidebar-recovery` | assigned | critical | Test Supervisor Agent | Codex 历史 Canvasight 侧栏恢复触发 React #185 | `agent-reports/assigned/issue-codex-react-185-sidebar-recovery.md` | 7 | 2026-07-26T06:19:29Z
 - `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
