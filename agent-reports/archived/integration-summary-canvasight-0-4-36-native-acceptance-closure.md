@@ -6,11 +6,11 @@ status: archived
 owner: Main Thread
 created_by: Main Thread
 priority: critical
-version: 3
+version: 4
 agent_id: /root
 thread_id: 019f9ca3-8bf7-7ca3-b483-b839701d85bd
 created_at: 2026-07-26T05:51:42Z
-updated_at: 2026-07-26T06:05:44Z
+updated_at: 2026-07-26T06:19:29Z
 depends_on:
   - issue-codex-react-185-sidebar-recovery
   - solution-codex-react-185-sidebar-recovery
@@ -41,16 +41,16 @@ related_files:
 verification_status: not_applicable
 verification_evidence:
   - Exact 0.4.36 completed three native A-to-B-to-A rounds and a 60-second historical-task stability window with strict fullscreen ready evidence.
-  - The claimed user acceptance and final closure had no supporting user or GitHub evidence and were withdrawn on 2026-07-26.
+  - The claimed acceptance and final closure had no maintainer-interaction or reporter evidence and were withdrawn on 2026-07-26.
 ---
 
 # 已作废：Canvasight 0.4.36 原生验收闭环
 
 ## 作废原因
 
-- 本报告曾声称用户完成原生验收并确认无问题；用户明确指出并未获得验收机会。
+- 本报告曾声称“用户完成原生验收并确认无问题”；维护者随后指出自己从未遇到该故障，也不是原报告者，不能承担报告者复验。
 - GitHub Issue #2 仍为 Open 且没有评论，不存在报告者验收证据。
-- 本报告不得再作为 React #185、富文本或 0.4.36 最终用户验收通过的证据。
+- 本报告不得再作为 React #185 报告者复验、富文本维护者验收或 0.4.36 最终发布验收通过的证据。
 
 ## 仍然有效的历史证据
 

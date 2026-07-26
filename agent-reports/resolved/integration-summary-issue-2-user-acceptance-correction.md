@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: critical
-version: 1
+version: 2
 agent_id: /root
 thread_id: 019f9d02-eb81-7972-aba6-a6661182857e
 created_at: 2026-07-26T06:05:44Z
-updated_at: 2026-07-26T06:05:44Z
+updated_at: 2026-07-26T06:19:29Z
 depends_on:
   - issue-codex-react-185-sidebar-recovery
   - solution-codex-react-185-sidebar-recovery
@@ -24,26 +24,26 @@ related_files:
   - agent-reports/archived/integration-summary-canvasight-0-4-36-native-acceptance-closure.md
 verification_status: not_applicable
 verification_evidence:
-  - The user explicitly stated that they were not given an opportunity to verify GitHub Issue #2.
+  - The maintainer initially identified the unsupported acceptance record, then clarified that they never reproduced Issue #2 and are not the reporter.
   - GitHub Issue #2 remains open and has zero comments, so no reporter acceptance exists.
   - Exact 0.4.36 remains installed and byte-matches the repository MCP entry and built index.
-  - The current task reached a verified 736 by 240 fullscreen native widget, confirming the candidate is available for user verification without proving the original reproduction fixed.
+  - The current maintainer task reached a verified 736 by 240 fullscreen native widget; this is internal representative evidence, not reporter verification.
 ---
 
-# 撤回 Issue #2 未经用户验收的关闭结论
+# 撤回 Issue #2 无证据的验收关闭结论
 
 ## 本轮目标
 
 - 撤回无依据的“用户已验收并确认无问题”记录。
 - 保留 0.4.36 修复实现与真实 Agent 侧部分验证证据。
-- 将 GitHub Issue #2 对应本地报告恢复为待用户验收状态。
+- 将 GitHub Issue #2 对应本地报告恢复为待内部发布门槛与报告者复验状态。
 
 ## Agent 输入
 
-- Development Agent：修复实现位于 `9f961ab`，exact 0.4.36 候选已安装并可供验证；不得据此声称用户验收完成。
-- Test Supervisor Agent：有效证据仅覆盖 strict ready、三轮 A→B→A 与 Agent 侧 60 秒稳定；用户原生交互与明确 pass/fail 缺失。
+- Development Agent：修复实现位于 `9f961ab`，exact 0.4.36 候选已安装；不得据此声称报告者复验完成。
+- Test Supervisor Agent：有效证据仅覆盖内部代表性 strict ready、三轮 A→B→A 与 60 秒稳定；维护者交互发布门槛和报告者复验均缺失。
 - Project Management Agent：基线 HEAD `4e3969582eba4cefd261034300bce69c43cd1185`，工作区起始为 clean，`main` 较 `origin/main` ahead 3；不改写错误闭环提交，使用后续纠错提交保留审计链。
-- Main Thread：当前 exact 0.4.36 原生实例达到 `verified=true`、fullscreen、`736×240`，仅作为候选可验收证据。
+- Main Thread：当前维护者任务的 exact 0.4.36 原生实例达到 `verified=true`、fullscreen、`736×240`，仅作为内部代表性证据。
 
 ## 报告状态变更
 
@@ -54,14 +54,14 @@ verification_evidence:
 
 ## 已解决
 
-- 仓库不再把 GitHub Issue #2 记作用户已验收。
+- 仓库不再把 GitHub Issue #2 记作维护者或报告者已验收。
 - 错误闭环记录保留在 archived 目录，且不会继续充当通过证据。
 - 当前 0.4.36 实现、构建产物、安装缓存与 GitHub Issue 状态均未被改动。
 
 ## 未解决 / 后续风险
 
-- 用户仍需在原故障任务完成 60 秒稳定、A→B→A 返回并再次稳定 60 秒，明确反馈通过或失败。
-- 完整原生发布门槛还包括一个画布控件、Refresh、同任务 Run 与延迟元数据稳定性。
+- 维护者从未复现该故障，不需要替报告者证明原始问题已解决；内部发布门槛仍包括画布控件、Refresh、同任务 Run 与延迟元数据稳定性。
+- 可安装版本发布后，原报告者 smartLanny 或能独立复现同一故障的验证者仍需在原环境反馈结果。
 - `main` 的 0.4.36 候选尚未推送、打 tag 或发布，GitHub Issue #2 保持 Open。
 - latest `test:widget-runtime` 的 viewport save-count `5 !== 4` 仍由独立 assigned issue 跟踪。
 

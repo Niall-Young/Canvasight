@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:05:44Z
+    last_seen: 2026-07-26T06:19:29Z
     handoff_source: issue-codex-react-185-sidebar-recovery
     last_report: solution-codex-react-185-sidebar-recovery
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: React 185 implementation candidate is ready as exact 0.4.36; user acceptance remains pending
+    notes: React 185 exact 0.4.36 candidate is implemented; maintainer release gate, publication, and reporter verification remain pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:05:44Z
+    last_seen: 2026-07-26T06:19:29Z
     handoff_source: issue-codex-react-185-sidebar-recovery
-    last_report: integration-summary-issue-2-user-acceptance-correction
+    last_report: integration-summary-issue-2-maintainer-reporter-boundary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns pending user acceptance for React 185 and the separate baseline-origin viewport save-count fixture risk
+    notes: Owns internal representative evidence and coordinates maintainer release gates plus external reporter verification for React 185
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:05:44Z
-    handoff_source: integration-summary-issue-2-user-acceptance-correction
-    last_report: integration-summary-issue-2-user-acceptance-correction
+    last_seen: 2026-07-26T06:19:29Z
+    handoff_source: integration-summary-issue-2-maintainer-reporter-boundary
+    last_report: integration-summary-issue-2-maintainer-reporter-boundary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns selective Git closure for the Issue #2 acceptance-record correction; the product issue remains unverified
+    notes: Owns selective Git closure for the maintainer-versus-reporter acceptance-boundary correction; no release scope is approved
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
