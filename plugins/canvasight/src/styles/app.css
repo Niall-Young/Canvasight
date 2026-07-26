@@ -2684,6 +2684,11 @@ button.achievement-card.is-unlocked:focus-visible {
   background: transparent;
 }
 
+.task-body-content > * + pre,
+.task-body-content > pre + * {
+  margin-top: var(--space-10);
+}
+
 .task-body-raw-markdown.is-inline {
   padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-xs);

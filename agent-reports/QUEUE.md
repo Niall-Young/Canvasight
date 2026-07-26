@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-node-rich-text-editor` | assigned | high | Development Agent | 节点正文缺少富文本编辑能力 | `agent-reports/assigned/issue-node-rich-text-editor.md` | 1 | 2026-07-26T03:10:31Z
+- `issue-widget-viewport-recovery-save-count` | assigned | medium | Test Supervisor Agent | Widget viewport recovery 多一次 document save | `agent-reports/assigned/issue-widget-viewport-recovery-save-count.md` | 1 | 2026-07-26T05:51:42Z
 - `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
 - `issue-publish-stable-release-0-4-33` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.33 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-33.md` | 3 | 2026-07-18T10:50:41Z
 - `issue-publish-stable-release-0-4-32` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.32 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-32.md` | 2 | 2026-07-18T09:45:36Z

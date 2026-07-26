@@ -4,8 +4,8 @@ import { Editor } from "@tiptap/core";
 import Blockquote from "@tiptap/extension-blockquote";
 import Bold from "@tiptap/extension-bold";
 import BulletList from "@tiptap/extension-bullet-list";
-import Code from "@tiptap/extension-code";
 import CodeBlock from "@tiptap/extension-code-block";
+import { inputRegexMatch as inlineCodeInputRegexMatch } from "@tiptap/extension-code";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import Heading from "@tiptap/extension-heading";
@@ -33,13 +33,13 @@ const compiledRawExtensions = ts.transpileModule(fs.readFileSync(rawExtensionPat
 }).outputText;
 const rawExtensionModule = { exports: {} };
 vm.runInNewContext(compiledRawExtensions, { exports: rawExtensionModule.exports, module: rawExtensionModule, require }, { filename: "richTextExtensions.cjs" });
-const { rawMarkdownExtensions, SafeLink } = rawExtensionModule.exports;
+const { InlineCode, insertUnmarkedSpaceAfterInlineCode, rawMarkdownExtensions, SafeLink } = rawExtensionModule.exports;
 
 const extensions = [
   Blockquote,
   Bold,
   BulletList,
-  Code,
+  InlineCode,
   CodeBlock,
   Document,
   HardBreak,
@@ -127,6 +127,54 @@ assert.equal(
 );
 unsafeLinkEditor.destroy();
 
+const inlineCodeExitEditor = createMarkdownEditor("`code`");
+inlineCodeExitEditor
+  .chain()
+  .setTextSelection(5)
+  .splitBlock()
+  .command(({ tr }) => {
+    tr.insertText("普通文字");
+    return true;
+  })
+  .run();
+const inlineCodeExitJson = inlineCodeExitEditor.getJSON();
+assert.deepEqual(
+  inlineCodeExitJson.content?.[1]?.content?.[0]?.marks ?? [],
+  [],
+  "pressing Enter after inline code must exit the code mark for the next paragraph"
+);
+assert.match(inlineCodeExitEditor.getMarkdown(), /`code`\n\n普通文字/);
+inlineCodeExitEditor.destroy();
+
+const inlineCodeSpaceEditor = createMarkdownEditor("`code`");
+inlineCodeSpaceEditor.commands.setTextSelection(5);
+assert.equal(insertUnmarkedSpaceAfterInlineCode(inlineCodeSpaceEditor), true);
+const inlineCodeSpaceContent = inlineCodeSpaceEditor.getJSON().content?.[0]?.content ?? [];
+assert.deepEqual(
+  inlineCodeSpaceContent.at(-1)?.marks ?? [],
+  [],
+  "typing Space at the end of inline code must insert an ordinary unmarked space"
+);
+inlineCodeSpaceEditor.commands.command(({ tr }) => {
+  tr.insertText("plain");
+  return true;
+});
+assert.deepEqual(inlineCodeSpaceEditor.getJSON().content?.[0]?.content?.at(-1)?.marks ?? [], []);
+inlineCodeSpaceEditor.destroy();
+
+const inlineCodeInnerSpaceEditor = createMarkdownEditor("`code`");
+inlineCodeInnerSpaceEditor.commands.setTextSelection(3);
+assert.equal(
+  insertUnmarkedSpaceAfterInlineCode(inlineCodeInnerSpaceEditor),
+  false,
+  "Space inside inline code must remain available as code content"
+);
+inlineCodeInnerSpaceEditor.destroy();
+
+assert.equal(inlineCodeInputRegexMatch("`code`")?.replaceWith, "code");
+assert.equal(inlineCodeInputRegexMatch("'code'"), null, "apostrophes are ordinary text, not Markdown code delimiters");
+assert.equal(inlineCodeInputRegexMatch("‘code’"), null, "curly single quotation marks are not Markdown code delimiters");
+
 const taskNodeSource = fs.readFileSync(path.join(pluginRoot, "src", "components", "TaskNode.tsx"), "utf8");
 assert.match(taskNodeSource, /setContent\(data\.body, \{ contentType: "markdown", emitUpdate: false \}\)/);
 assert.match(taskNodeSource, /onUpdate: \(\{ editor \}\) =>/);
@@ -137,5 +185,14 @@ assert.match(taskNodeSource, /script,style,img,video,audio,iframe,object,embed/)
 assert.match(taskNodeSource, /attribute\.name\.startsWith\("on"\).*attribute\.name === "style"/);
 assert.match(taskNodeSource, /clipboardData && \[\.\.\.event\.clipboardData\.files\]\.length > 0/);
 assert.match(taskNodeSource, /target\.closest\("pre"\).*event\.stopPropagation\(\)/);
+assert.match(taskNodeSource, /event\.key === " ".*insertUnmarkedSpaceAfterInlineCode\(editor\)/);
+assert.match(taskNodeSource, /bodyEditorRef\.current = bodyEditor/);
+
+const appCssSource = fs.readFileSync(path.join(pluginRoot, "src", "styles", "app.css"), "utf8");
+assert.match(
+  appCssSource,
+  /\.task-body-content > \* \+ pre,[\s\S]*\.task-body-content > pre \+ \*[\s\S]*margin-top: var\(--space-10\)/,
+  "code blocks must have explicit separation from adjacent rich-text blocks"
+);
 
 console.log("Rich-text Markdown smoke test passed");

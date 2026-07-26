@@ -6,7 +6,6 @@ import type { Editor } from "@tiptap/core";
 import Blockquote from "@tiptap/extension-blockquote";
 import Bold from "@tiptap/extension-bold";
 import BulletList from "@tiptap/extension-bullet-list";
-import Code from "@tiptap/extension-code";
 import CodeBlock from "@tiptap/extension-code-block";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -27,7 +26,12 @@ import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
-import { rawMarkdownExtensions, SafeLink } from "../lib/richTextExtensions";
+import {
+  InlineCode,
+  insertUnmarkedSpaceAfterInlineCode,
+  rawMarkdownExtensions,
+  SafeLink
+} from "../lib/richTextExtensions";
 import { placeSkillPicker, type SkillPickerPosition } from "../lib/skillPickerPlacement";
 import { shortcuts } from "../lib/shortcuts";
 import { filterSkills, findSkillQuery, type SkillQueryRange } from "../lib/skills";
@@ -273,7 +277,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         Blockquote,
         Bold,
         BulletList,
-        Code,
+        InlineCode,
         CodeBlock,
         Document,
         Dropcursor,
@@ -337,7 +341,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             }, 0);
             return false;
           },
-          keydown: (_view, event) => editorKeyDownRef.current(bodyEditorRef.current!, event),
+          keydown: (_view, event) => {
+            const currentEditor = bodyEditorRef.current;
+            return currentEditor ? editorKeyDownRef.current(currentEditor, event) : false;
+          },
           paste: (_view, event) => {
             if (event.clipboardData && [...event.clipboardData.files].length > 0) {
               event.preventDefault();
@@ -357,12 +364,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           return documentFragment.body.innerHTML;
         }
       },
-      onCreate: ({ editor }) => {
-        bodyEditorRef.current = editor;
-      },
-      onDestroy: () => {
-        bodyEditorRef.current = null;
-      },
       onSelectionUpdate: ({ editor }) => {
         syncSkillQuery(editor);
       },
@@ -378,6 +379,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     },
     [id]
   );
+
+  useEffect(() => {
+    if (!bodyEditor) return;
+    bodyEditorRef.current = bodyEditor;
+    return () => {
+      if (bodyEditorRef.current === bodyEditor) bodyEditorRef.current = null;
+    };
+  }, [bodyEditor]);
 
   useEffect(() => {
     if (editingField === "body") return;
@@ -561,6 +570,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
 
   editorKeyDownRef.current = (editor, event) => {
     if (isComposingRef.current || event.isComposing || event.keyCode === 229) return false;
+    if ((event.key === " " || event.key === "Spacebar") && insertUnmarkedSpaceAfterInlineCode(editor)) {
+      event.preventDefault();
+      return true;
+    }
     if (skillQuery) {
       if (event.key === "ArrowDown" && visibleSkills.length) {
         event.preventDefault();

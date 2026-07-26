@@ -1,5 +1,29 @@
-import { mergeAttributes, Node, type MarkdownToken } from "@tiptap/core";
+import { mergeAttributes, Node, type Editor, type MarkdownToken } from "@tiptap/core";
+import Code from "@tiptap/extension-code";
 import Link from "@tiptap/extension-link";
+
+export const InlineCode = Code.extend({
+  keepOnSplit: false
+});
+
+export function insertUnmarkedSpaceAfterInlineCode(editor: Editor): boolean {
+  const { empty, $from } = editor.state.selection;
+  const code = editor.schema.marks.code;
+  if (!empty || !code) return false;
+
+  const before = $from.nodeBefore;
+  const after = $from.nodeAfter;
+  if (!before?.isText || !code.isInSet(before.marks)) return false;
+  if (after?.isText && code.isInSet(after.marks)) return false;
+
+  const position = $from.pos;
+  return editor.commands.command(({ tr }) => {
+    tr.insertText(" ", position);
+    tr.removeMark(position, position + 1, code);
+    tr.removeStoredMark(code);
+    return true;
+  });
+}
 
 export function isSafeLinkHref(href: string): boolean {
   const value = href.trim();

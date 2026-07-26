@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.35";
+var SERVER_VERSION = "0.4.36";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17494,6 +17494,7 @@ var sessions = /* @__PURE__ */ new Map();
 var projectThreadClaims = /* @__PURE__ */ new Map();
 var projectDocumentRevisions = /* @__PURE__ */ new Map();
 var revisionPollLeases = /* @__PURE__ */ new Map();
+var presentationRecoveryLeases = /* @__PURE__ */ new Map();
 var projectRevisionStates = /* @__PURE__ */ new Map();
 var projectWriteLocks = /* @__PURE__ */ new Map();
 var projectGraphContexts = /* @__PURE__ */ new Map();
@@ -17520,7 +17521,12 @@ function projectRevisionKey(projectPath) {
 }
 var REVISION_POLL_INTERVAL_MS = 5e3;
 var REVISION_POLL_LEASE_MS = 1e4;
+var PRESENTATION_RECOVERY_LEASE_MS = 4e3;
+var PRESENTATION_RECOVERY_COOLDOWN_MS = 5e3;
 function revisionPollLeaseKey(projectPath, threadId) {
+  return JSON.stringify([path.resolve(projectPath), optionalThreadId(threadId) || ""]);
+}
+function presentationRecoveryLeaseKey(projectPath, threadId) {
   return JSON.stringify([path.resolve(projectPath), optionalThreadId(threadId) || ""]);
 }
 function revisionPollOwner(session, identity) {
@@ -21050,6 +21056,108 @@ function releaseSessionRevisionPollLeases(sessionIdValue) {
     if (lease.owner.sessionId === sessionIdValue) revisionPollLeases.delete(key);
   }
 }
+function presentationRecoveryOwner(session, identity) {
+  return {
+    sessionId: session.id,
+    openAttemptId: String(identity.openAttemptId || ""),
+    widgetInstanceId: String(identity.widgetInstanceId || "")
+  };
+}
+function newestPresentationRecoveryAttempt(projectPath, threadId) {
+  let newest = null;
+  for (const candidateSession of sessionsForProject(projectPath)) {
+    for (const attempt of candidateSession.openAttempts.values()) {
+      const attemptThreadId = optionalThreadId(attempt.threadId) || optionalThreadId(candidateSession.codexThreadId);
+      if (attemptThreadId !== threadId) continue;
+      if (!newest || attempt.bindingIssuedAt > newest.attempt.bindingIssuedAt) {
+        newest = { session: candidateSession, attempt };
+      }
+    }
+  }
+  return newest;
+}
+function claimPresentationRecovery(session, identity) {
+  const attempt = requireOpenAttempt(session, identity.openAttemptId);
+  const threadId = optionalThreadId(attempt.threadId) || optionalThreadId(session.codexThreadId);
+  const requestThreadId = optionalThreadId(identity.threadId);
+  if (!threadId || !requestThreadId || requestThreadId !== threadId) {
+    throw new HttpError(409, "Canvasight presentation recovery belongs to a different Codex task.", "widget_thread_mismatch");
+  }
+  const owner = presentationRecoveryOwner(session, identity);
+  const newest = newestPresentationRecoveryAttempt(session.projectPath, threadId);
+  if (!newest || newest.session.id !== session.id || newest.attempt.id !== attempt.id) {
+    appendOpenAttemptLifecycle("canvasight_presentation_recovery_stale_binding", {
+      ...owner,
+      threadId,
+      latestOpenAttemptId: newest?.attempt.id || null,
+      latestBindingIssuedAt: newest?.attempt.bindingIssuedAt || null
+    });
+    return {
+      status: "stale-binding",
+      owner: false,
+      retryAfterMs: 0
+    };
+  }
+  const key = presentationRecoveryLeaseKey(session.projectPath, threadId);
+  const now = Date.now();
+  for (const [expiredKey, lease] of presentationRecoveryLeases) {
+    if (lease.cooldownExpiresAt <= now) presentationRecoveryLeases.delete(expiredKey);
+  }
+  const existing = presentationRecoveryLeases.get(key);
+  if (existing?.leaseExpiresAt > now) {
+    const sameOwner = existing.owner.sessionId === owner.sessionId && existing.owner.openAttemptId === owner.openAttemptId && existing.owner.widgetInstanceId === owner.widgetInstanceId;
+    appendOpenAttemptLifecycle("canvasight_presentation_recovery_standby", {
+      ...owner,
+      threadId,
+      leaseOwnerWidgetInstanceId: existing.owner.widgetInstanceId,
+      retryAfterMs: Math.max(1, existing.leaseExpiresAt - now)
+    });
+    return {
+      status: sameOwner ? "owner" : "standby",
+      owner: sameOwner,
+      leaseExpiresAt: new Date(existing.leaseExpiresAt).toISOString(),
+      cooldownExpiresAt: new Date(existing.cooldownExpiresAt).toISOString(),
+      retryAfterMs: Math.max(1, existing.leaseExpiresAt - now)
+    };
+  }
+  if (existing?.cooldownExpiresAt > now) {
+    appendOpenAttemptLifecycle("canvasight_presentation_recovery_cooldown", {
+      ...owner,
+      threadId,
+      retryAfterMs: Math.max(1, existing.cooldownExpiresAt - now)
+    });
+    return {
+      status: "cooldown",
+      owner: false,
+      cooldownExpiresAt: new Date(existing.cooldownExpiresAt).toISOString(),
+      retryAfterMs: Math.max(1, existing.cooldownExpiresAt - now)
+    };
+  }
+  const leaseExpiresAt = now + PRESENTATION_RECOVERY_LEASE_MS;
+  const cooldownExpiresAt = now + PRESENTATION_RECOVERY_COOLDOWN_MS;
+  presentationRecoveryLeases.set(key, {
+    owner,
+    projectPath: path.resolve(session.projectPath),
+    threadId,
+    bindingIssuedAt: attempt.bindingIssuedAt,
+    leaseExpiresAt,
+    cooldownExpiresAt
+  });
+  appendOpenAttemptLifecycle("canvasight_presentation_recovery_owner", {
+    ...owner,
+    threadId,
+    bindingIssuedAt: attempt.bindingIssuedAt,
+    leaseExpiresAt: new Date(leaseExpiresAt).toISOString(),
+    cooldownExpiresAt: new Date(cooldownExpiresAt).toISOString()
+  });
+  return {
+    status: "owner",
+    owner: true,
+    leaseExpiresAt: new Date(leaseExpiresAt).toISOString(),
+    cooldownExpiresAt: new Date(cooldownExpiresAt).toISOString(),
+    retryAfterMs: PRESENTATION_RECOVERY_LEASE_MS
+  };
+}
 function projectThreadClaimKey(projectPath) {
   return path.resolve(projectPath);
 }
@@ -22363,6 +22471,12 @@ async function handleSessionApi(req, res, url2) {
       return true;
     }
     throw new HttpError(405, "Expected POST or DELETE");
+  }
+  if (action === "presentation-recovery") {
+    assertMethod(req, "POST");
+    await readJsonBody(req);
+    sendJson(res, 200, claimPresentationRecovery(session, requestIdentity));
+    return true;
   }
   if (action === "open-project") {
     assertMethod(req, "POST");

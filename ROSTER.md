@@ -19,34 +19,34 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T03:10:31Z
+    last_seen: 2026-07-26T04:51:20Z
     handoff_source: issue-node-rich-text-editor
     last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Auditing toolbarless rich-text interaction and strict design.md token compliance
+    notes: Approved Enter-to-exit inline code behavior and increased fenced-code separation for the reported rich-text regression
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_expert
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-17T15:59:50Z
-    handoff_source: issue-manual-canvas-latest-revision-refresh
-    last_report: integration-summary-manual-canvas-latest-revision-refresh
+    last_seen: 2026-07-26T05:29:57Z
+    handoff_source: issue-node-rich-text-editor
+    last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Added the Manual Canvas Refresh placement, safety, feedback, and navigation-preservation contract
+    notes: Confirmed Markdown backtick versus single-quotation semantics plus Enter and terminal-Space exit behavior in design.md
   - role: Development Agent
     status: active
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T03:10:31Z
-    handoff_source: issue-node-rich-text-editor
-    last_report: issue-node-rich-text-editor
+    last_seen: 2026-07-26T05:48:26Z
+    handoff_source: solution-node-rich-text-editor
+    last_report: solution-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implementing Tiptap rich-text node bodies with Markdown persistence and existing runtime compatibility
+    notes: Closed rich-text inline-code semantics and React 185 recovery after exact 0.4.36 user native acceptance
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,34 +63,34 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:57:46Z
-    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
-    last_report: integration-summary-test-supervisor-0-4-35-native-acceptance
+    last_seen: 2026-07-26T05:51:42Z
+    handoff_source: issue-widget-viewport-recovery-save-count
+    last_report: issue-widget-viewport-recovery-save-count
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently passed exact 0.4.35 native gate; Windows Node 20.19 and complete release matrix subsequently passed
+    notes: Passed final React 185 and rich-text native closure; owns the separate baseline-origin viewport save-count fixture risk
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T11:57:46Z
-    handoff_source: issue-windows-cli-daemon-state-cleanup-0-4-34
-    last_report: integration-summary-windows-daemon-stop-candidate-0-4-35
+    last_seen: 2026-07-26T05:29:57Z
+    handoff_source: issue-node-rich-text-editor
+    last_report: issue-node-rich-text-editor
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed bilingual README and all seven Skills; no user documentation change is needed for the internal lifecycle fix
+    notes: Re-reviewed required product and Skill files; Markdown backticks are already documented by contract and the Space exit refinement needs no bilingual README change
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
     thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-18T12:19:00Z
-    handoff_source: issue-publish-stable-release-0-4-35
-    last_report: integration-summary-release-closure-0-4-35
+    last_seen: 2026-07-26T05:54:02Z
+    handoff_source: integration-summary-canvasight-0-4-36-native-acceptance-closure
+    last_report: integration-summary-canvasight-0-4-36-native-acceptance-closure
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed guarded v0.4.35 tag, three-platform workflow, Release asset and stable fast-forward closure; v0.4.34 remains frozen
+    notes: Owns selective staging, staged-manifest review, diff checks, and the final Chinese conventional commit for the verified 0.4.36 native acceptance closure
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
