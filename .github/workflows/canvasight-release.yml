@@ -176,6 +176,67 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)" = "${NEW_STABLE}"
           test "$(gh release view "${TAG}" --json isDraft,isPrerelease --jq '.isDraft or .isPrerelease')" = "false"
 
+          # Treat the published assets—not the pre-upload workspace files—as
+          # the release candidate. Any mismatch here triggers the ERR trap,
+          # removes the just-created Release, and leaves stable untouched.
+          EXPECTED_ASSETS="$(printf '%s\n' \
+            "canvasight-${TAG}.zip" \
+            "canvasight-${TAG}.zip.sha256" | sort)"
+          ACTUAL_ASSETS="$(gh release view "${TAG}" --json assets --jq '.assets[].name' | sort)"
+          test "${ACTUAL_ASSETS}" = "${EXPECTED_ASSETS}"
+
+          VERIFY_DIR="$(mktemp -d)"
+          gh release download "${TAG}" --dir "${VERIFY_DIR}"
+          (
+            cd "${VERIFY_DIR}"
+            sha256sum -c "canvasight-${TAG}.zip.sha256"
+            mkdir unpacked
+            unzip -q "canvasight-${TAG}.zip" -d unpacked
+            test -f "unpacked/canvasight/.codex-plugin/plugin.json"
+            node -e '
+              const fs = require("node:fs");
+              const path = require("node:path");
+              const root = path.resolve("unpacked/canvasight");
+              const excluded = new Set(["node_modules", ".vite", ".cache", "cache", "caches"]);
+              const numberedDuplicate = / [0-9]+(?:\.[^/]*)?$/;
+              const pending = [root];
+              while (pending.length > 0) {
+                const current = pending.pop();
+                for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+                  const entryPath = path.join(current, entry.name);
+                  if (entry.isDirectory()) {
+                    if (excluded.has(entry.name)) {
+                      throw new Error(`release contains excluded directory: ${entryPath}`);
+                    }
+                    pending.push(entryPath);
+                  } else if (entry.isFile() && numberedDuplicate.test(entry.name)) {
+                    throw new Error(`release contains numbered duplicate file: ${entryPath}`);
+                  }
+                }
+              }
+            '
+            cd unpacked/canvasight
+            node scripts/prepare-release.mjs --check "${TAG#v}"
+            PROBE_JSON="$(node tests/mcp-registration-probe.mjs)"
+            printf '%s\n' "${PROBE_JSON}"
+            printf '%s\n' "${PROBE_JSON}" | node -e '
+              const fs = require("node:fs");
+              const diagnostic = JSON.parse(fs.readFileSync(0, "utf8"));
+              const expectedVersion = process.argv[1];
+              const initialized = diagnostic.stages?.find((stage) => stage.stage === "initialize_ok");
+              const tools = diagnostic.stages?.find((stage) => stage.stage === "tools_list_ok");
+              if (
+                diagnostic.ok !== true ||
+                initialized?.serverInfo?.version !== expectedVersion ||
+                tools?.toolCount !== 16 ||
+                tools?.requiredToolsPresent !== true ||
+                tools?.frameworkQuestionsToolPresent !== true
+              ) {
+                process.exit(1);
+              }
+            ' "${TAG#v}"
+          )
+
           # This is deliberately the final fallible operation. A normal push can
           # only create or fast-forward stable; protected branches are never
           # force-pushed, deleted, or rolled back by the workflow.

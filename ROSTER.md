@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:19:29Z
-    handoff_source: issue-codex-react-185-sidebar-recovery
-    last_report: integration-summary-issue-2-maintainer-reporter-boundary
+    last_seen: 2026-07-26T06:34:35Z
+    handoff_source: issue-publish-stable-release-0-4-36
+    last_report: integration-summary-release-preflight-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns internal representative evidence and coordinates maintainer release gates plus external reporter verification for React 185
+    notes: Passed the v0.4.36 automated and byte-parity preflight; exact maintainer native interaction remains the only pre-tag blocker
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:19:29Z
-    handoff_source: integration-summary-issue-2-maintainer-reporter-boundary
-    last_report: integration-summary-issue-2-maintainer-reporter-boundary
+    last_seen: 2026-07-26T06:34:35Z
+    handoff_source: issue-publish-stable-release-0-4-36
+    last_report: integration-summary-release-preflight-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns selective Git closure for the maintainer-versus-reporter acceptance-boundary correction; no release scope is approved
+    notes: Owns the guarded v0.4.36 tag, Release verification and final stable fast-forward authorized by the user
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent
