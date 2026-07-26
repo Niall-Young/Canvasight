@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:47:19Z
+    last_seen: 2026-07-26T06:55:43Z
     handoff_source: issue-publish-stable-release-0-4-36
-    last_report: integration-summary-release-candidate-0-4-36
+    last_report: integration-summary-release-closure-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Exact 0.4.36 plugin bytes remain frozen and internally accepted; publication and reporter verification remain pending
+    notes: Exact 0.4.36 plugin bytes were published and independently audited; reporter verification remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:47:19Z
+    last_seen: 2026-07-26T06:55:43Z
     handoff_source: issue-publish-stable-release-0-4-36
-    last_report: integration-summary-release-candidate-0-4-36
+    last_report: integration-summary-release-closure-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Approved the automated, byte-parity and maintainer native gates for the v0.4.36 release candidate; reporter verification remains post-release
+    notes: Independently passed workflow, hosted asset, plugin registration and Git identity audits for v0.4.36; reporter verification remains post-release
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -85,12 +85,12 @@ roles:
     agent_id: /root/project_management_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T06:47:19Z
+    last_seen: 2026-07-26T06:55:43Z
     handoff_source: issue-publish-stable-release-0-4-36
-    last_report: integration-summary-release-candidate-0-4-36
+    last_report: integration-summary-release-closure-0-4-36
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns the exact candidate commit, guarded v0.4.36 tag trigger, Release verification and final stable identity audit
+    notes: Completed guarded v0.4.36 tag, Release verification and exact stable identity closure; owns selective report commit
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

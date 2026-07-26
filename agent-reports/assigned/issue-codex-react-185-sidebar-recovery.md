@@ -6,11 +6,11 @@ status: assigned
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: critical
-version: 7
+version: 8
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-07-26T03:21:10Z
-updated_at: 2026-07-26T06:19:29Z
+updated_at: 2026-07-26T06:55:43Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/App.tsx
@@ -27,9 +27,11 @@ verification_evidence:
   - A clean 0.4.36 candidate without node_modules or numbered duplicate files is installed and enabled at /Users/niallyoung/.codex/plugins/cache/canvasight-local/canvasight/0.4.36; repository and installed-cache runtime hashes match.
   - Native task A 019f9ca3-8bf7-7ca3-b483-b839701d85bd and test task B 019f9ca4-88e7-74e3-852f-171ab4cebc6b completed three A to B to A rounds; the initial A instance and all three returned A instances reached verified fullscreen ready at 694 by 795 with all render evidence true.
   - A remained readable and the final fullscreen instance remained ready after a 60-second focused stability window with no React 185, Maximum update depth, uncaught, or fatal Canvasight lifecycle evidence.
-  - The maintainer clarified that they never encountered this failure and cannot certify the original reproduction; GitHub Issue #2 remains open with zero reporter comments.
+  - The maintainer clarified that they never encountered this failure and cannot certify the original reproduction; GitHub Issue #2 remains open with no reporter verification reply.
   - The current maintainer task opened exact 0.4.36 as a verified 736 by 240 fullscreen instance. This is internal representative evidence, not reporter verification.
-  - Exact 0.4.36 is local-only and unpublished, so the original reporter smartLanny cannot yet install and verify the candidate.
+  - The maintainer passed the exact 0.4.36 internal control, Refresh, same-task Run and late-state release gate; this remains internal evidence rather than reporter verification.
+  - v0.4.36 is now a non-draft, non-prerelease GitHub Release. Its three-platform workflow, hosted asset checksum, extracted plugin validation and stable identity all passed, so smartLanny can install and verify it.
+  - smartLanny was asked in GitHub Issue #2 comment 5082450875 to update, restart Codex Desktop and retest the original task for 60–90 seconds plus a task switch round-trip; no reporter result has arrived yet.
 solution_report: agent-reports/resolved/solution-codex-react-185-sidebar-recovery.md
 ---
 
@@ -109,14 +111,14 @@ Development Agent 实现协调逻辑；Test Supervisor Agent建立并验证红�
 - [x] 根因明确并写入 solution report
 - [x] A→B→A 自动恢复无回归
 - [x] Agent 侧历史任务 60 秒稳定性通过
-- [ ] 维护者完成发布候选的画布控件、Refresh、同任务 Run 与延迟元数据内部交互门槛
-- [ ] 发布或提供包含修复的可安装版本
+- [x] 维护者完成发布候选的画布控件、Refresh、同任务 Run 与延迟元数据内部交互门槛
+- [x] 发布或提供包含修复的可安装版本
 - [ ] 原报告者或能独立复现相同故障的验证者完成原任务 60 秒稳定与 A→B→A 返回复验
 - [ ] 原报告者在 GitHub Issue #2 明确反馈通过或失败，或维护者按公开的发布后等待政策处理
 
 ## 当前状态
 
-assigned / failed。0.4.36 已通过代表性自动回归、内部三轮 A→B→A strict ready 与 60 秒稳定观察；维护者没有复现过报告中的故障，不能替报告者确认修复。候选尚未发布，smartLanny 目前无法复验。
+assigned / failed。0.4.36 已通过代表性自动回归、内部三轮 A→B→A、60 秒稳定观察、维护者交互门槛和正式发布闭环；维护者没有复现过报告中的故障，不能替报告者确认修复。现等待 smartLanny 更新到 `v0.4.36` 后复验。
 
 ## 处理结果
 
@@ -139,13 +141,14 @@ assigned / failed。0.4.36 已通过代表性自动回归、内部三轮 A→B�
 - GREEN：干净安装缓存无 `node_modules`、无编号副本，关键运行时文件与仓库 SHA-1 一致。
 - GREEN / INTERNAL REPRESENTATIVE：A=`019f9ca3-8bf7-7ca3-b483-b839701d85bd`，B=`019f9ca4-88e7-74e3-852f-171ab4cebc6b`；三轮任务往返后 A 的 fullscreen Widget 均为 `verified=true`、`694×795`。
 - GREEN / INTERNAL REPRESENTATIVE：A 聚焦 60 秒期间无 React #185、Maximum update depth、uncaught 或 fatal 生命周期记录。
-- PENDING / MAINTAINER RELEASE GATE：画布控件、Refresh、同任务 node Run 与延迟元数据稳定性。
+- GREEN / MAINTAINER RELEASE GATE：画布控件、Refresh、同任务 node Run 与延迟元数据稳定性。
+- GREEN / RELEASE：workflow `30191751214`、GitHub 托管 zip SHA-256 `1edc00205c56be38cdffb31245761c49341fe6f48c3242d2dd931cb0d7bc4d6c`、解压插件校验、16 tools 与 `stable`/tag 身份一致。
 - PENDING / REPORTER：发布可安装版本后，由 smartLanny 在原故障任务或同目录 fork 完成至少 60 秒稳定与 A→B→A 复验。
 
 ## 后续风险
 
 - 内部代表性任务不是报告者的原始任务或环境，不能据此宣称 GitHub Issue #2 已解决。
 - 维护者内部交互验收即使通过，也只能证明发布候选达到内部门槛，不能冒充报告者复验。
-- exact 0.4.36 尚未推送、打 tag 或发布，报告者当前没有可安装候选。
+- exact 0.4.36 已发布；剩余证据只能由原报告者或能独立复现相同故障的验证者提供。
 - 不能用取消自动恢复来规避未来崩溃，否则会重新引入已修复的任务往返白屏。
-- latest Widget runtime 的 viewport save-count fixture `5 !== 4` 是独立既有自动化风险，最终集成总结需保留。
+- earlier Widget runtime viewport save-count `5 !== 4` observation was archived as non-reproducible after three sequential passes and is not represented as an active fix or release blocker.
