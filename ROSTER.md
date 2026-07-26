@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T05:48:26Z
-    handoff_source: solution-node-rich-text-editor
-    last_report: solution-node-rich-text-editor
+    last_seen: 2026-07-26T06:05:44Z
+    handoff_source: issue-codex-react-185-sidebar-recovery
+    last_report: solution-codex-react-185-sidebar-recovery
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Closed rich-text inline-code semantics and React 185 recovery after exact 0.4.36 user native acceptance
+    notes: React 185 implementation candidate is ready as exact 0.4.36; user acceptance remains pending
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_lead
@@ -61,14 +61,14 @@ roles:
   - role: Test Supervisor Agent
     status: active
     agent_id: /root/test_supervisor_agent
-    thread_id: 019f744e-868a-7ff2-990a-97ebc5777c67
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T05:51:42Z
-    handoff_source: issue-widget-viewport-recovery-save-count
-    last_report: issue-widget-viewport-recovery-save-count
+    last_seen: 2026-07-26T06:05:44Z
+    handoff_source: issue-codex-react-185-sidebar-recovery
+    last_report: integration-summary-issue-2-user-acceptance-correction
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed final React 185 and rich-text native closure; owns the separate baseline-origin viewport save-count fixture risk
+    notes: Owns pending user acceptance for React 185 and the separate baseline-origin viewport save-count fixture risk
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
@@ -83,14 +83,14 @@ roles:
   - role: Project Management Agent
     status: active
     agent_id: /root/project_management_agent
-    thread_id: 019f744e-6e66-7290-be73-bb49037d45c3
+    thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-07-26T05:54:02Z
-    handoff_source: integration-summary-canvasight-0-4-36-native-acceptance-closure
-    last_report: integration-summary-canvasight-0-4-36-native-acceptance-closure
+    last_seen: 2026-07-26T06:05:44Z
+    handoff_source: integration-summary-issue-2-user-acceptance-correction
+    last_report: integration-summary-issue-2-user-acceptance-correction
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Owns selective staging, staged-manifest review, diff checks, and the final Chinese conventional commit for the verified 0.4.36 native acceptance closure
+    notes: Owns selective Git closure for the Issue #2 acceptance-record correction; the product issue remains unverified
   - role: Skill Expert Agent
     status: active
     agent_id: /root/skill_expert_agent

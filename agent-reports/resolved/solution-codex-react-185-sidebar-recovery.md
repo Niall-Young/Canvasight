@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Main Thread
 priority: critical
-version: 1
+version: 2
 agent_id: /root/development_agent
 thread_id: null
 created_at: 2026-07-26T05:48:26Z
-updated_at: 2026-07-26T05:48:26Z
+updated_at: 2026-07-26T06:05:44Z
 depends_on:
   - issue-codex-react-185-sidebar-recovery
 related_files:
@@ -26,7 +26,7 @@ verification_evidence:
   - The 0.4.36 coordinator reduced project-thread recovery ownership to the latest eligible Widget while peers and stale bindings remain passive.
   - Native task A and test task B completed three A-to-B-to-A rounds with all returned A instances strict fullscreen ready.
   - Historical task A remained stable and ready for 60 seconds without React 185, Maximum update depth, uncaught, or fatal lifecycle evidence.
-  - The user completed the remaining native acceptance and confirmed no problems after the final exact 0.4.36 reload.
+  - The implementation candidate is installed as exact 0.4.36 and is ready for user verification; no user acceptance is recorded.
 ---
 
 # Codex React #185 侧栏恢复解决方案
@@ -54,7 +54,7 @@ Development Agent
 
 ## 处理结果
 
-已修复并通过 0.4.36 原生验收。
+修复候选已实现并通过自动化与 Agent 侧部分原生验证；GitHub Issue #2 的用户验收尚未完成，因此本 solution report 不代表 issue 已关闭。
 
 ## 修改文件
 
@@ -71,7 +71,7 @@ Development Agent
 - GREEN：0.4.36 隔离 build、Widget/MCP smoke 与统一候选矩阵。
 - GREEN：A=`019f9ca3-8bf7-7ca3-b483-b839701d85bd`，B=`019f9ca4-88e7-74e3-852f-171ab4cebc6b`，三轮 A→B→A strict ready。
 - GREEN：A 聚焦 60 秒无 React #185 或 fatal lifecycle evidence。
-- GREEN：用户完成剩余原生操作验收并确认无问题。
+- PENDING：用户在原故障任务完成 60 秒稳定、A→B→A 返回、画布控件、Refresh、同任务 Run 与延迟元数据检查，并明确反馈通过或失败。
 
 ## 后续风险
 
