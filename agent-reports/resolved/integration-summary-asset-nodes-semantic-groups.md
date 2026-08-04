@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: high
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-08-04T12:56:19Z
-updated_at: 2026-08-04T13:00:01Z
+updated_at: 2026-08-04T13:01:45Z
 depends_on:
   - issue-asset-nodes-semantic-groups
 related_files:
@@ -40,7 +40,7 @@ verification_evidence:
 - Customer Support Agent：更新中英文 README。
 - Design Standards Expert：更新 `design.md`。
 - Development Standards Lead：更新 `AGENTS.md` 并审查持久化、开发代理和 Graph Writer 边界。
-- Project Management Agent：已核对指定基线与本轮范围，执行选择性暂存、staged diff 审查和中文 conventional commit；最终哈希记录在提交后 handoff。
+- Project Management Agent：已完成指定基线核对、选择性暂存、staged diff 审查和中文 conventional feature commit，并确认提交后 worktree clean。
 - Skill Expert Agent：更新并验证 Graph Writer 的 Asset/Group 契约。
 
 ## 报告状态变更
@@ -75,6 +75,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `e50e74df300ac5bb512d9afdd2a6550291895d9e`
-- commit subject: `feat: 增加资产节点与语义分组`
-- commit hash: 提交后由 Project Management Agent handoff 记录（提交对象无法自包含其最终哈希）
-- worktree: 提交前确认仅含本轮范围；使用明确路径选择性暂存并复核 staged diff
+- feature commit: `4936e5e6cd333d89d3d659d1738c911356cccc02` (`feat: 增加资产节点与语义分组`)
+- worktree: feature commit 后 clean；仅使用明确路径选择性暂存，并已复核 staged name、stat 与 check
