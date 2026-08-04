@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.4.36";
+var SERVER_VERSION = "0.5.0";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -18016,6 +18016,7 @@ function defaultScatterPage(index = 0) {
     createdAt: now,
     updatedAt: now,
     viewport: { x: 0, y: 0, zoom: 1 },
+    viewState: { collapsedGroupIds: [] },
     nodes: [],
     edges: []
   };
@@ -18710,18 +18711,56 @@ function normalizeAttachment(value) {
     createdAt: typeof value?.createdAt === "string" ? value.createdAt : nowIso()
   };
 }
+function normalizeAssetRole(value) {
+  return ["input", "reference", "option", "output"].includes(value) ? value : "input";
+}
+function normalizeScatterViewState(value) {
+  const source = isObject2(value) ? value : {};
+  return {
+    collapsedGroupIds: Array.isArray(source.collapsedGroupIds) ? [...new Set(source.collapsedGroupIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))] : []
+  };
+}
 function normalizeScatterNode(value, index) {
   const node = isObject2(value) ? value : {};
   const rawData = isObject2(node.data) ? node.data : {};
   const { codexMode: _codexMode, planMode: _planMode, ...data } = rawData;
-  return {
+  const type = node.type === "asset" || node.type === "group" ? node.type : "task";
+  const normalized = {
     ...node,
     id: typeof node.id === "string" && node.id ? node.id : "node-".concat(index + 1),
-    type: "task",
+    type,
     position: {
       x: toNumber(node.position?.x, index * 460),
       y: toNumber(node.position?.y, 0)
-    },
+    }
+  };
+  if (type === "group") {
+    const { parentId: _parentId, ...groupNode } = normalized;
+    return {
+      ...groupNode,
+      data: {
+        ...data,
+        title: typeof data.title === "string" ? data.title : "",
+        description: typeof data.description === "string" ? data.description : ""
+      }
+    };
+  }
+  if (type === "asset") {
+    return {
+      ...normalized,
+      ...typeof node.parentId === "string" && node.parentId.trim() ? { parentId: node.parentId.trim() } : {},
+      data: {
+        ...data,
+        title: typeof data.title === "string" ? data.title : "",
+        description: typeof data.description === "string" ? data.description : "",
+        role: normalizeAssetRole(data.role),
+        asset: normalizeAttachment(data.asset)
+      }
+    };
+  }
+  return {
+    ...normalized,
+    ...typeof node.parentId === "string" && node.parentId.trim() ? { parentId: node.parentId.trim() } : {},
     data: {
       ...data,
       title: typeof data.title === "string" ? data.title : "",
@@ -18752,6 +18791,14 @@ function normalizeScatterViewport(value) {
 function normalizeScatterPage(value, index, fallback) {
   const page = isObject2(value) ? value : {};
   const now = nowIso();
+  const nodes = Array.isArray(page.nodes) ? page.nodes.map(normalizeScatterNode) : Array.isArray(fallback?.nodes) ? fallback.nodes.map(normalizeScatterNode) : [];
+  const groupIds = new Set(nodes.filter((node) => node.type === "group").map((node) => node.id));
+  for (const node of nodes) {
+    if (node.type === "group" || node.parentId === void 0) continue;
+    if (!groupIds.has(node.parentId)) throw new HttpError(400, "Node parentId must reference a Group node: ".concat(node.id));
+  }
+  const viewState = normalizeScatterViewState(page.viewState || fallback?.viewState);
+  viewState.collapsedGroupIds = viewState.collapsedGroupIds.filter((id) => groupIds.has(id));
   return {
     ...page,
     id: typeof page.id === "string" && page.id ? page.id : "page-".concat(index + 1),
@@ -18759,7 +18806,8 @@ function normalizeScatterPage(value, index, fallback) {
     createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
     updatedAt: typeof page.updatedAt === "string" && page.updatedAt ? page.updatedAt : typeof fallback?.updatedAt === "string" ? fallback.updatedAt : now,
     viewport: normalizeScatterViewport(page.viewport || fallback?.viewport),
-    nodes: Array.isArray(page.nodes) ? page.nodes.map(normalizeScatterNode) : Array.isArray(fallback?.nodes) ? fallback.nodes.map(normalizeScatterNode) : [],
+    viewState,
+    nodes,
     edges: Array.isArray(page.edges) ? page.edges.map(normalizeScatterEdge) : Array.isArray(fallback?.edges) ? fallback.edges.map(normalizeScatterEdge) : []
   };
 }
@@ -18767,8 +18815,8 @@ function normalizeScatterDocument(value, projectPath) {
   if (!isObject2(value)) {
     throw new HttpError(400, "document must be an object");
   }
-  if (value.version !== 1) {
-    throw new HttpError(400, "Only .scatter/scatter.json version 1 is supported");
+  if (value.version !== 1 && value.version !== 2) {
+    throw new HttpError(400, "Only .scatter/scatter.json versions 1 and 2 are supported");
   }
   const legacyFallback = {
     updatedAt: value.updatedAt,
@@ -18781,9 +18829,10 @@ function normalizeScatterDocument(value, projectPath) {
   const activePageId = typeof value.activePageId === "string" && pages.some((page) => page.id === value.activePageId) ? value.activePageId : pages[0].id;
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
   const { codexThreadId, threadId, threadClaimedAt, ...documentFields } = value;
+  const version2 = value.version === 2 || pages.some((page) => page.nodes.some((node) => node.type !== "task" || node.parentId)) ? 2 : 1;
   return {
     ...documentFields,
-    version: 1,
+    version: version2,
     projectName: typeof value.projectName === "string" && value.projectName ? value.projectName : projectNameFromPath(projectPath),
     updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : nowIso(),
     activePageId,
@@ -18821,6 +18870,20 @@ async function readScatterDocument(projectPath) {
 async function writeScatterDocument(projectPath, document2) {
   await ensureScatterLayout(projectPath);
   const normalized = normalizeScatterDocument(document2, projectPath);
+  if (normalized.version === 2) {
+    const backupPath = path.join(scatterDir(projectPath), "scatter.v1.backup.json");
+    try {
+      await fsp.access(backupPath);
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+      try {
+        const current = JSON.parse(await fsp.readFile(scatterPath(projectPath), "utf8"));
+        if (current?.version === 1) await writeJsonAtomic(backupPath, current);
+      } catch (readError) {
+        if (readError?.code !== "ENOENT" && !(readError instanceof SyntaxError)) throw readError;
+      }
+    }
+  }
   await writeJsonAtomic(scatterPath(projectPath), normalized);
   return normalized;
 }
@@ -18974,11 +19037,18 @@ function documentsContentEqual(left, right) {
   if (!left || !right || left.projectName !== right.projectName) return false;
   return sameValue(left.pages.map(comparablePage), right.pages.map(comparablePage));
 }
-function documentWithCurrentNavigation(currentDocument, localDocument, projectPath) {
+function documentsViewStateEqual(left, right) {
+  if (!left || !right) return false;
+  return sameValue(
+    left.pages.map((page) => ({ id: page.id, viewState: page.viewState })),
+    right.pages.map((page) => ({ id: page.id, viewState: page.viewState }))
+  );
+}
+function documentWithCurrentNavigation(currentDocument, localDocument, projectPath, preserveLocalViewState = false) {
   const currentPages = itemMap(currentDocument.pages);
   const pages = localDocument.pages.map((page) => {
     const currentPage = currentPages.get(page.id);
-    return currentPage ? { ...page, viewport: currentPage.viewport } : page;
+    return currentPage ? { ...page, viewport: currentPage.viewport, viewState: preserveLocalViewState ? page.viewState : currentPage.viewState } : page;
   });
   return rebuildDocumentMirrors({
     ...localDocument,
@@ -19035,11 +19105,16 @@ function createConflictPage(sourcePage, options) {
   const { baseRevision, clientMutationId, copyKind = "manual", createdAt, existingNames, incomingIntent, language, priorRevision, reasons, usedEdgeIds, usedNodeIds, usedPageIds } = options;
   const pageId = deterministicUniqueId("conflict-page", clientMutationId, sourcePage.id, usedPageIds);
   const nodeIds = /* @__PURE__ */ new Map();
-  const nodes = sourcePage.nodes.map((node) => {
+  sourcePage.nodes.forEach((node) => {
     const id = deterministicUniqueId("conflict-node", clientMutationId, "".concat(sourcePage.id, ":").concat(node.id), usedNodeIds);
     nodeIds.set(node.id, id);
-    return { ...node, id, selected: false };
   });
+  const nodes = sourcePage.nodes.map((node) => ({
+    ...node,
+    id: nodeIds.get(node.id),
+    ...node.parentId ? { parentId: nodeIds.get(node.parentId) || node.parentId } : {},
+    selected: false
+  }));
   const edges = sourcePage.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)).map((edge) => ({
     ...edge,
     id: deterministicUniqueId("conflict-edge", clientMutationId, "".concat(sourcePage.id, ":").concat(edge.id), usedEdgeIds),
@@ -19143,7 +19218,7 @@ function mergeConcurrentDocuments({ baseDocument, currentDocument, deletedPageSn
       continue;
     }
     if (!currentChanged) {
-      pages.push({ ...localPage, viewport: currentPage.viewport });
+      pages.push({ ...localPage, viewport: currentPage.viewport, viewState: currentPage.viewState });
       continue;
     }
     if (!pageContentChanged(currentPage, localPage)) {
@@ -19176,6 +19251,7 @@ function mergeConcurrentDocuments({ baseDocument, currentDocument, deletedPageSn
           ...currentPage,
           name: localPage.name !== basePage.name ? localPage.name : currentPage.name,
           viewport: localPage.viewport,
+          viewState: localPage.viewState,
           updatedAt: createdAt,
           nodes: humanNodes,
           edges: validHumanEdges
@@ -19479,19 +19555,64 @@ function edgeAwareGraphNodePositions(nodes, edges, layout) {
   return positions;
 }
 function applyGraphAutoLayout(nodes, edges, layout, positionAxesByNodeId) {
-  const autoPositions = edgeAwareGraphNodePositions(nodes, edges, layout);
-  return nodes.map((node) => {
+  const groups = nodes.filter((node) => node.type === "group");
+  const groupIds = new Set(groups.map((node) => node.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const internalPositions = /* @__PURE__ */ new Map();
+  const preparedGroups = groups.map((group) => {
+    const members = nodes.filter((node) => node.type !== "group" && node.parentId === group.id);
+    if (!members.length) return { ...group, width: optionalDimension(group.width) || 360, height: optionalDimension(group.height) || 160 };
+    const memberIds = new Set(members.map((node) => node.id));
+    const internalEdges = edges.filter((edge) => memberIds.has(edge.source) && memberIds.has(edge.target));
+    const memberPositions = edgeAwareGraphNodePositions(members, internalEdges, "horizontal");
+    let maxRight = 0;
+    let maxBottom = 0;
+    members.forEach((member) => {
+      const raw = memberPositions.get(member.id) || { x: 0, y: 0 };
+      const position = { x: raw.x + 32, y: raw.y + 72 };
+      internalPositions.set(member.id, position);
+      maxRight = Math.max(maxRight, position.x + (optionalDimension(member.width) || GRAPH_NODE_WIDTH));
+      maxBottom = Math.max(maxBottom, position.y + (optionalDimension(member.height) || GRAPH_NODE_HEIGHT));
+    });
+    return {
+      ...group,
+      width: Math.max(360, maxRight + 32),
+      height: Math.max(160, maxBottom + 32)
+    };
+  });
+  const preparedGroupById = new Map(preparedGroups.map((node) => [node.id, node]));
+  const macroNodes = [
+    ...preparedGroups,
+    ...nodes.filter((node) => node.type !== "group" && (!node.parentId || !groupIds.has(node.parentId)))
+  ];
+  const macroPairs = /* @__PURE__ */ new Set();
+  const macroEdges = edges.flatMap((edge) => {
+    const sourceNode = nodeById.get(edge.source);
+    const targetNode = nodeById.get(edge.target);
+    const source = sourceNode?.type !== "group" && sourceNode?.parentId && groupIds.has(sourceNode.parentId) ? sourceNode.parentId : edge.source;
+    const target = targetNode?.type !== "group" && targetNode?.parentId && groupIds.has(targetNode.parentId) ? targetNode.parentId : edge.target;
+    const pair = "".concat(source, "\0").concat(target);
+    if (source === target || macroPairs.has(pair)) return [];
+    macroPairs.add(pair);
+    return [{ id: "macro:".concat(edge.id), source, target }];
+  });
+  const macroPositions = edgeAwareGraphNodePositions(macroNodes, macroEdges, "horizontal");
+  const laidOut = nodes.map((node) => {
     const axes = positionAxesByNodeId.get(node.id) || { x: false, y: false };
-    const autoPosition = autoPositions.get(node.id);
+    const autoPosition = node.type !== "group" && node.parentId && groupIds.has(node.parentId) ? internalPositions.get(node.id) : macroPositions.get(node.id);
     if (!autoPosition || axes.x && axes.y) return node;
     return {
-      ...node,
+      ...node.type === "group" ? preparedGroupById.get(node.id) || node : node,
       position: {
         x: axes.x ? node.position.x : autoPosition.x,
         y: axes.y ? node.position.y : autoPosition.y
       }
     };
   });
+  return [
+    ...laidOut.filter((node) => node.type === "group"),
+    ...laidOut.filter((node) => node.type !== "group")
+  ];
 }
 function relayoutGraphPage(page, layout, layoutPolicy = "auto") {
   const preserveExplicit = normalizeGraphLayoutPolicy(layoutPolicy) === "preserve-explicit";
@@ -19522,7 +19643,32 @@ function findTemplateForGraphNode(value, data, templates, index) {
   const template = title ? templates.find((item) => normalizeTemplateQuery(item.title) === normalizeTemplateQuery(title)) : null;
   return { template: template || null, match: template ? "title" : "" };
 }
-function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], reusedTemplates = []) {
+function normalizeManagedGraphAsset(value, projectPath, fieldPath) {
+  if (!isObject2(value)) throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
+  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
+  const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
+  const candidatePath = typeof value.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : relativePath ? path.resolve(projectPath, relativePath) : "";
+  const storedPath = path.resolve(candidatePath || ".");
+  if (!candidatePath || !isPathInside(storedPath, assetsRoot)) {
+    throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
+  }
+  const asset = normalizeAttachment({
+    ...value,
+    storedPath,
+    relativePath: relativePath || path.relative(projectPath, storedPath),
+    originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path.basename(storedPath),
+    fileUrl: assetUrlForPath(storedPath)
+  });
+  let stat;
+  try {
+    stat = fs.lstatSync(storedPath);
+  } catch {
+    throw new HttpError(400, "".concat(fieldPath, " must reference an available managed project asset"));
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, "".concat(fieldPath, " must reference a regular managed project asset"));
+  return asset;
+}
+function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, templates = [], reusedTemplates = []) {
   if (!isObject2(value)) throw new HttpError(400, "nodes[".concat(index, "] must be an object"));
   const explicitId = typeof value.id === "string" && value.id.trim() ? value.id.trim() : "";
   const id = explicitId || generatedGraphId("node", index, usedNodeIds);
@@ -19530,7 +19676,11 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], r
   usedNodeIds.add(id);
   const rawData = isObject2(value.data) ? value.data : {};
   const { codexMode: _codexMode, planMode: _planMode, ...data } = rawData;
-  const { template, match } = findTemplateForGraphNode(value, data, templates, index);
+  const type = value.type === "asset" || value.type === "group" ? value.type : "task";
+  if (type === "group" && (value.parentId !== void 0 || data.parentId !== void 0)) {
+    throw new HttpError(400, "nodes[".concat(index, "].parentId cannot nest a Group"));
+  }
+  const { template, match } = type === "task" ? findTemplateForGraphNode(value, data, templates, index) : { template: null, match: "" };
   const width = optionalDimension(value.width);
   const height = optionalDimension(value.height);
   const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : typeof data.title === "string" && data.title.trim() ? data.title.trim() : template?.title || "";
@@ -19544,12 +19694,41 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, templates = [], r
       match
     });
   }
-  return {
+  const base = {
     id,
-    type: "task",
+    type,
     position: normalizeGraphNodePosition(value, index, layout),
     ...width ? { width } : {},
-    ...height ? { height } : {},
+    ...height ? { height } : {}
+  };
+  if (type === "group") {
+    return {
+      ...base,
+      data: {
+        ...data,
+        title,
+        description: typeof value.description === "string" ? value.description : typeof data.description === "string" ? data.description : ""
+      }
+    };
+  }
+  const parentId = typeof value.parentId === "string" && value.parentId.trim() ? value.parentId.trim() : typeof data.parentId === "string" && data.parentId.trim() ? data.parentId.trim() : "";
+  if (type === "asset") {
+    const assetInput = isObject2(value.asset) ? value.asset : data.asset;
+    return {
+      ...base,
+      ...parentId ? { parentId } : {},
+      data: {
+        ...data,
+        title,
+        description: typeof value.description === "string" ? value.description : typeof data.description === "string" ? data.description : "",
+        role: normalizeAssetRole(value.role || data.role),
+        asset: normalizeManagedGraphAsset(assetInput, projectPath, "nodes[".concat(index, "].asset"))
+      }
+    };
+  }
+  return {
+    ...base,
+    ...parentId ? { parentId } : {},
     data: {
       ...data,
       ...template ? {
@@ -19573,11 +19752,9 @@ function normalizeGraphEdge(value, index, nodeIds, usedEdgeIds, usedTargetIds, u
   if (source === target) throw new HttpError(400, "edges[".concat(index, "] cannot connect a node to itself"));
   const connectionPair = "".concat(source, "\0").concat(target);
   if (usedConnectionPairs.has(connectionPair)) throw new HttpError(400, "Duplicate edge connection: ".concat(source, " -> ").concat(target));
-  if (usedTargetIds.has(target)) throw new HttpError(400, "Node already has a parent edge: ".concat(target));
   const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : generatedGraphId("edge", index, usedEdgeIds);
   if (usedEdgeIds.has(id)) throw new HttpError(400, "Duplicate edge id: ".concat(id));
   usedEdgeIds.add(id);
-  usedTargetIds.add(target);
   usedConnectionPairs.add(connectionPair);
   return {
     id,
@@ -19610,7 +19787,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
   const guidanceNodes = softwareProductGuidanceNodes(projectPath, args, index, rawNodes);
   const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = /* @__PURE__ */ new Set();
-  const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, templates, reusedTemplates));
+  const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, projectPath, templates, reusedTemplates));
   const positionAxesByNodeId = new Map(
     nodes.map((node, nodeIndex) => [
       node.id,
@@ -19643,6 +19820,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
     createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
     updatedAt: now,
     viewport: normalizeScatterViewport(page.viewport || args?.viewport),
+    viewState: { collapsedGroupIds: [] },
     nodes: layoutedNodes,
     edges
   };
@@ -19655,7 +19833,8 @@ function replaceActivePage(existingDocument, incomingPage) {
       ...incomingPage,
       id: activePageId,
       name: incomingPage.name || page.name,
-      createdAt: page.createdAt || incomingPage.createdAt
+      createdAt: page.createdAt || incomingPage.createdAt,
+      viewState: normalizeScatterViewState(page.viewState)
     } : page
   );
 }
@@ -19685,25 +19864,57 @@ function activeScatterPage(document2) {
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
-function mergeGraphNodeChanges(node, changes) {
+function mergeGraphNodeChanges(node, changes, projectPath) {
   const rawChanges = isObject2(changes) ? changes : {};
   const {
     id: _id,
+    type: _type,
     title,
     body,
+    description,
+    role,
+    asset,
     attachments,
     effort,
     runMode,
+    parentId,
     codexMode: _codexMode,
     data: rawData,
     position: rawPosition,
     ...nodeChanges
   } = rawChanges;
   const dataChanges = isObject2(rawData) ? rawData : {};
-  const { codexMode: _dataCodexMode, planMode: _planMode, ...safeDataChanges } = dataChanges;
+  if (Object.prototype.hasOwnProperty.call(dataChanges, "asset")) {
+    throw new Error("Asset updates must use the validated top-level asset field.");
+  }
+  const {
+    codexMode: _dataCodexMode,
+    planMode: _planMode,
+    title: _dataTitle,
+    body: _dataBody,
+    description: _dataDescription,
+    role: _dataRole,
+    asset: _dataAsset,
+    attachments: _dataAttachments,
+    effort: _dataEffort,
+    runMode: _dataRunMode,
+    ...safeDataChanges
+  } = dataChanges;
+  const parentChanges = node.type === "group" || parentId === void 0 ? {} : typeof parentId === "string" && parentId.trim() ? { parentId: parentId.trim() } : { parentId: void 0 };
+  const typeDataChanges = node.type === "asset" ? {
+    ...typeof description === "string" ? { description } : {},
+    ...role !== void 0 ? { role: normalizeAssetRole(role) } : {},
+    ...asset !== void 0 ? { asset: normalizeManagedGraphAsset(asset, projectPath, "node ".concat(node.id, " asset")) } : {}
+  } : node.type === "group" ? { ...typeof description === "string" ? { description } : {} } : {
+    ...typeof body === "string" ? { body } : {},
+    ...Array.isArray(attachments) ? { attachments: attachments.map(normalizeAttachment) } : {},
+    ...effort !== void 0 ? { effort: normalizeEffort(effort) } : {},
+    ...runMode !== void 0 ? { runMode: normalizeRunMode(runMode) } : {}
+  };
   return {
     ...node,
     ...nodeChanges,
+    ...parentChanges,
     ...isObject2(rawPosition) ? {
       position: {
         ...node.position,
@@ -19715,10 +19926,7 @@ function mergeGraphNodeChanges(node, changes) {
       ...node.data,
       ...safeDataChanges,
       ...typeof title === "string" ? { title: title.trim() } : {},
-      ...typeof body === "string" ? { body } : {},
-      ...Array.isArray(attachments) ? { attachments: attachments.map(normalizeAttachment) } : {},
-      ...effort !== void 0 ? { effort: normalizeEffort(effort) } : {},
-      ...runMode !== void 0 ? { runMode: normalizeRunMode(runMode) } : {}
+      ...typeDataChanges
     }
   };
 }
@@ -19754,7 +19962,7 @@ function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds,
   addedNodeIds.delete(nodeId);
   return candidate;
 }
-function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
+function applyMergeOperations(existingPage, args, projectPath, templates, reusedTemplates) {
   const page = cloneJson(existingPage);
   const operations = Array.isArray(args?.operations) ? args.operations : [];
   const violations = [];
@@ -19795,7 +20003,7 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
           return;
         }
         const usedIds = new Set(page.nodes.map((node2) => node2.id));
-        const node = normalizeGraphNode(operation.node, page.nodes.length, normalizeGraphLayout(args?.layout), usedIds, templates, reusedTemplates);
+        const node = normalizeGraphNode(operation.node, page.nodes.length, normalizeGraphLayout(args?.layout), usedIds, projectPath, templates, reusedTemplates);
         page.nodes.push(node);
         addedNodeIds.add(node.id);
         if (graphNodePositionAxes(operation.node).x && graphNodePositionAxes(operation.node).y) explicitPositionIds.add(node.id);
@@ -19815,7 +20023,11 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
           violations.push(graphViolation("immutable_id", "".concat(opPath, ".changes.id"), "Node ids cannot be changed.", "Remove id from changes and target the node with nodeId."));
           return;
         }
-        page.nodes[nodeIndex] = mergeGraphNodeChanges(page.nodes[nodeIndex], operation.changes);
+        if (Object.prototype.hasOwnProperty.call(operation.changes, "type") && operation.changes.type !== page.nodes[nodeIndex].type) {
+          violations.push(graphViolation("immutable_node_type", "".concat(opPath, ".changes.type"), "Node types cannot be changed in place.", "Remove the node and add a new node with the desired type."));
+          return;
+        }
+        page.nodes[nodeIndex] = mergeGraphNodeChanges(page.nodes[nodeIndex], operation.changes, projectPath);
         summary.updatedNodeIds.push(page.nodes[nodeIndex].id);
         return;
       }
@@ -19826,6 +20038,19 @@ function applyMergeOperations(existingPage, args, templates, reusedTemplates) {
         }
         const [removed] = page.nodes.splice(nodeIndex, 1);
         removedNodeIds.push(removed.id);
+        if (removed.type === "group") {
+          page.nodes = page.nodes.map((node) => {
+            if (node.parentId !== removed.id) return node;
+            const { parentId: _parentId, ...released } = node;
+            return {
+              ...released,
+              position: {
+                x: toNumber(removed.position?.x, 0) + toNumber(node.position?.x, 0),
+                y: toNumber(removed.position?.y, 0) + toNumber(node.position?.y, 0)
+              }
+            };
+          });
+        }
         page.edges = page.edges.filter((edge) => {
           if (edge.source !== removed.id && edge.target !== removed.id) return true;
           removedEdgeIds.push(edge.id);
@@ -19930,7 +20155,7 @@ function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates,
   if (Array.isArray(args?.operations) && args.operations.some((operation) => operation?.op === "relayout-page")) {
     operations.push({ op: "relayout-page" });
   }
-  const merged = applyMergeOperations(page, { ...args, operations }, templates, reusedTemplates);
+  const merged = applyMergeOperations(page, { ...args, operations }, projectPath, templates, reusedTemplates);
   return {
     ...merged,
     projectGuidanceNodes: guidanceNodes.map((node) => ({
@@ -19940,9 +20165,10 @@ function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates,
     }))
   };
 }
-function graphNodeBounds(node) {
-  const x2 = toNumber(node?.position?.x, 0);
-  const y = toNumber(node?.position?.y, 0);
+function graphNodeBounds(node, nodes = []) {
+  const parent = node?.parentId ? nodes.find((candidate) => candidate.id === node.parentId && candidate.type === "group") : null;
+  const x2 = toNumber(node?.position?.x, 0) + toNumber(parent?.position?.x, 0);
+  const y = toNumber(node?.position?.y, 0) + toNumber(parent?.position?.y, 0);
   const width = optionalDimension(node?.width) || GRAPH_NODE_WIDTH;
   const height = optionalDimension(node?.height) || GRAPH_NODE_HEIGHT;
   return { x: x2, y, width, height, right: x2 + width, bottom: y + height };
@@ -19958,20 +20184,31 @@ function validateGraphStructure(page, layout = "horizontal") {
   });
   const edgeIds = /* @__PURE__ */ new Set();
   const pairs = /* @__PURE__ */ new Set();
-  const parentTargets = /* @__PURE__ */ new Set();
+  const nodeById = new Map(page.nodes.map((node) => [node.id, node]));
   const adjacency = new Map(page.nodes.map((node) => [node.id, []]));
   page.edges.forEach((edge, index) => {
     if (!edge.id || edgeIds.has(edge.id)) violations.push(graphViolation("duplicate_edge_id", "edges[".concat(index, "].id"), "Duplicate or empty edge id: ".concat(edge.id || "(empty)"), "Assign every edge a unique non-empty id."));
     edgeIds.add(edge.id);
     if (!nodeIds.has(edge.source)) violations.push(graphViolation("missing_edge_source", "edges[".concat(index, "].source"), "Edge source does not exist: ".concat(edge.source), "Use an existing node id."));
     if (!nodeIds.has(edge.target)) violations.push(graphViolation("missing_edge_target", "edges[".concat(index, "].target"), "Edge target does not exist: ".concat(edge.target), "Use an existing node id."));
+    if (nodeById.get(edge.source)?.type === "group" || nodeById.get(edge.target)?.type === "group") {
+      violations.push(graphViolation("group_edge_forbidden", "edges[".concat(index, "]"), "Edges cannot connect to Group nodes.", "Use parentId for membership and connect Task or Asset nodes for semantic relationships."));
+    }
     if (edge.source === edge.target) violations.push(graphViolation("self_edge", "edges[".concat(index, "]"), "An edge cannot connect a node to itself.", "Connect two different nodes or remove the edge."));
     const pair = "".concat(edge.source, "\0").concat(edge.target);
     if (pairs.has(pair)) violations.push(graphViolation("duplicate_connection", "edges[".concat(index, "]"), "Duplicate connection: ".concat(edge.source, " -> ").concat(edge.target), "Keep only one edge for this source-target pair."));
     pairs.add(pair);
-    if (parentTargets.has(edge.target)) violations.push(graphViolation("multiple_parents", "edges[".concat(index, "].target"), "Node already has a parent edge: ".concat(edge.target), "Keep one parent edge for each node."));
-    parentTargets.add(edge.target);
     adjacency.get(edge.source)?.push(edge.target);
+  });
+  page.nodes.forEach((node, index) => {
+    if (node.type === "group") {
+      if (node.parentId) violations.push(graphViolation("nested_group_forbidden", "nodes[".concat(index, "].parentId"), "Groups cannot belong to another Group.", "Remove parentId from the Group."));
+      return;
+    }
+    if (!node.parentId) return;
+    const parent = nodeById.get(node.parentId);
+    if (!parent) violations.push(graphViolation("group_parent_not_found", "nodes[".concat(index, "].parentId"), "Group parent does not exist: ".concat(node.parentId), "Use an existing Group id or remove parentId."));
+    else if (parent.type !== "group") violations.push(graphViolation("parent_not_group", "nodes[".concat(index, "].parentId"), "parentId does not reference a Group: ".concat(node.parentId), "Use a Group id or remove parentId."));
   });
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
@@ -19988,9 +20225,10 @@ function validateGraphStructure(page, layout = "horizontal") {
     violations.push(graphViolation("cycle_detected", "edges", "Graph dependencies contain a cycle.", "Remove or reverse an edge so every dependency has a forward direction."));
   }
   page.nodes.forEach((node, index) => {
-    const bounds = graphNodeBounds(node);
+    const bounds = graphNodeBounds(node, page.nodes);
     page.nodes.slice(index + 1).forEach((other) => {
-      const otherBounds = graphNodeBounds(other);
+      if (node.parentId === other.id || other.parentId === node.id) return;
+      const otherBounds = graphNodeBounds(other, page.nodes);
       const overlaps = bounds.x < otherBounds.right && bounds.right > otherBounds.x && bounds.y < otherBounds.bottom && bounds.bottom > otherBounds.y;
       if (overlaps) {
         violations.push(graphViolation("node_bounds_overlap", "nodes.".concat(node.id), "Node bounds overlap: ".concat(node.id, " and ").concat(other.id, "."), "Use automatic layout or move the nodes so their full rectangles do not intersect."));
@@ -20002,8 +20240,8 @@ function validateGraphStructure(page, layout = "horizontal") {
     const source = page.nodes.find((node) => node.id === edge.source);
     const target = page.nodes.find((node) => node.id === edge.target);
     if (!source || !target) return;
-    const sourceBounds = graphNodeBounds(source);
-    const targetBounds = graphNodeBounds(target);
+    const sourceBounds = graphNodeBounds(source, page.nodes);
+    const targetBounds = graphNodeBounds(target, page.nodes);
     const forward = vertical ? targetBounds.y >= sourceBounds.bottom : targetBounds.x >= sourceBounds.right;
     if (!forward) {
       violations.push(graphViolation("layout_direction_invalid", "edges[".concat(index, "]"), "Dependency is not ".concat(vertical ? "top-to-bottom" : "left-to-right", ": ").concat(edge.source, " -> ").concat(edge.target, "."), "Use automatic layout or move the target after its source along the selected layout direction."));
@@ -20013,6 +20251,12 @@ function validateGraphStructure(page, layout = "horizontal") {
 }
 function meaningfulFrameworkNode(node) {
   const title = typeof node?.data?.title === "string" ? node.data.title.trim() : "";
+  if (node?.type === "group") return false;
+  if (node?.type === "asset") {
+    const description = typeof node?.data?.description === "string" ? node.data.description.trim() : "";
+    const originalName = typeof node?.data?.asset?.originalName === "string" ? node.data.asset.originalName.trim() : "";
+    return Boolean(title && (description || originalName));
+  }
   const body = typeof node?.data?.body === "string" ? node.data.body.trim() : "";
   const combined = "".concat(title, " ").concat(body).trim().toLowerCase();
   if (!title || !body) return false;
@@ -20340,12 +20584,16 @@ function remapAiAdditionCollisions(basePage, currentPage, candidatePage, clientM
   const usedEdgeIds = new Set(currentPage.edges.map((edge) => edge.id));
   const nodeIdMap = {};
   const edgeIdMap = {};
-  const nodes = candidatePage.nodes.map((node) => {
+  const nodesWithRemappedIds = candidatePage.nodes.map((node) => {
     if (baseNodes.has(node.id) || !currentNodes.has(node.id) || sameValue(comparableNodeSemantic(currentNodes.get(node.id)), comparableNodeSemantic(node))) return node;
     const id = deterministicUniqueId("ai-node", clientMutationId, "".concat(basePage.id, ":").concat(node.id), usedNodeIds);
     nodeIdMap[node.id] = id;
     return { ...node, id };
   });
+  const nodes = nodesWithRemappedIds.map((node) => ({
+    ...node,
+    ...node.parentId && nodeIdMap[node.parentId] ? { parentId: nodeIdMap[node.parentId] } : {}
+  }));
   const edges = candidatePage.edges.map((edge) => {
     const remapped = {
       ...edge,
@@ -20496,7 +20744,7 @@ async function writeScatterGraph(projectPath, args) {
       const basePage = hasContextContract ? context.page : activeScatterPage(existingDocument);
       targetPageId = basePage.id;
       rebasedFromRevision = hasContextContract ? context.documentRevision : null;
-      const merged = applyMergeOperations(basePage, args, templates, reusedTemplates);
+      const merged = applyMergeOperations(basePage, args, projectPath, templates, reusedTemplates);
       if (merged.violations.length > 0) return validationFailure(currentRevision, merged.violations);
       const guided = ensureMergedSoftwareProductGuidance(merged.page, args, projectPath, templates, reusedTemplates);
       if (guided.violations.length > 0) return validationFailure(currentRevision, guided.violations);
@@ -20506,7 +20754,9 @@ async function writeScatterGraph(projectPath, args) {
       const generatedGuidanceNodeIds = new Set(guided.projectGuidanceNodes.map((node) => node.nodeId));
       const validation = validateGraphCandidate(candidatePage, args, projectPath, {
         preferences,
-        requiredCoverageNodeIds: [...combinedSummary.addedNodeIds, ...combinedSummary.updatedNodeIds].filter((nodeId) => !generatedGuidanceNodeIds.has(nodeId))
+        requiredCoverageNodeIds: [...combinedSummary.addedNodeIds, ...combinedSummary.updatedNodeIds].filter(
+          (nodeId) => !generatedGuidanceNodeIds.has(nodeId) && candidatePage.nodes.find((node) => node.id === nodeId)?.type === "task"
+        )
       });
       if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
       validationAdvisories.push(...validation.advisories);
@@ -20576,7 +20826,7 @@ async function writeScatterGraph(projectPath, args) {
         const generatedGuidanceNodeIds = new Set(projectGuidanceNodes.filter((node) => node.pageIndex === index).map((node) => node.nodeId));
         const validation = validateGraphCandidate(incomingPages[index], args, projectPath, {
           preferences,
-          requiredCoverageNodeIds: incomingPages[index].nodes.map((node) => node.id).filter((nodeId) => !generatedGuidanceNodeIds.has(nodeId))
+          requiredCoverageNodeIds: incomingPages[index].nodes.filter((node) => node.type === "task" && !generatedGuidanceNodeIds.has(node.id)).map((node) => node.id)
         });
         if (!validation.passed) return validationFailure(currentRevision, validation.violations, validation.advisories);
         validationAdvisories.push(...validation.advisories);
@@ -20593,8 +20843,9 @@ async function writeScatterGraph(projectPath, args) {
       }
     }
     const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+    const documentSchemaVersion = existingDocument.version === 2 || pages.some((page) => page.nodes.some((node) => node.type !== "task" || node.parentId)) ? 2 : 1;
     const document2 = await writeScatterDocument(projectPath, {
-      version: 1,
+      version: documentSchemaVersion,
       projectName: typeof args?.projectName === "string" && args.projectName.trim() ? args.projectName.trim() : existingDocument.projectName || projectNameFromPath(projectPath),
       updatedAt: now,
       activePageId: activePage.id,
@@ -20653,14 +20904,41 @@ async function openProject(projectPath) {
 }
 function summarizeGraphContextNode(node) {
   const body = typeof node?.data?.body === "string" ? node.data.body : "";
-  return {
+  const summary = {
     id: node.id,
+    type: node.type,
     title: typeof node?.data?.title === "string" ? node.data.title : "",
-    bodyPreview: body.length > TEMPLATE_BODY_PREVIEW_CHARS ? "".concat(body.slice(0, TEMPLATE_BODY_PREVIEW_CHARS - 1), "…") : body,
+    ...node.parentId ? { parentId: node.parentId } : {},
     position: {
       x: toNumber(node?.position?.x, 0),
       y: toNumber(node?.position?.y, 0)
     }
+  };
+  if (node.type === "group") {
+    return {
+      ...summary,
+      description: typeof node.data?.description === "string" ? node.data.description : ""
+    };
+  }
+  if (node.type === "asset") {
+    const asset = normalizeAttachment(node.data?.asset);
+    return {
+      ...summary,
+      description: typeof node.data?.description === "string" ? node.data.description : "",
+      asset: {
+        id: asset.id,
+        role: normalizeAssetRole(node.data?.role),
+        kind: asset.kind,
+        originalName: asset.originalName,
+        relativePath: asset.relativePath,
+        mime: asset.mime,
+        size: asset.size
+      }
+    };
+  }
+  return {
+    ...summary,
+    bodyPreview: body.length > TEMPLATE_BODY_PREVIEW_CHARS ? "".concat(body.slice(0, TEMPLATE_BODY_PREVIEW_CHARS - 1), "…") : body
   };
 }
 function graphContext(projectPath, document2, preferences = defaultPreferences(), revisionState = null) {
@@ -20671,6 +20949,12 @@ function graphContext(projectPath, document2, preferences = defaultPreferences()
   };
   const context = rememberGraphContext(projectPath, document2, resolvedRevisionState);
   const nodes = activePage.nodes.map(summarizeGraphContextNode);
+  const groups = activePage.nodes.filter((node) => node.type === "group").map((group) => ({
+    id: group.id,
+    title: typeof group.data?.title === "string" ? group.data.title : "",
+    description: typeof group.data?.description === "string" ? group.data.description : "",
+    memberIds: activePage.nodes.filter((node) => node.parentId === group.id).map((node) => node.id)
+  }));
   const edges = activePage.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
@@ -20689,11 +20973,14 @@ function graphContext(projectPath, document2, preferences = defaultPreferences()
       id: activePage.id,
       name: activePage.name,
       viewport: activePage.viewport,
+      viewState: activePage.viewState,
       nodes,
-      edges
+      edges,
+      groups
     },
     nodes,
     edges,
+    groups,
     pages: document2.pages.map((page) => ({
       id: page.id,
       name: page.name,
@@ -20749,9 +21036,9 @@ function newOpenAttempt(session, targetDisplayMode = "fullscreen") {
   });
   return attempt;
 }
-async function createSession({ projectPath, language, threadId, targetDisplayMode = null }) {
+async function createSession({ projectPath, language, threadId, targetDisplayMode = null, inheritEnvThreadId = true }) {
   const id = sessionId();
-  const resolvedThreadId = optionalThreadId(threadId) || optionalThreadId(process.env.CODEX_THREAD_ID);
+  const resolvedThreadId = optionalThreadId(threadId) || (inheritEnvThreadId ? optionalThreadId(process.env.CODEX_THREAD_ID) : null);
   const resolvedProjectPath = await resolveSessionProjectPath(projectPath, resolvedThreadId, {
     // Native widgets must never silently open the daemon's default project
     // when Codex cannot read the active task. That fallback caused unrelated
@@ -21761,6 +22048,25 @@ function revealPath(targetPath) {
   child.on("error", () => void 0);
   child.unref();
 }
+function openPath(targetPath) {
+  if (typeof targetPath !== "string" || !targetPath.trim()) return;
+  const resolved = path.resolve(targetPath);
+  let command;
+  let args;
+  if (process.platform === "darwin") {
+    command = "open";
+    args = [resolved];
+  } else if (process.platform === "win32") {
+    command = "cmd";
+    args = ["/c", "start", "", resolved];
+  } else {
+    command = "xdg-open";
+    args = [resolved];
+  }
+  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+  child.on("error", () => void 0);
+  child.unref();
+}
 function openExternalBrowser(url2) {
   const explicit = process.env.CANVASIGHT_OPEN_EXTERNAL_BROWSER || process.env.CANVASIGHT_OPEN_BROWSER;
   if (explicit !== "1" && String(explicit).toLowerCase() !== "true") {
@@ -22578,11 +22884,11 @@ async function handleSessionApi(req, res, url2) {
         clientMutationId
       };
       if (body.base.revision === currentState.revision && baseVersion === currentState.documentVersion) {
-        if (documentsContentEqual(localDocument, currentDocument)) {
+        if (documentsContentEqual(localDocument, currentDocument) && documentsViewStateEqual(localDocument, currentDocument)) {
           savedDocument = currentDocument;
           status = "unchanged";
         } else {
-          savedDocument = documentWithCurrentNavigation(currentDocument, localDocument, projectPath);
+          savedDocument = documentWithCurrentNavigation(currentDocument, localDocument, projectPath, true);
           status = "written";
         }
       } else {
@@ -22755,6 +23061,14 @@ async function handleHttp(req, res) {
       sendJson(res, 200, {});
       return;
     }
+    if (url2.pathname === "/api/open-file") {
+      assertDaemonAuthorized(req, url2);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      openPath(body.targetPath);
+      sendJson(res, 200, {});
+      return;
+    }
     if (url2.pathname === "/api/asset") {
       assertDaemonAuthorized(req, url2);
       await serveAsset(req, res, url2);
@@ -22894,7 +23208,8 @@ async function handleHttp(req, res) {
         projectPath: typeof body?.projectPath === "string" && body.projectPath ? body.projectPath : null,
         language: body?.language,
         threadId: body?.threadId,
-        targetDisplayMode: body?.targetDisplayMode === "fullscreen" ? "fullscreen" : null
+        targetDisplayMode: body?.targetDisplayMode === "fullscreen" ? "fullscreen" : null,
+        inheritEnvThreadId: !(Object.prototype.hasOwnProperty.call(body ?? {}, "threadId") && body.threadId === null)
       });
       const openedProject = await openProject(session.projectPath);
       session.documentRevision = projectDocumentRevision(session.projectPath);
@@ -23253,6 +23568,7 @@ var canvasightGraphContextOutputSchema = {
     },
     nodes: { type: "array", items: { type: "object", additionalProperties: true } },
     edges: { type: "array", items: { type: "object", additionalProperties: true } },
+    groups: { type: "array", items: { type: "object", additionalProperties: true } },
     pages: { type: "array", items: { type: "object", additionalProperties: true } }
   },
   required: ["status", "projectPath", "contextId", "documentRevision", "documentVersion", "preferences", "activePage", "nodes", "edges", "pages"],
@@ -23592,7 +23908,7 @@ function widgetApiRoute(pathValue) {
   if (parsed.origin !== "http://canvasight.local" || parsed.hash || parsed.pathname.includes("..")) {
     throw new Error("Canvasight widget API path is invalid.");
   }
-  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/skills" || parsed.pathname === "/api/preferences" || parsed.pathname === "/api/reveal";
+  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/skills" || parsed.pathname === "/api/preferences" || parsed.pathname === "/api/reveal" || parsed.pathname === "/api/open-file";
   if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
   if (parsed.search) {
     if (parsed.pathname !== "/api/skills") throw new Error("Canvasight widget API query parameters are not allowed for this path.");
@@ -24090,7 +24406,7 @@ var tools = [
   },
   {
     name: "write_canvasight_graph",
-    description: "Write pages, task nodes, and edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Can reuse saved global node templates through templateId or templateQuery.",
+    description: "Write Pages, Task Nodes, managed Asset Nodes, single-level Groups, membership, and semantic Edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Group membership uses parentId rather than Edges; Asset Nodes may only reuse project assets returned by Canvasight context. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Can reuse saved global Task Node templates through templateId or templateQuery.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24268,12 +24584,12 @@ var tools = [
         },
         nodes: {
           type: "array",
-          description: "Single page node list. Each node accepts id, title, body, x/y or position, runMode, effort, attachments, templateId, and templateQuery. Use templateId after calling list_canvasight_node_templates when a saved template should provide title, body, and attachments.",
+          description: "Single page node list. type may be task, asset, or group. Task nodes accept title, body, runMode, effort, attachments, templateId, and templateQuery. Asset nodes accept title, description, role, and one managed project asset. Task and Asset nodes may use parentId for one-level Group membership. Group nodes accept title, description, width, and height; Groups cannot nest.",
           items: { type: "object", additionalProperties: true }
         },
         edges: {
           type: "array",
-          description: "Single page edge list. source and target must reference node ids.",
+          description: "Single page semantic edge list. source and target must reference Task or Asset node ids; Group membership uses parentId, not edges.",
           items: { type: "object", additionalProperties: true }
         },
         pages: {

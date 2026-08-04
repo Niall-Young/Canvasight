@@ -10,12 +10,12 @@ For a merge, pass the latest `expectedRevision` and minimal operations. Preserve
 
 - Use stable, descriptive IDs and substantive title/body content.
 - Reuse a node ID when updating it; do not change node or edge IDs through update operations.
-- Give each node one clearly named primary responsibility, question, decision, stage, or result. A parent summarizes and organizes its branch; it does not repeat all child detail.
+- Give each Task Node one clearly named primary responsibility, question, decision, stage, or result. An upstream branch anchor summarizes and organizes its branch; it does not repeat all downstream detail.
 - Split content when a part can be independently understood, chosen, executed, verified, extended, or delivered. Keep related statements together when they jointly explain one conclusion and separation would damage that meaning.
-- Express meaningful dependency, sequence, containment, evidence, or decision relationships as edges instead of hiding submodules in body prose. Allow shallow and uneven branches when the material warrants them; do not manufacture uniform depth.
+- Express meaningful dependency, sequence, evidence, decision, navigation, or flow relationships as edges instead of hiding submodules in body prose. Group membership uses `parentId`; never duplicate it with a containment Edge. Allow shallow and uneven branches when the material warrants them; do not manufacture uniform depth.
 - Treat semantic order separately from dependency. Reading order, numbered sections, workflow stages, and ordered source material do not justify a full-chain topology. Connect consecutive nodes only when the later responsibility actually requires the earlier result; otherwise place them as sibling or parallel branches and record order in their content.
 - For every edge connecting two covered nodes, add its final edge ID to `frameworkManifest.semanticRelationships` with one type (`dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`) and a concrete rationale for that exact source-target relationship.
-- No self-edge, duplicate `source -> target`, missing endpoint, or multiple parent edges into one target.
+- No self-edge, duplicate `source -> target`, missing endpoint, or Edge connected to a Group. Multiple semantic inputs may target the same Task/Asset; single ownership applies only to Group `parentId`.
 - Removing a node may remove its incident edges; account for that in the final topology and coverage.
 - Treat visible `$skill-name` text as part of the node responsibility, not as hidden graph metadata. Keep a node-level Skill scoped to that node unless the user also chose it as a canvas-level content Skill.
 

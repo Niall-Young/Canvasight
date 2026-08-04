@@ -22,7 +22,7 @@ import Text from "@tiptap/extension-text";
 import { Dropcursor, Gapcursor, UndoRedo } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type { Attachment, RunMode, ScatterNodeData } from "../../shared/types";
+import type { Attachment, RunMode, ScatterNodeData, ScatterTaskNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
@@ -43,24 +43,28 @@ import { Icon } from "./ui/icon";
 import { TooltipAnchor } from "./ui/tooltip";
 import { UploadChip } from "./ui/upload-chip";
 
-type TaskNodeProps = NodeProps<Node<ScatterNodeData, "task">>;
+type TaskNodeProps = NodeProps<Node<ScatterTaskNodeData, "task">>;
 type EditableField = "title" | "body";
 type ConnectedNodeSide = "left" | "right";
 type EditorSkillQuery = SkillQueryRange & { from: number; to: number };
 
-interface RuntimeActions {
+export interface RuntimeActions {
   updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
   beginNodeEdit: () => void;
   commitNodeEdit: () => void;
   chooseFilesForNode: (nodeId: string) => Promise<void>;
   addFilesToNode: (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => Promise<void>;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
+  promoteAttachment: (nodeId: string, attachmentId: string) => void;
   createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
   duplicateNode: (nodeId: string) => void;
   saveNodeAsTemplate: (nodeId: string, data: ScatterNodeData) => Promise<void>;
   deleteNode: (nodeId: string) => void;
   setNodeHover: (nodeId: string, hovered: boolean) => void;
   runNode: (nodeId: string, mode: RunMode) => Promise<void>;
+  toggleGroup: (groupId: string) => void;
+  ungroupNode: (nodeId: string) => void;
+  fitGroup: (groupId: string) => void;
   listSkills: (forceReload?: boolean) => Promise<SkillSummary[]>;
 }
 
@@ -105,6 +109,7 @@ function TaskAttachmentChip({ attachment, nodeId, assetBaseUrl }: { attachment: 
       kind={attachment.kind}
       title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
       onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}
+      onPromote={() => taskNodeActions?.promoteAttachment(nodeId, attachment.id)}
       onRemove={() => {
         taskNodeActions?.removeAttachment(nodeId, attachment.id);
       }}
@@ -681,20 +686,17 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
       onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
     >
-      <Handle type="target" position={Position.Left} className="node-handle" isConnectableStart={!hasParent} isConnectableEnd={!hasParent}>
-        {hasParent ? (
-          <span className="node-edge-cap" aria-hidden="true" />
-        ) : (
-          <button
-            className="node-connect-button"
-            type="button"
-            aria-label={t("task.connectLeft")}
-            onMouseDown={handleConnectButtonMouseDown("left")}
-            onClick={handleConnectButtonClick("left")}
-          >
-            <Icon name="plus-lg" size={16} />
-          </button>
-        )}
+      <Handle type="target" position={Position.Left} className="node-handle">
+        {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
+        <button
+          className="node-connect-button"
+          type="button"
+          aria-label={t("task.connectLeft")}
+          onMouseDown={handleConnectButtonMouseDown("left")}
+          onClick={handleConnectButtonClick("left")}
+        >
+          <Icon name="plus-lg" size={16} />
+        </button>
       </Handle>
       <div className="task-node-header">
         <input

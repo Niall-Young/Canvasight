@@ -1,4 +1,4 @@
-import { BaseEdge, getBezierPath, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyflow/react";
 import type { ReactElement } from "react";
 
 function EdgeCap({ className, side, x, y }: { className: string; side: "left" | "right"; x: number; y: number }): ReactElement {
@@ -45,7 +45,7 @@ export function ScatterEdge({
 }: EdgeProps): ReactElement {
   const sourceEdgeX = nodeEdgeX(sourceX, sourcePosition);
   const targetEdgeX = nodeEdgeX(targetX, targetPosition);
-  const [edgePath] = getBezierPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX: sourceEdgeX,
     sourceY,
     sourcePosition,
@@ -54,9 +54,12 @@ export function ScatterEdge({
     targetPosition,
     curvature: 0.45
   });
-  const isActive = Boolean((data as { active?: boolean } | undefined)?.active);
+  const edgeData = data as { active?: boolean; aggregate?: boolean; count?: number } | undefined;
+  const isActive = Boolean(edgeData?.active);
+  const isAggregate = Boolean(edgeData?.aggregate);
+  const count = Math.max(1, edgeData?.count ?? 1);
   const stateClass = selected ? "is-selected" : isActive ? "is-active" : "";
-  const edgeClassName = `scatter-edge-path ${stateClass}`.trim();
+  const edgeClassName = `scatter-edge-path ${isAggregate ? "is-aggregate" : ""} ${stateClass}`.trim();
   const capClassName = `scatter-edge-cap ${stateClass}`.trim();
 
   return (
@@ -70,6 +73,13 @@ export function ScatterEdge({
       />
       <EdgeCap className={capClassName} side={capSide(sourcePosition)} x={sourceEdgeX} y={sourceY} />
       <EdgeCap className={capClassName} side={capSide(targetPosition)} x={targetEdgeX} y={targetY} />
+      {isAggregate && count > 1 ? (
+        <EdgeLabelRenderer>
+          <span className="scatter-edge-count nodrag nopan" title={`${count} hidden connections`} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
+            ×{count}
+          </span>
+        </EdgeLabelRenderer>
+      ) : null}
     </>
   );
 }

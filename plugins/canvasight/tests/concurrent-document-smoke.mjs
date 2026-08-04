@@ -112,6 +112,7 @@ function page(id = "page-main", overrides = {}) {
     createdAt: "2026-07-13T00:00:00.000Z",
     updatedAt: "2026-07-13T00:00:00.000Z",
     viewport: { x: 0, y: 0, zoom: 1 },
+    viewState: { collapsedGroupIds: [] },
     nodes,
     edges,
     ...overrides
@@ -121,7 +122,7 @@ function page(id = "page-main", overrides = {}) {
 function documentFor(projectName, pages = [page()], activePageId = pages[0].id) {
   const active = pages.find((item) => item.id === activePageId) || pages[0];
   return {
-    version: 1,
+    version: pages.some((pageItem) => pageItem.nodes.some((nodeItem) => nodeItem.type !== "task" || nodeItem.parentId)) ? 2 : 1,
     projectName,
     updatedAt: "2026-07-13T00:00:00.000Z",
     activePageId: active.id,
@@ -228,6 +229,10 @@ function assertUniqueGraphIds(document) {
   assert.equal(new Set(edgeIds).size, edgeIds.length, "edge IDs must be unique across Pages");
   document.pages.forEach((pageItem) => {
     const ids = new Set(pageItem.nodes.map((nodeItem) => nodeItem.id));
+    const groupIds = new Set(pageItem.nodes.filter((nodeItem) => nodeItem.type === "group").map((nodeItem) => nodeItem.id));
+    pageItem.nodes.forEach((nodeItem) => {
+      if (nodeItem.parentId) assert.equal(groupIds.has(nodeItem.parentId), true, `dangling parentId ${nodeItem.parentId}`);
+    });
     pageItem.edges.forEach((edgeItem) => {
       assert.equal(ids.has(edgeItem.source), true, `dangling source ${edgeItem.source}`);
       assert.equal(ids.has(edgeItem.target), true, `dangling target ${edgeItem.target}`);
@@ -324,6 +329,40 @@ async function assertOrientationAndTransientChangesAreNoop() {
   assert.equal(contentResult.status, "written");
   assert.equal(contentResult.documentRevision, result.documentRevision + 1);
   assert.equal(nodeById(contentResult.document, "node-b").data.body, "real content change after orientation no-op");
+}
+
+async function assertViewStatePersistenceAndAiProtection() {
+  const groupedPage = page("page-main", {
+    nodes: [
+      {
+        id: "group-a",
+        type: "group",
+        position: { x: 0, y: 0 },
+        width: 900,
+        height: 420,
+        data: { title: "Group A", description: "Human view-state fixture." }
+      },
+      node("node-a", "grouped base", { parentId: "group-a", position: { x: 40, y: 100 } })
+    ],
+    edges: []
+  });
+  const grouped = await fixture("view-state-grouped", [groupedPage]);
+  const groupedCollapsed = clone(grouped.base.document);
+  groupedCollapsed.pages[0].viewState = { collapsedGroupIds: ["group-a"] };
+  const collapseSaved = await saveModern(grouped.firstSessionId, grouped.projectPath, grouped.base, groupedCollapsed, "view-state-group-collapse");
+  assert.equal(collapseSaved.status, "written");
+  assert.deepEqual(pageById(collapseSaved.document, "page-main").viewState.collapsedGroupIds, ["group-a"]);
+
+  const staleSemantic = clone(grouped.base.document);
+  setNodeBody(staleSemantic, "node-a", "stale semantic edit after collapse");
+  const merged = await saveModern(grouped.secondSessionId, grouped.projectPath, grouped.base, staleSemantic, "view-state-stale-content");
+  assert.equal(merged.status, "merged");
+  assert.deepEqual(pageById(merged.document, "page-main").viewState.collapsedGroupIds, ["group-a"], "current view state wins stale semantic merges without conflict");
+
+  const context = await getGraphContext(grouped.projectPath);
+  const ai = await graphUpdate(grouped.projectPath, context, "node-a", "AI update preserves collapse", "view-state-ai");
+  assert.equal(ai.status, "written");
+  assert.deepEqual(pageById(ai.document, "page-main").viewState.collapsedGroupIds, ["group-a"]);
 }
 
 async function assertConflictMatrix() {
@@ -501,6 +540,9 @@ async function getGraphContext(projectPath) {
 
 async function graphUpdate(projectPath, context, nodeId, body, clientMutationId = `graph-${crypto.randomUUID()}`) {
   const active = context.activePage;
+  const taskIds = active.nodes.filter((item) => item.type === "task").map((item) => item.id);
+  const taskIdSet = new Set(taskIds);
+  const taskEdges = active.edges.filter((edge) => taskIdSet.has(edge.source) && taskIdSet.has(edge.target));
   return requestJson("/api/graphs/write", {
     method: "POST",
     body: JSON.stringify({
@@ -512,7 +554,7 @@ async function graphUpdate(projectPath, context, nodeId, body, clientMutationId 
         expectedRevision: context.documentRevision,
         clientMutationId,
         layoutPolicy: "preserve-explicit",
-        frameworkManifest: minimalRefineManifest(active.nodes.map((item) => item.id), active.edges),
+        frameworkManifest: minimalRefineManifest(taskIds, taskEdges),
         operations: [{ op: "update-node", nodeId, changes: { body } }]
       }
     })
@@ -632,17 +674,103 @@ async function assertAiDragPageSwitchConflictAndReplay() {
   assertUniqueGraphIds(humanAfterAi.document);
 }
 
+async function assertConflictCopyRemapsGroupMembership() {
+  const group = {
+    id: "group-visual",
+    type: "group",
+    position: { x: 0, y: 0 },
+    width: 900,
+    height: 420,
+    data: {
+      title: "Visual direction",
+      description: "Reference material and its derived brief."
+    }
+  };
+  const child = node("node-a", "base grouped task", {
+    parentId: "group-visual",
+    position: { x: 40, y: 100 }
+  });
+  const state = await fixture("group-conflict-parent-remap", [page("page-main", { nodes: [group, child], edges: [] })]);
+  const firstLocal = clone(state.base.document);
+  const secondLocal = clone(state.base.document);
+  setNodeBody(firstLocal, "node-a", "first grouped edit");
+  setNodeBody(secondLocal, "node-a", "second grouped edit");
+  const first = await saveModern(state.firstSessionId, state.projectPath, state.base, firstLocal, "group-conflict-first");
+  const second = await saveModern(state.secondSessionId, state.projectPath, state.base, secondLocal, "group-conflict-second");
+  assert.equal(first.status, "written");
+  assert.equal(second.status, "conflict-copy");
+  const conflict = second.merge.conflictCopies[0];
+  const copy = pageById(second.document, conflict.conflictPageId);
+  const copiedGroup = copy.nodes.find((item) => item.type === "group");
+  const copiedChild = copy.nodes.find((item) => item.data.title === "node-a");
+  assert.ok(copiedGroup);
+  assert.equal(copiedChild.parentId, copiedGroup.id, "conflict copy children must reference the remapped copied Group");
+  assert.notEqual(copiedChild.parentId, "group-visual");
+  assertUniqueGraphIds(second.document);
+}
+
+async function assertGroupMembershipConflictMatrix() {
+  const groupNode = (id, title, x) => ({
+    id,
+    type: "group",
+    position: { x, y: 0 },
+    width: 760,
+    height: 420,
+    data: { title, description: `${title} fixture.` }
+  });
+  const baseNodes = [
+    groupNode("group-a", "Group A", 0),
+    groupNode("group-b", "Group B", 900),
+    groupNode("group-c", "Group C", 1800),
+    node("node-a", "group conflict base", { parentId: "group-a", position: { x: 40, y: 100 } })
+  ];
+
+  const deleted = await fixture("group-delete-member-edit", [page("page-main", { nodes: baseNodes, edges: [] })]);
+  const deleteLocal = clone(deleted.base.document);
+  const editLocal = clone(deleted.base.document);
+  deleteLocal.pages[0].nodes = deleteLocal.pages[0].nodes.filter((item) => item.id !== "group-a").map((item) =>
+    item.id === "node-a" ? { ...item, parentId: undefined, position: { x: 40, y: 100 } } : item
+  );
+  setNodeBody(editLocal, "node-a", "member edited while its Group was deleted");
+  await saveModern(deleted.firstSessionId, deleted.projectPath, deleted.base, deleteLocal, "group-delete-first");
+  const deleteConflict = await saveModern(deleted.secondSessionId, deleted.projectPath, deleted.base, editLocal, "group-member-edit-second");
+  assert.equal(deleteConflict.status, "conflict-copy");
+  assert.equal(pageById(deleteConflict.document, "page-main").nodes.some((item) => item.id === "group-a"), false);
+  assert.equal(nodeById(deleteConflict.document, "node-a").parentId, undefined, "Group deletion releases the original member");
+  const deleteCopy = pageById(deleteConflict.document, deleteConflict.merge.conflictCopies[0].conflictPageId);
+  const deleteCopyChild = deleteCopy.nodes.find((item) => item.data.title === "node-a");
+  assert.ok(deleteCopy.nodes.some((item) => item.type === "group" && item.id === deleteCopyChild.parentId), "edited conflict copy keeps valid remapped membership");
+  assertUniqueGraphIds(deleteConflict.document);
+
+  const regrouped = await fixture("simultaneous-regroup", [page("page-main", { nodes: baseNodes, edges: [] })]);
+  const firstRegroup = clone(regrouped.base.document);
+  const secondRegroup = clone(regrouped.base.document);
+  nodeById(firstRegroup, "node-a").parentId = "group-b";
+  nodeById(secondRegroup, "node-a").parentId = "group-c";
+  await saveModern(regrouped.firstSessionId, regrouped.projectPath, regrouped.base, firstRegroup, "regroup-b-first");
+  const regroupConflict = await saveModern(regrouped.secondSessionId, regrouped.projectPath, regrouped.base, secondRegroup, "regroup-c-second");
+  assert.equal(regroupConflict.status, "conflict-copy");
+  assert.equal(nodeById(regroupConflict.document, "node-a").parentId, "group-b");
+  const regroupCopy = pageById(regroupConflict.document, regroupConflict.merge.conflictCopies[0].conflictPageId);
+  const regroupCopyChild = regroupCopy.nodes.find((item) => item.data.title === "node-a");
+  assert.equal(regroupCopy.nodes.find((item) => item.id === regroupCopyChild.parentId)?.data.title, "Group C");
+  assertUniqueGraphIds(regroupConflict.document);
+}
+
 try {
   await startDaemon();
   await assertDisjointMerge();
   await assertSameNodeConflictCopy();
   await assertIdenticalEditIsUnchanged();
   await assertOrientationAndTransientChangesAreNoop();
+  await assertViewStatePersistenceAndAiProtection();
   await assertConflictMatrix();
   await assertDifferentEdgesMerge();
   await assertMutationReplayAndRestart();
   await assertAiWriterRace();
   await assertAiDragPageSwitchConflictAndReplay();
+  await assertConflictCopyRemapsGroupMembership();
+  await assertGroupMembershipConflictMatrix();
   console.log("Canvasight concurrent document smoke passed.");
 } finally {
   await stopDaemon();

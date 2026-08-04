@@ -50,8 +50,11 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
   return nodes.flatMap((node) => {
     const entries: TaskListEntry[] = [];
     const isFlowStart = outgoingNodeIds.has(node.id) && !incomingNodeIds.has(node.id);
-    const isStandaloneNode = !incomingNodeIds.has(node.id) && !outgoingNodeIds.has(node.id);
-    const hasPrompt = node.data.body.trim().length > 0;
+    const hasPrompt = node.type === "task"
+      ? node.data.body.trim().length > 0 || node.data.attachments.length > 0
+      : node.type === "asset"
+        ? Boolean(node.data.asset?.storedPath)
+        : nodes.some((member) => member.type !== "group" && member.parentId === node.id);
 
     if (isFlowStart) {
       const downstreamCount = childCount(node.id, edges);
@@ -67,7 +70,10 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
       visit(node.id);
 
       entries.push({
-        canRun: Array.from(downstreamNodeIds).some((nodeId) => (nodeById.get(nodeId)?.data.body.trim().length ?? 0) > 0),
+        canRun: Array.from(downstreamNodeIds).some((nodeId) => {
+          const candidate = nodeById.get(nodeId);
+          return candidate?.type === "asset" || (candidate?.type === "task" && (candidate.data.body.trim().length > 0 || candidate.data.attachments.length > 0));
+        }),
         flow: true,
         id: `flow-${node.id}`,
         meta: t("drawer.flowStartMeta", { count: nodeCount }),
@@ -77,7 +83,7 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
       });
     }
 
-    if (!isStandaloneNode) return entries;
+    if (isFlowStart) return entries;
 
     entries.push({
       canRun: hasPrompt,
@@ -253,6 +259,7 @@ export function RightDrawer({
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
   const [markdownView, setMarkdownView] = useState<MarkdownView>("source");
   const [renderedDrawer, setRenderedDrawer] = useState<DrawerMode>("tasks");
+  const [taskSearch, setTaskSearch] = useState("");
 
   useEffect(() => {
     if (drawer) setRenderedDrawer(drawer);
@@ -262,6 +269,16 @@ export function RightDrawer({
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
   const markdownNode = nodes.find((node) => node.id === markdownNodeId);
   const taskEntries = taskListEntries(nodes, edges, t);
+  const normalizedTaskSearch = taskSearch.trim().toLowerCase();
+  const filteredTaskEntries = taskEntries.filter((entry) => {
+    if (!normalizedTaskSearch) return true;
+    const searchable = entry.node.type === "task"
+      ? `${entry.node.data.title} ${entry.node.data.body} ${entry.node.data.attachments.map((attachment) => attachment.originalName).join(" ")}`
+      : entry.node.type === "asset"
+        ? `${entry.node.data.title} ${entry.node.data.description} ${entry.node.data.asset.originalName} ${entry.node.data.role}`
+        : `${entry.node.data.title} ${entry.node.data.description}`;
+    return searchable.toLowerCase().includes(normalizedTaskSearch);
+  });
   const flowStartNodeIds = new Set(taskEntries.filter((entry) => entry.flow).map((entry) => entry.node.id));
   const normalizedTemplateSearch = templateSearch.trim().toLowerCase();
   const filteredTemplates = templates.filter((template) => {
@@ -305,11 +322,22 @@ export function RightDrawer({
       {renderedDrawer === "tasks" ? (
         <div className="task-sidebar">
           <p className="right-sidebar-title">{t("drawer.tasks")}</p>
+          <label className="template-search">
+            <Icon name="search" size={16} />
+            <input
+              value={taskSearch}
+              placeholder={t("drawer.taskSearchPlaceholder")}
+              aria-label={t("drawer.taskSearchPlaceholder")}
+              onChange={(event) => setTaskSearch(event.currentTarget.value)}
+            />
+          </label>
           <div className="task-list">
             {nodes.length === 0 ? (
               <p className="empty-copy">{t("drawer.noTasks")}</p>
+            ) : filteredTaskEntries.length === 0 ? (
+              <p className="empty-copy">{t("drawer.noTaskResults")}</p>
             ) : (
-              taskEntries.map((entry) => {
+              filteredTaskEntries.map((entry) => {
                 const isActive = entry.node.id === selectedNodeId && (entry.mode === currentRunMode || !flowStartNodeIds.has(entry.node.id));
 
                 return (

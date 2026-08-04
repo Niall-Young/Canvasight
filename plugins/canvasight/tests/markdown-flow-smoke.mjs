@@ -87,6 +87,76 @@ const enabledAgentTeamResult = buildMarkdown(nodes, edges, "a", "flow", "Smoke P
 assert.equal(enabledAgentTeamResult.agentTeam.enabled, true, "an explicit user opt-in must remain supported");
 assert.match(enabledAgentTeamResult.markdown, /## Agent Team/);
 
+const groupAsset = {
+  id: "visual-reference",
+  type: "asset",
+  parentId: "visual-group",
+  position: { x: 24, y: 88 },
+  data: {
+    title: "Homepage reference",
+    description: "Use the restrained spacing and strong type hierarchy.",
+    role: "reference",
+    asset: {
+      id: "homepage-reference-file",
+      kind: "image",
+      source: "upload",
+      originalName: "homepage-reference.png",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png",
+      relativePath: ".scatter/assets/homepage-reference.png",
+      fileUrl: "/api/asset?path=homepage-reference",
+      mime: "image/png",
+      size: 1024,
+      createdAt: "2026-08-04T00:00:00.000Z"
+    }
+  }
+};
+const groupedTask = {
+  ...taskNode("visual-brief", "Visual brief", "Translate the reference into an original homepage direction.", { x: 420, y: 88 }),
+  parentId: "visual-group"
+};
+const outsideTask = taskNode("outside-task", "Outside task", "Must not be included by Group Run.", { x: 900, y: 0 });
+const groupNode = {
+  id: "visual-group",
+  type: "group",
+  position: { x: 0, y: 0 },
+  width: 820,
+  height: 420,
+  data: {
+    title: "Visual direction",
+    description: "Reference material and the brief it informs."
+  }
+};
+const multimodalNodes = [groupNode, groupAsset, groupedTask, outsideTask];
+const multimodalEdges = [
+  { id: "reference-brief", source: "visual-reference", target: "visual-brief", label: "informs" },
+  { id: "brief-outside", source: "visual-brief", target: "outside-task", label: "then" }
+];
+
+const groupRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-group", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
+assert.equal(groupRun.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief", "Group Run includes direct members only");
+assert.equal(groupRun.attachments.map((attachment) => attachment.id).join(","), "homepage-reference-file");
+assert.equal(groupRun.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png");
+assert.match(groupRun.markdown, /Visual direction/);
+assert.match(groupRun.markdown, /Reference material and the brief it informs/);
+assert.match(groupRun.markdown, /Homepage reference/);
+assert.match(groupRun.markdown, /Use the restrained spacing and strong type hierarchy/);
+assert.match(groupRun.markdown, /Homepage reference -> Visual brief/);
+assert.doesNotMatch(groupRun.markdown, /Outside task/);
+
+const assetRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-reference", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
+assert.equal(assetRun.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief,outside-task", "Asset Run follows downstream edges");
+assert.equal(assetRun.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png");
+
+const assetOnlyGroupRun = buildMarkdown([groupNode, groupAsset], [], "visual-group", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
+assert.equal(assetOnlyGroupRun.nodes.map((node) => node.id).join(","), "visual-reference", "a Group containing only assets is runnable");
+assert.match(assetOnlyGroupRun.markdown, /Homepage reference/);
+
+const fullCanvasReview = buildMarkdown(multimodalNodes, multimodalEdges, null, "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
+assert.equal(fullCanvasReview.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief,outside-task", "full-canvas review orders Group members before ungrouped nodes");
+assert.match(fullCanvasReview.markdown, /## Group: Visual direction/);
+assert.match(fullCanvasReview.markdown, /## Ungrouped Nodes/);
+assert.ok(fullCanvasReview.markdown.indexOf("## Group: Visual direction") < fullCanvasReview.markdown.indexOf("## Ungrouped Nodes"), "Group chapters precede the independent ungrouped chapter");
+
 const skillNodes = [
   taskNode("skill-root", "Root", "Coordinate the flow", { x: 0, y: 0 }),
   taskNode("skill-copy", "Copy", "$write-product-promo-article draft the launch copy", { x: 240, y: 0 }),

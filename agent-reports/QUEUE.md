@@ -32,6 +32,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-asset-nodes-semantic-groups.md` - 集成 Canvasight 0.5.0 资产节点、单层语义 Group、双读持久化、Run、AI、并发、文档和本地验证矩阵；native-host 保持 unverified。
+- `agent-reports/resolved/solution-asset-nodes-semantic-groups.md` - 记录 v2 领域模型、资产/分组交互、Graph Writer、并发和回滚边界的实施方案。
+- `agent-reports/resolved/issue-asset-nodes-semantic-groups.md` - 完成 Asset Node 与语义 Group 实现并记录真实 Codex native-host 验收缺口。
 - `agent-reports/resolved/integration-summary-release-closure-0-4-36.md` - closes the 0.4.36 three-platform Release, hosted-asset verification and exact stable fast-forward while leaving Issue #2 open for smartLanny.
 - `agent-reports/resolved/solution-publish-stable-release-0-4-36.md` - records the guarded publish, independent asset audit and stable identity closure.
 - `agent-reports/resolved/issue-publish-stable-release-0-4-36.md` - exact internal native, release matrix, GitHub Release and stable closure passed.

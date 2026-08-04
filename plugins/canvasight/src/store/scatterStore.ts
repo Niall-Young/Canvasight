@@ -37,6 +37,7 @@ interface ScatterState {
   activePageId: string | null;
   nodes: ScatterNode[];
   edges: ScatterEdge[];
+  collapsedGroupIds: string[];
   selectedNodeId: string | null;
   drawer: DrawerMode | null;
   theme: "light" | "dark";
@@ -52,6 +53,7 @@ interface ScatterState {
   renameActivePage: (name: string) => void;
   deleteActivePage: () => void;
   setActivePageViewport: (viewport: ScatterPage["viewport"]) => void;
+  setCollapsedGroupIds: (groupIds: string[]) => void;
   setNodes: (nodes: ScatterNode[]) => void;
   setEdges: (edges: ScatterEdge[]) => void;
   replaceCanvasLive: (change: CanvasChange) => void;
@@ -82,18 +84,25 @@ function cloneEdgeForHistory(edge: ScatterEdge): ScatterEdge {
 }
 
 function cloneNodeForHistory(node: ScatterNode): ScatterNode {
-  const { selected: _selected, data, ...nodeRest } = node;
-  const { lastRunAt: _lastRunAt, attachments, ...dataRest } = data;
-
-  return {
-    ...nodeRest,
-    type: "task",
-    position: { ...node.position },
-    data: {
-      ...dataRest,
-      attachments: attachments.map((attachment) => ({ ...attachment }))
-    }
-  } as ScatterNode;
+  const { selected: _selected, ...nodeRest } = node;
+  if (node.type === "task") {
+    const { lastRunAt: _lastRunAt, attachments, ...dataRest } = node.data;
+    return {
+      ...nodeRest,
+      type: "task",
+      position: { ...node.position },
+      data: { ...dataRest, attachments: attachments.map((attachment) => ({ ...attachment })) }
+    };
+  }
+  if (node.type === "asset") {
+    return {
+      ...nodeRest,
+      type: "asset",
+      position: { ...node.position },
+      data: { ...node.data, asset: { ...node.data.asset } }
+    };
+  }
+  return { ...nodeRest, type: "group", position: { ...node.position }, data: { ...node.data } };
 }
 
 function createSnapshot(nodes: ScatterNode[], edges: ScatterEdge[]): CanvasSnapshot {
@@ -123,6 +132,7 @@ function clonePage(page: ScatterPage): ScatterPage {
   return {
     ...page,
     viewport: { ...page.viewport },
+    viewState: { collapsedGroupIds: [...(page.viewState?.collapsedGroupIds ?? [])] },
     nodes: clonePageNodes(page.nodes),
     edges: clonePageEdges(page.edges)
   };
@@ -136,6 +146,7 @@ function newPage(index: number): ScatterPage {
     createdAt: now,
     updatedAt: now,
     viewport: { x: 0, y: 0, zoom: 1 },
+    viewState: { collapsedGroupIds: [] },
     nodes: [],
     edges: []
   };
@@ -151,6 +162,7 @@ function documentPages(document: ScatterDocument): ScatterPage[] {
       createdAt: now,
       updatedAt: now,
       viewport: { ...document.viewport },
+      viewState: { collapsedGroupIds: [] },
       nodes: clonePageNodes(document.nodes),
       edges: clonePageEdges(document.edges)
     }
@@ -222,21 +234,19 @@ function pushHistory(past: CanvasSnapshot[], snapshot: CanvasSnapshot): CanvasSn
 function restoreSnapshotNodes(snapshot: CanvasSnapshot, currentNodes: ScatterNode[], selectedNodeId: string | null): ScatterNode[] {
   const lastRunAtByNodeId = new Map(
     currentNodes
-      .filter((node) => Boolean(node.data.lastRunAt))
-      .map((node) => [node.id, node.data.lastRunAt])
+      .filter((node) => node.type === "task" && Boolean(node.data.lastRunAt))
+      .map((node) => [node.id, node.type === "task" ? node.data.lastRunAt : undefined])
   );
 
   return snapshot.nodes.map((node) => {
     const restoredNode = cloneNodeForHistory(node);
     const lastRunAt = lastRunAtByNodeId.get(node.id);
 
+    if (restoredNode.type !== "task") return { ...restoredNode, selected: selectedNodeId === node.id };
     return {
       ...restoredNode,
       selected: selectedNodeId === node.id,
-      data: {
-        ...restoredNode.data,
-        ...(lastRunAt ? { lastRunAt } : {})
-      }
+      data: { ...restoredNode.data, ...(lastRunAt ? { lastRunAt } : {}) }
     };
   });
 }
@@ -295,6 +305,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
     activePageId: null,
     nodes: [],
     edges: [],
+    collapsedGroupIds: [],
     selectedNodeId: null,
     drawer: null,
     theme: "light",
@@ -316,6 +327,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         activePageId,
         nodes: activePage ? clonePageNodes(activePage.nodes) : [],
         edges: activePage ? clonePageEdges(activePage.edges) : [],
+        collapsedGroupIds: [...(activePage?.viewState?.collapsedGroupIds ?? [])],
         selectedNodeId: null,
         status: `Opened ${project.name}`,
         canUndo: false,
@@ -331,6 +343,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         activePageId: null,
         nodes: [],
         edges: [],
+        collapsedGroupIds: [],
         selectedNodeId: null,
         drawer: null,
         isSaving: false,
@@ -348,6 +361,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         activePageId: pageId,
         nodes: nextPage ? clonePageNodes(nextPage.nodes) : [],
         edges: nextPage ? clonePageEdges(nextPage.edges) : [],
+        collapsedGroupIds: [...(nextPage?.viewState?.collapsedGroupIds ?? [])],
         selectedNodeId: null,
         drawer: state.drawer === "markdown" ? null : state.drawer,
         canUndo: false,
@@ -365,6 +379,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         activePageId: page.id,
         nodes: [],
         edges: [],
+        collapsedGroupIds: [],
         selectedNodeId: null,
         drawer: state.drawer === "markdown" ? null : state.drawer,
         canUndo: false,
@@ -394,6 +409,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         activePageId: nextPage?.id ?? null,
         nodes: nextPage ? clonePageNodes(nextPage.nodes) : [],
         edges: nextPage ? clonePageEdges(nextPage.edges) : [],
+        collapsedGroupIds: [...(nextPage?.viewState?.collapsedGroupIds ?? [])],
         selectedNodeId: null,
         drawer: state.drawer === "markdown" ? null : state.drawer,
         canUndo: false,
@@ -410,6 +426,20 @@ export const useScatterStore = create<ScatterState>((set, get) => {
         pages: state.pages.map((page) =>
           page.id === state.activePageId
             ? { ...page, viewport: { ...viewport }, updatedAt: new Date().toISOString() }
+            : page
+        )
+      });
+    },
+    setCollapsedGroupIds: (groupIds) => {
+      const state = get();
+      if (!state.activePageId) return;
+      const validGroupIds = new Set(state.nodes.filter((node) => node.type === "group").map((node) => node.id));
+      const collapsedGroupIds = [...new Set(groupIds)].filter((id) => validGroupIds.has(id));
+      set({
+        collapsedGroupIds,
+        pages: state.pages.map((page) =>
+          page.id === state.activePageId
+            ? { ...page, viewState: { collapsedGroupIds }, updatedAt: new Date().toISOString() }
             : page
         )
       });
@@ -520,38 +550,34 @@ export const useScatterStore = create<ScatterState>((set, get) => {
       state.commitCanvasChange({
         nodes: state.nodes.map((node) =>
           node.id === nodeId
-            ? {
+            ? ({
                 ...node,
                 data: {
                   ...node.data,
                   ...patch
                 }
-              }
+              } as ScatterNode)
             : node
         )
       });
     },
     appendAttachments: (nodeId, attachments) => {
       const state = get();
-      const next = updateNodeInPages(state, nodeId, (node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          attachments: [...node.data.attachments, ...attachments]
-        }
-      }));
+      const next = updateNodeInPages(state, nodeId, (node) =>
+        node.type === "task"
+          ? { ...node, data: { ...node.data, attachments: [...node.data.attachments, ...attachments] } }
+          : node
+      );
       if (next.currentPageChanged) state.commitCanvasChange({ nodes: next.nodes });
       else set({ pages: next.pages });
     },
     removeAttachment: (nodeId, attachmentId) => {
       const state = get();
-      const next = updateNodeInPages(state, nodeId, (node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          attachments: node.data.attachments.filter((attachment) => attachment.id !== attachmentId)
-        }
-      }));
+      const next = updateNodeInPages(state, nodeId, (node) =>
+        node.type === "task"
+          ? { ...node, data: { ...node.data, attachments: node.data.attachments.filter((attachment) => attachment.id !== attachmentId) } }
+          : node
+      );
       if (next.currentPageChanged) state.commitCanvasChange({ nodes: next.nodes });
       else set({ pages: next.pages });
     },
@@ -563,7 +589,7 @@ export const useScatterStore = create<ScatterState>((set, get) => {
     markNodeRun: (nodeId, runMode) =>
       set((state) => {
         const nodes = state.nodes.map((node) =>
-          node.id === nodeId
+          node.id === nodeId && node.type === "task"
             ? {
                 ...node,
                 data: {

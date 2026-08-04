@@ -964,6 +964,13 @@ export const canvasightApi = {
     });
   },
 
+  openFile(targetPath: string): Promise<void> {
+    return requestJson<void>(`/api/open-file`, {
+      method: "POST",
+      body: JSON.stringify({ targetPath })
+    });
+  },
+
   listSkills(projectPath: string, forceReload = false): Promise<SkillListResponse> {
     const params = new URLSearchParams({ projectPath });
     if (forceReload) params.set("forceReload", "true");

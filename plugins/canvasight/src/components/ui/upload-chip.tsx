@@ -10,10 +10,11 @@ interface UploadChipProps extends HTMLAttributes<HTMLDivElement> {
   imageSrc?: string;
   kind?: "file" | "image";
   onOpen?: () => void;
+  onPromote?: () => void;
   onRemove?: () => void;
 }
 
-export function UploadChip({ className, fileName, imageAlt = "", imageLoading = false, imageSrc, kind = "file", onOpen, onRemove, ...props }: UploadChipProps): ReactElement {
+export function UploadChip({ className, fileName, imageAlt = "", imageLoading = false, imageSrc, kind = "file", onOpen, onPromote, onRemove, ...props }: UploadChipProps): ReactElement {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const [lockedWidth, setLockedWidth] = useState<number | null>(null);
@@ -26,7 +27,7 @@ export function UploadChip({ className, fileName, imageAlt = "", imageLoading = 
       if (width) setLockedWidth(width);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [fileName, imageSrc, kind, Boolean(onRemove)]);
+  }, [fileName, imageSrc, kind, Boolean(onPromote), Boolean(onRemove)]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     props.onKeyDown?.(event);
@@ -74,6 +75,20 @@ export function UploadChip({ className, fileName, imageAlt = "", imageLoading = 
         </span>
       )}
       <span className="kit-upload-chip-label">{fileName}</span>
+      {onPromote ? (
+        <button
+          className="kit-upload-chip-promote"
+          type="button"
+          aria-label={t("task.promoteAttachment")}
+          title={t("task.promoteAttachment")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPromote();
+          }}
+        >
+          <Icon name="image-square" size={16} />
+        </button>
+      ) : null}
       {onRemove ? (
         <button
           className="kit-upload-chip-remove"

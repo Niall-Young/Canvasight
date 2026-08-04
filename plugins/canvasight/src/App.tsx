@@ -27,6 +27,7 @@ import {
   defaultAppSettings,
   nodeTemplateLimit,
   type AppSettings,
+  type AssetRole,
   type AttachmentInput,
   type NodeTemplate,
   type NodeTemplateInput,
@@ -35,6 +36,9 @@ import {
   type ScatterEdge,
   type ScatterNode,
   type ScatterNodeData,
+  type ScatterAssetNode,
+  type ScatterGroupNode,
+  type ScatterTaskNode,
   type ScatterPage,
   type ScatterProjectInfo
 } from "../shared/types";
@@ -61,6 +65,8 @@ import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { TaskNode, setTaskNodeActions } from "./components/TaskNode";
+import { AssetNode } from "./components/AssetNode";
+import { GroupNode } from "./components/GroupNode";
 import { StartupFailurePanel } from "./components/StartupFailurePanel";
 import { WorkspaceStartupSkeleton } from "./components/WorkspaceStartupSkeleton";
 import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
@@ -72,7 +78,7 @@ import { useScatterStore } from "./store/scatterStore";
 import "@xyflow/react/dist/style.css";
 import "./styles/app.css";
 
-const nodeTypes = { task: TaskNode } satisfies NodeTypes;
+const nodeTypes = { task: TaskNode, asset: AssetNode, group: GroupNode } as NodeTypes;
 const edgeTypes = { scatter: ScatterFlowEdge } satisfies EdgeTypes;
 const defaultEdgeOptions = { type: "scatter" };
 const proOptions = { hideAttribution: true };
@@ -83,6 +89,13 @@ const taskNodeWidth = 400;
 const taskNodeHeight = 220;
 const taskNodeHorizontalGap = 180;
 const taskNodeVerticalGap = 72;
+const assetNodeWidth = 320;
+const assetNodeHeight = 360;
+const groupHeaderHeight = 40;
+const groupPadding = 32;
+const groupMinWidth = 360;
+const groupMinHeight = 160;
+const aggregateEdgePrefix = "__canvasight-group-aggregate__";
 const nodeConnectButtonSize = 20;
 const connectionPreviewEdgeId = "__canvasight-connection-preview__";
 const canvasClipboardMime = "application/x-canvasight-nodes";
@@ -172,6 +185,7 @@ function emptyPage(index = 0, name = `Page ${index + 1}`): ScatterPage {
     createdAt: now,
     updatedAt: now,
     viewport: { x: 0, y: 0, zoom: 1 },
+    viewState: { collapsedGroupIds: [] },
     nodes: [],
     edges: []
   };
@@ -372,10 +386,10 @@ function connectionFromStart(connectionStart: ConnectionStart, targetNodeId: str
     : { source: targetNodeId, target: connectionStart.nodeId };
 }
 
-function isConnectionAllowed(connection: Pick<ScatterEdge, "source" | "target">, edges: ScatterEdge[]): boolean {
+function isConnectionAllowed(connection: Pick<ScatterEdge, "source" | "target">, edges: ScatterEdge[], nodes: ScatterNode[] = []): boolean {
   if (!connection.source || !connection.target || connection.source === connection.target) return false;
   if (edges.some((edge) => edge.source === connection.source && edge.target === connection.target)) return false;
-  if (edges.some((edge) => edge.target === connection.target)) return false;
+  if (nodes.some((node) => (node.id === connection.source || node.id === connection.target) && node.type === "group")) return false;
   return true;
 }
 
@@ -447,6 +461,22 @@ function emptyNode(position: { x: number; y: number }, index: number): ScatterNo
   };
 }
 
+function assetNodeFromAttachment(attachment: Awaited<ReturnType<typeof canvasightApi.saveAttachments>>[number], position: FlowPosition, parentId?: string): ScatterAssetNode {
+  return {
+    id: nanoid(),
+    type: "asset",
+    position: roundPosition(position),
+    selected: true,
+    ...(parentId ? { parentId } : {}),
+    data: {
+      title: attachment.originalName,
+      description: "",
+      asset: { ...attachment },
+      role: "reference"
+    }
+  };
+}
+
 function nodeFromTemplate(template: NodeTemplate, position: { x: number; y: number }, index: number): ScatterNode {
   const body = template.body.trim();
   return {
@@ -489,20 +519,21 @@ function normalizeViewport(value: unknown): ScatterDocument["viewport"] {
 function normalizePageNodes(nodes: unknown): ScatterNode[] {
   return Array.isArray(nodes)
       ? nodes.map((node) => {
+        const nodeType = node?.type === "asset" || node?.type === "group" ? node.type : "task";
         const { codexMode: _codexMode, planMode: _planMode, ...nodeData } = node.data || {};
-        return {
+        const base = {
           ...node,
-          type: "task",
+          type: nodeType,
           selected: false,
-          data: {
-            ...nodeData,
-            title: typeof nodeData.title === "string" ? nodeData.title : "",
-            body: typeof nodeData.body === "string" ? nodeData.body : "",
-            attachments: nodeData.attachments || [],
-            effort: nodeData.effort || "xhigh",
-            runMode: nodeData.runMode || "flow"
-          }
-        } satisfies ScatterNode;
+          ...(nodeType !== "group" && typeof node.parentId === "string" ? { parentId: node.parentId } : {})
+        };
+        if (nodeType === "asset") {
+          return { ...base, type: "asset", data: { ...nodeData, title: typeof nodeData.title === "string" ? nodeData.title : "", description: typeof nodeData.description === "string" ? nodeData.description : "", role: ["input", "reference", "option", "output"].includes(nodeData.role) ? nodeData.role : "reference", asset: nodeData.asset } } as ScatterAssetNode;
+        }
+        if (nodeType === "group") {
+          return { ...base, type: "group", data: { ...nodeData, title: typeof nodeData.title === "string" ? nodeData.title : "", description: typeof nodeData.description === "string" ? nodeData.description : "" } } as ScatterGroupNode;
+        }
+        return { ...base, type: "task", data: { ...nodeData, title: typeof nodeData.title === "string" ? nodeData.title : "", body: typeof nodeData.body === "string" ? nodeData.body : "", attachments: nodeData.attachments || [], effort: nodeData.effort || "xhigh", runMode: nodeData.runMode || "flow" } } as ScatterTaskNode;
       })
     : [];
 }
@@ -519,6 +550,7 @@ function normalizePage(page: Partial<ScatterPage>, index: number, fallback?: Par
     createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : fallback?.createdAt || now,
     updatedAt: typeof page.updatedAt === "string" && page.updatedAt ? page.updatedAt : fallback?.updatedAt || now,
     viewport: normalizeViewport(page.viewport || fallback?.viewport),
+    viewState: { collapsedGroupIds: [...(page.viewState?.collapsedGroupIds ?? fallback?.viewState?.collapsedGroupIds ?? [])] },
     nodes: normalizePageNodes(page.nodes || fallback?.nodes),
     edges: normalizePageEdges(page.edges || fallback?.edges)
   };
@@ -555,7 +587,14 @@ function normalizeDocument(projectPath: string, document: Partial<ScatterDocumen
   };
 }
 
-function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePageId: string | null, nodes: ScatterNode[], edges: ScatterEdge[]): ScatterDocument {
+function toDocument(
+  project: ScatterProjectInfo,
+  pages: ScatterPage[],
+  activePageId: string | null,
+  nodes: ScatterNode[],
+  edges: ScatterEdge[],
+  minimumVersion: 1 | 2 = 1
+): ScatterDocument {
   const now = new Date().toISOString();
   const sourcePages = pages.length ? pages : [emptyPage(0)];
   const currentPageId = activePageId && sourcePages.some((page) => page.id === activePageId) ? activePageId : sourcePages[0].id;
@@ -572,7 +611,7 @@ function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePag
   const activePage = serializedPages.find((page) => page.id === currentPageId) ?? serializedPages[0];
 
   return {
-    version: 1,
+    version: minimumVersion === 2 || serializedPages.some((page) => page.nodes.some((node) => node.type !== "task" || node.parentId)) ? 2 : 1,
     projectName: project.name,
     updatedAt: now,
     activePageId: currentPageId,
@@ -583,7 +622,7 @@ function toDocument(project: ScatterProjectInfo, pages: ScatterPage[], activePag
   };
 }
 
-function persistentNodeValue(node: ScatterNode): Omit<ScatterNode, "selected" | "width" | "height"> {
+function persistentNodeValue(node: ScatterNode): Record<string, unknown> {
   const transientNode = node as ScatterNode & {
     dragging?: boolean;
     measured?: unknown;
@@ -591,19 +630,21 @@ function persistentNodeValue(node: ScatterNode): Omit<ScatterNode, "selected" | 
   };
   const {
     dragging: _dragging,
-    height: _height,
     measured: _measured,
     resizing: _resizing,
     selected: _selected,
-    width: _width,
     ...persisted
   } = transientNode;
-  const { lastRunAt: _lastRunAt, ...persistedData } = persisted.data;
-  return {
-    ...persisted,
-    type: "task",
-    data: persistedData
-  };
+  if (node.type === "task") {
+    const { lastRunAt: _lastRunAt, ...persistedData } = node.data;
+    const { width: _width, height: _height, ...taskPersisted } = persisted;
+    return { ...taskPersisted, type: "task", data: persistedData };
+  }
+  if (node.type === "asset") {
+    const { width: _width, height: _height, ...assetPersisted } = persisted;
+    return { ...assetPersisted, type: "asset", data: { ...node.data, asset: { ...node.data.asset } } };
+  }
+  return { ...persisted, type: "group", data: { ...node.data } };
 }
 
 function stableValue(value: unknown): unknown {
@@ -704,6 +745,7 @@ function rebaseLocalChangesAfterSave(
       ...targetPage,
       name: sentPage.name !== latestPage.name ? latestPage.name : targetPage.name,
       viewport: !sameDocumentValue(sentPage.viewport, latestPage.viewport) ? latestPage.viewport : targetPage.viewport,
+      viewState: !sameDocumentValue(sentPage.viewState, latestPage.viewState) ? latestPage.viewState : targetPage.viewState,
       updatedAt: latestPage.updatedAt,
       nodes: [...targetNodes.values()],
       edges: [...targetEdges.values()]
@@ -714,17 +756,65 @@ function rebaseLocalChangesAfterSave(
   return normalizeDocument(projectPath, { ...savedDocument, pages, activePageId });
 }
 
-function flowEdges(edges: ScatterEdge[], selectedNodeId: string | null, hoveredNodeId: string | null, connectionPreview: ConnectionHoverTarget | null): Edge[] {
+function absoluteNodePosition(node: ScatterNode, nodes: ScatterNode[]): FlowPosition {
+  if (node.type === "group" || !node.parentId) return node.position;
+  const parent = nodes.find((candidate) => candidate.id === node.parentId && candidate.type === "group");
+  return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
+}
+
+function orderedFlowNodes(nodes: ScatterNode[], collapsedGroupIds: string[]): Node[] {
+  const collapsed = new Set(collapsedGroupIds);
+  return [...nodes]
+    .sort((left, right) => Number(left.type !== "group") - Number(right.type !== "group"))
+    .map((node) => {
+      const hidden = node.type !== "group" && Boolean(node.parentId && collapsed.has(node.parentId));
+      if (node.type === "group" && collapsed.has(node.id)) {
+        return { ...node, hidden: false, width: 320, height: 72, style: { width: 320, height: 72 }, zIndex: 0 } as Node;
+      }
+      return { ...node, hidden, zIndex: node.type === "group" ? 0 : 2 } as Node;
+    });
+}
+
+function flowEdges(
+  edges: ScatterEdge[],
+  nodes: ScatterNode[],
+  collapsedGroupIds: string[],
+  selectedNodeId: string | null,
+  hoveredNodeId: string | null,
+  connectionPreview: ConnectionHoverTarget | null
+): Edge[] {
   const activeNodeIds = new Set(
     [selectedNodeId, hoveredNodeId, connectionPreview?.sourceId, connectionPreview?.targetId].filter(Boolean) as string[]
   );
-  const renderedEdges = edges.map((edge) => ({
-    ...edge,
-    type: "scatter",
-    data: {
-      active: activeNodeIds.has(edge.source) || activeNodeIds.has(edge.target)
-    }
-  })) as Edge[];
+  const collapsed = new Set(collapsedGroupIds);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const bundles = new Map<string, { source: string; target: string; edges: ScatterEdge[] }>();
+  for (const edge of edges) {
+    const sourceNode = nodeById.get(edge.source);
+    const targetNode = nodeById.get(edge.target);
+    const source = sourceNode?.type !== "group" && sourceNode?.parentId && collapsed.has(sourceNode.parentId) ? sourceNode.parentId : edge.source;
+    const target = targetNode?.type !== "group" && targetNode?.parentId && collapsed.has(targetNode.parentId) ? targetNode.parentId : edge.target;
+    if (source === target) continue;
+    const key = `${source}\u0000${target}`;
+    const bundle = bundles.get(key) ?? { source, target, edges: [] };
+    bundle.edges.push(edge);
+    bundles.set(key, bundle);
+  }
+  const renderedEdges = [...bundles.values()].map((bundle) => {
+    const synthetic = bundle.edges.length > 1 || bundle.edges[0].source !== bundle.source || bundle.edges[0].target !== bundle.target;
+    return {
+      ...(synthetic ? { id: `${aggregateEdgePrefix}:${bundle.source}:${bundle.target}` } : bundle.edges[0]),
+      source: bundle.source,
+      target: bundle.target,
+      type: "scatter",
+      selectable: !synthetic,
+      data: {
+        active: activeNodeIds.has(bundle.source) || activeNodeIds.has(bundle.target),
+        aggregate: synthetic,
+        count: bundle.edges.length
+      }
+    } as Edge;
+  });
 
   if (connectionPreview) {
     renderedEdges.push({
@@ -742,7 +832,7 @@ function flowEdges(edges: ScatterEdge[], selectedNodeId: string | null, hoveredN
 
 function storeEdges(edges: Edge[]): ScatterEdge[] {
   return edges
-    .filter((edge) => edge.id !== connectionPreviewEdgeId)
+    .filter((edge) => edge.id !== connectionPreviewEdgeId && !edge.id.startsWith(aggregateEdgePrefix))
     .map(({ id, source, target, label }) => ({ id, source, target, label: typeof label === "string" ? label : undefined }));
 }
 
@@ -801,19 +891,10 @@ async function filesToInputs(files: FileList | File[], source: "upload" | "drop"
   return inputs;
 }
 
-function cloneNodeData(data: ScatterNodeData): ScatterNodeData {
-  return {
-    ...data,
-    attachments: data.attachments.map((attachment) => ({ ...attachment }))
-  };
-}
-
 function cloneNodeForClipboard(node: ScatterNode): ScatterNode {
-  return {
-    ...node,
-    position: { ...node.position },
-    data: cloneNodeData(node.data)
-  };
+  if (node.type === "task") return { ...node, position: { ...node.position }, data: { ...node.data, attachments: node.data.attachments.map((attachment) => ({ ...attachment })) } };
+  if (node.type === "asset") return { ...node, position: { ...node.position }, data: { ...node.data, asset: { ...node.data.asset } } };
+  return { ...node, position: { ...node.position }, data: { ...node.data } };
 }
 
 function cloneEdgeForClipboard(edge: ScatterEdge): ScatterEdge {
@@ -825,14 +906,17 @@ function isScatterNode(value: unknown): value is ScatterNode {
   const node = value as ScatterNode;
   return (
     typeof node.id === "string" &&
-    node.type === "task" &&
+    (node.type === "task" || node.type === "asset" || node.type === "group") &&
     Boolean(node.position) &&
     typeof node.position.x === "number" &&
     typeof node.position.y === "number" &&
     Boolean(node.data) &&
     typeof node.data.title === "string" &&
-    typeof node.data.body === "string" &&
-    Array.isArray(node.data.attachments)
+    (node.type === "task"
+      ? typeof node.data.body === "string" && Array.isArray(node.data.attachments)
+      : node.type === "asset"
+        ? typeof node.data.description === "string" && Boolean(node.data.asset)
+        : typeof node.data.description === "string")
   );
 }
 
@@ -880,6 +964,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     createPage,
     deleteActivePage,
     edges,
+    collapsedGroupIds,
     markNodeRun,
     nodes,
     activePageId,
@@ -890,6 +975,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     selectedNodeId,
     setActivePageId,
     setActivePageViewport,
+    setCollapsedGroupIds,
     setDrawer,
     setProjectDocument,
     setSaving,
@@ -1002,8 +1088,16 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const activePage = useMemo(() => pages.find((page) => page.id === activePageId) ?? pages[0] ?? null, [activePageId, pages]);
   const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
-  const canRun = Boolean(project && selectedNode && selectedNode.data.body.trim().length > 0);
+  const canRun = Boolean(project && selectedNode && (
+    selectedNode.type === "task"
+      ? selectedNode.data.body.trim().length > 0 || selectedNode.data.attachments.length > 0
+      : selectedNode.type === "asset"
+        ? Boolean(selectedNode.data.asset?.storedPath)
+        : nodes.some((node) => node.type !== "group" && node.parentId === selectedNode.id)
+  ));
   const canDeletePage = pages.length > 1;
+  const canGroup = selectedNodes.filter((node) => node.type !== "group").length >= 2;
+  const canUngroup = selectedNodes.some((node) => node.type === "group" || node.parentId);
   const panModeActive = canvasTool === "pan" || spacePanActive;
   const zoomPercent = Math.round(viewportZoom * 100);
   const markdownResult = useMemo(
@@ -1030,7 +1124,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           },
     [agentTeamEnabled, edges, language, markdownNode, nodes, project, selectedRunMode]
   );
-  const renderedEdges = useMemo(() => flowEdges(edges, selectedNodeId, hoveredNodeId, connectionPreview), [connectionPreview, edges, hoveredNodeId, selectedNodeId]);
+  const renderedNodes = useMemo(() => orderedFlowNodes(nodes, collapsedGroupIds), [collapsedGroupIds, nodes]);
+  const renderedEdges = useMemo(
+    () => flowEdges(edges, nodes, collapsedGroupIds, selectedNodeId, hoveredNodeId, connectionPreview),
+    [collapsedGroupIds, connectionPreview, edges, hoveredNodeId, nodes, selectedNodeId]
+  );
   const hideRunFeedback = useCallback(() => {
     if (runFeedbackTimerRef.current) {
       window.clearTimeout(runFeedbackTimerRef.current);
@@ -1265,7 +1363,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         currentState.pages,
         currentState.activePageId,
         currentState.nodes,
-        currentState.edges
+        currentState.edges,
+        baseDocumentRef.current?.document.version === 2 ? 2 : 1
       ))
     );
     return hasUnobservedPersistentChange ||
@@ -1487,6 +1586,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     if (startupInitializedRef.current) return;
     startupInitializedRef.current = true;
     window.scatter = {
+      openFile: (targetPath: string) => canvasightApi.openFile(targetPath),
       showInFolder: (targetPath: string) => canvasightApi.showInFolder(targetPath)
     };
 
@@ -1731,7 +1831,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           hydratedState.pages,
           hydratedState.activePageId,
           hydratedState.nodes,
-          hydratedState.edges
+          hydratedState.edges,
+          baseDocumentRef.current?.document.version === 2 ? 2 : 1
         ));
       }
       return;
@@ -1743,7 +1844,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       stateAtObservation.pages,
       stateAtObservation.activePageId,
       stateAtObservation.nodes,
-      stateAtObservation.edges
+      stateAtObservation.edges,
+      baseDocumentRef.current?.document.version === 2 ? 2 : 1
     );
     const observedPersistentValue = persistentDocumentValue(observedDocument);
     const hasNewPersistentChange = observedPersistentDocumentRef.current !== observedPersistentValue;
@@ -1776,7 +1878,14 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         settleSaveFlushWaiters(new Error("Canvasight project changed before the pending save completed."));
         return;
       }
-      const document = toDocument(currentState.project, currentState.pages, currentState.activePageId, currentState.nodes, currentState.edges);
+      const document = toDocument(
+        currentState.project,
+        currentState.pages,
+        currentState.activePageId,
+        currentState.nodes,
+        currentState.edges,
+        base.document.version === 2 ? 2 : 1
+      );
       const deletedPageSnapshots = Object.fromEntries(
         base.document.pages.filter((page) => !document.pages.some((candidate) => candidate.id === page.id)).map((page) => [page.id, page])
       );
@@ -1836,7 +1945,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 latestState.pages,
                 latestState.activePageId,
                 latestState.nodes,
-                latestState.edges
+                latestState.edges,
+                baseDocumentRef.current?.document.version === 2 ? 2 : 1
               );
               const rebasedDocument = rebaseLocalChangesAfterSave(project.path, document, latestLocalDocument, normalizedResult, result.merge);
               const previousSelectedNodeId = latestState.selectedNodeId;
@@ -2205,7 +2315,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         side === "right"
           ? { id: nanoid(), source: source.id, target: node.id }
           : { id: nanoid(), source: node.id, target: source.id };
-      if (!isConnectionAllowed(edge, edges)) return;
+      if (!isConnectionAllowed(edge, edges, nodes)) return;
       commitCanvasChange({
         nodes: [...nodes.map((item) => ({ ...item, selected: false })), node],
         edges: [...edges, edge]
@@ -2219,31 +2329,49 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     (nodeId: string) => {
       const source = nodes.find((node) => node.id === nodeId);
       if (!source) return;
-      const node: ScatterNode = {
-        ...source,
-        id: nanoid(),
-        position: { x: source.position.x + 36, y: source.position.y + 36 },
-        selected: true,
-        data: {
-          ...source.data,
-          title: `${source.data.title} copy`,
-          attachments: source.data.attachments.map((attachment) => ({ ...attachment }))
-        }
-      };
+      if (source.type === "group") {
+        const memberIds = new Set(nodes.filter((node) => node.type !== "group" && node.parentId === source.id).map((node) => node.id));
+        const groupId = nanoid();
+        const idMap = new Map<string, string>([[source.id, groupId]]);
+        memberIds.forEach((id) => idMap.set(id, nanoid()));
+        const copies = [source, ...nodes.filter((node) => memberIds.has(node.id))].map((item): ScatterNode => {
+          const copy = cloneNodeForClipboard(item);
+          const id = idMap.get(item.id) as string;
+          if (copy.type === "group") return { ...copy, id, position: { x: copy.position.x + 36, y: copy.position.y + 36 }, selected: true, data: { ...copy.data, title: `${copy.data.title} copy` } };
+          return { ...copy, id, parentId: groupId, selected: true };
+        });
+        const copiedEdges = edges.filter((edge) => memberIds.has(edge.source) && memberIds.has(edge.target)).map((edge) => ({ ...edge, id: nanoid(), source: idMap.get(edge.source) as string, target: idMap.get(edge.target) as string }));
+        commitCanvasChange({ nodes: [...nodes.map((item) => ({ ...item, selected: false })), ...copies], edges: [...edges, ...copiedEdges] });
+        setSelectedNodeId(groupId);
+        return;
+      }
+      const cloned = cloneNodeForClipboard(source);
+      if (cloned.type === "group") return;
+      const node: ScatterNode = cloned.type === "task"
+        ? { ...cloned, id: nanoid(), position: { x: cloned.position.x + 36, y: cloned.position.y + 36 }, selected: true, data: { ...cloned.data, title: `${cloned.data.title} copy` } }
+        : { ...cloned, id: nanoid(), position: { x: cloned.position.x + 36, y: cloned.position.y + 36 }, selected: true, data: { ...cloned.data, title: `${cloned.data.title} copy` } };
       commitCanvasChange({
         nodes: [...nodes.map((item) => ({ ...item, selected: false })), node]
       });
       setSelectedNodeId(node.id);
     },
-    [commitCanvasChange, nodes, setSelectedNodeId]
+    [commitCanvasChange, edges, nodes, setSelectedNodeId]
   );
 
   const deleteNode = useCallback(
     (nodeId: string) => {
       const current = useScatterStore.getState();
-      if (!current.nodes.some((node) => node.id === nodeId)) return;
+      const target = current.nodes.find((node) => node.id === nodeId);
+      if (!target) return;
+      const nextNodes = target.type === "group"
+        ? current.nodes.filter((node) => node.id !== nodeId).map((node) =>
+            node.type !== "group" && node.parentId === nodeId
+              ? { ...node, parentId: undefined, position: { x: target.position.x + node.position.x, y: target.position.y + node.position.y } }
+              : node
+          )
+        : current.nodes.filter((node) => node.id !== nodeId);
       commitCanvasChange({
-        nodes: current.nodes.filter((node) => node.id !== nodeId),
+        nodes: nextNodes,
         edges: current.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
       });
       if (current.selectedNodeId === nodeId) setSelectedNodeId(null);
@@ -2253,9 +2381,14 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const deleteSelectedNodes = useCallback(() => {
     if (!selectedNodes.length) return false;
-    const selectedIds = new Set(selectedNodes.map((node) => node.id));
+    const selectedGroups = new Map(selectedNodes.filter((node): node is ScatterGroupNode => node.type === "group").map((node) => [node.id, node]));
+    const selectedIds = new Set(selectedNodes.filter((node) => node.type === "group" || !node.parentId || !selectedGroups.has(node.parentId)).map((node) => node.id));
     commitCanvasChange({
-      nodes: nodes.filter((node) => !selectedIds.has(node.id)),
+      nodes: nodes.filter((node) => !selectedIds.has(node.id)).map((node) => {
+        if (node.type === "group" || !node.parentId || !selectedGroups.has(node.parentId)) return node;
+        const group = selectedGroups.get(node.parentId) as ScatterGroupNode;
+        return { ...node, parentId: undefined, position: { x: group.position.x + node.position.x, y: group.position.y + node.position.y } };
+      }),
       edges: edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target))
     });
     setSelectedNodeId(null);
@@ -2267,11 +2400,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     (clipboardData?: DataTransfer | null) => {
       if (!selectedNodes.length) return false;
       const selectedIds = new Set(selectedNodes.map((node) => node.id));
+      selectedNodes.filter((node) => node.type === "group").forEach((group) => {
+        nodes.filter((node) => node.type !== "group" && node.parentId === group.id).forEach((node) => selectedIds.add(node.id));
+      });
+      const copiedNodes = nodes.filter((node) => selectedIds.has(node.id)).map((node) => {
+        const copy = cloneNodeForClipboard(node);
+        if (copy.type === "group" || !copy.parentId || selectedIds.has(copy.parentId)) return copy;
+        const absolute = absoluteNodePosition(copy, nodes);
+        return { ...copy, parentId: undefined, position: absolute };
+      });
       const payload: CanvasClipboardPayload = {
         kind: "canvasight.nodes",
         version: 1,
         copiedAt: new Date().toISOString(),
-        nodes: selectedNodes.map(cloneNodeForClipboard),
+        nodes: copiedNodes,
         edges: edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)).map(cloneEdgeForClipboard)
       };
       const serialized = JSON.stringify(payload);
@@ -2290,7 +2432,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       setStatus(t("status.copiedNodes", { count: payload.nodes.length }));
       return true;
     },
-    [edges, selectedNodes, setStatus, t]
+    [edges, nodes, selectedNodes, setStatus, t]
   );
 
   const pasteCanvasClipboard = useCallback(
@@ -2300,16 +2442,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       clipboardPasteSerialRef.current = serial;
       const offset = 36 * serial;
       const idMap = new Map<string, string>();
-      const pastedNodes = payload.nodes.map((node) => {
+      payload.nodes.forEach((node) => idMap.set(node.id, nanoid()));
+      const pastedNodes = payload.nodes.map((node): ScatterNode => {
         const id = nanoid();
-        idMap.set(node.id, id);
-        return {
-          ...node,
-          id,
-          selected: true,
-          position: roundPosition({ x: node.position.x + offset, y: node.position.y + offset }),
-          data: cloneNodeData(node.data)
-        } satisfies ScatterNode;
+        const mappedId = idMap.get(node.id) ?? id;
+        const copy = cloneNodeForClipboard(node);
+        const parentId = copy.type !== "group" && copy.parentId ? idMap.get(copy.parentId) : undefined;
+        const position = parentId ? { ...copy.position } : roundPosition({ x: copy.position.x + offset, y: copy.position.y + offset });
+        if (copy.type === "group") return { ...copy, id: mappedId, selected: true, position };
+        return { ...copy, id: mappedId, selected: true, position, ...(parentId ? { parentId } : { parentId: undefined }) };
       });
       const pastedEdges = payload.edges
         .map((edge) => {
@@ -2342,14 +2483,155 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       try {
         const inputs = await filesToInputs(files, source);
         const attachments = await canvasightApi.saveAttachments(project.path, inputs);
+        if (nodes.find((node) => node.id === nodeId)?.type !== "task") throw new Error("Files can only be attached directly to Task nodes.");
         appendAttachments(nodeId, attachments);
         setStatus(t("status.attachmentsAdded", { count: attachments.length }));
       } catch (error) {
         setStatus(error instanceof Error ? error.message : t("status.addAttachmentFailed"));
       }
     },
-    [appendAttachments, project, setStatus, t]
+    [appendAttachments, nodes, project, setStatus, t]
   );
+
+  const createAssetNodes = useCallback(async (files: FileList | File[], source: "upload" | "drop" | "paste", position: FlowPosition, parentId?: string) => {
+    if (!project) return;
+    try {
+      const attachments = await canvasightApi.saveAttachments(project.path, await filesToInputs(files, source));
+      const group = parentId ? nodes.find((node): node is ScatterGroupNode => node.id === parentId && node.type === "group") : null;
+      const assets = attachments.map((attachment, index) => assetNodeFromAttachment(attachment, {
+        x: (group ? Math.max(groupPadding, position.x - group.position.x) : position.x) + index * 28,
+        y: (group ? Math.max(groupHeaderHeight + groupPadding, position.y - group.position.y) : position.y) + index * 28
+      }, group?.id));
+      const nextNodes = nodes.map((node): ScatterNode => {
+        if (node.type !== "group" || node.id !== group?.id) return { ...node, selected: false };
+        return {
+          ...node,
+          selected: false,
+          width: Math.max(node.width ?? groupMinWidth, ...assets.map((asset) => asset.position.x + assetNodeWidth + groupPadding)),
+          height: Math.max(node.height ?? groupMinHeight, ...assets.map((asset) => asset.position.y + nodeBounds(asset).height + groupPadding))
+        };
+      });
+      commitCanvasChange({ nodes: [...nextNodes, ...assets] });
+      setSelectedNodeId(assets[0]?.id ?? null);
+      setStatus(language === "zh" ? `已创建 ${assets.length} 个资产节点` : `Created ${assets.length} asset nodes`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : t("status.addAttachmentFailed"));
+    }
+  }, [commitCanvasChange, language, nodes, project, setSelectedNodeId, setStatus, t]);
+
+  const chooseFilesForCanvas = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.onchange = () => {
+      if (input.files?.length) void createAssetNodes(input.files, "upload", getVisibleCanvasCenterPosition());
+    };
+    input.click();
+  }, [createAssetNodes, getVisibleCanvasCenterPosition]);
+
+  const promoteAttachment = useCallback((nodeId: string, attachmentId: string) => {
+    const task = nodes.find((node): node is ScatterTaskNode => node.id === nodeId && node.type === "task");
+    const attachment = task?.data.attachments.find((item) => item.id === attachmentId);
+    if (!task || !attachment) return;
+    const taskAbsolute = absoluteNodePosition(task, nodes);
+    const preferred = { x: taskAbsolute.x - assetNodeWidth - 96, y: taskAbsolute.y };
+    const groupedPosition = { x: task.position.x + taskNodeWidth + 96, y: task.position.y };
+    const asset = assetNodeFromAttachment(attachment, task.parentId ? groupedPosition : preferred, task.parentId);
+    const nextTask = { ...task, selected: false, data: { ...task.data, attachments: task.data.attachments.filter((item) => item.id !== attachmentId) } };
+    commitCanvasChange({
+      nodes: [...nodes.map((node): ScatterNode => {
+        if (node.id === task.id) return nextTask;
+        if (node.type === "group" && node.id === task.parentId) {
+          return {
+            ...node,
+            selected: false,
+            width: Math.max(node.width ?? groupMinWidth, asset.position.x + assetNodeWidth + groupPadding),
+            height: Math.max(node.height ?? groupMinHeight, asset.position.y + nodeBounds(asset).height + groupPadding)
+          };
+        }
+        return { ...node, selected: false };
+      }), asset],
+      edges: [...edges, { id: nanoid(), source: asset.id, target: task.id, label: language === "zh" ? "参考" : "Reference" }]
+    });
+    setSelectedNodeId(asset.id);
+    setStatus(language === "zh" ? "附件已提升为资产节点" : "Attachment promoted to an asset node");
+  }, [commitCanvasChange, edges, language, nodes, setSelectedNodeId, setStatus]);
+
+  const groupSelectedNodes = useCallback(() => {
+    const members = selectedNodes.filter((node) => node.type !== "group");
+    if (members.length < 2) return false;
+    const absoluteMembers = members.map((node) => ({ node, position: absoluteNodePosition(node, nodes), bounds: nodeBounds(node) }));
+    const minX = Math.min(...absoluteMembers.map((item) => item.position.x));
+    const minY = Math.min(...absoluteMembers.map((item) => item.position.y));
+    const maxX = Math.max(...absoluteMembers.map((item) => item.position.x + item.bounds.width));
+    const maxY = Math.max(...absoluteMembers.map((item) => item.position.y + item.bounds.height));
+    const group: ScatterGroupNode = {
+      id: nanoid(), type: "group", selected: true,
+      position: { x: minX - groupPadding, y: minY - groupHeaderHeight - groupPadding },
+      width: Math.max(groupMinWidth, maxX - minX + groupPadding * 2),
+      height: Math.max(groupMinHeight, maxY - minY + groupHeaderHeight + groupPadding * 2),
+      data: { title: language === "zh" ? "新建分组" : "New group", description: "" }
+    };
+    const memberPositions = new Map(absoluteMembers.map((item) => [item.node.id, { x: item.position.x - group.position.x, y: item.position.y - group.position.y }]));
+    const nextNodes = nodes.map((node): ScatterNode => {
+      const position = memberPositions.get(node.id);
+      if (!position || node.type === "group") return { ...node, selected: false };
+      return { ...node, parentId: group.id, position, selected: false };
+    });
+    commitCanvasChange({ nodes: [group, ...nextNodes] });
+    setSelectedNodeId(group.id);
+    setStatus(language === "zh" ? `已将 ${members.length} 个节点分组` : `Grouped ${members.length} nodes`);
+    return true;
+  }, [commitCanvasChange, language, nodes, selectedNodes, setSelectedNodeId, setStatus]);
+
+  const ungroupNode = useCallback((nodeId: string) => {
+    const target = nodes.find((node) => node.id === nodeId);
+    if (!target) return;
+    const groupId = target.type === "group" ? target.id : target.parentId;
+    if (!groupId) return;
+    const group = nodes.find((node): node is ScatterGroupNode => node.id === groupId && node.type === "group");
+    if (!group) return;
+    const releaseAll = target.type === "group";
+    commitCanvasChange({ nodes: nodes.map((node): ScatterNode => {
+      if (node.type === "group" || node.parentId !== group.id || (!releaseAll && node.id !== target.id)) return node;
+      return { ...node, parentId: undefined, position: { x: group.position.x + node.position.x, y: group.position.y + node.position.y } };
+    }) });
+    setStatus(language === "zh" ? "已解除分组" : "Ungrouped");
+  }, [commitCanvasChange, language, nodes, setStatus]);
+
+  const ungroupSelection = useCallback(() => {
+    const targets = selectedNodes.filter((node) => node.type === "group" || node.parentId);
+    if (!targets.length) return false;
+    const groupIds = new Set(targets.filter((node) => node.type === "group").map((node) => node.id));
+    const groups = new Map(nodes.filter((node): node is ScatterGroupNode => node.type === "group").map((node) => [node.id, node]));
+    commitCanvasChange({ nodes: nodes.map((node): ScatterNode => {
+      if (node.type === "group" || !node.parentId) return node;
+      if (!groupIds.has(node.parentId) && !targets.some((target) => target.id === node.id)) return node;
+      const group = groups.get(node.parentId);
+      return group ? { ...node, parentId: undefined, position: { x: group.position.x + node.position.x, y: group.position.y + node.position.y } } : { ...node, parentId: undefined };
+    }) });
+    setStatus(language === "zh" ? "已解除分组" : "Ungrouped");
+    return true;
+  }, [commitCanvasChange, language, nodes, selectedNodes, setStatus]);
+
+  const fitGroup = useCallback((groupId: string) => {
+    const group = nodes.find((node): node is ScatterGroupNode => node.id === groupId && node.type === "group");
+    const members = nodes.filter((node) => node.type !== "group" && node.parentId === groupId);
+    if (!group || !members.length) return;
+    const width = Math.max(groupMinWidth, ...members.map((node) => node.position.x + nodeBounds(node).width + groupPadding));
+    const height = Math.max(groupMinHeight, ...members.map((node) => node.position.y + nodeBounds(node).height + groupPadding));
+    commitCanvasChange({ nodes: nodes.map((node) => node.id === groupId ? { ...group, width, height } : node) });
+  }, [commitCanvasChange, nodes]);
+
+  const toggleGroup = useCallback((groupId: string) => {
+    const collapsing = !collapsedGroupIds.includes(groupId);
+    setCollapsedGroupIds(collapsing ? [...collapsedGroupIds, groupId] : collapsedGroupIds.filter((id) => id !== groupId));
+    if (collapsing) {
+      replaceCanvasLive({ nodes: nodes.map((node) => ({ ...node, selected: node.id === groupId })) });
+      setSelectedNodeId(groupId);
+    }
+    setStatus(language === "zh" ? (collapsing ? "分组已折叠" : "分组已展开") : (collapsing ? "Group collapsed" : "Group expanded"));
+  }, [collapsedGroupIds, language, nodes, replaceCanvasLive, setCollapsedGroupIds, setSelectedNodeId, setStatus]);
 
   const chooseFilesForNode = useCallback(
     async (nodeId: string) => {
@@ -2387,6 +2669,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const saveNodeAsTemplate = useCallback(
     async (_nodeId: string, data: ScatterNodeData) => {
+      if (!("body" in data) || typeof data.body !== "string" || !Array.isArray(data.attachments)) return;
       const body = data.body.trim();
       if (!body) {
         setStatus(t("status.templateSaveEmpty"));
@@ -2492,11 +2775,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         return;
       }
 
-      if (!selectedNode || !event.dataTransfer.files.length) return;
+      if (!event.dataTransfer.files.length) return;
       event.preventDefault();
-      void addFilesToNode(selectedNode.id, event.dataTransfer.files, "drop");
+      const targetNodeId = nodeIdFromElementTarget(event.target);
+      const targetNode = nodes.find((node) => node.id === targetNodeId);
+      const flowPosition = flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      if (targetNode?.type === "task") {
+        void addFilesToNode(targetNode.id, event.dataTransfer.files, "drop");
+      } else if (targetNode?.type === "asset") {
+        setStatus(language === "zh" ? "资产节点首版不支持替换文件" : "Replacing an asset file is not supported yet");
+      } else if (flowPosition) {
+        void createAssetNodes(event.dataTransfer.files, "drop", { x: flowPosition.x - assetNodeWidth / 2, y: flowPosition.y - 60 }, targetNode?.type === "group" ? targetNode.id : undefined);
+      }
     },
-    [addFilesToNode, insertTemplateAtPosition, selectedNode, templateFromDragEvent]
+    [addFilesToNode, createAssetNodes, insertTemplateAtPosition, language, nodes, setStatus, templateFromDragEvent]
   );
 
   const handleCanvasDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -2542,16 +2834,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const targetNodeId = nodeIdFromElementTarget(target);
       const documentLevelTarget = !target || target === document.body || target === document.documentElement;
       const canvasTarget = documentLevelTarget || Boolean(canvasShellRef.current?.contains(target));
-      const nodeId = targetNodeId ?? (canvasTarget ? selectedNodeId : null);
-      if (!nodeId || !nodes.some((node) => node.id === nodeId)) return;
-
       event.preventDefault();
-      void addFilesToNode(nodeId, files, "paste");
+      const targetNode = nodes.find((node) => node.id === targetNodeId);
+      if (targetNode?.type === "task") void addFilesToNode(targetNode.id, files, "paste");
+      else if (canvasTarget) void createAssetNodes(files, "paste", getVisibleCanvasCenterPosition(), targetNode?.type === "group" ? targetNode.id : undefined);
     }
 
     window.addEventListener("paste", handlePaste, true);
     return () => window.removeEventListener("paste", handlePaste, true);
-  }, [addFilesToNode, nodes, pasteCanvasClipboard, project, selectedNodeId]);
+  }, [addFilesToNode, createAssetNodes, getVisibleCanvasCenterPosition, nodes, pasteCanvasClipboard, project]);
 
   const runNode = useCallback(
     async (nodeId: string, _mode: RunMode = "flow") => {
@@ -2560,7 +2851,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       if (!node) return;
       const mode: RunMode = "flow";
       const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
-      if (result.nodes.every((item) => item.data.body.trim().length === 0)) {
+      const hasRunnableInput = result.nodes.some((item) =>
+        item.type === "asset" || (item.type === "task" && (item.data.body.trim().length > 0 || item.data.attachments.length > 0))
+      );
+      if (!hasRunnableInput) {
         setRunStatus(t("status.cannotSendEmpty"), "negative");
         return;
       }
@@ -2569,7 +2863,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const runPayload = {
         attachments: result.attachments,
         agentTeam: result.agentTeam,
-        effort: node.data.effort || "xhigh",
+        effort: node.type === "task" ? node.data.effort : "xhigh",
         imagePaths: result.imagePaths,
         markdown: result.markdown,
         nodeIds: result.nodes.map((item) => item.id),
@@ -2609,13 +2903,17 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         const response = await canvasightApi.listSkills(project.path, forceReload);
         return response.skills;
       },
+      fitGroup,
+      promoteAttachment,
       removeAttachment,
       runNode,
       saveNodeAsTemplate,
       setNodeHover: (nodeId: string, hovered: boolean) => setHoveredNodeId((current) => (hovered ? nodeId : current === nodeId ? null : current)),
+      toggleGroup,
+      ungroupNode,
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
-  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, project?.path, removeAttachment, runNode, saveNodeAsTemplate, updateNodeData]);
+  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -2630,17 +2928,60 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [commitCanvasChange, replaceCanvasLive, selectedNodeId, setSelectedNodeId]
   );
 
+  const handleNodeDragStop = useCallback((_event: MouseEvent | TouchEvent, dragged: Node) => {
+    const current = useScatterStore.getState();
+    const node = current.nodes.find((item) => item.id === dragged.id);
+    if (!node || node.type === "group") return;
+    const absolute = absoluteNodePosition(node, current.nodes);
+    const bounds = nodeBounds(node);
+    const center = { x: absolute.x + bounds.width / 2, y: absolute.y + bounds.height / 2 };
+    const currentGroup = node.parentId ? current.nodes.find((item): item is ScatterGroupNode => item.id === node.parentId && item.type === "group") : undefined;
+    if (currentGroup) {
+      const groupBounds = nodeBounds(currentGroup);
+      const inside = center.x >= currentGroup.position.x - 12 && center.x <= currentGroup.position.x + groupBounds.width + 12 && center.y >= currentGroup.position.y + groupHeaderHeight - 12 && center.y <= currentGroup.position.y + groupBounds.height + 12;
+      if (!inside) {
+        commitCanvasChange({ nodes: current.nodes.map((item) => item.id === node.id ? { ...node, parentId: undefined, position: absolute } : item) });
+      } else {
+        const width = Math.max(currentGroup.width ?? groupMinWidth, node.position.x + bounds.width + groupPadding);
+        const height = Math.max(currentGroup.height ?? groupMinHeight, node.position.y + bounds.height + groupPadding);
+        if (width !== currentGroup.width || height !== currentGroup.height) {
+          commitCanvasChange({ nodes: current.nodes.map((item) => item.id === currentGroup.id ? { ...currentGroup, width, height } : item) });
+        }
+      }
+      return;
+    }
+    const target = [...current.nodes].reverse().find((item): item is ScatterGroupNode => {
+      if (item.type !== "group" || collapsedGroupIds.includes(item.id)) return false;
+      const groupBounds = nodeBounds(item);
+      return center.x >= item.position.x && center.x <= item.position.x + groupBounds.width && center.y >= item.position.y + groupHeaderHeight && center.y <= item.position.y + groupBounds.height;
+    });
+    if (!target) return;
+    const position = {
+      x: Math.max(groupPadding, absolute.x - target.position.x),
+      y: Math.max(groupHeaderHeight + groupPadding, absolute.y - target.position.y)
+    };
+    const width = Math.max(target.width ?? groupMinWidth, position.x + bounds.width + groupPadding);
+    const height = Math.max(target.height ?? groupMinHeight, position.y + bounds.height + groupPadding);
+    commitCanvasChange({ nodes: current.nodes.map((item) => {
+      if (item.id === node.id) return { ...node, parentId: target.id, position };
+      if (item.id === target.id) return { ...target, width, height };
+      return item;
+    }) });
+  }, [collapsedGroupIds, commitCanvasChange]);
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const nextEdges = applyEdgeChanges(changes, renderedEdges);
+      const persistentChanges = changes.filter((change) => change.type === "add" || (!change.id.startsWith(aggregateEdgePrefix) && change.id !== connectionPreviewEdgeId));
+      if (!persistentChanges.length) return;
+      const nextEdges = applyEdgeChanges(persistentChanges, edges as Edge[]);
       commitCanvasChange({ edges: storeEdges(nextEdges) });
     },
-    [commitCanvasChange, renderedEdges]
+    [commitCanvasChange, edges]
   );
 
   const commitExistingConnection = useCallback(
     (connection: Pick<ScatterEdge, "source" | "target">, selectedNodeIdAfterCommit: string) => {
-      if (!isConnectionAllowed(connection, edges)) return false;
+      if (!isConnectionAllowed(connection, edges, nodes)) return false;
 
       commitCanvasChange({
         nodes: nodes.map((node) => ({ ...node, selected: node.id === selectedNodeIdAfterCommit })),
@@ -2654,9 +2995,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const isValidConnection = useCallback(
     (connection: Edge | Connection) => {
-      return isConnectionAllowed({ source: connection.source, target: connection.target }, edges);
+      return isConnectionAllowed({ source: connection.source, target: connection.target }, edges, nodes);
     },
-    [edges]
+    [edges, nodes]
   );
 
   const onConnect = useCallback(
@@ -2758,7 +3099,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       if (!connectionStart) return;
 
       const hoverConnection = connectionFromStart(connectionStart, node.id);
-      if (!hoverConnection || !isConnectionAllowed(hoverConnection, edges)) {
+      if (!hoverConnection || !isConnectionAllowed(hoverConnection, edges, nodes)) {
         clearConnectionHoverTarget();
         return;
       }
@@ -2864,6 +3205,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }
 
       if (hasPrimaryModifier && !event.altKey) {
+        if (project && key === "g") {
+          event.preventDefault();
+          if (event.shiftKey) ungroupSelection();
+          else groupSelectedNodes();
+          return;
+        }
+
         if (key === "z") {
           event.preventDefault();
           if (event.shiftKey) redo();
@@ -2947,7 +3295,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", resetSpacePan);
     };
-  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo]);
+  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, groupSelectedNodes, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo, ungroupSelection]);
 
   return (
     <div
@@ -3102,7 +3450,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 </RadixDropdownMenu.Root>
               </div>
               <ReactFlow
-                nodes={nodes as Node[]}
+                nodes={renderedNodes}
                 edges={renderedEdges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
@@ -3140,6 +3488,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 onNodeClick={(_event, node) => selectNode(node.id, selectedRunMode)}
                 onNodeMouseEnter={handleNodeMouseEnter}
                 onNodeMouseLeave={handleNodeMouseLeave}
+                onNodeDragStop={handleNodeDragStop}
                 onNodesChange={onNodesChange}
                 onPaneClick={() => selectNode(null)}
               >
@@ -3222,6 +3571,15 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
               <div className="canvas-toolbar" aria-label={t("canvas.tools")}>
                 <TooltipAnchor label={t("canvas.addNode")} shortcut={shortcuts.addNode}>
                   <IconButton className="canvas-toolbar-button" filled={false} icon="plus-lg" size="lg" aria-label={t("canvas.addNode")} onClick={addNode} />
+                </TooltipAnchor>
+                <TooltipAnchor label={t("canvas.addAsset")}>
+                  <IconButton className="canvas-toolbar-button" filled={false} icon="image-square" size="lg" aria-label={t("canvas.addAsset")} onClick={chooseFilesForCanvas} />
+                </TooltipAnchor>
+                <TooltipAnchor label={t("canvas.group")} shortcut="⌘G">
+                  <IconButton className="canvas-toolbar-button" filled={false} icon="members" size="lg" aria-label={t("canvas.group")} disabled={!canGroup} onClick={groupSelectedNodes} />
+                </TooltipAnchor>
+                <TooltipAnchor label={t("canvas.ungroup")} shortcut="⌘⇧G">
+                  <IconButton className="canvas-toolbar-button" filled={false} icon="folder-unshare" size="lg" aria-label={t("canvas.ungroup")} disabled={!canUngroup} onClick={ungroupSelection} />
                 </TooltipAnchor>
                 <span className="canvas-toolbar-divider" />
                 <TooltipAnchor label={t("canvas.selectTool")} shortcut={shortcuts.selectTool}>

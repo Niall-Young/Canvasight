@@ -2043,6 +2043,201 @@ async function assertGraphContextMergeAndValidationContracts() {
   assert.deepEqual(afterLegacyAppendContext.structuredContent.activePage.nodes.map((node) => node.id), ["legacy-appended-node"]);
 }
 
+async function assertMultimodalGraphContracts(origin) {
+  const projectPath = path.join(tempRoot, "multimodal-graph-project");
+  const opened = await request("tools/call", {
+    name: "open_canvasight",
+    arguments: { projectPath, language: "en" }
+  });
+  const initialScatter = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.equal(initialScatter.version, 1, "new projects remain v1 until a multimodal node is used");
+
+  const uploaded = await fetchJson(`${origin}/api/sessions/${opened.structuredContent.sessionId}/attachments`, {
+    method: "POST",
+    body: JSON.stringify({
+      files: [{
+        name: "homepage-reference.png",
+        mime: "image/png",
+        source: "upload",
+        dataBase64: Buffer.from("managed-image").toString("base64")
+      }]
+    })
+  });
+  assert.equal(uploaded.length, 1);
+
+  const written = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      pageName: "Visual direction",
+      nodes: [
+        {
+          id: "visual-group",
+          type: "group",
+          title: "Visual references",
+          description: "Reference material and UI decisions.",
+          x: 0,
+          y: 0,
+          width: 1120,
+          height: 520
+        },
+        {
+          id: "visual-reference",
+          type: "asset",
+          parentId: "visual-group",
+          title: "Homepage reference",
+          description: "Use the spacing and hierarchy as evidence.",
+          role: "reference",
+          asset: uploaded[0],
+          x: 40,
+          y: 100
+        },
+        {
+          id: "visual-brief",
+          type: "task",
+          parentId: "visual-group",
+          title: "Visual brief",
+          body: "Translate the reference into an original direction.",
+          x: 600,
+          y: 100
+        }
+      ],
+      edges: [{ id: "reference-informs-brief", source: "visual-reference", target: "visual-brief", label: "informs" }]
+    }
+  });
+  assert.equal(written.structuredContent.status, "written");
+  assert.equal(written.structuredContent.document.version, 2);
+  assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-group").type, "group");
+  assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-reference").data.asset.id, uploaded[0].id);
+  assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-reference").parentId, "visual-group");
+  assert.equal(written.structuredContent.document.pages[1].viewState.collapsedGroupIds.length, 0);
+  const backupPath = path.join(projectPath, ".scatter", "scatter.v1.backup.json");
+  const originalBackup = await fsp.readFile(backupPath, "utf8");
+  const v1Backup = JSON.parse(originalBackup);
+  assert.equal(v1Backup.version, 1, "the first v2 write preserves one v1 backup");
+
+  const collapsedDocument = JSON.parse(JSON.stringify(written.structuredContent.document));
+  const collapsedPage = collapsedDocument.pages.find((page) => page.id === collapsedDocument.activePageId);
+  collapsedPage.viewState = { collapsedGroupIds: ["visual-group"] };
+  collapsedDocument.viewState = collapsedPage.viewState;
+  const collapsedSave = await fetchJson(`${origin}/api/sessions/${opened.structuredContent.sessionId}/document`, {
+    method: "POST",
+    body: JSON.stringify({ projectPath, document: collapsedDocument, expectedRevision: written.structuredContent.documentRevision })
+  });
+  assert.deepEqual(collapsedSave.document.viewState.collapsedGroupIds, ["visual-group"], "manual collapse state is persisted");
+
+  const context = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+  assert.equal(context.structuredContent.nodes.find((node) => node.id === "visual-reference").type, "asset");
+  assert.equal(context.structuredContent.nodes.find((node) => node.id === "visual-reference").parentId, "visual-group");
+  assert.equal(context.structuredContent.nodes.find((node) => node.id === "visual-reference").asset.role, "reference");
+  assert.equal(context.structuredContent.groups[0].id, "visual-group");
+  assert.deepEqual(context.structuredContent.groups[0].memberIds, ["visual-reference", "visual-brief"]);
+  assert.deepEqual(context.structuredContent.activePage.viewState.collapsedGroupIds, ["visual-group"]);
+
+  const rejectedGroupEdge = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: context.structuredContent.contextId,
+      expectedRevision: context.structuredContent.documentRevision,
+      clientMutationId: "multimodal-group-edge-rejected",
+      operations: [{ op: "add-edge", edge: { id: "group-edge", source: "visual-group", target: "visual-brief" } }]
+    }
+  });
+  assert.equal(rejectedGroupEdge.structuredContent.status, "validation_failed");
+  assert.equal(rejectedGroupEdge.structuredContent.validation.violations.some((item) => item.code === "group_edge_forbidden"), true);
+
+  const rejectedExternalAsset = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: context.structuredContent.contextId,
+      expectedRevision: context.structuredContent.documentRevision,
+      clientMutationId: "multimodal-external-asset-rejected",
+      operations: [{
+        op: "add-node",
+        node: {
+          id: "external-asset",
+          type: "asset",
+          title: "External asset",
+          role: "input",
+          asset: { ...uploaded[0], storedPath: path.join(tempRoot, "outside.png") }
+        }
+      }]
+    }
+  });
+  assert.equal(rejectedExternalAsset.structuredContent.status, "validation_failed");
+  assert.equal(rejectedExternalAsset.structuredContent.validation.violations.some((item) => item.code === "invalid_operation" && /managed project asset/i.test(item.message)), true);
+
+  const rejectedNestedAsset = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: context.structuredContent.contextId,
+      expectedRevision: context.structuredContent.documentRevision,
+      clientMutationId: "multimodal-nested-asset-rejected",
+      operations: [{
+        op: "update-node",
+        nodeId: "visual-reference",
+        changes: { data: { asset: { ...uploaded[0], storedPath: path.join(tempRoot, "outside.png") } } }
+      }]
+    }
+  });
+  assert.equal(rejectedNestedAsset.structuredContent.status, "validation_failed");
+  assert.equal(rejectedNestedAsset.structuredContent.validation.violations.some((item) => item.code === "invalid_operation" && /validated top-level asset/i.test(item.message)), true);
+
+  const reusableAsset = context.structuredContent.nodes.find((node) => node.id === "visual-reference").asset;
+  const reusedAssetWrite = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: context.structuredContent.contextId,
+      expectedRevision: context.structuredContent.documentRevision,
+      clientMutationId: "multimodal-context-asset-reuse",
+      operations: [{
+        op: "add-node",
+        node: {
+          id: "visual-reference-option",
+          type: "asset",
+          parentId: "visual-group",
+          title: "Homepage reference option",
+          description: "Reuse the managed asset through its context handle.",
+          role: "option",
+          asset: reusableAsset
+        }
+      }]
+    }
+  });
+  assert.equal(reusedAssetWrite.structuredContent.status, "written");
+  const reusedNode = reusedAssetWrite.structuredContent.document.nodes.find((node) => node.id === "visual-reference-option");
+  assert.equal(reusedNode.data.asset.storedPath, uploaded[0].storedPath);
+  assert.deepEqual(reusedAssetWrite.structuredContent.document.pages.find((page) => page.id === reusedAssetWrite.structuredContent.document.activePageId).viewState.collapsedGroupIds, ["visual-group"], "AI merge preserves human collapse state");
+  assert.equal(await fsp.readFile(backupPath, "utf8"), originalBackup, "later v2 writes never overwrite the v1 backup");
+
+  const replaced = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "replace-active-page",
+      pageName: "Visual direction revised",
+      viewState: { collapsedGroupIds: [] },
+      nodes: [
+        { id: "visual-group", type: "group", title: "Visual references", description: "Revised group." },
+        { id: "visual-brief", type: "task", parentId: "visual-group", title: "Visual brief", body: "Keep the approved direction." }
+      ]
+    }
+  });
+  assert.equal(replaced.structuredContent.status, "written");
+  assert.deepEqual(replaced.structuredContent.document.pages.find((page) => page.id === replaced.structuredContent.document.activePageId).viewState.collapsedGroupIds, ["visual-group"], "AI replacement cannot modify human collapse state");
+}
+
 function softwareProductMergeManifest(nodeId, overrides = {}) {
   const coverageKeys = [
     "product.goal", "product.users", "product.value", "product.capabilities", "product.scope", "product.journey",
@@ -4145,6 +4340,7 @@ async function main() {
 
     await assertSkillAssignmentAndContentModeContracts(origin);
     await assertGraphContextMergeAndValidationContracts();
+    await assertMultimodalGraphContracts(origin);
     await assertUniversalHorizontalAndBlueprintTopologyContracts();
     await assertSoftwareProductMergeGuidanceContracts();
 
@@ -4726,26 +4922,22 @@ async function main() {
       /target must reference an existing node id/
     );
 
-    await assert.rejects(
-      () =>
-        request("tools/call", {
+    await request("tools/call", {
           name: "write_canvasight_graph",
           arguments: {
             projectPath,
-            pageName: "Invalid Parent Graph",
+            pageName: "Multiple Evidence Inputs",
             nodes: [
               { id: "parent-a", title: "Parent A", body: "First parent." },
               { id: "parent-b", title: "Parent B", body: "Second parent." },
-              { id: "child", title: "Child", body: "Only one parent is allowed." }
+              { id: "child", title: "Child", body: "Multiple semantic inputs are allowed." }
             ],
             edges: [
               { source: "parent-a", target: "child" },
               { source: "parent-b", target: "child" }
             ]
           }
-        }),
-      /Node already has a parent edge: child/
-    );
+        });
 
     const document = {
       version: 1,

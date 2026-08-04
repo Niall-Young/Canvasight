@@ -1,5 +1,6 @@
 export type AttachmentKind = "image" | "file";
 export type AttachmentSource = "upload" | "drop" | "paste" | "clipboard";
+export type AssetRole = "input" | "reference" | "option" | "output";
 export type RunMode = "flow" | "node";
 export type EffortLevel = "low" | "medium" | "high" | "xhigh";
 export type LanguagePreference = "system" | "zh" | "en";
@@ -92,7 +93,7 @@ export interface AttachmentInput {
   bytes?: ArrayBuffer;
 }
 
-export interface ScatterNodeData extends Record<string, unknown> {
+export interface ScatterTaskNodeData extends Record<string, unknown> {
   title: string;
   body: string;
   attachments: Attachment[];
@@ -100,6 +101,20 @@ export interface ScatterNodeData extends Record<string, unknown> {
   runMode: RunMode;
   lastRunAt?: string;
 }
+
+export interface ScatterAssetNodeData extends Record<string, unknown> {
+  title: string;
+  description: string;
+  asset: Attachment;
+  role: AssetRole;
+}
+
+export interface ScatterGroupNodeData extends Record<string, unknown> {
+  title: string;
+  description: string;
+}
+
+export type ScatterNodeData = ScatterTaskNodeData | ScatterAssetNodeData | ScatterGroupNodeData;
 
 export interface NodeTemplate {
   id: string;
@@ -122,15 +137,27 @@ export interface NodeTemplateSummary {
   updatedAt: string;
 }
 
-export interface ScatterNode {
+interface ScatterNodeBase<TType extends "task" | "asset" | "group", TData extends ScatterNodeData> {
   id: string;
-  type: "task";
+  type: TType;
   position: { x: number; y: number };
   width?: number;
   height?: number;
   selected?: boolean;
-  data: ScatterNodeData;
+  data: TData;
 }
+
+export interface ScatterTaskNode extends ScatterNodeBase<"task", ScatterTaskNodeData> {
+  parentId?: string;
+}
+
+export interface ScatterAssetNode extends ScatterNodeBase<"asset", ScatterAssetNodeData> {
+  parentId?: string;
+}
+
+export interface ScatterGroupNode extends ScatterNodeBase<"group", ScatterGroupNodeData> {}
+
+export type ScatterNode = ScatterTaskNode | ScatterAssetNode | ScatterGroupNode;
 
 export interface ScatterEdge {
   id: string;
@@ -145,6 +172,9 @@ export interface ScatterPage {
   createdAt: string;
   updatedAt: string;
   viewport: { x: number; y: number; zoom: number };
+  viewState: {
+    collapsedGroupIds: string[];
+  };
   nodes: ScatterNode[];
   edges: ScatterEdge[];
   conflict?: {
@@ -161,7 +191,7 @@ export interface ScatterPage {
 }
 
 export interface ScatterDocument {
-  version: 1;
+  version: 1 | 2;
   projectName: string;
   updatedAt: string;
   activePageId: string;

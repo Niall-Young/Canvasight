@@ -35,6 +35,8 @@
   --color-background-disabled: #F9F9F9;
   --color-background-canvas: #F2F2F2;
   --color-background: #FFFFFF;
+  --color-background-group: rgba(255, 255, 255, 0.58);
+  --color-border-group: #D6D6D6;
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-interaction: rgba(18, 18, 23, 0.04);
   --color-shadow-sm: rgba(18, 18, 23, 0.1);
@@ -113,6 +115,8 @@
   --color-background-disabled: #3D3D3D;
   --color-background-canvas: #0A0A0A;
   --color-background: #151515;
+  --color-background-group: rgba(41, 41, 41, 0.58);
+  --color-border-group: #525252;
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-interaction: rgba(249, 249, 249, 0.08);
   --color-shadow-sm: rgba(0, 0, 0, 0.3);
@@ -2055,6 +2059,24 @@ button.achievement-card.is-unlocked:focus-visible {
   stroke: var(--color-primary);
 }
 
+.scatter-edge-path.is-aggregate {
+  stroke-dasharray: 7 5;
+}
+
+.scatter-edge-count {
+  position: absolute;
+  z-index: 3;
+  padding: 1px 6px;
+  color: var(--color-text-subtle);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-full);
+  background: var(--color-background-raised);
+  box-shadow: var(--shadow-node);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+  pointer-events: none;
+}
+
 .react-flow__edge.selected .scatter-edge-path,
 .react-flow__edge.selectable:focus .scatter-edge-path,
 .react-flow__edge.selectable:focus-visible .scatter-edge-path,
@@ -2354,6 +2376,220 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .task-node.is-selected {
   box-shadow: var(--shadow-hover);
+}
+
+.asset-node {
+  position: relative;
+  display: flex;
+  width: 320px;
+  flex-direction: column;
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-sunken);
+  box-shadow: var(--shadow-node);
+  transition: box-shadow 150ms ease;
+}
+
+.asset-node:hover,
+.asset-node:focus-within,
+.asset-node.is-selected {
+  box-shadow: var(--shadow-hover);
+}
+
+.asset-node-header {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 16px;
+}
+
+.asset-node-title,
+.group-node-title,
+.group-node-description {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--color-text);
+  background: transparent;
+}
+
+.asset-node-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-role-badge,
+.group-node-count {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  color: var(--color-text-subtle);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-full);
+  background: var(--color-background-input);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+  white-space: nowrap;
+}
+
+.asset-node-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-surface);
+}
+
+.asset-node.is-selected .asset-node-card {
+  border-color: var(--color-border-focus);
+}
+
+.asset-preview {
+  display: grid;
+  width: 100%;
+  height: 240px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-background-input);
+}
+
+.asset-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.asset-preview-status,
+.asset-file-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--color-text-subtle);
+  font-size: var(--text-12);
+}
+
+.asset-preview-status.is-error {
+  color: var(--color-negative);
+}
+
+.asset-file-summary {
+  min-height: 132px;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-background-input);
+  text-align: center;
+}
+
+.asset-file-summary strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.asset-description {
+  width: 100%;
+  min-height: 66px;
+  resize: vertical;
+  padding: 0;
+  color: var(--color-text-subtle);
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.group-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 360px;
+  min-height: 160px;
+  color: var(--color-text);
+  border: var(--border-weight-sm) solid var(--color-border-group);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-group);
+}
+
+.group-node.is-selected {
+  border-color: var(--color-border-focus);
+}
+
+.group-node.is-collapsed {
+  min-width: 320px;
+  min-height: 72px;
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-node);
+}
+
+.group-node-header {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.group-node-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.group-node-title {
+  width: 100%;
+  font-weight: 500;
+}
+
+.group-node-description,
+.group-node-description-summary {
+  width: 100%;
+  overflow: hidden;
+  color: var(--color-text-subtle);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-node-empty {
+  display: grid;
+  min-height: 96px;
+  place-items: center;
+  color: var(--color-text-subtlest);
+  font-size: var(--text-12);
+}
+
+.react-flow__node-group { z-index: 0 !important; }
+.react-flow__node-task,
+.react-flow__node-asset { z-index: 2 !important; }
+
+.kit-upload-chip-promote {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--color-icon);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.kit-upload-chip-promote:hover,
+.kit-upload-chip-promote:focus-visible {
+  color: var(--color-text);
+  background: var(--color-background-input-hover);
 }
 
 .task-node-header {

@@ -4,8 +4,10 @@ import type {
   Attachment,
   ResolvedLanguage,
   RunMode,
+  ScatterAssetNode,
   ScatterEdge,
-  ScatterNode
+  ScatterNode,
+  ScatterTaskNode
 } from "../../shared/types";
 
 export interface MarkdownResult {
@@ -72,6 +74,33 @@ function sortFlow(nodes: ScatterNode[], edges: ScatterEdge[], startId: string): 
   return [...ordered, ...remaining];
 }
 
+function nodeTitle(node: ScatterNode | null | undefined): string {
+  return typeof node?.data?.title === "string" ? node.data.title : "";
+}
+
+function nodeAttachments(node: ScatterNode): Attachment[] {
+  if (node.type === "task") return node.data.attachments;
+  if (node.type === "asset") return node.data.asset ? [node.data.asset] : [];
+  return [];
+}
+
+function groupCycle(memberIds: Set<string>, edges: ScatterEdge[]): boolean {
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (nodeId: string): boolean => {
+    if (visiting.has(nodeId)) return true;
+    if (visited.has(nodeId)) return false;
+    visiting.add(nodeId);
+    for (const edge of edges) {
+      if (edge.source === nodeId && memberIds.has(edge.target) && visit(edge.target)) return true;
+    }
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+    return false;
+  };
+  return [...memberIds].some(visit);
+}
+
 interface MarkdownText {
   absolutePath: string;
   allAttachments: string;
@@ -90,6 +119,7 @@ interface MarkdownText {
   skillExecutionScope: string;
   skillMap: string;
   includedNodes: string;
+  groupLabel: string;
   noConnections: string;
   noPrompt: string;
   none: string;
@@ -103,6 +133,7 @@ interface MarkdownText {
   runModeNode: string;
   source: string;
   taskTitle: string;
+  ungroupedNodes: string;
   untitledTask: (index: number) => string;
   warningCycle: string;
 }
@@ -127,6 +158,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     skillExecutionScope: "流程包含节点级 Skill。每个 Skill 只应用于下方映射的节点职责；不要把某个节点的 Skill 扩展到其他节点。",
     skillMap: "节点—Skill 映射",
     includedNodes: "包含的节点",
+    groupLabel: "分组",
     noConnections: "- 当前范围内没有下游连接。",
     noPrompt: "_未提供提示词正文。_",
     none: "- 无",
@@ -140,6 +172,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     runModeNode: "仅当前节点",
     source: "来源",
     taskTitle: "Canvasight 任务",
+    ungroupedNodes: "未分组节点",
     untitledTask: (index) => `未命名任务 ${index + 1}`,
     warningCycle: "> 警告：这个流程包含环。节点已按遍历顺序和画布位置排序。\n"
   },
@@ -162,6 +195,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     skillExecutionScope: "This flow contains node-scoped Skills. Apply each Skill only to the mapped node responsibility; do not extend one node's Skill to other nodes.",
     skillMap: "Node–Skill Map",
     includedNodes: "Included Nodes",
+    groupLabel: "Group",
     noConnections: "- No downstream connections included.",
     noPrompt: "_No prompt text provided._",
     none: "- None",
@@ -175,6 +209,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     runModeNode: "Current node only",
     source: "Source",
     taskTitle: "Canvasight Task",
+    ungroupedNodes: "Ungrouped Nodes",
     untitledTask: (index) => `Untitled task ${index + 1}`,
     warningCycle: "> Warning: This flow contains a cycle. Nodes were ordered by traversal and canvas position.\n"
   }
@@ -302,9 +337,9 @@ function nodeSearchText(nodes: ScatterNode[], projectName: string, projectPath: 
       projectPath,
       ...nodes.flatMap((node) => [
         node.id,
-        node.data.title,
-        node.data.body,
-        ...node.data.attachments.flatMap((attachment) => [attachment.originalName, attachment.relativePath, attachment.mime])
+        nodeTitle(node),
+        node.type === "task" ? node.data.body : node.type === "asset" ? node.data.description : "",
+        ...nodeAttachments(node).flatMap((attachment) => [attachment.originalName, attachment.relativePath, attachment.mime])
       ])
     ].join(" ")
   );
@@ -373,14 +408,19 @@ function attachmentLine(attachment: Attachment, text: MarkdownText): string {
   - ${text.source}: ${attachment.source}`;
 }
 
-function nodeBlock(node: ScatterNode, index: number, text: MarkdownText): string {
-  const title = node.data.title?.trim() || text.untitledTask(index);
-  const body = node.data.body?.trim() || text.noPrompt;
-  const attachments = node.data.attachments.length
-    ? node.data.attachments.map((attachment) => attachmentLine(attachment, text)).join("\n")
+function nodeBlock(node: ScatterNode, index: number, text: MarkdownText, heading = "##"): string {
+  const title = nodeTitle(node).trim() || text.untitledTask(index);
+  const body = node.type === "task"
+    ? node.data.body?.trim() || text.noPrompt
+    : node.type === "asset"
+      ? `${node.data.description?.trim() || text.noPrompt}\n\nAsset role: ${node.data.role}`
+      : text.noPrompt;
+  const nodeAssets = nodeAttachments(node);
+  const attachments = nodeAssets.length
+    ? nodeAssets.map((attachment) => attachmentLine(attachment, text)).join("\n")
     : text.none;
 
-  return `## ${index + 1}. ${title}
+  return `${heading} ${index + 1}. ${title}
 
 ${text.nodeId}: \`${node.id}\`
 ### ${text.prompt}
@@ -404,8 +444,9 @@ export function extractSkillNames(body: string): string[] {
   return names;
 }
 
-function nodeSkillMap(nodes: ScatterNode[]): Array<{ node: ScatterNode; names: string[] }> {
+function nodeSkillMap(nodes: ScatterNode[]): Array<{ node: ScatterTaskNode; names: string[] }> {
   return nodes
+    .filter((node): node is ScatterTaskNode => node.type === "task")
     .map((node) => ({ node, names: extractSkillNames(node.data.body || "") }))
     .filter((entry) => entry.names.length > 0);
 }
@@ -422,18 +463,33 @@ export function buildMarkdown(
 ): MarkdownResult {
   const text = markdownText(language);
   const startNode = startNodeId ? allNodes.find((node) => node.id === startNodeId) : null;
-  const nodeIds =
-    startNode && runMode === "flow"
+  const startGroup = startNode?.type === "group" ? startNode : null;
+  const executableNodes = allNodes.filter((node): node is ScatterTaskNode | ScatterAssetNode => node.type !== "group");
+  const groupMembers = startGroup ? executableNodes.filter((node) => node.parentId === startGroup.id) : [];
+  const groupMemberIds = new Set(groupMembers.map((node) => node.id));
+  const nodeIds = startGroup
+    ? { ids: groupMemberIds, hasCycle: groupCycle(groupMemberIds, allEdges) }
+    : startNode && runMode === "flow"
       ? downstreamNodeIds(startNode.id, allEdges)
-      : { ids: new Set(startNode ? [startNode.id] : allNodes.map((node) => node.id)), hasCycle: false };
+      : { ids: new Set(startNode ? [startNode.id] : executableNodes.map((node) => node.id)), hasCycle: false };
 
-  const selectedNodes = allNodes.filter((node) => nodeIds.ids.has(node.id));
-  const orderedNodes = startNode ? sortFlow(selectedNodes, allEdges, startNode.id) : selectedNodes;
+  const selectedNodes = executableNodes.filter((node) => nodeIds.ids.has(node.id));
+  const canvasGroups = !startNode
+    ? allNodes.filter((node) => node.type === "group").sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y || left.id.localeCompare(right.id))
+    : [];
+  const orderedNodes = startGroup
+    ? [...selectedNodes].sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y || left.id.localeCompare(right.id))
+    : startNode
+      ? sortFlow(selectedNodes, allEdges, startNode.id)
+      : [
+          ...canvasGroups.flatMap((group) => selectedNodes.filter((node) => node.parentId === group.id).sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y || left.id.localeCompare(right.id))),
+          ...selectedNodes.filter((node) => !node.parentId).sort((left, right) => left.position.x - right.position.x || left.position.y - right.position.y || left.id.localeCompare(right.id))
+        ];
   const selectedIds = new Set(orderedNodes.map((node) => node.id));
   const selectedEdges = allEdges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target));
-  const attachments = orderedNodes.flatMap((node) => node.data.attachments);
+  const attachments = orderedNodes.flatMap(nodeAttachments);
   const imagePaths = attachments.filter((attachment) => attachment.kind === "image").map((attachment) => attachment.storedPath);
-  const title = startNode?.data.title?.trim() || projectName || "Scatter Flow";
+  const title = nodeTitle(startNode).trim() || projectName || "Scatter Flow";
   const modeLabel = runMode === "flow" ? text.runModeFlow : text.runModeNode;
 
   const connectionMap = selectedEdges.length
@@ -441,7 +497,7 @@ export function buildMarkdown(
         .map((edge) => {
           const source = allNodes.find((node) => node.id === edge.source);
           const target = allNodes.find((node) => node.id === edge.target);
-          return `- ${source?.data.title || edge.source} -> ${target?.data.title || edge.target}`;
+          return `- ${nodeTitle(source) || edge.source} -> ${nodeTitle(target) || edge.target}${edge.label ? ` (${edge.label})` : ""}`;
         })
         .join("\n")
     : text.noConnections;
@@ -449,9 +505,23 @@ export function buildMarkdown(
   const skillMap = nodeSkillMap(orderedNodes);
   const skillMapSection = skillMap.length
     ? `\n\n## ${text.skillMap}\n${skillMap
-        .map(({ node, names }, index) => `- ${node.data.title?.trim() || text.untitledTask(index)} (\`${node.id}\`): ${names.join(", ")}`)
+        .map(({ node, names }, index) => `- ${nodeTitle(node).trim() || text.untitledTask(index)} (\`${node.id}\`): ${names.join(", ")}`)
         .join("\n")}`
     : "";
+  const includedNodeSections = startGroup
+    ? `## ${text.groupLabel}: ${nodeTitle(startGroup).trim() || startGroup.id}\n${startGroup.data.description?.trim() || text.noPrompt}\n\n${orderedNodes.map((node, index) => nodeBlock(node, index, text, "###")).join("\n\n")}`
+    : !startNode
+      ? [
+          ...canvasGroups.map((group) => {
+            const members = orderedNodes.filter((node) => node.type !== "group" && node.parentId === group.id);
+            return `## ${text.groupLabel}: ${nodeTitle(group).trim() || group.id}\n${group.data.description?.trim() || text.noPrompt}${members.length ? `\n\n${members.map((node, index) => nodeBlock(node, index, text, "###")).join("\n\n")}` : ""}`;
+          }),
+          (() => {
+            const ungrouped = orderedNodes.filter((node) => node.type !== "group" && !node.parentId);
+            return ungrouped.length ? `## ${text.ungroupedNodes}\n${ungrouped.map((node, index) => nodeBlock(node, index, text, "###")).join("\n\n")}` : "";
+          })()
+        ].filter(Boolean).join("\n\n")
+      : `## ${text.includedNodes}\n${orderedNodes.map((node, index) => nodeBlock(node, index, text, "##")).join("\n\n")}`;
 
   const markdown = `# ${text.taskTitle}: ${title}
 
@@ -461,9 +531,7 @@ ${text.runMode}: ${modeLabel}
 ${nodeIds.hasCycle ? text.warningCycle : ""}${agentTeamSection(agentTeam, text)}
 ## ${text.executionRequest}
 ${text.executionRequestBody}${skillMap.length ? `\n\n${text.skillExecutionScope}` : ""}${skillMapSection}
-
-## ${text.includedNodes}
-${orderedNodes.map((node, index) => nodeBlock(node, index, text)).join("\n\n")}
+${includedNodeSections}
 
 ## ${text.connectionMap}
 ${connectionMap}

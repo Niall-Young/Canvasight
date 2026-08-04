@@ -38,7 +38,6 @@ type DevSession = {
 };
 const devSessions = new Map<string, DevSession>();
 const projectDocumentRevisions = new Map<string, number>();
-const projectWriteLocks = new Map<string, Promise<unknown>>();
 let daemonStartPromise: Promise<DaemonState> | null = null;
 
 function nowIso(): string {
@@ -276,97 +275,17 @@ function projectDocumentRevision(projectPath: string): number {
   return projectDocumentRevisions.get(projectRevisionKey(projectPath)) || 0;
 }
 
-function bumpProjectDocumentRevision(projectPath: string): number {
-  const key = projectRevisionKey(projectPath);
-  const revision = (projectDocumentRevisions.get(key) || 0) + 1;
-  projectDocumentRevisions.set(key, revision);
-  return revision;
-}
-
-async function withProjectWriteLock<T>(projectPath: string, operation: () => Promise<T>): Promise<T> {
-  const key = projectRevisionKey(projectPath);
-  const previous = projectWriteLocks.get(key) || Promise.resolve();
-  let release = (): void => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const current = previous.catch(() => undefined).then(() => gate);
-  projectWriteLocks.set(key, current);
-  await previous.catch(() => undefined);
-  try {
-    return await operation();
-  } finally {
-    release();
-    if (projectWriteLocks.get(key) === current) projectWriteLocks.delete(key);
-  }
-}
-
-function assertCurrentDocumentRevision(projectPath: string, expectedRevision: unknown): void {
-  if (typeof expectedRevision !== "number" || !Number.isFinite(expectedRevision)) {
-    const error = new Error("Canvasight document revision is required. Reload required.") as Error & { statusCode?: number; code?: string };
-    error.statusCode = 409;
-    error.code = "stale_document";
-    throw error;
-  }
-  if (expectedRevision !== projectDocumentRevision(projectPath)) {
-    const error = new Error("Canvasight document changed outside this session. Reload required.") as Error & { statusCode?: number; code?: string };
-    error.statusCode = 409;
-    error.code = "stale_document";
-    throw error;
-  }
-}
-
 function scatterDir(projectPath: string): string {
   return path.join(projectPath, ".scatter");
-}
-
-function scatterPath(projectPath: string): string {
-  return path.join(scatterDir(projectPath), "scatter.json");
 }
 
 function scatterAssetsDir(projectPath: string): string {
   return path.join(scatterDir(projectPath), "assets");
 }
 
-function defaultScatterDocument(projectPath: string): Record<string, unknown> {
-  return {
-    version: 1,
-    projectName: projectNameFromPath(projectPath),
-    updatedAt: nowIso(),
-    viewport: { x: 0, y: 0, zoom: 1 },
-    nodes: [],
-    edges: []
-  };
-}
-
 async function ensureScatterLayout(projectPath: string): Promise<void> {
   await fsp.mkdir(projectPath, { recursive: true });
   await fsp.mkdir(scatterAssetsDir(projectPath), { recursive: true });
-}
-
-async function readScatterDocument(projectPath: string): Promise<Record<string, unknown>> {
-  await ensureScatterLayout(projectPath);
-  try {
-    return JSON.parse(await fsp.readFile(scatterPath(projectPath), "utf8")) as Record<string, unknown>;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    const document = defaultScatterDocument(projectPath);
-    await writeScatterDocument(projectPath, document);
-    return document;
-  }
-}
-
-async function writeScatterDocument(projectPath: string, document: Record<string, unknown>): Promise<Record<string, unknown>> {
-  await ensureScatterLayout(projectPath);
-  const normalized = {
-    ...defaultScatterDocument(projectPath),
-    ...document,
-    version: 1,
-    projectName: typeof document.projectName === "string" && document.projectName ? document.projectName : projectNameFromPath(projectPath),
-    updatedAt: nowIso()
-  };
-  await fsp.writeFile(scatterPath(projectPath), `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
-  return normalized;
 }
 
 function devSession(id: string): DevSession {
@@ -423,6 +342,26 @@ async function ensureDevDaemonSession(session: DevSession): Promise<{ daemon: Da
   }
 
   throw unboundDevSessionError();
+}
+
+async function ensureDevProjectSession(session: DevSession, projectPath: string): Promise<{ daemon: DaemonState; sessionId: string }> {
+  const daemon = await ensureDaemonServer();
+  if (session.daemonSessionId) {
+    try {
+      const info = await daemonJson<{ projectPath: string | null }>(daemon, `/api/sessions/${encodeURIComponent(session.daemonSessionId)}`);
+      if (info.projectPath && path.resolve(info.projectPath) === path.resolve(projectPath)) {
+        return { daemon, sessionId: session.daemonSessionId };
+      }
+    } catch {
+      session.daemonSessionId = undefined;
+    }
+  }
+  const opened = await daemonJson<{ session: { sessionId: string } }>(daemon, "/api/sessions", {
+    method: "POST",
+    body: JSON.stringify({ language: session.language, projectPath, threadId: null })
+  });
+  session.daemonSessionId = opened.session.sessionId;
+  return { daemon, sessionId: opened.session.sessionId };
 }
 
 function sendJson(res: { statusCode: number; setHeader(name: string, value: string): void; end(body?: string): void }, statusCode: number, payload: unknown): void {
@@ -543,7 +482,7 @@ function canvasightDevApiPlugin() {
             fs.createReadStream(assetPath).pipe(res as unknown as NodeJS.WritableStream);
             return;
           }
-          if (url.pathname === "/api/reveal") {
+          if (url.pathname === "/api/reveal" || url.pathname === "/api/open-file") {
             sendJson(res, 200, {});
             return;
           }
@@ -616,27 +555,26 @@ function canvasightDevApiPlugin() {
             session.daemonSessionId = undefined;
           }
           if (action === "open-project") {
-            const document = await readScatterDocument(projectPath);
-            sendJson(res, 200, {
-              documentRevision: projectDocumentRevision(projectPath),
-              project: {
-                name: projectNameFromPath(projectPath),
-                path: projectPath,
-                updatedAt: typeof document.updatedAt === "string" ? document.updatedAt : nowIso()
-              },
-              document
+            const daemon = await ensureDaemonServer();
+            const opened = await daemonJson<{
+              documentRevision: number;
+              session: { sessionId: string };
+            }>(daemon, "/api/sessions", {
+              method: "POST",
+              body: JSON.stringify({ language: session.language, projectPath, threadId: null })
             });
+            session.daemonSessionId = opened.session.sessionId;
+            projectDocumentRevisions.set(path.resolve(projectPath), opened.documentRevision);
+            sendJson(res, 200, opened);
             return;
           }
           if (action === "document") {
-            const result = await withProjectWriteLock(projectPath, async () => {
-              assertCurrentDocumentRevision(projectPath, body.expectedRevision);
-              const document = await writeScatterDocument(projectPath, (body.document || {}) as Record<string, unknown>);
-              return {
-                document,
-                documentRevision: bumpProjectDocumentRevision(projectPath)
-              };
+            const { daemon, sessionId } = await ensureDevProjectSession(session, projectPath);
+            const result = await daemonJson<{ documentRevision: number }>(daemon, `/api/sessions/${encodeURIComponent(sessionId)}/document`, {
+              method: "POST",
+              body: JSON.stringify({ ...body, projectPath })
             });
+            projectDocumentRevisions.set(path.resolve(projectPath), result.documentRevision);
             sendJson(res, 200, result);
             return;
           }
