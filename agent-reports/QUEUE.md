@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-1341-integration-summary.md` - 集成 Asset 分类 check 右置与视频 More 实心悬停修复；native-host 保持 unverified。
+- `agent-reports/resolved/20260805-1341-development-solution-asset-control-placement-hover.md` - 记录 trailing icon 与 Asset More 状态覆盖方案。
+- `agent-reports/resolved/20260805-1337-issue-asset-control-placement-hover.md` - 关闭 Asset 分类选中标记与视频 More 悬停样式问题。
 - `agent-reports/resolved/integration-summary-asset-content-first-media-file-icons.md` - 集成 Canvasight 0.5.2 内容优先 Asset、既有 SVG 映射、视频 MIME/Range、文档和本地验证；native-host 保持 blocked/unverified。
 - `agent-reports/resolved/solution-asset-content-first-media-file-icons.md` - 记录图片/视频本体节点、单层文件表面、分类/More 层级和视频资源服务方案。
 - `agent-reports/resolved/integration-summary-group-asset-node-visual-semantics.md` - 集成 Canvasight 0.5.1 Group/Asset 视觉语义、文档、版本与本地验证；native-host 保持 blocked/unverified。

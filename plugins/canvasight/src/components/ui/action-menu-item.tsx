@@ -6,9 +6,10 @@ interface ActionMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: string | null;
   label: string;
   shortcut?: string;
+  trailingIcon?: string | null;
 }
 
-export function ActionMenuItem({ className, icon = "work-with-apps", label, shortcut, type = "button", ...props }: ActionMenuItemProps): ReactElement {
+export function ActionMenuItem({ className, icon = "work-with-apps", label, shortcut, trailingIcon, type = "button", ...props }: ActionMenuItemProps): ReactElement {
   return (
     <button className={cn("kit-action-menu-item", className)} type={type} {...props}>
       <span className="kit-action-menu-item-content">
@@ -16,6 +17,11 @@ export function ActionMenuItem({ className, icon = "work-with-apps", label, shor
         <span className="kit-action-menu-item-label">{label}</span>
       </span>
       {shortcut ? <span className="kit-shortcut">{shortcut}</span> : null}
+      {trailingIcon !== undefined ? (
+        <span className="kit-action-menu-item-trailing-icon">
+          {trailingIcon ? <Icon name={trailingIcon} size={16} /> : null}
+        </span>
+      ) : null}
     </button>
   );
 }

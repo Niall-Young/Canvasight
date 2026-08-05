@@ -2496,10 +2496,12 @@ button.achievement-card.is-unlocked:focus-visible {
   transform: translateY(0);
 }
 
-.asset-node-menu .kit-icon-button {
-  background: color-mix(in srgb, var(--color-background-surface) 88%, transparent);
+.asset-node-menu .kit-icon-button,
+.asset-node-menu .kit-icon-button.is-plain:hover,
+.asset-node-menu .kit-icon-button.is-plain:focus-visible,
+.asset-node-menu .kit-icon-button[data-state="open"] {
+  background: var(--color-background-surface);
   box-shadow: 0 1px 4px var(--color-shadow-sm);
-  backdrop-filter: blur(8px);
 }
 
 .asset-preview {
@@ -4135,6 +4137,16 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .kit-action-menu-item-icon,
 .kit-dropdown-menu-item-icon {
+  color: var(--color-icon);
+}
+
+.kit-action-menu-item-trailing-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
   color: var(--color-icon);
 }
 

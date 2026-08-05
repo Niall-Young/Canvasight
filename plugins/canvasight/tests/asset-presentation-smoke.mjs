@@ -8,6 +8,7 @@ import ts from "typescript";
 const pluginRoot = path.resolve(import.meta.dirname, "..");
 const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.ts");
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
+const actionMenuItemPath = path.join(pluginRoot, "src", "components", "ui", "action-menu-item.tsx");
 const appCssPath = path.join(pluginRoot, "src", "styles", "app.css");
 
 const compiled = ts.transpileModule(fs.readFileSync(presentationPath, "utf8"), {
@@ -61,12 +62,18 @@ for (const [, , icon] of expectedMappings) {
 }
 
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
+const actionMenuItemSource = fs.readFileSync(actionMenuItemPath, "utf8");
 const appCssSource = fs.readFileSync(appCssPath, "utf8");
 assert.match(assetNodeSource, /className="asset-role-trigger nodrag"/, "classification must stay visible at the top left");
 assert.equal((assetNodeSource.match(/<AssetRoleOptions/g) ?? []).length, 1, "classification must not be duplicated in More");
+assert.match(assetNodeSource, /icon=\{null\}[\s\S]*?trailingIcon=\{option === role \? "check-md" : null\}/, "the selected classification check must trail the label");
+assert.match(actionMenuItemSource, /trailingIcon !== undefined[\s\S]*?kit-action-menu-item-trailing-icon/, "unselected classification rows must retain the trailing icon slot");
+assert.match(appCssSource, /\.kit-action-menu-item-trailing-icon\s*\{[^}]*width:\s*16px;[^}]*flex:\s*0 0 16px;/s, "classification rows must reserve aligned trailing space");
 assert.match(assetNodeSource, /className="asset-node-menu"/, "More must remain a distinct hover control");
 assert.match(appCssSource, /\.asset-node-menu:has\(\.kit-icon-button\[data-state="open"\]\)/, "an open Portal menu must keep More visible");
 assert.match(appCssSource, /\.asset-node-menu\s*\{[^}]*opacity:\s*0/s, "More must be hidden at rest");
+assert.match(appCssSource, /\.asset-node-menu \.kit-icon-button,[\s\S]*?\.asset-node-menu \.kit-icon-button\[data-state="open"\][\s\S]*?background:\s*var\(--color-background-surface\);/s, "More must keep one opaque surface across visible states");
+assert.doesNotMatch(appCssSource, /\.asset-node-menu \.kit-icon-button\s*\{[^}]*color-mix\([^}]*transparent/s, "video must not show through the More button");
 assert.match(appCssSource, /\.asset-preview\.is-loading,[\s\S]*?min-height:\s*220px/, "only pending image states keep a placeholder");
 assert.match(appCssSource, /\.asset-preview img\s*\{[^}]*width:\s*100%;[^}]*height:\s*auto;/s, "ready images must preserve their natural ratio");
 assert.doesNotMatch(appCssSource, /\.asset-preview\s*\{[^}]*height:\s*280px/s, "images must not use a fixed viewport");

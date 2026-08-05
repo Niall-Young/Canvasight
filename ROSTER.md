@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T03:36:00Z
-    handoff_source: issue-asset-content-first-media-file-icons
-    last_report: solution-asset-content-first-media-file-icons
+    last_seen: 2026-08-05T05:41:00Z
+    handoff_source: 20260805-1337-issue-asset-control-placement-hover
+    last_report: 20260805-1341-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Final PASS on content-first media, single-surface files, existing SVG mapping, and control hierarchy
+    notes: Reviewed and passed Asset classification trailing check and opaque More surface states
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T03:36:00Z
-    handoff_source: issue-asset-content-first-media-file-icons
-    last_report: solution-asset-content-first-media-file-icons
+    last_seen: 2026-08-05T05:41:00Z
+    handoff_source: 20260805-1337-issue-asset-control-placement-hover
+    last_report: 20260805-1341-development-solution-asset-control-placement-hover
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed Canvasight 0.5.2 content-first Asset UI, existing SVG mapping, and video MIME/Range implementation
+    notes: Implemented Asset trailing classification check and opaque More hover/focus/open states
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T03:36:00Z
-    handoff_source: issue-asset-content-first-media-file-icons
-    last_report: issue-asset-content-first-media-file-icons
+    last_seen: 2026-08-05T05:41:00Z
+    handoff_source: 20260805-1337-issue-asset-control-placement-hover
+    last_report: 20260805-1341-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Local and browser image/file/real-video evidence PASS; owns exact 0.5.2 restarted Codex Desktop native-host acceptance blocker
+    notes: Browser PASS for aligned trailing check and opaque real-video More states; existing native-host acceptance remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

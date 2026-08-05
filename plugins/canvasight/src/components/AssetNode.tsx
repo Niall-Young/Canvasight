@@ -23,8 +23,9 @@ function AssetRoleOptions({ id, role, t }: { id: string; role: AssetRole; t: Tra
         <RadixDropdownMenu.RadioItem asChild key={option} value={option}>
           <ActionMenuItem
             className={`asset-role-option ${option === role ? "is-selected" : ""}`}
-            icon={option === role ? "check-md" : null}
+            icon={null}
             label={t(`asset.role.${option}`)}
+            trailingIcon={option === role ? "check-md" : null}
           />
         </RadixDropdownMenu.RadioItem>
       ))}
