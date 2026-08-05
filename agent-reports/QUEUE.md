@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-1415-integration-summary.md` - 集成持久 Edge 贴边回归修复；真实浏览器 inward 几何通过，native-host 保持 unverified。
+- `agent-reports/resolved/20260805-1415-development-solution-edge-endpoint-gap.md` - 记录 XYFlow Handle 外缘坐标与 inward 半 Handle 换算。
+- `agent-reports/resolved/20260805-1407-issue-edge-endpoint-gap-regression.md` - 关闭 Edge 端点与节点边缘悬空回归。
 - `agent-reports/resolved/20260805-1356-integration-summary.md` - 集成 Edge/端帽与连接按钮层级修复；浏览器交互矩阵通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-1356-development-solution-edge-connect-layer.md` - 记录 Group、Edge、Task/Asset 显式层级与按钮外缘端点方案。
 - `agent-reports/resolved/20260805-1348-issue-edge-over-connect-button.md` - 关闭蓝色 Edge/端帽覆盖黑色连接按钮的问题。

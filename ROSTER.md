@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:56:00Z
-    handoff_source: 20260805-1348-issue-edge-over-connect-button
-    last_report: 20260805-1356-integration-summary
+    last_seen: 2026-08-05T06:15:00Z
+    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
+    last_report: 20260805-1415-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined Group < Edge < Task/Asset layering so connect buttons stay above persistent edges
+    notes: Corrected endpoint semantics from real DOM evidence; current XYFlow requires inward half-Handle conversion to reach node boundaries
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:56:00Z
-    handoff_source: 20260805-1348-issue-edge-over-connect-button
-    last_report: 20260805-1356-development-solution-edge-connect-layer
+    last_seen: 2026-08-05T06:15:00Z
+    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
+    last_report: 20260805-1415-development-solution-edge-endpoint-gap
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Removed the nodes stacking trap, fixed Edge layering and aligned Edge endpoints with connect-button outer edges
+    notes: Restored inward half-Handle endpoint conversion and added regression assertions against outward/direct gaps
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:56:00Z
-    handoff_source: 20260805-1348-issue-edge-over-connect-button
-    last_report: 20260805-1356-integration-summary
+    last_seen: 2026-08-05T06:15:00Z
+    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
+    last_report: 20260805-1415-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Browser PASS for connect-button hit order, Edge selection, Group layering and real drag-connect; existing native-host acceptance remains unverified
+    notes: Browser PASS for zero-gap endpoints, button hit order, Edge selection, Group layering and real drag-connect; native-host remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

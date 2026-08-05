@@ -28,7 +28,7 @@ function capSide(position: unknown): "left" | "right" {
 }
 
 function nodeEdgeX(x: number, position: unknown): number {
-  return capSide(position) === "left" ? x - 10 : x + 10;
+  return capSide(position) === "left" ? x + 10 : x - 10;
 }
 
 export function ScatterEdge({
