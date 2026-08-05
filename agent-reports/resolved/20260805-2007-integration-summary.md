@@ -128,5 +128,5 @@ related_files:
 
 - branch: `main`
 - baseline: `0ccd974e6e1a4fef36bc54345654e34595a28d92`
-- commit: pending `fix: 移除资产分类`
-- worktree: 提交前等待选择性暂存与 staged diff 检查。
+- commit: `7bfbeaa6bcd0bc767d05281afe2ce9c575a666de` (`fix: 移除资产分类`)
+- worktree: 功能提交后仅保留预先存在的未跟踪 `plugins/canvasight/dist/favicon 2.png` 与 `index 2.html`；二者哈希未变且未进入提交。
