@@ -21,7 +21,7 @@ roles:
     created_at: 2026-07-11T11:08:45Z
     last_seen: 2026-08-05T20:39:00+08:00
     handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
-    last_report: 20260805-2016-issue-edge-single-parent-cardinality
+    last_report: 20260805-2043-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
     notes: Defined the single-predecessor Edge contract, zero-side-effect rejection, occupied-target affordance, and legacy repair boundary
@@ -65,7 +65,7 @@ roles:
     created_at: 2026-07-11T11:08:45Z
     last_seen: 2026-08-05T20:39:00+08:00
     handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
-    last_report: 20260805-2016-issue-edge-single-parent-cardinality
+    last_report: 20260805-2043-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
     notes: Independently verified single-parent rejection, unchanged selection/history/revision, occupied Task/Asset controls, repair recovery, and clean console

@@ -34,6 +34,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-2043-integration-summary.md` - 集成 UI/Store/保存/Graph Writer/并发的 Edge 单父硬约束；browser/dev 全验收通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-2016-issue-edge-single-parent-cardinality.md` - 关闭 Task/Asset target 可持久化多个父 Edge 的全链路缺陷。
 - `agent-reports/resolved/20260805-2028-development-edge-single-parent-solution.md` - 记录 UI、Store、保存、Graph Writer、并发冲突与 legacy 减坏方案。
 - `agent-reports/resolved/20260805-2007-integration-summary.md` - 集成 Asset 分类 UI/Run 移除、More 与文件布局收敛；browser/dev 验收通过，native-host 保持 unverified。
