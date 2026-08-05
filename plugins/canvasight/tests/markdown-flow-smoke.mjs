@@ -141,6 +141,8 @@ assert.match(groupRun.markdown, /Reference material and the brief it informs/);
 assert.match(groupRun.markdown, /Homepage reference/);
 assert.match(groupRun.markdown, /Use the restrained spacing and strong type hierarchy/);
 assert.match(groupRun.markdown, /Homepage reference -> Visual brief/);
+assert.doesNotMatch(groupRun.markdown, /Asset role:/, "persisted Asset roles must not leak into Run Markdown");
+assert.equal(groupRun.nodes.find((node) => node.id === "visual-reference")?.data.role, "reference", "legacy Asset roles remain readable in the v2 data model");
 assert.doesNotMatch(groupRun.markdown, /Outside task/);
 
 const assetRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-reference", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);

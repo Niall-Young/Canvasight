@@ -413,7 +413,7 @@ function nodeBlock(node: ScatterNode, index: number, text: MarkdownText, heading
   const body = node.type === "task"
     ? node.data.body?.trim() || text.noPrompt
     : node.type === "asset"
-      ? `${node.data.description?.trim() || text.noPrompt}\n\nAsset role: ${node.data.role}`
+      ? node.data.description?.trim() || text.noPrompt
       : text.noPrompt;
   const nodeAssets = nodeAttachments(node);
   const attachments = nodeAssets.length

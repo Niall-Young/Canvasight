@@ -160,7 +160,7 @@ Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasigh
 - `npm run preview` previews the built web app.
 - `npm run test:markdown` verifies node Run Markdown includes the current node plus downstream children in stable order.
 - `npm run test:rich-text` verifies supported node-body Markdown parsing and serialization, safe links, legacy plain text, unknown-syntax preservation, and rich-text editor source contracts.
-- `npm run test:asset-presentation` verifies Asset extension/MIME mapping, existing SVG registry availability, natural-ratio media, hidden filename/size metadata, the persistent upper-left classification control, and hover/focus/open More behavior.
+- `npm run test:asset-presentation` verifies Asset extension/MIME mapping, supplied SVG registry availability, natural-ratio media, ordinary-file filename/size layout, the absence of visible Asset classification, and hover/focus/open More behavior.
 - `npm run test:skills` verifies `$` query detection, fuzzy Chinese/name matching, token replacement, and multiple node-body Skill tokens.
 - `npm run test:dev-server` verifies the persistent dev server lifecycle.
 - `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts, concurrent daemon single-flight, stdout-close/EPIPE handling, and newline plus `Content-Length` JSON-RPC transports.

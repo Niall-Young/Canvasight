@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-2007-integration-summary.md` - 集成 Asset 分类 UI/Run 移除、More 与文件布局收敛；browser/dev 验收通过，native-host 保持 unverified。
+- `agent-reports/resolved/20260805-2007-development-solution-remove-asset-role-classification.md` - 记录 Edge 语义优先、legacy role 兼容、UI/Markdown absence 与回归方案。
+- `agent-reports/resolved/20260805-1956-issue-remove-asset-role-classification.md` - 关闭 Asset 分类控件及 Run Markdown 重复语义问题。
 - `agent-reports/resolved/20260805-1948-integration-summary.md` - 集成指定格式 SVG、unknown 回退与横排文件 Asset；browser/dev 验收通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-1948-development-solution-file-asset-format-icons-layout.md` - 记录现有 Icon registry、封闭格式映射、视频检测拆分与紧凑单层卡片方案。
 - `agent-reports/resolved/20260805-1938-issue-file-asset-format-icons-layout.md` - 关闭居中通用图标、信息缺失和大面积空白问题。

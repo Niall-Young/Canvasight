@@ -8,7 +8,6 @@ import ts from "typescript";
 const pluginRoot = path.resolve(import.meta.dirname, "..");
 const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.ts");
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
-const actionMenuItemPath = path.join(pluginRoot, "src", "components", "ui", "action-menu-item.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 const appCssPath = path.join(pluginRoot, "src", "styles", "app.css");
@@ -58,16 +57,13 @@ for (const [, , icon] of expectedMappings) {
 }
 
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
-const actionMenuItemSource = fs.readFileSync(actionMenuItemPath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
 const appCssSource = fs.readFileSync(appCssPath, "utf8");
-assert.match(assetNodeSource, /className="asset-role-trigger nodrag"/, "classification must stay visible at the top left");
-assert.equal((assetNodeSource.match(/<AssetRoleOptions/g) ?? []).length, 1, "classification must not be duplicated in More");
-assert.match(assetNodeSource, /icon=\{null\}[\s\S]*?trailingIcon=\{option === role \? "check-md" : null\}/, "the selected classification check must trail the label");
-assert.match(actionMenuItemSource, /trailingIcon !== undefined[\s\S]*?kit-action-menu-item-trailing-icon/, "unselected classification rows must retain the trailing icon slot");
-assert.match(appCssSource, /\.kit-action-menu-item-trailing-icon\s*\{[^}]*width:\s*16px;[^}]*flex:\s*0 0 16px;/s, "classification rows must reserve aligned trailing space");
+assert.doesNotMatch(assetNodeSource, /AssetRoleOptions|asset-role-trigger|asset-role-option|asset\.classification|asset\.role\.|data\.role/, "Asset nodes must not render or expose the persisted compatibility role");
+assert.doesNotMatch(assetNodeSource, /RadioGroup|RadioItem/, "Asset classification must not return inside More");
 assert.match(assetNodeSource, /className="asset-node-menu"/, "More must remain a distinct hover control");
+assert.match(appCssSource, /\.asset-node-controls\s*\{[^}]*right:\s*12px;[^}]*left:\s*auto;[^}]*justify-content:\s*flex-end;/s, "Asset controls must remain right-aligned after classification removal");
 assert.match(appCssSource, /\.asset-node-menu:has\(\.kit-icon-button\[data-state="open"\]\)/, "an open Portal menu must keep More visible");
 assert.match(appCssSource, /\.asset-node-menu\s*\{[^}]*opacity:\s*0/s, "More must be hidden at rest");
 assert.match(appCssSource, /\.asset-node-menu \.kit-icon-button,[\s\S]*?\.asset-node-menu \.kit-icon-button\[data-state="open"\][\s\S]*?background:\s*var\(--color-background-surface\);/s, "More must keep one opaque surface across visible states");
@@ -78,8 +74,9 @@ assert.doesNotMatch(appCssSource, /\.asset-preview\s*\{[^}]*height:\s*280px/s, "
 assert.match(assetNodeSource, /className="asset-file-icon"[\s\S]*?className="asset-file-copy"[\s\S]*?className="asset-file-name"[\s\S]*?className="asset-file-meta"/, "file Assets must render a horizontal icon, name, and metadata row");
 assert.match(assetNodeSource, /\{fileType\} · \{formatBytes\(data\.asset\.size\)\}/, "file Assets must show lightweight format and size metadata");
 assert.match(appCssSource, /\.asset-node\s*\{[^}]*width:\s*360px;/s, "all Asset nodes must retain the specified 360px width");
-assert.match(appCssSource, /\.asset-node\.is-file\s*\{[^}]*min-height:\s*132px;[^}]*background:\s*var\(--color-background-surface\);/s, "file Assets must keep the compact 360px single-card surface");
-assert.match(appCssSource, /\.asset-file-summary\s*\{[^}]*display:\s*flex;[^}]*gap:\s*16px;[^}]*padding:\s*60px 16px 16px;[^}]*background:\s*transparent;/s, "file Assets must use one white card surface with Task-aligned side padding");
+assert.match(appCssSource, /\.asset-node\.is-file\s*\{[^}]*min-height:\s*112px;[^}]*background:\s*var\(--color-background-surface\);/s, "file Assets must keep the compact 360px single-card surface");
+assert.match(appCssSource, /\.asset-file-summary\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*112px;/s, "file Asset content must retain the compact 112px minimum height");
+assert.match(appCssSource, /\.asset-file-summary\s*\{[^}]*display:\s*flex;[^}]*gap:\s*16px;[^}]*padding:\s*16px 56px 16px 16px;[^}]*background:\s*transparent;/s, "file Assets must use Task-aligned padding with a safe area for More");
 assert.match(appCssSource, /\.asset-file-icon\s*\{[^}]*flex:\s*0 0 48px;/s, "file format icons must use the specified 48px presentation size");
 assert.match(appCssSource, /\.asset-file-name\s*\{[^}]*font-size:\s*var\(--text-16\);[^}]*line-height:\s*22px;[^}]*font-weight:\s*500;/s, "file names must use the specified 16/22 medium typography");
 assert.doesNotMatch(appCssSource, /\.asset-file-summary\s*\{[^}]*background:\s*var\(--color-background-(?:input|surface)\)/s, "file Assets must not add an inner card surface");

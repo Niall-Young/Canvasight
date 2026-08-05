@@ -2393,7 +2393,7 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-node.is-file {
-  min-height: 132px;
+  min-height: 112px;
   border: var(--border-weight-sm) solid var(--color-border-divider);
   background: var(--color-background-surface);
   box-shadow: var(--shadow-node);
@@ -2441,47 +2441,17 @@ button.achievement-card.is-unlocked:focus-visible {
   position: absolute;
   top: 12px;
   right: 12px;
-  left: 12px;
+  left: auto;
   z-index: 3;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   pointer-events: none;
 }
 
 .asset-node-controls > * {
   pointer-events: auto;
-}
-
-.asset-role-trigger {
-  display: inline-flex;
-  min-width: 0;
-  height: 32px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  color: var(--color-text);
-  border: var(--border-weight-sm) solid color-mix(in srgb, var(--color-border-divider) 78%, transparent);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-background-surface) 88%, transparent);
-  box-shadow: 0 1px 4px var(--color-shadow-sm);
-  font: inherit;
-  font-size: var(--text-12);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-}
-
-.asset-role-trigger:hover,
-.asset-role-trigger:focus-visible {
-  outline: none;
-  background: color-mix(in srgb, var(--color-background-surface) 96%, transparent);
-}
-
-.asset-role-trigger span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .asset-node-menu {
@@ -2544,10 +2514,10 @@ button.achievement-card.is-unlocked:focus-visible {
 .asset-file-summary {
   display: flex;
   width: 100%;
-  min-height: 132px;
+  min-height: 112px;
   align-items: center;
   gap: 16px;
-  padding: 60px 16px 16px;
+  padding: 16px 56px 16px 16px;
   border-radius: var(--radius-lg);
   background: transparent;
 }
@@ -2618,11 +2588,6 @@ button.achievement-card.is-unlocked:focus-visible {
 .asset-node-content:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
-}
-
-.asset-role-option.is-selected {
-  background: var(--color-interaction);
-  font-weight: 500;
 }
 
 .group-node {

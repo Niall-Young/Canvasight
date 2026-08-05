@@ -1,38 +1,15 @@
 import { memo, useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import type { AssetRole, ScatterAssetNodeData } from "../../shared/types";
+import type { ScatterAssetNodeData } from "../../shared/types";
 import { assetExtension, fileIconName, isVideoAsset } from "../lib/assetPresentation";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, resolveCanvasightAssetUrl, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import { useI18n } from "../lib/i18n";
-import type { Translate } from "../lib/translations";
 import { formatBytes } from "../lib/utils";
 import { taskNodeActions } from "./TaskNode";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
-
-const roles: AssetRole[] = ["input", "reference", "option", "output"];
-
-function AssetRoleOptions({ id, role, t }: { id: string; role: AssetRole; t: Translate }): ReactElement {
-  return (
-    <RadixDropdownMenu.RadioGroup
-      value={role}
-      onValueChange={(nextRole) => taskNodeActions?.updateNodeData(id, { role: nextRole as AssetRole })}
-    >
-      {roles.map((option) => (
-        <RadixDropdownMenu.RadioItem asChild key={option} value={option}>
-          <ActionMenuItem
-            className={`asset-role-option ${option === role ? "is-selected" : ""}`}
-            icon={null}
-            label={t(`asset.role.${option}`)}
-            trailingIcon={option === role ? "check-md" : null}
-          />
-        </RadixDropdownMenu.RadioItem>
-      ))}
-    </RadixDropdownMenu.RadioGroup>
-  );
-}
 
 function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetNodeData, "asset">>): ReactElement {
   const { t } = useI18n();
@@ -77,7 +54,7 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
   return (
     <article
       className={`asset-node is-${presentation} ${selected ? "is-selected" : ""}`}
-      aria-label={`${displayName}, ${t(`asset.role.${data.role}`)}`}
+      aria-label={displayName}
       onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
       onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
     >
@@ -87,24 +64,6 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
         </button>
       </Handle>
       <div className="asset-node-controls">
-        <RadixDropdownMenu.Root>
-          <RadixDropdownMenu.Trigger asChild>
-            <button
-              className="asset-role-trigger nodrag"
-              type="button"
-              aria-label={`${t("asset.classification")}: ${t(`asset.role.${data.role}`)}`}
-            >
-              <Icon name="category" size={14} />
-              <span>{t(`asset.role.${data.role}`)}</span>
-              <Icon name="chevron-down-md" size={14} />
-            </button>
-          </RadixDropdownMenu.Trigger>
-          <RadixDropdownMenu.Portal>
-            <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="start">
-              <AssetRoleOptions id={id} role={data.role} t={t} />
-            </RadixDropdownMenu.Content>
-          </RadixDropdownMenu.Portal>
-        </RadixDropdownMenu.Root>
         <div className="asset-node-menu">
           <RadixDropdownMenu.Root>
             <RadixDropdownMenu.Trigger asChild>

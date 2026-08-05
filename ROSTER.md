@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T19:48:00+08:00
-    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
-    last_report: 20260805-1948-integration-summary
+    last_seen: 2026-08-05T20:07:00+08:00
+    handoff_source: 20260805-1956-issue-remove-asset-role-classification
+    last_report: 20260805-2007-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined compact horizontal file Asset layout, icon sizing, typography, and Task-aligned content padding
+    notes: Defined complete Asset classification removal, More-only controls, compact file safe area, and Edge-led semantics
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T19:48:00+08:00
-    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
-    last_report: 20260805-1948-development-solution-file-asset-format-icons-layout
+    last_seen: 2026-08-05T20:07:00+08:00
+    handoff_source: 20260805-1956-issue-remove-asset-role-classification
+    last_report: 20260805-2007-development-solution-remove-asset-role-classification
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Added exact supplied file-format SVGs, explicit mappings and unknown fallback, compact file card, and regression tests
+    notes: Removed Asset role UI, accessible suffix and Run Markdown output while retaining v2 compatibility and regression coverage
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T19:48:00+08:00
-    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
-    last_report: 20260805-1948-integration-summary
+    last_seen: 2026-08-05T20:07:00+08:00
+    handoff_source: 20260805-1956-issue-remove-asset-role-classification
+    last_report: 20260805-2007-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed browser QA for MD and unknown file cards, media preservation, More/Role controls, and Edge attachment geometry
+    notes: Passed fresh-browser QA for classification absence, More-only controls, four Asset types, media, file layout, and Edge geometry
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
