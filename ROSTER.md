@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T10:22:00Z
-    handoff_source: edge-geometry-agents-guardrail
-    last_report: 20260805-1822-integration-summary
+    last_seen: 2026-08-05T19:48:00+08:00
+    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
+    last_report: 20260805-1948-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed AGENTS.md separation of Edge attachment geometry from connect-button occlusion
+    notes: Defined compact horizontal file Asset layout, icon sizing, typography, and Task-aligned content padding
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T10:22:00Z
-    handoff_source: edge-geometry-agents-guardrail
-    last_report: 20260805-1822-integration-summary
+    last_seen: 2026-08-05T19:48:00+08:00
+    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
+    last_report: 20260805-1948-development-solution-file-asset-format-icons-layout
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed explicit AGENTS.md inward half-Handle implementation guardrail and forbidden regressions
+    notes: Added exact supplied file-format SVGs, explicit mappings and unknown fallback, compact file card, and regression tests
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Reviewed v2 persistence, daemon-backed dev saves, graph contracts, and updated AGENTS.md durable rules
   - role: Test Supervisor Agent
-    status: blocked
+    status: active
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T10:22:00Z
-    handoff_source: edge-geometry-agents-guardrail
-    last_report: 20260805-1822-integration-summary
+    last_seen: 2026-08-05T19:48:00+08:00
+    handoff_source: 20260805-1938-issue-file-asset-format-icons-layout
+    last_report: 20260805-1948-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined AGENTS.md real-browser Edge geometry gate with <=0.5 CSS px endpoint gaps and full interaction checks
+    notes: Passed browser QA for MD and unknown file cards, media preservation, More/Role controls, and Edge attachment geometry
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

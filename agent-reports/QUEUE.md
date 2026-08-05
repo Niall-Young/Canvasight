@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-1948-integration-summary.md` - 集成指定格式 SVG、unknown 回退与横排文件 Asset；browser/dev 验收通过，native-host 保持 unverified。
+- `agent-reports/resolved/20260805-1948-development-solution-file-asset-format-icons-layout.md` - 记录现有 Icon registry、封闭格式映射、视频检测拆分与紧凑单层卡片方案。
+- `agent-reports/resolved/20260805-1938-issue-file-asset-format-icons-layout.md` - 关闭居中通用图标、信息缺失和大面积空白问题。
 - `agent-reports/resolved/20260805-1822-integration-summary.md` - 将 XYFlow Edge 端点、层级与真实浏览器几何门禁固化到 `AGENTS.md`。
 - `agent-reports/resolved/20260805-1415-integration-summary.md` - 集成持久 Edge 贴边回归修复；真实浏览器 inward 几何通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-1415-development-solution-edge-endpoint-gap.md` - 记录 XYFlow Handle 外缘坐标与 inward 半 Handle 换算。

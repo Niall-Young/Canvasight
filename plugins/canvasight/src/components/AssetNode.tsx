@@ -2,10 +2,11 @@ import { memo, useEffect, useState, useSyncExternalStore, type KeyboardEvent, ty
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { AssetRole, ScatterAssetNodeData } from "../../shared/types";
-import { fileIconName, isVideoAsset } from "../lib/assetPresentation";
+import { assetExtension, fileIconName, isVideoAsset } from "../lib/assetPresentation";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, resolveCanvasightAssetUrl, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import { useI18n } from "../lib/i18n";
 import type { Translate } from "../lib/translations";
+import { formatBytes } from "../lib/utils";
 import { taskNodeActions } from "./TaskNode";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { Icon } from "./ui/icon";
@@ -61,6 +62,8 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
   const video = isVideoAsset(displayName, data.asset.mime);
   const presentation = data.asset.kind === "image" ? "image" : video ? "video" : "file";
   const videoSrc = video ? resolveCanvasightAssetUrl(data.asset.fileUrl, assetBaseUrl) : "";
+  const extension = assetExtension(displayName);
+  const fileType = extension ? extension.toUpperCase() : t("asset.file");
   const openFile = (): void => {
     void window.scatter.openFile(data.asset.storedPath);
   };
@@ -138,7 +141,11 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
           <video className="asset-video" src={videoSrc} controls preload="metadata" aria-label={displayName} />
         ) : (
           <div className="asset-file-summary">
-            <Icon name={fileIconName(displayName, data.asset.mime)} size={80} />
+            <Icon className="asset-file-icon" name={fileIconName(displayName, data.asset.mime)} size={48} />
+            <div className="asset-file-copy">
+              <span className="asset-file-name" title={displayName}>{displayName}</span>
+              <span className="asset-file-meta">{fileType} · {formatBytes(data.asset.size)}</span>
+            </div>
           </div>
         )}
       </div>

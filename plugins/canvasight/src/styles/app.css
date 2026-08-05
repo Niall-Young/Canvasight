@@ -2393,7 +2393,7 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-node.is-file {
-  min-height: 220px;
+  min-height: 132px;
   border: var(--border-weight-sm) solid var(--color-border-divider);
   background: var(--color-background-surface);
   box-shadow: var(--shadow-node);
@@ -2542,13 +2542,46 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-file-summary {
-  display: grid;
+  display: flex;
   width: 100%;
-  min-height: 220px;
-  place-items: center;
-  color: var(--color-icon);
+  min-height: 132px;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 16px 16px;
   border-radius: var(--radius-lg);
-  background: var(--color-background-surface);
+  background: transparent;
+}
+
+.asset-file-icon {
+  flex: 0 0 48px;
+}
+
+.asset-file-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asset-file-name,
+.asset-file-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-file-name {
+  color: var(--color-text);
+  font-size: var(--text-16);
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.asset-file-meta {
+  color: var(--color-text-subtle);
+  font-size: var(--text-12);
+  line-height: var(--line-12);
 }
 
 .asset-video {

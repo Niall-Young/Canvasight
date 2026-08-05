@@ -22,33 +22,27 @@ vm.runInNewContext(compiled, { exports: module.exports, module, require() {} }, 
 const { fileIconName, isVideoAsset } = module.exports;
 
 const expectedMappings = [
-  ["brief.pdf", "application/octet-stream", "news-paper"],
-  ["report.docx", "application/octet-stream", "notepad"],
-  ["budget.xlsx", "application/octet-stream", "analyze-data"],
-  ["deck.pptx", "application/octet-stream", "file-presentation"],
-  ["bundle.zip", "application/octet-stream", "archive"],
-  ["track.mp3", "application/octet-stream", "music"],
-  ["clip.mp4", "application/octet-stream", "video"],
-  ["analysis.ipynb", "application/octet-stream", "code-square"],
-  ["warehouse.parquet", "application/octet-stream", "analyze-data"],
-  ["table.arrow", "application/octet-stream", "analyze-data"],
-  ["brand.woff2", "application/octet-stream", "writing"],
-  ["scene.glb", "application/octet-stream", "all-gizmos"],
-  ["installer.dmg", "application/octet-stream", "download-simple"],
-  ["library.sqlite", "application/octet-stream", "storage"],
-  ["book.epub", "application/octet-stream", "book"],
-  ["artwork.psd", "application/octet-stream", "image-square"],
-  ["layout.fig", "application/octet-stream", "compose-canvas"],
-  ["layout.sketch", "application/octet-stream", "compose-canvas"],
-  ["layout.xd", "application/octet-stream", "compose-canvas"],
-  ["unknown.bin", "application/octet-stream", "notepad"]
+  ["brief.pdf", "application/octet-stream", "file-format-pdf"],
+  ["README.md", "application/octet-stream", "file-format-md"],
+  ["deck.pptx", "application/octet-stream", "file-format-ppt"],
+  ["keynote.key", "application/octet-stream", "file-format-ppt"],
+  ["records.csv", "application/octet-stream", "file-format-csv"],
+  ["records.tsv", "application/octet-stream", "file-format-csv"],
+  ["budget.xlsx", "application/octet-stream", "file-format-xls"],
+  ["budget.numbers", "application/octet-stream", "file-format-xls"],
+  ["report.docx", "application/octet-stream", "file-format-doc"],
+  ["report.odt", "application/octet-stream", "file-format-doc"],
+  ["index.tsx", "application/octet-stream", "file-format-code"],
+  ["analysis.py", "application/octet-stream", "file-format-code"],
+  ["unknown.bin", "application/octet-stream", "file-format-unknown"],
+  ["bundle.zip", "application/zip", "file-format-unknown"]
 ];
 for (const [name, mime, expectedIcon] of expectedMappings) {
   assert.equal(fileIconName(name, mime), expectedIcon, `${name} should use ${expectedIcon}`);
 }
-assert.equal(fileIconName("download", "font/woff2"), "writing");
-assert.equal(fileIconName("model", "model/gltf-binary"), "all-gizmos");
-assert.equal(fileIconName("dataset", "application/vnd.apache.parquet"), "analyze-data");
+assert.equal(fileIconName("download", "application/pdf"), "file-format-pdf");
+assert.equal(fileIconName("notes", "text/markdown"), "file-format-md");
+assert.equal(fileIconName("dataset", "application/vnd.ms-excel"), "file-format-xls");
 assert.equal(isVideoAsset("clip.mov", "application/octet-stream"), true);
 assert.equal(isVideoAsset("notes.md", "text/markdown"), false);
 
@@ -81,8 +75,14 @@ assert.doesNotMatch(appCssSource, /\.asset-node-menu \.kit-icon-button\s*\{[^}]*
 assert.match(appCssSource, /\.asset-preview\.is-loading,[\s\S]*?min-height:\s*220px/, "only pending image states keep a placeholder");
 assert.match(appCssSource, /\.asset-preview img\s*\{[^}]*width:\s*100%;[^}]*height:\s*auto;/s, "ready images must preserve their natural ratio");
 assert.doesNotMatch(appCssSource, /\.asset-preview\s*\{[^}]*height:\s*280px/s, "images must not use a fixed viewport");
-assert.doesNotMatch(assetNodeSource, /formatBytes|data\.asset\.size|asset-file-copy|asset-image-copy/, "Asset content must not render file names or sizes");
-assert.doesNotMatch(appCssSource, /\.asset-file-summary\s*\{[^}]*background:\s*var\(--color-background-input\)/s, "file Assets must not add an inner gray card");
+assert.match(assetNodeSource, /className="asset-file-icon"[\s\S]*?className="asset-file-copy"[\s\S]*?className="asset-file-name"[\s\S]*?className="asset-file-meta"/, "file Assets must render a horizontal icon, name, and metadata row");
+assert.match(assetNodeSource, /\{fileType\} · \{formatBytes\(data\.asset\.size\)\}/, "file Assets must show lightweight format and size metadata");
+assert.match(appCssSource, /\.asset-node\s*\{[^}]*width:\s*360px;/s, "all Asset nodes must retain the specified 360px width");
+assert.match(appCssSource, /\.asset-node\.is-file\s*\{[^}]*min-height:\s*132px;[^}]*background:\s*var\(--color-background-surface\);/s, "file Assets must keep the compact 360px single-card surface");
+assert.match(appCssSource, /\.asset-file-summary\s*\{[^}]*display:\s*flex;[^}]*gap:\s*16px;[^}]*padding:\s*60px 16px 16px;[^}]*background:\s*transparent;/s, "file Assets must use one white card surface with Task-aligned side padding");
+assert.match(appCssSource, /\.asset-file-icon\s*\{[^}]*flex:\s*0 0 48px;/s, "file format icons must use the specified 48px presentation size");
+assert.match(appCssSource, /\.asset-file-name\s*\{[^}]*font-size:\s*var\(--text-16\);[^}]*line-height:\s*22px;[^}]*font-weight:\s*500;/s, "file names must use the specified 16/22 medium typography");
+assert.doesNotMatch(appCssSource, /\.asset-file-summary\s*\{[^}]*background:\s*var\(--color-background-(?:input|surface)\)/s, "file Assets must not add an inner card surface");
 assert.match(appCssSource, /\.react-flow \.react-flow__nodes\s*\{[^}]*z-index:\s*auto;/s, "the nodes container must not flatten Group and content node layers");
 assert.match(appCssSource, /\.react-flow \.react-flow__edges > svg\s*\{[^}]*z-index:\s*1 !important;/s, "XYFlow edge SVGs must stay between Groups and content nodes");
 assert.match(appCssSource, /\.react-flow__node-group\s*\{[^}]*z-index:\s*0 !important;/s, "Groups must stay below Edges");
