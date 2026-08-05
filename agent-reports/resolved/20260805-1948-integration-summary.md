@@ -126,5 +126,5 @@ related_files:
 
 - branch: `main`
 - baseline: `5edea58d337e46dbcf3a419e57b12866da999f5b`
-- commit: pending `fix: 完善文件资产卡片`
-- worktree: 提交前等待选择性暂存与 staged diff 检查。
+- commit: `0d667509b9bc8b438c053fc9943bcab31cdd190a` (`fix: 完善文件资产卡片`)
+- worktree: 功能提交后仅保留预先存在的未跟踪 `plugins/canvasight/dist/favicon 2.png` 与 `index 2.html`；二者哈希未变且未进入提交。
