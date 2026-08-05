@@ -10,6 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `issue-asset-content-first-media-file-icons` | blocked | high | Test Supervisor Agent | Asset 内容本体与统一文件图标仍不符合预期 | `agent-reports/assigned/issue-asset-content-first-media-file-icons.md` | 3 | 2026-08-05T03:36:00Z
 - `issue-group-asset-node-visual-semantics` | blocked | medium | Test Supervisor Agent | Group 与 Asset Node 视觉语义不一致 | `agent-reports/assigned/issue-group-asset-node-visual-semantics.md` | 3 | 2026-08-05T02:35:00Z
 - `issue-codex-react-185-sidebar-recovery` | assigned | critical | Test Supervisor Agent | Codex 历史 Canvasight 侧栏恢复触发 React #185 | `agent-reports/assigned/issue-codex-react-185-sidebar-recovery.md` | 8 | 2026-07-26T06:55:43Z
 - `issue-publish-stable-release-0-4-34` | blocked | high | Project Management Agent | 发布 Canvasight 0.4.34 并推进 stable 更新通道 | `agent-reports/assigned/issue-publish-stable-release-0-4-34.md` | 4 | 2026-07-18T11:46:32Z
@@ -33,6 +34,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-asset-content-first-media-file-icons.md` - 集成 Canvasight 0.5.2 内容优先 Asset、既有 SVG 映射、视频 MIME/Range、文档和本地验证；native-host 保持 blocked/unverified。
+- `agent-reports/resolved/solution-asset-content-first-media-file-icons.md` - 记录图片/视频本体节点、单层文件表面、分类/More 层级和视频资源服务方案。
 - `agent-reports/resolved/integration-summary-group-asset-node-visual-semantics.md` - 集成 Canvasight 0.5.1 Group/Asset 视觉语义、文档、版本与本地验证；native-host 保持 blocked/unverified。
 - `agent-reports/resolved/solution-group-asset-node-visual-semantics.md` - 记录轻量 Group、纯文件 Asset、显式替换和运行边界方案。
 - `agent-reports/resolved/integration-summary-asset-nodes-semantic-groups.md` - 集成 Canvasight 0.5.0 资产节点、单层语义 Group、双读持久化、Run、AI、并发、文档和本地验证矩阵；native-host 保持 unverified。

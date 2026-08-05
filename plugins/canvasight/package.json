@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -22,6 +22,7 @@
     "test:markdown": "node tests/markdown-flow-smoke.mjs",
     "test:rich-text": "node tests/rich-text-smoke.mjs",
     "test:markdown-export": "node tests/markdown-export-smoke.mjs",
+    "test:asset-presentation": "node tests/asset-presentation-smoke.mjs",
     "test:skills": "node tests/skills-smoke.mjs",
     "test:mcp": "node tests/mcp-smoke.mjs",
     "test:concurrency": "node tests/concurrent-document-smoke.mjs",

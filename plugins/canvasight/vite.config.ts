@@ -407,12 +407,50 @@ function safeFileName(name: unknown): string {
 
 function mimeFromPath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".jpeg" || ext === ".jpg") return "image/jpeg";
-  if (ext === ".png") return "image/png";
-  if (ext === ".gif") return "image/gif";
-  if (ext === ".webp") return "image/webp";
-  if (ext === ".svg") return "image/svg+xml";
-  return "application/octet-stream";
+  const map: Record<string, string> = {
+    ".aac": "audio/aac",
+    ".avi": "video/x-msvideo",
+    ".flac": "audio/flac",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".m4a": "audio/mp4",
+    ".m4v": "video/x-m4v",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".ogg": "audio/ogg",
+    ".ogv": "video/ogg",
+    ".opus": "audio/opus",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
+    ".webp": "image/webp"
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+function parseSingleByteRange(header: string | string[] | undefined, size: number): { start: number; end: number } | null | false {
+  if (header === undefined) return null;
+  if (typeof header !== "string" || !Number.isSafeInteger(size) || size < 0) return false;
+  const match = header.trim().match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || (!match[1] && !match[2]) || size === 0) return false;
+
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return false;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+
+  const start = Number(match[1]);
+  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return false;
+  if (!match[2]) return { start, end: size - 1 };
+
+  const requestedEnd = Number(match[2]);
+  if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) return false;
+  return { start, end: Math.min(requestedEnd, size - 1) };
 }
 
 function base64UrlEncode(value: string): string {
@@ -465,7 +503,7 @@ function canvasightDevApiPlugin() {
     name: "canvasight-dev-api",
     configureServer(server: { middlewares: { use(handler: (req: unknown, res: unknown, next: () => void) => void): void } }) {
       server.middlewares.use((request, response, next) => {
-        const req = request as NodeJS.ReadableStream & { method?: string; url?: string };
+        const req = request as NodeJS.ReadableStream & { headers?: Record<string, string | string[] | undefined>; method?: string; url?: string };
         const res = response as { statusCode: number; setHeader(name: string, value: string): void; end(body?: string | Buffer): void };
         void (async () => {
           const url = new URL(req.url || "/", "http://127.0.0.1");
@@ -476,7 +514,26 @@ function canvasightDevApiPlugin() {
           if (url.pathname === "/api/asset") {
             const assetPath = path.resolve(base64UrlDecode(url.searchParams.get("path")));
             const stat = await fsp.stat(assetPath);
+            const range = parseSingleByteRange(req.headers?.range, stat.size);
+            if (range === false) {
+              res.statusCode = 416;
+              res.setHeader("accept-ranges", "bytes");
+              res.setHeader("content-range", `bytes */${stat.size}`);
+              res.setHeader("content-length", "0");
+              res.end();
+              return;
+            }
+            if (range) {
+              res.statusCode = 206;
+              res.setHeader("accept-ranges", "bytes");
+              res.setHeader("content-range", `bytes ${range.start}-${range.end}/${stat.size}`);
+              res.setHeader("content-type", mimeFromPath(assetPath));
+              res.setHeader("content-length", String(range.end - range.start + 1));
+              fs.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res as unknown as NodeJS.WritableStream);
+              return;
+            }
             res.statusCode = 200;
+            res.setHeader("accept-ranges", "bytes");
             res.setHeader("content-type", mimeFromPath(assetPath));
             res.setHeader("content-length", String(stat.size));
             fs.createReadStream(assetPath).pipe(res as unknown as NodeJS.WritableStream);

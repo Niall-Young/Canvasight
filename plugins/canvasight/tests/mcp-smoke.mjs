@@ -5050,6 +5050,35 @@ async function main() {
     const assetResponse = await fetch(`${origin}${attachments[0].fileUrl}`);
     assert.equal(assetResponse.ok, true);
     assert.equal(await assetResponse.text(), "hello canvasight");
+    const [videoAttachment] = await fetchJson(`${origin}/api/sessions/${sessionId}/attachments`, {
+      method: "POST",
+      body: JSON.stringify({
+        projectPath,
+        files: [{
+          name: "clip.mp4",
+          source: "upload",
+          dataBase64: Buffer.from("0123456789abcdef", "utf8").toString("base64")
+        }]
+      })
+    });
+    assert.equal(videoAttachment.mime, "video/mp4", "video MIME is inferred from the managed filename");
+    const completeVideoResponse = await fetch(`${origin}${videoAttachment.fileUrl}`);
+    assert.equal(completeVideoResponse.status, 200);
+    assert.equal(completeVideoResponse.headers.get("accept-ranges"), "bytes");
+    assert.equal(completeVideoResponse.headers.get("content-type"), "video/mp4");
+    assert.equal(completeVideoResponse.headers.get("content-length"), "16");
+    assert.equal(await completeVideoResponse.text(), "0123456789abcdef");
+    const rangedVideoResponse = await fetch(`${origin}${videoAttachment.fileUrl}`, { headers: { range: "bytes=3-7" } });
+    assert.equal(rangedVideoResponse.status, 206);
+    assert.equal(rangedVideoResponse.headers.get("accept-ranges"), "bytes");
+    assert.equal(rangedVideoResponse.headers.get("content-range"), "bytes 3-7/16");
+    assert.equal(rangedVideoResponse.headers.get("content-length"), "5");
+    assert.equal(await rangedVideoResponse.text(), "34567");
+    const invalidVideoRange = await fetch(`${origin}${videoAttachment.fileUrl}`, { headers: { range: "bytes=99-120" } });
+    assert.equal(invalidVideoRange.status, 416);
+    assert.equal(invalidVideoRange.headers.get("accept-ranges"), "bytes");
+    assert.equal(invalidVideoRange.headers.get("content-range"), "bytes */16");
+    assert.equal(await invalidVideoRange.text(), "");
     const requestWidgetAttachmentPreview = (storedPath) => request("tools/call", {
       name: "canvasight_widget_api",
       arguments: {

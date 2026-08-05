@@ -2384,17 +2384,32 @@ button.achievement-card.is-unlocked:focus-visible {
   width: 360px;
   flex-direction: column;
   color: var(--color-text);
-  border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-lg);
-  background: var(--color-background-surface);
-  box-shadow: var(--shadow-node);
-  transition: box-shadow 150ms ease;
+  transition: filter 150ms ease;
 }
 
-.asset-node:hover,
-.asset-node:focus-within,
-.asset-node.is-selected {
+.asset-node.is-file {
+  min-height: 220px;
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-node);
+}
+
+.asset-node.is-file:hover,
+.asset-node.is-file:focus-within,
+.asset-node.is-file.is-selected {
   box-shadow: var(--shadow-hover);
+}
+
+.asset-node.is-file.is-selected {
+  border-color: var(--color-border-focus);
+}
+
+.asset-node.is-image,
+.asset-node.is-video {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .group-node-title,
@@ -2418,24 +2433,67 @@ button.achievement-card.is-unlocked:focus-visible {
   white-space: nowrap;
 }
 
-.asset-node-card {
-  position: relative;
+.asset-node-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+  z-index: 3;
   display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 12px;
-  border-radius: var(--radius-lg);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
 }
 
-.asset-node.is-selected {
-  border-color: var(--color-border-focus);
+.asset-node-controls > * {
+  pointer-events: auto;
+}
+
+.asset-role-trigger {
+  display: inline-flex;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  color: var(--color-text);
+  border: var(--border-weight-sm) solid color-mix(in srgb, var(--color-border-divider) 78%, transparent);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-background-surface) 88%, transparent);
+  box-shadow: 0 1px 4px var(--color-shadow-sm);
+  font: inherit;
+  font-size: var(--text-12);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.asset-role-trigger:hover,
+.asset-role-trigger:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--color-background-surface) 96%, transparent);
+}
+
+.asset-role-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .asset-node-menu {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.asset-node:hover .asset-node-menu,
+.asset-node:focus-within .asset-node-menu,
+.asset-node.is-selected .asset-node-menu,
+.asset-node-menu:has(.kit-icon-button[data-state="open"]) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .asset-node-menu .kit-icon-button {
@@ -2447,22 +2505,24 @@ button.achievement-card.is-unlocked:focus-visible {
 .asset-preview {
   display: grid;
   width: 100%;
-  height: 260px;
   overflow: hidden;
   place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--color-background-input);
+  border-radius: var(--radius-lg);
+  background: transparent;
+}
+
+.asset-preview.is-loading,
+.asset-preview.is-error {
+  min-height: 220px;
 }
 
 .asset-preview img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
 }
 
-.asset-preview-status,
-.asset-file-summary {
+.asset-preview-status {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2476,78 +2536,47 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-file-summary {
-  min-height: 148px;
-  justify-content: flex-start;
-  padding: 24px 52px 24px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--color-background-input);
-  text-align: left;
-}
-
-.asset-file-icon {
-  position: relative;
   display: grid;
-  width: 72px;
-  height: 88px;
-  flex: 0 0 auto;
+  width: 100%;
+  min-height: 220px;
   place-items: center;
   color: var(--color-icon);
-  border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-lg);
   background: var(--color-background-surface);
 }
 
-.asset-file-type-mark {
-  position: absolute;
-  right: 7px;
-  bottom: 6px;
-  min-width: 22px;
-  padding: 1px 4px;
-  color: var(--color-text-subtle);
-  border: var(--border-weight-sm) solid var(--color-border-divider);
-  border-radius: var(--radius-xs);
-  background: var(--color-background-raised);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 600;
-  line-height: 12px;
-  text-align: center;
+.asset-video {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  max-height: 360px;
+  border-radius: var(--radius-lg);
+  background: #000;
+  object-fit: contain;
 }
 
-.asset-file-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.asset-file-copy strong {
-  max-width: 100%;
-  color: var(--color-text);
-  font-size: var(--text-16);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.asset-image-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.asset-image-copy {
-  padding: 0 4px 2px;
-}
-
-.asset-node-file {
-  border-radius: var(--radius-md);
+.asset-node-content {
+  width: 100%;
+  border-radius: var(--radius-lg);
   outline: none;
   cursor: pointer;
 }
 
-.asset-node-file:focus-visible {
+.asset-node.is-image .asset-node-content,
+.asset-node.is-video .asset-node-content {
+  box-shadow: var(--shadow-node);
+}
+
+.asset-node.is-image:hover .asset-node-content,
+.asset-node.is-image:focus-within .asset-node-content,
+.asset-node.is-image.is-selected .asset-node-content,
+.asset-node.is-video:hover .asset-node-content,
+.asset-node.is-video:focus-within .asset-node-content,
+.asset-node.is-video.is-selected .asset-node-content {
+  box-shadow: var(--shadow-hover);
+}
+
+.asset-node-content:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
 }

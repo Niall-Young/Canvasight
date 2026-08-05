@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T02:35:00Z
-    handoff_source: issue-group-asset-node-visual-semantics
-    last_report: issue-group-asset-node-visual-semantics
+    last_seen: 2026-08-05T03:36:00Z
+    handoff_source: issue-asset-content-first-media-file-icons
+    last_report: solution-asset-content-first-media-file-icons
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Final PASS after Asset drag surface, file type mark, and collapsed Group Fit fixes
+    notes: Final PASS on content-first media, single-surface files, existing SVG mapping, and control hierarchy
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T02:35:00Z
-    handoff_source: issue-group-asset-node-visual-semantics
-    last_report: solution-group-asset-node-visual-semantics
+    last_seen: 2026-08-05T03:36:00Z
+    handoff_source: issue-asset-content-first-media-file-icons
+    last_report: solution-asset-content-first-media-file-icons
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed Canvasight 0.5.1 Group and Asset visual semantics implementation and local checks
+    notes: Completed Canvasight 0.5.2 content-first Asset UI, existing SVG mapping, and video MIME/Range implementation
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T02:35:00Z
-    handoff_source: issue-group-asset-node-visual-semantics
-    last_report: issue-group-asset-node-visual-semantics
+    last_seen: 2026-08-05T03:36:00Z
+    handoff_source: issue-asset-content-first-media-file-icons
+    last_report: issue-asset-content-first-media-file-icons
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Local and browser evidence PASS; owns exact 0.5.1 restarted Codex Desktop native-host acceptance blocker
+    notes: Local and browser image/file/real-video evidence PASS; owns exact 0.5.2 restarted Codex Desktop native-host acceptance blocker
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

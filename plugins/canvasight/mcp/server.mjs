@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.1";
+var SERVER_VERSION = "0.5.2";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17982,10 +17982,24 @@ function mimeFromPath(filePath) {
     ".js": "text/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
     ".mjs": "text/javascript; charset=utf-8",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".m4a": "audio/mp4",
+    ".m4v": "video/x-m4v",
+    ".mov": "video/quicktime",
+    ".ogg": "audio/ogg",
+    ".ogv": "video/ogg",
+    ".opus": "audio/opus",
     ".png": "image/png",
     ".svg": "image/svg+xml",
     ".txt": "text/plain; charset=utf-8",
+    ".avi": "video/x-msvideo",
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
+    ".mkv": "video/x-matroska",
     ".wasm": "application/wasm",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
     ".webp": "image/webp"
   };
   return map2[ext] || "application/octet-stream";
@@ -22703,13 +22717,52 @@ async function serveStatic(req, res, url2) {
     sendText(res, 404, "Not found");
   }
 }
+function parseSingleByteRange(header, size) {
+  if (header === void 0) return null;
+  if (typeof header !== "string" || !Number.isSafeInteger(size) || size < 0) return false;
+  const match = header.trim().match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || !match[1] && !match[2] || size === 0) return false;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return false;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  if (!Number.isSafeInteger(start) || start < 0 || start >= size) return false;
+  if (!match[2]) return { start, end: size - 1 };
+  const requestedEnd = Number(match[2]);
+  if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) return false;
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
 async function serveAsset(req, res, url2) {
   assertMethod(req, "GET");
   const assetPath = path.resolve(base64UrlDecode(url2.searchParams.get("path")));
   if (!isScatterAssetPath(assetPath) && !isTemplateAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
   const stat = await fsp.stat(assetPath);
   if (!stat.isFile()) throw new HttpError(404, "Asset not found");
+  const range = parseSingleByteRange(req.headers.range, stat.size);
+  if (range === false) {
+    res.writeHead(416, responseHeaders({
+      "accept-ranges": "bytes",
+      "content-range": "bytes */".concat(stat.size),
+      "content-length": 0
+    }));
+    res.end();
+    return;
+  }
+  if (range) {
+    const contentLength = range.end - range.start + 1;
+    res.writeHead(206, responseHeaders({
+      "accept-ranges": "bytes",
+      "content-range": "bytes ".concat(range.start, "-").concat(range.end, "/").concat(stat.size),
+      "content-type": mimeFromPath(assetPath),
+      "content-length": contentLength
+    }));
+    fs.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res);
+    return;
+  }
   res.writeHead(200, responseHeaders({
+    "accept-ranges": "bytes",
     "content-type": mimeFromPath(assetPath),
     "content-length": stat.size
   }));
