@@ -6,6 +6,7 @@ import { assetExtension, fileIconName, isVideoAsset } from "../lib/assetPresenta
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, resolveCanvasightAssetUrl, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import { useI18n } from "../lib/i18n";
 import { formatBytes } from "../lib/utils";
+import { useScatterStore } from "../store/scatterStore";
 import { taskNodeActions } from "./TaskNode";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { Icon } from "./ui/icon";
@@ -16,6 +17,9 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
   const [imageSrc, setImageSrc] = useState("");
   const [imageStatus, setImageStatus] = useState<"loading" | "ready" | "error">(data.asset.kind === "image" ? "loading" : "ready");
   const assetBaseUrl = useSyncExternalStore(subscribeCanvasightRuntimeData, getCanvasightAssetBaseUrl, getCanvasightAssetBaseUrl);
+  const hasParent = useScatterStore((state) =>
+    state.edges.some((edge) => edge.target === id && state.nodes.some((node) => node.id === edge.source))
+  );
 
   useEffect(() => {
     let current = true;
@@ -58,10 +62,20 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
       onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
       onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
     >
-      <Handle type="target" position={Position.Left} className="node-handle">
-        <button className="node-connect-button" type="button" aria-label={t("task.connectLeft")} onClick={() => taskNodeActions?.createConnectedNode(id, "left")}>
-          <Icon name="plus-lg" size={16} />
-        </button>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="node-handle"
+        isConnectable={!hasParent}
+        isConnectableStart={!hasParent}
+        isConnectableEnd={!hasParent}
+      >
+        {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
+        {!hasParent ? (
+          <button className="node-connect-button" type="button" aria-label={t("task.connectLeft")} onClick={() => taskNodeActions?.createConnectedNode(id, "left")}>
+            <Icon name="plus-lg" size={16} />
+          </button>
+        ) : null}
       </Handle>
       <div className="asset-node-controls">
         <div className="asset-node-menu">

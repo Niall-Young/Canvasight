@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:07:00+08:00
-    handoff_source: 20260805-1956-issue-remove-asset-role-classification
-    last_report: 20260805-2007-integration-summary
+    last_seen: 2026-08-05T20:39:00+08:00
+    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
+    last_report: 20260805-2016-issue-edge-single-parent-cardinality
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined complete Asset classification removal, More-only controls, compact file safe area, and Edge-led semantics
+    notes: Defined the single-predecessor Edge contract, zero-side-effect rejection, occupied-target affordance, and legacy repair boundary
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:07:00+08:00
-    handoff_source: 20260805-1956-issue-remove-asset-role-classification
-    last_report: 20260805-2007-development-solution-remove-asset-role-classification
+    last_seen: 2026-08-05T20:39:00+08:00
+    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
+    last_report: 20260805-2028-development-edge-single-parent-solution
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Removed Asset role UI, accessible suffix and Run Markdown output while retaining v2 compatibility and regression coverage
+    notes: Enforced single-parent Edges across UI, Store, saves, Graph Writer, concurrent rebase, and occupied Task/Asset target controls
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:07:00+08:00
-    handoff_source: 20260805-1956-issue-remove-asset-role-classification
-    last_report: 20260805-2007-integration-summary
+    last_seen: 2026-08-05T20:39:00+08:00
+    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
+    last_report: 20260805-2016-issue-edge-single-parent-cardinality
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed fresh-browser QA for classification absence, More-only controls, four Asset types, media, file layout, and Edge geometry
+    notes: Independently verified single-parent rejection, unchanged selection/history/revision, occupied Task/Asset controls, repair recovery, and clean console
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

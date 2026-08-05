@@ -241,6 +241,14 @@ function assertUniqueGraphIds(document) {
   assertMirrors(document);
 }
 
+function assertSingleIncomingEdgePerTarget(document) {
+  document.pages.forEach((pageItem) => {
+    const incoming = new Map();
+    pageItem.edges.forEach((edgeItem) => incoming.set(edgeItem.target, (incoming.get(edgeItem.target) || 0) + 1));
+    incoming.forEach((count, target) => assert.ok(count <= 1, `${pageItem.id}/${target} has ${count} incoming Edges`));
+  });
+}
+
 async function assertDisjointMerge() {
   const state = await fixture("disjoint-merge");
   const firstLocal = clone(state.base.document);
@@ -463,6 +471,87 @@ async function assertDifferentEdgesMerge() {
   assert.equal(pageById(second.document, "page-main").edges[1].label, "second edge update");
 }
 
+async function assertDifferentParentsConflict() {
+  const nodes = [node("parent-a"), node("parent-b"), node("child")];
+  const state = await fixture("different-parent-conflict", [page("page-main", { nodes, edges: [] })]);
+  const firstLocal = clone(state.base.document);
+  const secondLocal = clone(state.base.document);
+  firstLocal.pages[0].edges = [{ id: "edge-a-child", source: "parent-a", target: "child" }];
+  firstLocal.edges = firstLocal.pages[0].edges;
+  secondLocal.pages[0].edges = [{ id: "edge-b-child", source: "parent-b", target: "child" }];
+  secondLocal.edges = secondLocal.pages[0].edges;
+
+  const first = await saveModern(state.firstSessionId, state.projectPath, state.base, firstLocal, "different-parent-first");
+  const second = await saveModern(state.secondSessionId, state.projectPath, state.base, secondLocal, "different-parent-second");
+  assert.equal(first.status, "written");
+  assert.equal(second.status, "conflict-copy");
+  assert.deepEqual(pageById(second.document, "page-main").edges.map((edge) => edge.id), ["edge-a-child"]);
+  assert.equal(second.merge.conflictCopies[0].reasons.some((reason) => reason.startsWith("edge-target:page-main:child")), true);
+  const copy = pageById(second.document, second.merge.conflictCopies[0].conflictPageId);
+  assert.equal(copy.edges.length, 1);
+  assert.equal(copy.edges[0].source, copy.nodes.find((item) => item.data.title === "parent-b").id);
+  assert.equal(copy.edges[0].target, copy.nodes.find((item) => item.data.title === "child").id);
+  assertSingleIncomingEdgePerTarget(second.document);
+}
+
+async function assertLegacyMultipleParentsCanOnlyImprove() {
+  const projectPath = path.join(tempRoot, "legacy-multiple-parents");
+  const dirtyPage = page("page-main", {
+    nodes: [node("parent-a"), node("parent-b"), node("parent-c"), node("child")],
+    edges: [
+      { id: "edge-a-child", source: "parent-a", target: "child" },
+      { id: "edge-b-child", source: "parent-b", target: "child" }
+    ]
+  });
+  const dirtyDocument = documentFor("legacy-multiple-parents", [dirtyPage]);
+  await fsp.mkdir(path.join(projectPath, ".scatter"), { recursive: true });
+  await fsp.writeFile(path.join(projectPath, ".scatter", "scatter.json"), `${JSON.stringify(dirtyDocument, null, 2)}\n`);
+  const session = await createSession(projectPath, "legacy-multiple-parent-editor");
+  assert.equal(session.document.pages[0].edges.length, 2, "legacy dirty Edges must survive load normalization");
+
+  const preserved = clone(session.document);
+  setNodeBody(preserved, "parent-a", "legacy document remains editable while preserving existing Edges");
+  const preservedSave = await saveModern(
+    session.session.sessionId,
+    projectPath,
+    { document: session.document, documentRevision: session.documentRevision, documentVersion: session.documentVersion },
+    preserved,
+    "legacy-preserve"
+  );
+  assert.equal(preservedSave.status, "written");
+  assert.equal(preservedSave.document.pages[0].edges.length, 2);
+
+  const repaired = clone(preservedSave.document);
+  repaired.pages[0].edges = repaired.pages[0].edges.slice(0, 1);
+  repaired.edges = repaired.pages[0].edges;
+  const repairedSave = await saveModern(
+    session.session.sessionId,
+    projectPath,
+    { document: preservedSave.document, documentRevision: preservedSave.documentRevision, documentVersion: preservedSave.documentVersion },
+    repaired,
+    "legacy-repair"
+  );
+  assert.equal(repairedSave.status, "written");
+  assert.equal(repairedSave.document.pages[0].edges.length, 1);
+
+  const invalid = clone(repairedSave.document);
+  invalid.pages[0].edges.push({ id: "edge-c-child", source: "parent-c", target: "child" });
+  invalid.edges = invalid.pages[0].edges;
+  const rejected = await saveModern(
+    session.session.sessionId,
+    projectPath,
+    { document: repairedSave.document, documentRevision: repairedSave.documentRevision, documentVersion: repairedSave.documentVersion },
+    invalid,
+    "legacy-regression",
+    {},
+    400
+  );
+  assert.equal(rejected.code, "invalid_edge_structure");
+  const afterRejected = await createSession(projectPath, "legacy-multiple-parent-check");
+  assert.equal(afterRejected.documentRevision, repairedSave.documentRevision);
+  assert.deepEqual(afterRejected.document.pages[0].edges, repairedSave.document.pages[0].edges);
+}
+
 async function assertMutationReplayAndRestart() {
   const state = await fixture("mutation-replay");
   const firstLocal = clone(state.base.document);
@@ -559,6 +648,61 @@ async function graphUpdate(projectPath, context, nodeId, body, clientMutationId 
       }
     })
   });
+}
+
+async function graphAddEdge(projectPath, context, edge, clientMutationId = `graph-edge-${crypto.randomUUID()}`) {
+  const active = context.activePage;
+  const taskIds = active.nodes.filter((item) => item.type === "task").map((item) => item.id);
+  const taskIdSet = new Set(taskIds);
+  const candidateEdges = [
+    ...active.edges.filter((item) => taskIdSet.has(item.source) && taskIdSet.has(item.target)),
+    edge
+  ];
+  return requestJson("/api/graphs/write", {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath,
+      args: {
+        projectPath,
+        mode: "merge-active-page",
+        contextId: context.contextId,
+        expectedRevision: context.documentRevision,
+        clientMutationId,
+        layoutPolicy: "preserve-explicit",
+        frameworkManifest: minimalRefineManifest(taskIds, candidateEdges),
+        operations: [{ op: "add-edge", edge }]
+      }
+    })
+  });
+}
+
+async function assertAiDifferentParentConflict() {
+  const nodes = [
+    node("parent-a", undefined, { position: { x: 0, y: 0 } }),
+    node("parent-b", undefined, { position: { x: 0, y: 380 } }),
+    node("child", undefined, { position: { x: 680, y: 380 } })
+  ];
+  const state = await fixture("ai-different-parent-conflict", [page("page-main", { nodes, edges: [] })]);
+  const context = await getGraphContext(state.projectPath);
+  const manual = clone(state.base.document);
+  manual.pages[0].edges = [{ id: "manual-a-child", source: "parent-a", target: "child" }];
+  manual.edges = manual.pages[0].edges;
+  await saveModern(state.firstSessionId, state.projectPath, state.base, manual, "manual-parent-before-ai");
+
+  const result = await graphAddEdge(
+    state.projectPath,
+    context,
+    { id: "ai-b-child", source: "parent-b", target: "child" },
+    "ai-different-parent"
+  );
+  assert.equal(result.status, "conflict-copy", JSON.stringify(result.validation || result));
+  assert.deepEqual(pageById(result.document, "page-main").edges.map((edge) => edge.id), ["manual-a-child"]);
+  assert.equal(result.conflictCopies[0].reasons.some((reason) => reason.startsWith("edge-target:page-main:child")), true);
+  const copy = pageById(result.document, result.conflictCopies[0].conflictPageId);
+  assert.equal(copy.edges.length, 1);
+  assert.equal(copy.edges[0].source, copy.nodes.find((item) => item.data.title === "parent-b").id);
+  assert.equal(copy.edges[0].target, copy.nodes.find((item) => item.data.title === "child").id);
+  assertSingleIncomingEdgePerTarget(result.document);
 }
 
 async function assertAiWriterRace() {
@@ -766,8 +910,11 @@ try {
   await assertViewStatePersistenceAndAiProtection();
   await assertConflictMatrix();
   await assertDifferentEdgesMerge();
+  await assertDifferentParentsConflict();
+  await assertLegacyMultipleParentsCanOnlyImprove();
   await assertMutationReplayAndRestart();
   await assertAiWriterRace();
+  await assertAiDifferentParentConflict();
   await assertAiDragPageSwitchConflictAndReplay();
   await assertConflictCopyRemapsGroupMembership();
   await assertGroupMembershipConflictMatrix();

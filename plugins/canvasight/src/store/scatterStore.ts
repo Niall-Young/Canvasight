@@ -112,6 +112,28 @@ function createSnapshot(nodes: ScatterNode[], edges: ScatterEdge[]): CanvasSnaps
   };
 }
 
+function incomingEdgeCounts(edges: ScatterEdge[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  edges.forEach((edge) => counts.set(edge.target, (counts.get(edge.target) ?? 0) + 1));
+  return counts;
+}
+
+function canApplyEdgeMutation(currentEdges: ScatterEdge[], nextEdges: ScatterEdge[], nodes: ScatterNode[]): boolean {
+  const currentIncoming = incomingEdgeCounts(currentEdges);
+  const nextIncoming = incomingEdgeCounts(nextEdges);
+  for (const [target, count] of nextIncoming) {
+    if (count > Math.max(1, currentIncoming.get(target) ?? 0)) return false;
+  }
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const currentById = new Map(currentEdges.map((edge) => [edge.id, edge]));
+  return nextEdges.every((edge) => {
+    if (nodeById.get(edge.source)?.type !== "group" && nodeById.get(edge.target)?.type !== "group") return true;
+    const current = currentById.get(edge.id);
+    return current?.source === edge.source && current.target === edge.target;
+  });
+}
+
 function emptyHistory(): CanvasHistory {
   return {
     past: [],
@@ -445,18 +467,24 @@ export const useScatterStore = create<ScatterState>((set, get) => {
       });
     },
     setNodes: (nodes) => set((state) => ({ nodes, pages: mergeCanvasIntoPages(state, nodes, state.edges) })),
-    setEdges: (edges) => set((state) => ({ edges, pages: mergeCanvasIntoPages(state, state.nodes, edges) })),
+    setEdges: (edges) => set((state) => canApplyEdgeMutation(state.edges, edges, state.nodes)
+      ? { edges, pages: mergeCanvasIntoPages(state, state.nodes, edges) }
+      : state),
     replaceCanvasLive: (change) => {
       const state = get();
+      const nextNodes = change.nodes ?? state.nodes;
+      const nextEdges = change.edges ?? state.edges;
+      if (change.edges && !canApplyEdgeMutation(state.edges, nextEdges, nextNodes)) return;
       set({
-        nodes: change.nodes ?? state.nodes,
-        edges: change.edges ?? state.edges
+        nodes: nextNodes,
+        edges: nextEdges
       });
     },
     commitCanvasChange: (change) => {
       const state = get();
       const nextNodes = change.nodes ?? state.nodes;
       const nextEdges = change.edges ?? state.edges;
+      if (change.edges && !canApplyEdgeMutation(state.edges, nextEdges, nextNodes)) return;
 
       if (state.history.transactionStart) {
         set({

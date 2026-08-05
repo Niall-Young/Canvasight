@@ -17309,7 +17309,7 @@ function zipSync(data, opts) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.2";
+var SERVER_VERSION = "0.5.3";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -19070,6 +19070,41 @@ function documentWithCurrentNavigation(currentDocument, localDocument, projectPa
     pages
   }, projectPath);
 }
+function pageEdgeConstraintViolations(basePage, candidatePage) {
+  const baseEdges = Array.isArray(basePage?.edges) ? basePage.edges : [];
+  const candidateEdges = Array.isArray(candidatePage?.edges) ? candidatePage.edges : [];
+  const baseIncoming = /* @__PURE__ */ new Map();
+  const candidateIncoming = /* @__PURE__ */ new Map();
+  baseEdges.forEach((edge) => baseIncoming.set(edge.target, (baseIncoming.get(edge.target) || 0) + 1));
+  candidateEdges.forEach((edge) => candidateIncoming.set(edge.target, (candidateIncoming.get(edge.target) || 0) + 1));
+  const violations = [];
+  for (const [target, count] of candidateIncoming) {
+    if (count > Math.max(1, baseIncoming.get(target) || 0)) violations.push("edge-target:".concat(candidatePage?.id || "page", ":").concat(target));
+  }
+  const baseNodeById = new Map((basePage?.nodes || []).map((node) => [node.id, node]));
+  const candidateNodeById = new Map((candidatePage?.nodes || []).map((node) => [node.id, node]));
+  const baseEdgeById = itemMap(baseEdges);
+  candidateEdges.forEach((edge) => {
+    if (candidateNodeById.get(edge.source)?.type !== "group" && candidateNodeById.get(edge.target)?.type !== "group") return;
+    const baseEdge = baseEdgeById.get(edge.id);
+    const preservedLegacyGroupEdge = baseEdge?.source === edge.source && baseEdge.target === edge.target && (baseNodeById.get(baseEdge.source)?.type === "group" || baseNodeById.get(baseEdge.target)?.type === "group");
+    if (!preservedLegacyGroupEdge) violations.push("group-edge:".concat(candidatePage?.id || "page", ":").concat(edge.id));
+  });
+  return [...new Set(violations)];
+}
+function documentEdgeConstraintViolations(baseDocument, candidateDocument) {
+  const basePages = itemMap(baseDocument?.pages || []);
+  return (candidateDocument?.pages || []).flatMap((page) => pageEdgeConstraintViolations(basePages.get(page.id), page));
+}
+function assertDocumentEdgeMutationAllowed(baseDocument, candidateDocument) {
+  const violations = documentEdgeConstraintViolations(baseDocument, candidateDocument);
+  if (!violations.length) return;
+  throw new HttpError(
+    400,
+    "Canvasight Edges may connect only Task or Asset nodes, and each target may have at most one incoming Edge. Existing legacy violations may be preserved or reduced, but not increased.",
+    "invalid_edge_structure"
+  );
+}
 function edgeIncidentConflict(basePage, currentPage, localPage, reasons) {
   const baseNodes = itemMap(basePage?.nodes);
   const currentNodes = itemMap(currentPage?.nodes);
@@ -19246,6 +19281,7 @@ function mergeConcurrentDocuments({ baseDocument, currentDocument, deletedPageSn
     edgeIncidentConflict(basePage, currentPage, localPage, reasons);
     const mergedNodeIds = new Set(mergedNodes.map((node) => node.id));
     if (mergedEdges.some((edge) => !mergedNodeIds.has(edge.source) || !mergedNodeIds.has(edge.target))) reasons.push("dangling-edge:".concat(pageId));
+    reasons.push(...pageEdgeConstraintViolations(currentPage, { ...currentPage, nodes: mergedNodes, edges: mergedEdges }));
     if (reasons.length) {
       const directConflictReasons = reasons.filter((reason) => /^(node|edge|page-name):/.test(reason));
       const conflictOwnedByAi = directConflictReasons.length > 0 && directConflictReasons.every((reason) => {
@@ -19766,9 +19802,11 @@ function normalizeGraphEdge(value, index, nodeIds, usedEdgeIds, usedTargetIds, u
   if (source === target) throw new HttpError(400, "edges[".concat(index, "] cannot connect a node to itself"));
   const connectionPair = "".concat(source, "\0").concat(target);
   if (usedConnectionPairs.has(connectionPair)) throw new HttpError(400, "Duplicate edge connection: ".concat(source, " -> ").concat(target));
+  if (usedTargetIds.has(target)) throw new HttpError(400, "Multiple incoming edges are not allowed for target: ".concat(target));
   const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : generatedGraphId("edge", index, usedEdgeIds);
   if (usedEdgeIds.has(id)) throw new HttpError(400, "Duplicate edge id: ".concat(id));
   usedEdgeIds.add(id);
+  usedTargetIds.add(target);
   usedConnectionPairs.add(connectionPair);
   return {
     id,
@@ -20198,6 +20236,7 @@ function validateGraphStructure(page, layout = "horizontal") {
   });
   const edgeIds = /* @__PURE__ */ new Set();
   const pairs = /* @__PURE__ */ new Set();
+  const incomingTargets = /* @__PURE__ */ new Set();
   const nodeById = new Map(page.nodes.map((node) => [node.id, node]));
   const adjacency = new Map(page.nodes.map((node) => [node.id, []]));
   page.edges.forEach((edge, index) => {
@@ -20212,6 +20251,8 @@ function validateGraphStructure(page, layout = "horizontal") {
     const pair = "".concat(edge.source, "\0").concat(edge.target);
     if (pairs.has(pair)) violations.push(graphViolation("duplicate_connection", "edges[".concat(index, "]"), "Duplicate connection: ".concat(edge.source, " -> ").concat(edge.target), "Keep only one edge for this source-target pair."));
     pairs.add(pair);
+    if (incomingTargets.has(edge.target)) violations.push(graphViolation("multiple_incoming_edges", "edges[".concat(index, "].target"), "Multiple incoming Edges target ".concat(edge.target, "."), "Keep only one incoming Edge for each Task or Asset target."));
+    incomingTargets.add(edge.target);
     adjacency.get(edge.source)?.push(edge.target);
   });
   page.nodes.forEach((node, index) => {
@@ -20677,13 +20718,15 @@ function mergeAiGraphCandidate({ basePage, currentPage, candidatePage, clientMut
     if (!valid) reasons.push("dangling-edge:".concat(edge.id));
     return valid;
   });
+  const edgeConstraintReasons = pageEdgeConstraintViolations(currentPage, { ...currentPage, nodes, edges: validEdges });
+  reasons.push(...edgeConstraintReasons);
   let name = currentPage.name;
   const currentNameChanged = currentPage.name !== basePage.name;
   const aiNameChanged = aiPage.name !== basePage.name;
   if (currentNameChanged && aiNameChanged && currentPage.name !== aiPage.name) reasons.push("page-name:".concat(basePage.id));
   else if (aiNameChanged) name = aiPage.name;
   const now = nowIso();
-  const page = { ...currentPage, name, updatedAt: now, nodes, edges: validEdges };
+  const page = edgeConstraintReasons.length ? currentPage : { ...currentPage, name, updatedAt: now, nodes, edges: validEdges };
   const candidateForCopy = {
     ...aiPage,
     nodes: aiPage.nodes.map((node) => {
@@ -22881,7 +22924,9 @@ async function handleSessionApi(req, res, url2) {
       const modernSave = isObject2(body.base) && typeof body.clientMutationId === "string" && body.clientMutationId.trim();
       if (!modernSave) {
         assertCurrentDocumentRevision(projectPath, body.expectedRevision);
-        const savedDocument2 = await writeScatterDocument(projectPath, body.document);
+        const candidateDocument = normalizeScatterDocument(body.document, projectPath);
+        assertDocumentEdgeMutationAllowed(currentDocument, candidateDocument);
+        const savedDocument2 = await writeScatterDocument(projectPath, candidateDocument);
         const documentRevision3 = currentState.revision + 1;
         const documentVersion2 = documentFingerprint(savedDocument2);
         await persistProjectRevisionState(projectPath, {
@@ -22919,6 +22964,7 @@ async function handleSessionApi(req, res, url2) {
       }
       const baseDocument = normalizeScatterDocument(body.base.document, projectPath);
       const localDocument = normalizeScatterDocument(body.document, projectPath);
+      assertDocumentEdgeMutationAllowed(baseDocument, localDocument);
       const baseVersion = documentFingerprint(baseDocument);
       if (typeof body.base.version === "string" && body.base.version && body.base.version !== baseVersion) {
         throw new HttpError(409, "Canvasight save base does not match its document version.", "invalid_document_base");

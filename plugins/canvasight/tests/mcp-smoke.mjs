@@ -4922,22 +4922,34 @@ async function main() {
       /target must reference an existing node id/
     );
 
-    await request("tools/call", {
-          name: "write_canvasight_graph",
-          arguments: {
-            projectPath,
-            pageName: "Multiple Evidence Inputs",
-            nodes: [
-              { id: "parent-a", title: "Parent A", body: "First parent." },
-              { id: "parent-b", title: "Parent B", body: "Second parent." },
-              { id: "child", title: "Child", body: "Multiple semantic inputs are allowed." }
-            ],
-            edges: [
-              { source: "parent-a", target: "child" },
-              { source: "parent-b", target: "child" }
-            ]
-          }
-        });
+    const beforeMultipleParents = await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8");
+    const beforeMultipleParentsRevision = JSON.parse(
+      await fsp.readFile(path.join(projectPath, ".scatter", "revision-state.json"), "utf8")
+    ).revision;
+    await assert.rejects(
+      () => request("tools/call", {
+        name: "write_canvasight_graph",
+        arguments: {
+          projectPath,
+          pageName: "Multiple Evidence Inputs",
+          nodes: [
+            { id: "parent-a", title: "Parent A", body: "First parent." },
+            { id: "parent-b", title: "Parent B", body: "Second parent." },
+            { id: "child", title: "Child", body: "A target accepts only one semantic parent." }
+          ],
+          edges: [
+            { source: "parent-a", target: "child" },
+            { source: "parent-b", target: "child" }
+          ]
+        }
+      }),
+      /Multiple incoming edges are not allowed for target: child/
+    );
+    assert.equal(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"), beforeMultipleParents);
+    assert.equal(
+      JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "revision-state.json"), "utf8")).revision,
+      beforeMultipleParentsRevision
+    );
 
     const document = {
       version: 1,

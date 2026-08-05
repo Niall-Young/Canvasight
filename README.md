@@ -17,7 +17,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 ### 主要功能
 
-- 创建、拖拽、删除和连接任务节点与资产节点；图片和视频直接成为 Asset 的可见内容，其他文件在单层白底中显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标。Asset 通过连线参与 Task/Group Run，作为文件证据但不单独运行。
+- 创建、拖拽、删除和连接任务节点与资产节点；每个节点可以是无上游的根节点，但作为子节点连接后只能有一个父节点，同时仍可连接多个下游。图片和视频直接成为 Asset 的可见内容，其他文件在单层白底中显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标。Asset 通过连线参与 Task/Group Run，作为文件证据但不单独运行。
 - 用单层语义 Group 收纳 Task/Asset 节点，支持 `⌘/Ctrl+G` 分组、`⌘/Ctrl+Shift+G` 解除、整体移动、右侧一键适应内容、折叠摘要和仅组内 Run。
 - 在节点内使用无工具栏富文本编辑：Markdown 快捷语法会直接呈现为紧凑的富文本，同时正文仍以 Markdown 保存，兼容模板、预览、导出和 Run。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
@@ -88,7 +88,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 6. **刷新到最新版本。** 如果 AI 已完成写入，但当前画布没有及时显示新节点，点击画布右上角的刷新图标。Canvasight 会先等待当前修改保存，再加载项目的最新画布版本，并尽量保留当前 Page、视口和选中状态。如果本地修改尚未保存或刷新期间又发生了修改，刷新会取消并保留当前内容。
 
-7. **编辑、加入素材并运行。** 你可以继续在画布中拖拽节点、编辑正文、添加附件、连接节点或切换 Page。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
+7. **编辑、加入素材并运行。** 你可以继续在画布中拖拽节点、编辑正文、添加附件、连接节点或切换 Page。每个 Task/Asset 可以没有父节点；第一条入边连接后，Canvasight 会拒绝任何第二父连接并完整保留原连线。一个节点仍可分支连接多个下游。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
 
    正文支持通过 Markdown 快捷语法输入一级至三级标题、粗体、斜体、删除线、项目列表、编号列表、任务列表、引用、行内代码、围栏代码块和链接，也支持常用格式快捷键。显示虽然是所见即所得的富文本，底层仍保存 Markdown 字符串，因此已有纯文本节点、节点模板、Markdown 预览与导出、并发保存和 Run 保持兼容。
 
@@ -279,6 +279,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:single-parent
 npm run test:skills
 npm run test:dev-server
 npm run test:mcp
@@ -287,11 +288,11 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.5.2
-npm run release:verify -- 0.5.2
+npm run release:prepare -- 0.5.3
+npm run release:verify -- 0.5.3
 ```
 
-`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 图标存在性和内容优先的源码/CSS 合同。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 图标存在性和内容优先的源码/CSS 合同；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
 
 `npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
 
@@ -409,7 +410,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 ### Main Features
 
-- Create, drag, delete, and connect task and asset nodes. Images and videos become the visible Asset content directly; other files show the matching SVG format icon, filename, and format/size on one white surface, with unmatched formats using the unknown-file icon. Assets contribute file evidence to Task/Group Run through their connections without running on their own.
+- Create, drag, delete, and connect task and asset nodes. A node may be a root with no incoming Edge; once connected as a child it has exactly one parent, while it may still branch to multiple downstream nodes. Images and videos become the visible Asset content directly; other files show the matching SVG format icon, filename, and format/size on one white surface, with unmatched formats using the unknown-file icon. Assets contribute file evidence to Task/Group Run through their connections without running on their own.
 - Organize Task/Asset nodes in single-level semantic Groups with `Cmd/Ctrl+G`, ungroup with `Cmd/Ctrl+Shift+G`, move them together, fit their contents from the right-side header action, collapse to a summary, and Run only the Group's contents.
 - Edit node bodies as toolbarless rich text: Markdown shortcuts render directly as compact formatted content while the body remains stored as Markdown for templates, preview, export, and Run.
 - Use multiple Pages as isolated canvas workspaces within one project.
@@ -480,7 +481,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 6. **Refresh to the latest version.** If AI has finished writing but the open canvas does not yet show the new nodes, click the refresh icon in the upper-right canvas controls. Canvasight waits for current changes to save, then loads the project's latest canvas version while preserving the active Page, viewport, and selection where possible. If local changes are still unsaved or new edits occur during refresh, it cancels the refresh and preserves the current content.
 
-7. **Edit, add material, and run.** You can keep dragging nodes, editing their bodies, adding attachments, connecting nodes, or switching Pages directly on the canvas. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
+7. **Edit, add material, and run.** You can keep dragging nodes, editing their bodies, adding attachments, connecting nodes, or switching Pages directly on the canvas. Each Task/Asset may remain a root with no parent; after its first incoming Edge, Canvasight rejects any second parent while preserving the existing connection. A node may still branch to multiple downstream targets. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
 
    Node bodies support Markdown shortcuts for level-one through level-three headings, bold, italic, strikethrough, bullet lists, numbered lists, task lists, blockquotes, inline code, fenced code blocks, and links, along with common formatting keyboard shortcuts. The editing surface is rich text, but Canvasight still stores the body as a Markdown string, preserving compatibility with existing plain-text nodes, node templates, Markdown preview and export, concurrent saves, and Run.
 
@@ -669,6 +670,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:single-parent
 npm run test:skills
 npm run test:dev-server
 npm run test:mcp
@@ -677,11 +679,11 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.5.2
-npm run release:verify -- 0.5.2
+npm run release:prepare -- 0.5.3
+npm run release:verify -- 0.5.3
 ```
 
-`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG registry availability, and content-first source/CSS contracts. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG registry availability, and content-first source/CSS contracts; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
 
 `npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
 

@@ -67,6 +67,8 @@ Task nodes should feel like compact work objects rather than document cards:
 - Attachments should appear as compact chips with file size and removal affordances.
 - Valid image attachments must render thumbnails from the actual image content. Loading and error states must use neutral, unmistakable, recoverable feedback and must never imitate image content or appear to be a real thumbnail.
 - Parent and child connection handles should remain discoverable on the left and right edges.
+- Semantic Edges use a single-predecessor rule. Every Task or Asset may have zero incoming Edges and therefore be a root, or exactly one incoming Edge; a node may still have multiple outgoing Edges. This constraint is independent of Group containment through `parentId`.
+- Resolve connection validity before mutation. A target with an existing incoming Edge is unavailable to any second incoming connection, except while reconnecting that same Edge. Rejection preserves the existing Edge exactly and must not replace, delete, retarget, or briefly hide it, create an undo/save revision, or change canvas selection. The occupied target does not receive the valid-target highlight, and the left add-parent affordance is unavailable after the first incoming Edge; outgoing connection affordances remain available.
 - Hovering a connected edge or related node should create a visible relationship highlight.
 - Running, loading, errored, selected, and editing states must be visually distinct.
 - Multi-select actions should work without making a single node look editable when it is only selected as part of a group.
@@ -93,6 +95,8 @@ Asset nodes make visual and file-based evidence inspectable on the canvas rather
 File import cannot be drag-only. The existing keyboard-reachable file picker must create Asset nodes when no Task is the explicit target, while an explicit Task target continues to receive attachments. Image alternative text and the Asset accessible name use the original filename even when it is visually hidden. File loading uses polite status text; failure uses an explicit message plus Retry or Open rather than color or an image-like placeholder. Replace, direct Open, and Delete remain keyboard reachable, with localized accessible names and visible focus. The content surface remains the primary drag target; only controls, handles, menus, and native video controls are `nodrag`.
 
 Deleting an Asset Node removes only the canvas object. The managed file under `.scatter/assets` remains available and is never silently evicted.
+
+Manual connections, AI graph writes, imports, retries, document saves, and concurrent persistence all enforce the same single-predecessor invariant. Existing invalid data is never silently repaired by deleting an Edge; it remains visible for explicit user repair while every path blocks adding another parent.
 
 ## Semantic Group Design
 

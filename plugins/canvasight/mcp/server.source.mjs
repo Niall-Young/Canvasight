@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.2";
+const SERVER_VERSION = "0.5.3";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -2056,6 +2056,47 @@ function documentWithCurrentNavigation(currentDocument, localDocument, projectPa
   }, projectPath);
 }
 
+function pageEdgeConstraintViolations(basePage, candidatePage) {
+  const baseEdges = Array.isArray(basePage?.edges) ? basePage.edges : [];
+  const candidateEdges = Array.isArray(candidatePage?.edges) ? candidatePage.edges : [];
+  const baseIncoming = new Map();
+  const candidateIncoming = new Map();
+  baseEdges.forEach((edge) => baseIncoming.set(edge.target, (baseIncoming.get(edge.target) || 0) + 1));
+  candidateEdges.forEach((edge) => candidateIncoming.set(edge.target, (candidateIncoming.get(edge.target) || 0) + 1));
+  const violations = [];
+  for (const [target, count] of candidateIncoming) {
+    if (count > Math.max(1, baseIncoming.get(target) || 0)) violations.push(`edge-target:${candidatePage?.id || "page"}:${target}`);
+  }
+
+  const baseNodeById = new Map((basePage?.nodes || []).map((node) => [node.id, node]));
+  const candidateNodeById = new Map((candidatePage?.nodes || []).map((node) => [node.id, node]));
+  const baseEdgeById = itemMap(baseEdges);
+  candidateEdges.forEach((edge) => {
+    if (candidateNodeById.get(edge.source)?.type !== "group" && candidateNodeById.get(edge.target)?.type !== "group") return;
+    const baseEdge = baseEdgeById.get(edge.id);
+    const preservedLegacyGroupEdge = baseEdge?.source === edge.source
+      && baseEdge.target === edge.target
+      && (baseNodeById.get(baseEdge.source)?.type === "group" || baseNodeById.get(baseEdge.target)?.type === "group");
+    if (!preservedLegacyGroupEdge) violations.push(`group-edge:${candidatePage?.id || "page"}:${edge.id}`);
+  });
+  return [...new Set(violations)];
+}
+
+function documentEdgeConstraintViolations(baseDocument, candidateDocument) {
+  const basePages = itemMap(baseDocument?.pages || []);
+  return (candidateDocument?.pages || []).flatMap((page) => pageEdgeConstraintViolations(basePages.get(page.id), page));
+}
+
+function assertDocumentEdgeMutationAllowed(baseDocument, candidateDocument) {
+  const violations = documentEdgeConstraintViolations(baseDocument, candidateDocument);
+  if (!violations.length) return;
+  throw new HttpError(
+    400,
+    "Canvasight Edges may connect only Task or Asset nodes, and each target may have at most one incoming Edge. Existing legacy violations may be preserved or reduced, but not increased.",
+    "invalid_edge_structure"
+  );
+}
+
 function edgeIncidentConflict(basePage, currentPage, localPage, reasons) {
   const baseNodes = itemMap(basePage?.nodes);
   const currentNodes = itemMap(currentPage?.nodes);
@@ -2244,6 +2285,7 @@ function mergeConcurrentDocuments({ baseDocument, currentDocument, deletedPageSn
     edgeIncidentConflict(basePage, currentPage, localPage, reasons);
     const mergedNodeIds = new Set(mergedNodes.map((node) => node.id));
     if (mergedEdges.some((edge) => !mergedNodeIds.has(edge.source) || !mergedNodeIds.has(edge.target))) reasons.push(`dangling-edge:${pageId}`);
+    reasons.push(...pageEdgeConstraintViolations(currentPage, { ...currentPage, nodes: mergedNodes, edges: mergedEdges }));
     if (reasons.length) {
       const directConflictReasons = reasons.filter((reason) => /^(node|edge|page-name):/.test(reason));
       const conflictOwnedByAi = directConflictReasons.length > 0 && directConflictReasons.every((reason) => {
@@ -2887,9 +2929,11 @@ function normalizeGraphEdge(value, index, nodeIds, usedEdgeIds, usedTargetIds, u
   if (source === target) throw new HttpError(400, `edges[${index}] cannot connect a node to itself`);
   const connectionPair = `${source}\u0000${target}`;
   if (usedConnectionPairs.has(connectionPair)) throw new HttpError(400, `Duplicate edge connection: ${source} -> ${target}`);
+  if (usedTargetIds.has(target)) throw new HttpError(400, `Multiple incoming edges are not allowed for target: ${target}`);
   const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : generatedGraphId("edge", index, usedEdgeIds);
   if (usedEdgeIds.has(id)) throw new HttpError(400, `Duplicate edge id: ${id}`);
   usedEdgeIds.add(id);
+  usedTargetIds.add(target);
   usedConnectionPairs.add(connectionPair);
   return {
     id,
@@ -3372,6 +3416,7 @@ function validateGraphStructure(page, layout = "horizontal") {
   });
   const edgeIds = new Set();
   const pairs = new Set();
+  const incomingTargets = new Set();
   const nodeById = new Map(page.nodes.map((node) => [node.id, node]));
   const adjacency = new Map(page.nodes.map((node) => [node.id, []]));
   page.edges.forEach((edge, index) => {
@@ -3386,6 +3431,8 @@ function validateGraphStructure(page, layout = "horizontal") {
     const pair = `${edge.source}\u0000${edge.target}`;
     if (pairs.has(pair)) violations.push(graphViolation("duplicate_connection", `edges[${index}]`, `Duplicate connection: ${edge.source} -> ${edge.target}`, "Keep only one edge for this source-target pair."));
     pairs.add(pair);
+    if (incomingTargets.has(edge.target)) violations.push(graphViolation("multiple_incoming_edges", `edges[${index}].target`, `Multiple incoming Edges target ${edge.target}.`, "Keep only one incoming Edge for each Task or Asset target."));
+    incomingTargets.add(edge.target);
     adjacency.get(edge.source)?.push(edge.target);
   });
   page.nodes.forEach((node, index) => {
@@ -3873,13 +3920,17 @@ function mergeAiGraphCandidate({ basePage, currentPage, candidatePage, clientMut
     if (!valid) reasons.push(`dangling-edge:${edge.id}`);
     return valid;
   });
+  const edgeConstraintReasons = pageEdgeConstraintViolations(currentPage, { ...currentPage, nodes, edges: validEdges });
+  reasons.push(...edgeConstraintReasons);
   let name = currentPage.name;
   const currentNameChanged = currentPage.name !== basePage.name;
   const aiNameChanged = aiPage.name !== basePage.name;
   if (currentNameChanged && aiNameChanged && currentPage.name !== aiPage.name) reasons.push(`page-name:${basePage.id}`);
   else if (aiNameChanged) name = aiPage.name;
   const now = nowIso();
-  const page = { ...currentPage, name, updatedAt: now, nodes, edges: validEdges };
+  const page = edgeConstraintReasons.length
+    ? currentPage
+    : { ...currentPage, name, updatedAt: now, nodes, edges: validEdges };
   const candidateForCopy = {
     ...aiPage,
     nodes: aiPage.nodes.map((node) => {
@@ -6432,7 +6483,9 @@ async function handleSessionApi(req, res, url) {
       const modernSave = isObject(body.base) && typeof body.clientMutationId === "string" && body.clientMutationId.trim();
       if (!modernSave) {
         assertCurrentDocumentRevision(projectPath, body.expectedRevision);
-        const savedDocument = await writeScatterDocument(projectPath, body.document);
+        const candidateDocument = normalizeScatterDocument(body.document, projectPath);
+        assertDocumentEdgeMutationAllowed(currentDocument, candidateDocument);
+        const savedDocument = await writeScatterDocument(projectPath, candidateDocument);
         const documentRevision = currentState.revision + 1;
         const documentVersion = documentFingerprint(savedDocument);
         await persistProjectRevisionState(projectPath, {
@@ -6471,6 +6524,7 @@ async function handleSessionApi(req, res, url) {
       }
       const baseDocument = normalizeScatterDocument(body.base.document, projectPath);
       const localDocument = normalizeScatterDocument(body.document, projectPath);
+      assertDocumentEdgeMutationAllowed(baseDocument, localDocument);
       const baseVersion = documentFingerprint(baseDocument);
       if (typeof body.base.version === "string" && body.base.version && body.base.version !== baseVersion) {
         throw new HttpError(409, "Canvasight save base does not match its document version.", "invalid_document_base");

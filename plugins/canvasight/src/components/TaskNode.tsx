@@ -687,17 +687,26 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
       onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
     >
-      <Handle type="target" position={Position.Left} className="node-handle">
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="node-handle"
+        isConnectable={!hasParent}
+        isConnectableStart={!hasParent}
+        isConnectableEnd={!hasParent}
+      >
         {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
-        <button
-          className="node-connect-button"
-          type="button"
-          aria-label={t("task.connectLeft")}
-          onMouseDown={handleConnectButtonMouseDown("left")}
-          onClick={handleConnectButtonClick("left")}
-        >
-          <Icon name="plus-lg" size={16} />
-        </button>
+        {!hasParent ? (
+          <button
+            className="node-connect-button"
+            type="button"
+            aria-label={t("task.connectLeft")}
+            onMouseDown={handleConnectButtonMouseDown("left")}
+            onClick={handleConnectButtonClick("left")}
+          >
+            <Icon name="plus-lg" size={16} />
+          </button>
+        ) : null}
       </Handle>
       <div className="task-node-header">
         <input

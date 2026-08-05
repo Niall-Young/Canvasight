@@ -34,6 +34,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-2016-issue-edge-single-parent-cardinality.md` - 关闭 Task/Asset target 可持久化多个父 Edge 的全链路缺陷。
+- `agent-reports/resolved/20260805-2028-development-edge-single-parent-solution.md` - 记录 UI、Store、保存、Graph Writer、并发冲突与 legacy 减坏方案。
 - `agent-reports/resolved/20260805-2007-integration-summary.md` - 集成 Asset 分类 UI/Run 移除、More 与文件布局收敛；browser/dev 验收通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-2007-development-solution-remove-asset-role-classification.md` - 记录 Edge 语义优先、legacy role 兼容、UI/Markdown absence 与回归方案。
 - `agent-reports/resolved/20260805-1956-issue-remove-asset-role-classification.md` - 关闭 Asset 分类控件及 Run Markdown 重复语义问题。

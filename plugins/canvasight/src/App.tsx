@@ -389,6 +389,7 @@ function connectionFromStart(connectionStart: ConnectionStart, targetNodeId: str
 function isConnectionAllowed(connection: Pick<ScatterEdge, "source" | "target">, edges: ScatterEdge[], nodes: ScatterNode[] = []): boolean {
   if (!connection.source || !connection.target || connection.source === connection.target) return false;
   if (edges.some((edge) => edge.source === connection.source && edge.target === connection.target)) return false;
+  if (edges.some((edge) => edge.target === connection.target)) return false;
   if (nodes.some((node) => (node.id === connection.source || node.id === connection.target) && node.type === "group")) return false;
   return true;
 }
@@ -2996,10 +2997,20 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     (changes: EdgeChange[]) => {
       const persistentChanges = changes.filter((change) => change.type === "add" || (!change.id.startsWith(aggregateEdgePrefix) && change.id !== connectionPreviewEdgeId));
       if (!persistentChanges.length) return;
-      const nextEdges = applyEdgeChanges(persistentChanges, edges as Edge[]);
+      const acceptedChanges: EdgeChange[] = [];
+      let candidateEdges = edges as Edge[];
+      persistentChanges.forEach((change) => {
+        const nextEdges = applyEdgeChanges([change], candidateEdges);
+        if (change.type !== "add" || isConnectionAllowed(change.item, storeEdges(candidateEdges), nodes)) {
+          acceptedChanges.push(change);
+          candidateEdges = nextEdges;
+        }
+      });
+      if (!acceptedChanges.length) return;
+      const nextEdges = applyEdgeChanges(acceptedChanges, edges as Edge[]);
       commitCanvasChange({ edges: storeEdges(nextEdges) });
     },
-    [commitCanvasChange, edges]
+    [commitCanvasChange, edges, nodes]
   );
 
   const commitExistingConnection = useCallback(
@@ -3053,10 +3064,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         nodeId: params.nodeId,
         handleType: params.handleType
       };
-      setSelectedNodeId(params.nodeId);
-      replaceCanvasLive({ nodes: nodes.map((node) => ({ ...node, selected: node.id === params.nodeId })) });
     },
-    [clearConnectionHoverTarget, edges, nodes, replaceCanvasLive, setSelectedNodeId]
+    [clearConnectionHoverTarget, edges]
   );
 
   const handleConnectEnd = useCallback<OnConnectEnd>(
