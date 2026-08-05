@@ -1,12 +1,12 @@
 ---
 status: resolved
 report_type: integration-summary
-version: 2
+version: 3
 owner: main-thread
 created_by: main-thread
 priority: high
 created_at: 2026-08-05 21:18
-updated_at: 2026-08-05 21:18
+updated_at: 2026-08-05 21:20
 related_files:
   - plugins/canvasight/mcp/server.source.mjs
   - plugins/canvasight/src/lib/canvasightApi.ts
@@ -144,5 +144,5 @@ related_files:
 ## Git 状态
 
 - branch: `main`
-- commit: pending selective closure
-- worktree: 仅本轮 scoped changes 与两个预存 untracked dist 副本；等待 selective stage。
+- commit: `9f5153d feat: 支持 SVG 资产安全预览`
+- worktree: feature commit 后仅本 integration summary closure 与两个预存 untracked dist 副本；副本保持未暂存。
