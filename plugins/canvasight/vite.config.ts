@@ -453,6 +453,15 @@ function parseSingleByteRange(header: string | string[] | undefined, size: numbe
   return { start, end: Math.min(requestedEnd, size - 1) };
 }
 
+function setManagedAssetResponseHeaders(res: { setHeader(name: string, value: string): void }, assetPath: string): void {
+  const mime = mimeFromPath(assetPath);
+  res.setHeader("content-type", mime);
+  res.setHeader("x-content-type-options", "nosniff");
+  if (mime === "image/svg+xml") {
+    res.setHeader("content-security-policy", "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'");
+  }
+}
+
 function base64UrlEncode(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
 }
@@ -525,16 +534,16 @@ function canvasightDevApiPlugin() {
             }
             if (range) {
               res.statusCode = 206;
+              setManagedAssetResponseHeaders(res, assetPath);
               res.setHeader("accept-ranges", "bytes");
               res.setHeader("content-range", `bytes ${range.start}-${range.end}/${stat.size}`);
-              res.setHeader("content-type", mimeFromPath(assetPath));
               res.setHeader("content-length", String(range.end - range.start + 1));
               fs.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res as unknown as NodeJS.WritableStream);
               return;
             }
             res.statusCode = 200;
+            setManagedAssetResponseHeaders(res, assetPath);
             res.setHeader("accept-ranges", "bytes");
-            res.setHeader("content-type", mimeFromPath(assetPath));
             res.setHeader("content-length", String(stat.size));
             fs.createReadStream(assetPath).pipe(res as unknown as NodeJS.WritableStream);
             return;

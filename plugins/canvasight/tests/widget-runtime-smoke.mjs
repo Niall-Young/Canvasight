@@ -24,6 +24,8 @@ const thumbnailPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA
 const thumbnailDataUrl = `data:image/png;base64,${thumbnailPng.toString("base64")}`;
 const thumbnailGif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64");
 const thumbnailGifDataUrl = `data:image/gif;base64,${thumbnailGif.toString("base64")}`;
+const thumbnailSvgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><linearGradient id="safe-gradient"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#7c3aed"/></linearGradient><style>.safe-shape{fill:url(#safe-gradient)}</style><style>.unsafe-shape{fill:url(https://example.com/css-tracker.svg)}</style></defs><script>parent.__CANVASIGHT_UNTRUSTED_SVG_RAN__ = true</script><rect id="safe-shape" class="safe-shape" width="10" height="10" onload="parent.__CANVASIGHT_UNTRUSTED_SVG_ONLOAD__ = true" style="stroke:url(https://example.com/stroke.svg)"><set attributeName="fill" to="url(https://example.com/smil-tracker.svg)"/></rect><foreignObject width="10" height="10"><img xmlns="http://www.w3.org/1999/xhtml" src="invalid" onerror="parent.__CANVASIGHT_UNTRUSTED_SVG_ERROR__ = true"/></foreignObject><image href="https://example.com/canvasight-svg-tracker.png"/></svg>`;
+const thumbnailSvg = Buffer.from(thumbnailSvgText, "utf8");
 
 async function terminateChild(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
@@ -104,6 +106,7 @@ function createMcpClient() {
 function hostHtml(widgetData) {
   const thumbnailPath = path.join(projectPath, ".scatter", "assets", "thumbnail.png");
   const thumbnailGifPath = path.join(projectPath, ".scatter", "assets", "thumbnail.gif");
+  const thumbnailSvgPath = path.join(projectPath, ".scatter", "assets", "thumbnail.svg");
   const page = {
     id: "page-composed",
     name: "Page 1",
@@ -140,6 +143,28 @@ function hostHtml(widgetData) {
             fileUrl: `/api/asset?path=${encodeURIComponent(Buffer.from(thumbnailGifPath).toString("base64url"))}&token=second-daemon-secret`,
             mime: "image/gif",
             size: thumbnailGif.length,
+            createdAt: new Date().toISOString()
+          }, {
+            id: "attachment-image-svg",
+            kind: "image",
+            source: "upload",
+            originalName: "thumbnail.svg",
+            storedPath: thumbnailSvgPath,
+            relativePath: ".scatter/assets/thumbnail.svg",
+            fileUrl: `/api/asset?path=${encodeURIComponent(Buffer.from(thumbnailSvgPath).toString("base64url"))}&token=svg-daemon-secret`,
+            mime: "image/svg+xml",
+            size: thumbnailSvg.length,
+            createdAt: new Date().toISOString()
+          }, {
+            id: "attachment-image-svg-data-shortcut",
+            kind: "image",
+            source: "upload",
+            originalName: "thumbnail-data-shortcut.svg",
+            storedPath: path.join(projectPath, ".scatter", "assets", "thumbnail-data-shortcut.svg"),
+            relativePath: ".scatter/assets/thumbnail-data-shortcut.svg",
+            fileUrl: `data:image/svg+xml;base64,${thumbnailSvg.toString("base64")}`,
+            mime: "image/svg+xml",
+            size: thumbnailSvg.length,
             createdAt: new Date().toISOString()
           }],
           effort: "xhigh",
@@ -321,7 +346,9 @@ function hostHtml(widgetData) {
       else if (args.path && args.path.endsWith('/attachment-preview')) {
         data = args.body && args.body.storedPath === ${JSON.stringify(thumbnailGifPath)}
           ? { dataBase64: ${JSON.stringify(thumbnailGif.toString("base64"))}, mime: 'image/gif', size: ${thumbnailGif.length} }
-          : { dataBase64: ${JSON.stringify(thumbnailPng.toString("base64"))}, mime: 'image/png', size: ${thumbnailPng.length} };
+          : args.body && args.body.storedPath === ${JSON.stringify(thumbnailSvgPath)}
+            ? { dataBase64: ${JSON.stringify(thumbnailSvg.toString("base64"))}, mime: 'image/svg+xml', size: ${thumbnailSvg.length} }
+            : { dataBase64: ${JSON.stringify(thumbnailPng.toString("base64"))}, mime: 'image/png', size: ${thumbnailPng.length} };
       }
       else if (args.path && args.path.startsWith('/api/skills')) data = { status: 'ok', query: '', count: 0, total: 0, skills: [] };
       else if (args.path && args.path.endsWith('/document')) {
@@ -1418,20 +1445,38 @@ try {
     const frame = document.getElementById('widget');
     const doc = frame.contentDocument;
     const images = Array.from(doc.querySelectorAll('.kit-upload-chip-thumbnail img'));
-    return images.length === 2 && images.every((image) => image.complete && image.naturalWidth > 0)
+    return images.length === 4 && images.every((image) => image.complete && image.naturalWidth > 0)
       ? {
           images: images.map((image) => ({ src: image.src, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight })),
-          assetCalls: window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/attachment-preview'))
+          assetCalls: window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/attachment-preview')),
+          svgFlags: {
+            script: Boolean(window.__CANVASIGHT_UNTRUSTED_SVG_RAN__ || frame.contentWindow.__CANVASIGHT_UNTRUSTED_SVG_RAN__),
+            onload: Boolean(window.__CANVASIGHT_UNTRUSTED_SVG_ONLOAD__ || frame.contentWindow.__CANVASIGHT_UNTRUSTED_SVG_ONLOAD__),
+            onerror: Boolean(window.__CANVASIGHT_UNTRUSTED_SVG_ERROR__ || frame.contentWindow.__CANVASIGHT_UNTRUSTED_SVG_ERROR__)
+          }
         }
       : false;
   })()`, "attachment thumbnail loaded through the native widget asset proxy");
-  assert.deepEqual(proxiedThumbnail.images.map((image) => image.src).sort(), [thumbnailDataUrl, thumbnailGifDataUrl].sort());
-  assert.equal(proxiedThumbnail.images.every((image) => image.naturalWidth === 1 && image.naturalHeight === 1), true);
-  assert.ok(proxiedThumbnail.assetCalls.length >= 2, "both attachment previews must load through the widget proxy");
+  assert.equal(proxiedThumbnail.images.some((image) => image.src === thumbnailDataUrl), true);
+  assert.equal(proxiedThumbnail.images.some((image) => image.src === thumbnailGifDataUrl), true);
+  const proxiedSvgs = proxiedThumbnail.images.filter((image) => image.src.startsWith("data:image/svg+xml;base64,"));
+  assert.equal(proxiedSvgs.length, 2, "proxied and managed data-URL SVG attachments must both render as images");
+  proxiedSvgs.forEach((proxiedSvg) => {
+    assert.ok(proxiedSvg.naturalWidth > 0 && proxiedSvg.naturalHeight > 0, "sanitized SVG keeps a decodable intrinsic size");
+    assert.equal(proxiedSvg.naturalWidth / proxiedSvg.naturalHeight, 1, "the square SVG viewBox ratio must be preserved");
+    const sanitizedSvg = Buffer.from(proxiedSvg.src.split(",", 2)[1], "base64").toString("utf8");
+    assert.doesNotMatch(sanitizedSvg, /<script|foreignObject|<set|<animate|\sonload=|\sonerror=|https:\/\/example\.com/iu);
+    assert.match(sanitizedSvg, /viewBox="0 0 10 10"/u);
+    assert.match(sanitizedSvg, /linearGradient/u);
+    assert.match(sanitizedSvg, /<style>\.safe-shape\{fill:url\(#safe-gradient\)\}<\/style>/u);
+  });
+  assert.deepEqual(proxiedThumbnail.svgFlags, { script: false, onload: false, onerror: false });
+  assert.ok(proxiedThumbnail.assetCalls.length >= 3, "all attachment previews must load through the widget proxy");
   assert.equal(proxiedThumbnail.assetCalls.every((call) => /^\/api\/sessions\/[^/]+\/attachment-preview$/.test(call.path)), true);
   assert.deepEqual([...new Set(proxiedThumbnail.assetCalls.map((call) => call.body.storedPath))].sort(), [
     path.join(projectPath, ".scatter", "assets", "thumbnail.gif"),
-    path.join(projectPath, ".scatter", "assets", "thumbnail.png")
+    path.join(projectPath, ".scatter", "assets", "thumbnail.png"),
+    path.join(projectPath, ".scatter", "assets", "thumbnail.svg")
   ]);
   assert.doesNotMatch(JSON.stringify(proxiedThumbnail.assetCalls), /daemon-secret/);
   assert.equal(proxiedThumbnail.assetCalls.some((call) => call.path.includes('/api/asset')), false);

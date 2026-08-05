@@ -451,17 +451,45 @@ async function main() {
     const completeVideoResponse = await fetch(`${origin}${videoAttachment.fileUrl}`);
     assert.equal(completeVideoResponse.status, 200);
     assert.equal(completeVideoResponse.headers.get("content-type"), "video/mp4");
+    assert.equal(completeVideoResponse.headers.get("x-content-type-options"), "nosniff", "all dev assets must disable MIME sniffing");
     assert.equal(completeVideoResponse.headers.get("accept-ranges"), "bytes");
     assert.equal(await completeVideoResponse.text(), "0123456789abcdef");
     const rangedVideoResponse = await fetch(`${origin}${videoAttachment.fileUrl}`, { headers: { range: "bytes=3-7" } });
     assert.equal(rangedVideoResponse.status, 206);
     assert.equal(rangedVideoResponse.headers.get("content-type"), "video/mp4");
+    assert.equal(rangedVideoResponse.headers.get("x-content-type-options"), "nosniff", "ranged dev assets must disable MIME sniffing");
     assert.equal(rangedVideoResponse.headers.get("accept-ranges"), "bytes");
     assert.equal(rangedVideoResponse.headers.get("content-range"), "bytes 3-7/16");
     assert.equal(await rangedVideoResponse.text(), "34567");
     const invalidVideoRange = await fetch(`${origin}${videoAttachment.fileUrl}`, { headers: { range: "bytes=99-120" } });
     assert.equal(invalidVideoRange.status, 416);
     assert.equal(invalidVideoRange.headers.get("content-range"), "bytes */16");
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 1"><rect width="2" height="1" fill="#2563eb"/></svg>`;
+    const [svgAttachment] = await fetchJson(`${origin}/api/sessions/local/attachments`, {
+      method: "POST",
+      body: JSON.stringify({
+        projectPath,
+        files: [{
+          name: "diagram.svg",
+          source: "upload",
+          dataBase64: Buffer.from(svgText, "utf8").toString("base64")
+        }]
+      })
+    });
+    assert.equal(svgAttachment.kind, "image");
+    assert.equal(svgAttachment.mime, "image/svg+xml");
+    const completeSvgResponse = await fetch(`${origin}${svgAttachment.fileUrl}`);
+    assert.equal(completeSvgResponse.status, 200);
+    assert.equal(completeSvgResponse.headers.get("content-type"), "image/svg+xml");
+    assert.equal(completeSvgResponse.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(completeSvgResponse.headers.get("content-security-policy"), "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'");
+    assert.equal(await completeSvgResponse.text(), svgText);
+    const rangedSvgResponse = await fetch(`${origin}${svgAttachment.fileUrl}`, { headers: { range: "bytes=0-15" } });
+    assert.equal(rangedSvgResponse.status, 206);
+    assert.equal(rangedSvgResponse.headers.get("content-type"), "image/svg+xml");
+    assert.equal(rangedSvgResponse.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(rangedSvgResponse.headers.get("content-security-policy"), "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'");
+    assert.equal(await rangedSvgResponse.text(), svgText.slice(0, 16));
     const unclaimedLogOffset = (await readNativeLog()).length;
     const unclaimedRun = await fetchJsonResult(`${origin}/api/sessions/local/run`, {
       method: "POST",

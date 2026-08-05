@@ -5036,6 +5036,7 @@ async function main() {
     assert.equal("codexMode" in scatterJson.nodes[0].data, false, "saved legacy Plan fields are removed");
     assert.equal("planMode" in scatterJson.nodes[0].data, false);
 
+    const unsafeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><script>globalThis.__canvasightSvgExecuted = true</script><rect width="10" height="10" fill="#2563eb" onload="globalThis.__canvasightSvgOnload = true"/><image href="https://example.com/tracker.png"/></svg>`;
     const attachments = await fetchJson(`${origin}/api/sessions/${sessionId}/attachments`, {
       method: "POST",
       body: JSON.stringify({
@@ -5052,16 +5053,30 @@ async function main() {
             mime: "image/png",
             source: "paste",
             dataBase64: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64").toString("base64")
+          },
+          {
+            name: "diagram.svg",
+            mime: "application/octet-stream",
+            source: "upload",
+            dataBase64: Buffer.from(unsafeSvg, "utf8").toString("base64")
           }
         ]
       })
     });
-    assert.equal(attachments.length, 2);
+    assert.equal(attachments.length, 3);
     assert.equal(attachments[0].relativePath.startsWith(".scatter/assets/"), true);
     assert.equal(await fsp.readFile(attachments[0].storedPath, "utf8"), "hello canvasight");
     const assetResponse = await fetch(`${origin}${attachments[0].fileUrl}`);
     assert.equal(assetResponse.ok, true);
     assert.equal(await assetResponse.text(), "hello canvasight");
+    assert.equal(attachments[2].kind, "image");
+    assert.equal(attachments[2].mime, "image/svg+xml");
+    const svgAssetResponse = await fetch(`${origin}${attachments[2].fileUrl}`);
+    assert.equal(svgAssetResponse.status, 200);
+    assert.equal(svgAssetResponse.headers.get("content-type"), "image/svg+xml");
+    assert.equal(svgAssetResponse.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(svgAssetResponse.headers.get("content-security-policy"), "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'");
+    assert.equal(await svgAssetResponse.text(), unsafeSvg, "the managed source file remains byte-preserving; preview sanitization happens in the image loader");
     const [videoAttachment] = await fetchJson(`${origin}/api/sessions/${sessionId}/attachments`, {
       method: "POST",
       body: JSON.stringify({
@@ -5110,6 +5125,10 @@ async function main() {
     assert.equal(widgetThumbnailProxy.structuredContent.data.mime, "image/png");
     assert.equal(widgetThumbnailProxy.structuredContent.data.size, 68);
     assert.equal(Buffer.from(widgetThumbnailProxy.structuredContent.data.dataBase64, "base64").equals(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")), true);
+    const widgetSvgProxy = await requestWidgetAttachmentPreview(attachments[2].storedPath);
+    assert.equal(widgetSvgProxy.structuredContent.ok, true);
+    assert.equal(widgetSvgProxy.structuredContent.data.mime, "image/svg+xml");
+    assert.equal(Buffer.from(widgetSvgProxy.structuredContent.data.dataBase64, "base64").toString("utf8"), unsafeSvg);
     const widgetTextPreview = await requestWidgetAttachmentPreview(attachments[0].storedPath);
     assert.equal(widgetTextPreview.structuredContent.ok, false);
     assert.equal(widgetTextPreview.structuredContent.status, 415);

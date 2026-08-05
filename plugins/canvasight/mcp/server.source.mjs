@@ -11,7 +11,7 @@ import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { strToU8, zipSync } from "fflate";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.3";
+const SERVER_VERSION = "0.5.4";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -818,8 +818,19 @@ function mimeFromPath(filePath) {
 }
 
 function attachmentKind(name, mime) {
-  if (typeof mime === "string" && mime.toLowerCase().startsWith("image/")) return "image";
+  const normalizedMime = typeof mime === "string" ? mime.trim().toLowerCase() : "";
+  const baseMime = normalizedMime.split(";", 1)[0].trim();
+  if (baseMime === "image/svg+xml") return extensionFromName(name) === ".svg" ? "image" : "file";
+  if (baseMime.startsWith("image/")) return "image";
   return IMAGE_EXTENSIONS.has(extensionFromName(name)) ? "image" : "file";
+}
+
+function normalizedAttachmentMime(name, mime) {
+  const inferred = mimeFromPath(name).split(";", 1)[0].trim().toLowerCase();
+  if (inferred && inferred !== "application/octet-stream") return inferred;
+  const supplied = typeof mime === "string" && mime.trim() ? mime.trim().toLowerCase() : "application/octet-stream";
+  if (supplied.split(";", 1)[0].trim() === "image/svg+xml" && extensionFromName(name) !== ".svg") return "application/octet-stream";
+  return supplied;
 }
 
 function defaultScatterDocument(projectPath) {
@@ -1645,15 +1656,19 @@ async function recentProjects(limit) {
 function normalizeAttachment(value) {
   const source = ["upload", "drop", "paste", "clipboard"].includes(value?.source) ? value.source : "upload";
   const storedPath = typeof value?.storedPath === "string" ? value.storedPath : "";
+  const originalName = typeof value?.originalName === "string" ? value.originalName : "attachment";
+  const relativePath = typeof value?.relativePath === "string" ? value.relativePath : "";
+  const managedName = storedPath || relativePath || originalName;
+  const mime = normalizedAttachmentMime(managedName, value?.mime);
   return {
     id: typeof value?.id === "string" && value.id ? value.id : crypto.randomUUID(),
-    kind: value?.kind === "image" ? "image" : "file",
+    kind: attachmentKind(managedName, mime),
     source,
-    originalName: typeof value?.originalName === "string" ? value.originalName : "attachment",
+    originalName,
     storedPath,
-    relativePath: typeof value?.relativePath === "string" ? value.relativePath : "",
+    relativePath,
     fileUrl: storedPath ? assetUrlForPath(storedPath) : typeof value?.fileUrl === "string" ? value.fileUrl : "",
-    mime: typeof value?.mime === "string" ? value.mime : "application/octet-stream",
+    mime,
     size: toNumber(value?.size, 0),
     createdAt: typeof value?.createdAt === "string" ? value.createdAt : nowIso()
   };
@@ -5385,7 +5400,7 @@ async function saveAttachments(projectPath, files) {
   for (const input of files) {
     if (!isObject(input)) throw new HttpError(400, "attachment input must be an object");
     const originalName = safeFileName(input.name);
-    const mime = typeof input.mime === "string" && input.mime ? input.mime : mimeFromPath(originalName);
+    const mime = normalizedAttachmentMime(originalName, input.mime);
     const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${originalName}`;
     const storedPath = path.join(assetsDir, uniqueName);
     let bytes;
@@ -6322,6 +6337,18 @@ function parseSingleByteRange(header, size) {
   return { start, end: Math.min(requestedEnd, size - 1) };
 }
 
+function managedAssetResponseHeaders(assetPath, headers = {}) {
+  const mime = mimeFromPath(assetPath);
+  return {
+    "content-type": mime,
+    "x-content-type-options": "nosniff",
+    ...(mime === "image/svg+xml"
+      ? { "content-security-policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'" }
+      : {}),
+    ...headers
+  };
+}
+
 async function serveAsset(req, res, url) {
   assertMethod(req, "GET");
   const assetPath = path.resolve(base64UrlDecode(url.searchParams.get("path")));
@@ -6340,20 +6367,18 @@ async function serveAsset(req, res, url) {
   }
   if (range) {
     const contentLength = range.end - range.start + 1;
-    res.writeHead(206, responseHeaders({
+    res.writeHead(206, responseHeaders(managedAssetResponseHeaders(assetPath, {
       "accept-ranges": "bytes",
       "content-range": `bytes ${range.start}-${range.end}/${stat.size}`,
-      "content-type": mimeFromPath(assetPath),
       "content-length": contentLength
-    }));
+    })));
     fs.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res);
     return;
   }
-  res.writeHead(200, responseHeaders({
+  res.writeHead(200, responseHeaders(managedAssetResponseHeaders(assetPath, {
     "accept-ranges": "bytes",
-    "content-type": mimeFromPath(assetPath),
     "content-length": stat.size
-  }));
+  })));
   fs.createReadStream(assetPath).pipe(res);
 }
 

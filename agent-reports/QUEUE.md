@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-2118-integration-summary.md` - 集成一等 SVG Asset、跨 runtime 被动安全预览、daemon/Vite headers、0.5.4 生成物与独立 browser/dev 验收；real native-host 保持 unverified。
+- `agent-reports/resolved/20260805-2055-issue-svg-asset-first-class-support.md` - 关闭 SVG legacy/generic MIME 归类、伪装 MIME、安全清理与被动预览合同缺失。
+- `agent-reports/resolved/20260805-2103-development-svg-asset-first-class-solution.md` - 记录受管扩展权威、跨 runtime sanitizer、SMIL/外链防护、响应头与回归门禁。
 - `agent-reports/resolved/20260805-2043-integration-summary.md` - 集成 UI/Store/保存/Graph Writer/并发的 Edge 单父硬约束；browser/dev 全验收通过，native-host 保持 unverified。
 - `agent-reports/resolved/20260805-2016-issue-edge-single-parent-cardinality.md` - 关闭 Task/Asset target 可持久化多个父 Edge 的全链路缺陷。
 - `agent-reports/resolved/20260805-2028-development-edge-single-parent-solution.md` - 记录 UI、Store、保存、Graph Writer、并发冲突与 legacy 减坏方案。

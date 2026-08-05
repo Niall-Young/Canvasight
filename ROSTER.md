@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:39:00+08:00
-    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
-    last_report: 20260805-2043-integration-summary
+    last_seen: 2026-08-05T13:18:00Z
+    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
+    last_report: 20260805-2118-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined the single-predecessor Edge contract, zero-side-effect rejection, occupied-target affordance, and legacy repair boundary
+    notes: Defined source SVG as a direct Image Asset and reviewed passive img rendering, natural ratio, transparent surfaces, failure boundaries, and security constraints
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:39:00+08:00
-    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
-    last_report: 20260805-2028-development-edge-single-parent-solution
+    last_seen: 2026-08-05T13:18:00Z
+    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
+    last_report: 20260805-2103-development-svg-asset-first-class-solution
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Enforced single-parent Edges across UI, Store, saves, Graph Writer, concurrent rebase, and occupied Task/Asset target controls
+    notes: Implemented managed SVG normalization, spoof-resistant MIME handling, browser/native/data/blob sanitization, passive img rendering, daemon/Vite security headers, and focused regression coverage
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T20:39:00+08:00
-    handoff_source: 20260805-2016-issue-edge-single-parent-cardinality
-    last_report: 20260805-2043-integration-summary
+    last_seen: 2026-08-05T13:18:00Z
+    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
+    last_report: 20260805-2118-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently verified single-parent rejection, unchanged selection/history/revision, occupied Task/Asset controls, repair recovery, and clean console
+    notes: Independently verified direct transparent SVG media, intrinsic ratios, sanitization, inactive malicious content, handles, More/Open/Replace, legacy normalization, widget runtime, and dev asset security headers
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

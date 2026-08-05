@@ -1,6 +1,6 @@
 {
   "name": "canvasight-plugin",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -27,6 +27,7 @@
     "test:mcp": "node tests/mcp-smoke.mjs",
     "test:concurrency": "node tests/concurrent-document-smoke.mjs",
     "test:single-parent": "node tests/single-parent-edge-smoke.mjs",
+    "test:svg-asset": "node tests/svg-asset-smoke.mjs",
     "test:update": "node --test tests/update-canvasight-smoke.mjs",
     "test:plugin-distribution": "node tests/plugin-distribution-smoke.mjs",
     "diagnose:mcp": "node tests/mcp-registration-probe.mjs",

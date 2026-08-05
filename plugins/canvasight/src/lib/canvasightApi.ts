@@ -359,10 +359,101 @@ interface CanvasightWidgetImageAsset {
   size: number;
 }
 
+const blockedSvgElements = new Set(["script", "foreignobject", "iframe", "object", "embed", "frame", "frameset", "link", "meta", "animate", "animatecolor", "animatemotion", "animatetransform", "set"]);
+const rasterDataUrlPattern = /^data:image\/(?:avif|gif|jpeg|png|webp);base64,/i;
+
+function svgReferenceAllowed(value: string): boolean {
+  const normalized = value.trim().replace(/^['"]|['"]$/g, "");
+  return normalized.startsWith("#") || rasterDataUrlPattern.test(normalized);
+}
+
+function containsUnsafeSvgUrl(value: string): boolean {
+  const matches = value.matchAll(/url\(\s*([^)]*?)\s*\)/gi);
+  for (const match of matches) {
+    if (!svgReferenceAllowed(match[1] || "")) return true;
+  }
+  return /@import|expression\s*\(/i.test(value);
+}
+
+export function sanitizeSvgImageText(svgText: string): string {
+  const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const root = parsed.documentElement;
+  if (!root || root.localName.toLowerCase() !== "svg" || parsed.querySelector("parsererror")) {
+    throw new CanvasightApiError("Canvasight SVG image is invalid.", 415, { code: "invalid_svg_image" });
+  }
+
+  Array.from(parsed.querySelectorAll("*")).forEach((element) => {
+    if (blockedSvgElements.has(element.localName.toLowerCase())) {
+      element.remove();
+      return;
+    }
+    if (element.localName.toLowerCase() === "style" && containsUnsafeSvgUrl(element.textContent || "")) {
+      element.remove();
+      return;
+    }
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value;
+      if (name.startsWith("on") || name === "xml:base") {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+      if ((name === "href" || name === "xlink:href" || name === "src") && !svgReferenceAllowed(value)) {
+        element.removeAttribute(attribute.name);
+        return;
+      }
+      if (containsUnsafeSvgUrl(value)) element.removeAttribute(attribute.name);
+    });
+  });
+  return new XMLSerializer().serializeToString(root);
+}
+
+function utf8Base64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function safeSvgDataUrl(svgText: string): string {
+  return `data:image/svg+xml;base64,${utf8Base64(sanitizeSvgImageText(svgText))}`;
+}
+
+async function loadSvgText(url: string): Promise<string> {
+  if (url.toLowerCase().startsWith("data:")) {
+    const comma = url.indexOf(",");
+    if (comma < 0 || !url.slice(0, comma).toLowerCase().startsWith("data:image/svg+xml")) {
+      throw new CanvasightApiError("Canvasight SVG image data URL is invalid.", 415, { code: "invalid_svg_image" });
+    }
+    const metadata = url.slice(0, comma);
+    const payload = url.slice(comma + 1);
+    return /;base64(?:;|$)/i.test(metadata) ? base64Utf8(payload) : decodeURIComponent(payload);
+  }
+  const response = await fetch(url, { referrerPolicy: "no-referrer" });
+  if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("image/svg+xml")) {
+    throw new CanvasightApiError("Canvasight SVG image could not be loaded.", response.status || 502, { code: "invalid_svg_image" });
+  }
+  return response.text();
+}
+
 export async function loadCanvasightImageAsset(fileUrl: string, storedPath: string, baseUrl = apiBaseUrl()): Promise<string> {
   if (!fileUrl) return "";
-  if (/^(?:data|blob):/i.test(fileUrl)) return fileUrl;
-  if (!isNativeWidgetShell()) return resolveCanvasightAssetUrl(fileUrl, baseUrl);
+  const isSvg = /\.svg$/i.test(storedPath);
+  if (/^(?:data|blob):/i.test(fileUrl)) return isSvg ? safeSvgDataUrl(await loadSvgText(fileUrl)) : fileUrl;
+  if (!isNativeWidgetShell()) {
+    const resolved = resolveCanvasightAssetUrl(fileUrl, baseUrl);
+    if (!/\.svg$/i.test(storedPath)) return resolved;
+    return safeSvgDataUrl(await loadSvgText(resolved));
+  }
 
   let parsed: URL;
   try {
@@ -381,6 +472,7 @@ export async function loadCanvasightImageAsset(fileUrl: string, storedPath: stri
   if (!asset?.mime?.startsWith("image/") || !asset.dataBase64) {
     throw new CanvasightApiError("Canvasight attachment preview did not return an image.", 502, { code: "invalid_asset_preview" });
   }
+  if (asset.mime.toLowerCase() === "image/svg+xml") return safeSvgDataUrl(base64Utf8(asset.dataBase64));
   return `data:${asset.mime};base64,${asset.dataBase64}`;
 }
 
