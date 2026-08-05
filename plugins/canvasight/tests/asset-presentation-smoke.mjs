@@ -9,6 +9,8 @@ const pluginRoot = path.resolve(import.meta.dirname, "..");
 const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.ts");
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
 const actionMenuItemPath = path.join(pluginRoot, "src", "components", "ui", "action-menu-item.tsx");
+const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
+const appPath = path.join(pluginRoot, "src", "App.tsx");
 const appCssPath = path.join(pluginRoot, "src", "styles", "app.css");
 
 const compiled = ts.transpileModule(fs.readFileSync(presentationPath, "utf8"), {
@@ -63,6 +65,8 @@ for (const [, , icon] of expectedMappings) {
 
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
 const actionMenuItemSource = fs.readFileSync(actionMenuItemPath, "utf8");
+const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
+const appSource = fs.readFileSync(appPath, "utf8");
 const appCssSource = fs.readFileSync(appCssPath, "utf8");
 assert.match(assetNodeSource, /className="asset-role-trigger nodrag"/, "classification must stay visible at the top left");
 assert.equal((assetNodeSource.match(/<AssetRoleOptions/g) ?? []).length, 1, "classification must not be duplicated in More");
@@ -79,5 +83,14 @@ assert.match(appCssSource, /\.asset-preview img\s*\{[^}]*width:\s*100%;[^}]*heig
 assert.doesNotMatch(appCssSource, /\.asset-preview\s*\{[^}]*height:\s*280px/s, "images must not use a fixed viewport");
 assert.doesNotMatch(assetNodeSource, /formatBytes|data\.asset\.size|asset-file-copy|asset-image-copy/, "Asset content must not render file names or sizes");
 assert.doesNotMatch(appCssSource, /\.asset-file-summary\s*\{[^}]*background:\s*var\(--color-background-input\)/s, "file Assets must not add an inner gray card");
+assert.match(appCssSource, /\.react-flow \.react-flow__nodes\s*\{[^}]*z-index:\s*auto;/s, "the nodes container must not flatten Group and content node layers");
+assert.match(appCssSource, /\.react-flow \.react-flow__edges > svg\s*\{[^}]*z-index:\s*1 !important;/s, "XYFlow edge SVGs must stay between Groups and content nodes");
+assert.match(appCssSource, /\.react-flow__node-group\s*\{[^}]*z-index:\s*0 !important;/s, "Groups must stay below Edges");
+assert.match(appCssSource, /\.react-flow__node-task,\s*\.react-flow__node-asset\s*\{\s*z-index:\s*2 !important;/s, "Task and Asset nodes must stay above Edges");
+assert.match(scatterEdgeSource, /return capSide\(position\) === "left" \? x - 10 : x \+ 10;/, "Edge paths and caps must terminate outside the connect button");
+assert.match(scatterEdgeSource, /interactionWidth=\{20\}/, "Edge click targets must retain their interaction width");
+assert.match(appSource, /if \(position === Position\.Left\) return x - offset;[\s\S]*?if \(position === Position\.Right\) return x \+ offset;/, "the live connection line must also start outside the connect button");
+assert.match(appCssSource, /\.react-flow__edge\.selected \.scatter-edge-path,[\s\S]*?\.scatter-edge-path\.is-selected\s*\{[^}]*stroke:\s*var\(--color-primary\);/s, "selected Edge highlighting must remain intact");
+assert.match(appCssSource, /\.canvas-shell\.has-connection-preview \.scatter-connection-path\s*\{[^}]*display:\s*none;/s, "the connection preview handoff must remain intact");
 
 console.log("Asset presentation smoke test passed");

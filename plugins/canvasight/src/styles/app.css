@@ -2045,7 +2045,11 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .react-flow .react-flow__nodes {
-  z-index: 1;
+  z-index: auto;
+}
+
+.react-flow .react-flow__edges > svg {
+  z-index: 1 !important;
 }
 
 .react-flow__edge .scatter-edge-path {

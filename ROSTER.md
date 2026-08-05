@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:41:00Z
-    handoff_source: 20260805-1337-issue-asset-control-placement-hover
-    last_report: 20260805-1341-integration-summary
+    last_seen: 2026-08-05T05:56:00Z
+    handoff_source: 20260805-1348-issue-edge-over-connect-button
+    last_report: 20260805-1356-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed and passed Asset classification trailing check and opaque More surface states
+    notes: Defined Group < Edge < Task/Asset layering so connect buttons stay above persistent edges
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:41:00Z
-    handoff_source: 20260805-1337-issue-asset-control-placement-hover
-    last_report: 20260805-1341-development-solution-asset-control-placement-hover
+    last_seen: 2026-08-05T05:56:00Z
+    handoff_source: 20260805-1348-issue-edge-over-connect-button
+    last_report: 20260805-1356-development-solution-edge-connect-layer
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented Asset trailing classification check and opaque More hover/focus/open states
+    notes: Removed the nodes stacking trap, fixed Edge layering and aligned Edge endpoints with connect-button outer edges
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T05:41:00Z
-    handoff_source: 20260805-1337-issue-asset-control-placement-hover
-    last_report: 20260805-1341-integration-summary
+    last_seen: 2026-08-05T05:56:00Z
+    handoff_source: 20260805-1348-issue-edge-over-connect-button
+    last_report: 20260805-1356-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Browser PASS for aligned trailing check and opaque real-video More states; existing native-host acceptance remains unverified
+    notes: Browser PASS for connect-button hit order, Edge selection, Group layering and real drag-connect; existing native-host acceptance remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

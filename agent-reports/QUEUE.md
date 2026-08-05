@@ -34,6 +34,9 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/20260805-1356-integration-summary.md` - 集成 Edge/端帽与连接按钮层级修复；浏览器交互矩阵通过，native-host 保持 unverified。
+- `agent-reports/resolved/20260805-1356-development-solution-edge-connect-layer.md` - 记录 Group、Edge、Task/Asset 显式层级与按钮外缘端点方案。
+- `agent-reports/resolved/20260805-1348-issue-edge-over-connect-button.md` - 关闭蓝色 Edge/端帽覆盖黑色连接按钮的问题。
 - `agent-reports/resolved/20260805-1341-integration-summary.md` - 集成 Asset 分类 check 右置与视频 More 实心悬停修复；native-host 保持 unverified。
 - `agent-reports/resolved/20260805-1341-development-solution-asset-control-placement-hover.md` - 记录 trailing icon 与 Asset More 状态覆盖方案。
 - `agent-reports/resolved/20260805-1337-issue-asset-control-placement-hover.md` - 关闭 Asset 分类选中标记与视频 More 悬停样式问题。
