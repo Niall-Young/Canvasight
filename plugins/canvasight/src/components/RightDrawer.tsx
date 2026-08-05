@@ -48,13 +48,12 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   return nodes.flatMap((node) => {
+    if (node.type === "asset") return [];
     const entries: TaskListEntry[] = [];
     const isFlowStart = outgoingNodeIds.has(node.id) && !incomingNodeIds.has(node.id);
     const hasPrompt = node.type === "task"
       ? node.data.body.trim().length > 0 || node.data.attachments.length > 0
-      : node.type === "asset"
-        ? Boolean(node.data.asset?.storedPath)
-        : nodes.some((member) => member.type !== "group" && member.parentId === node.id);
+      : nodes.some((member) => member.type !== "group" && member.parentId === node.id);
 
     if (isFlowStart) {
       const downstreamCount = childCount(node.id, edges);
@@ -332,7 +331,7 @@ export function RightDrawer({
             />
           </label>
           <div className="task-list">
-            {nodes.length === 0 ? (
+            {taskEntries.length === 0 ? (
               <p className="empty-copy">{t("drawer.noTasks")}</p>
             ) : filteredTaskEntries.length === 0 ? (
               <p className="empty-copy">{t("drawer.noTaskResults")}</p>

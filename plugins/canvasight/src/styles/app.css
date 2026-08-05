@@ -2381,11 +2381,12 @@ button.achievement-card.is-unlocked:focus-visible {
 .asset-node {
   position: relative;
   display: flex;
-  width: 320px;
+  width: 360px;
   flex-direction: column;
   color: var(--color-text);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-lg);
-  background: var(--color-background-sunken);
+  background: var(--color-background-surface);
   box-shadow: var(--shadow-node);
   transition: box-shadow 150ms ease;
 }
@@ -2396,15 +2397,6 @@ button.achievement-card.is-unlocked:focus-visible {
   box-shadow: var(--shadow-hover);
 }
 
-.asset-node-header {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px 4px 16px;
-}
-
-.asset-node-title,
 .group-node-title,
 .group-node-description {
   min-width: 0;
@@ -2414,13 +2406,6 @@ button.achievement-card.is-unlocked:focus-visible {
   background: transparent;
 }
 
-.asset-node-title {
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.asset-role-badge,
 .group-node-count {
   flex: 0 0 auto;
   padding: 2px 7px;
@@ -2434,23 +2419,35 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-node-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   padding: 12px;
-  border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-lg);
-  background: var(--color-background-surface);
 }
 
-.asset-node.is-selected .asset-node-card {
+.asset-node.is-selected {
   border-color: var(--color-border-focus);
+}
+
+.asset-node-menu {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+}
+
+.asset-node-menu .kit-icon-button {
+  background: color-mix(in srgb, var(--color-background-surface) 88%, transparent);
+  box-shadow: 0 1px 4px var(--color-shadow-sm);
+  backdrop-filter: blur(8px);
 }
 
 .asset-preview {
   display: grid;
   width: 100%;
-  height: 240px;
+  height: 260px;
   overflow: hidden;
   place-items: center;
   border-radius: var(--radius-md);
@@ -2479,28 +2476,85 @@ button.achievement-card.is-unlocked:focus-visible {
 }
 
 .asset-file-summary {
-  min-height: 132px;
-  flex-direction: column;
-  padding: 16px;
-  border-radius: var(--radius-md);
+  min-height: 148px;
+  justify-content: flex-start;
+  padding: 24px 52px 24px 24px;
+  border-radius: var(--radius-lg);
   background: var(--color-background-input);
+  text-align: left;
+}
+
+.asset-file-icon {
+  position: relative;
+  display: grid;
+  width: 72px;
+  height: 88px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--color-icon);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-background-surface);
+}
+
+.asset-file-type-mark {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  min-width: 22px;
+  padding: 1px 4px;
+  color: var(--color-text-subtle);
+  border: var(--border-weight-sm) solid var(--color-border-divider);
+  border-radius: var(--radius-xs);
+  background: var(--color-background-raised);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 12px;
   text-align: center;
 }
 
-.asset-file-summary strong {
-  max-width: 100%;
-  overflow-wrap: anywhere;
+.asset-file-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.asset-description {
-  width: 100%;
-  min-height: 66px;
-  resize: vertical;
-  padding: 0;
-  color: var(--color-text-subtle);
-  border: 0;
-  outline: 0;
-  background: transparent;
+.asset-file-copy strong {
+  max-width: 100%;
+  color: var(--color-text);
+  font-size: var(--text-16);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-image-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asset-image-copy {
+  padding: 0 4px 2px;
+}
+
+.asset-node-file {
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+}
+
+.asset-node-file:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.asset-role-option.is-selected {
+  background: var(--color-interaction);
+  font-weight: 500;
 }
 
 .group-node {
@@ -2567,7 +2621,12 @@ button.achievement-card.is-unlocked:focus-visible {
   font-size: var(--text-12);
 }
 
-.react-flow__node-group { z-index: 0 !important; }
+.react-flow__node-group {
+  z-index: 0 !important;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 .react-flow__node-task,
 .react-flow__node-asset { z-index: 2 !important; }
 
@@ -3176,7 +3235,10 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .task-node:hover .node-connect-button,
 .task-node:focus-within .node-connect-button,
-.task-node.is-selected .node-connect-button {
+.task-node.is-selected .node-connect-button,
+.asset-node:hover .node-connect-button,
+.asset-node:focus-within .node-connect-button,
+.asset-node.is-selected .node-connect-button {
   opacity: 1;
   transform: scale(1);
 }

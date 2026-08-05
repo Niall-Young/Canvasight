@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-04T12:56:19Z
-    handoff_source: issue-asset-nodes-semantic-groups
-    last_report: issue-asset-nodes-semantic-groups
+    last_seen: 2026-08-05T02:35:00Z
+    handoff_source: issue-group-asset-node-visual-semantics
+    last_report: issue-group-asset-node-visual-semantics
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed Asset Node, Group, collapse, aggregate-edge, keyboard, and accessibility interaction review
+    notes: Final PASS after Asset drag surface, file type mark, and collapsed Group Fit fixes
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-04T12:56:19Z
-    handoff_source: issue-asset-nodes-semantic-groups
-    last_report: issue-asset-nodes-semantic-groups
+    last_seen: 2026-08-05T02:35:00Z
+    handoff_source: issue-group-asset-node-visual-semantics
+    last_report: solution-group-asset-node-visual-semantics
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Completed Canvasight 0.5.0 model, MCP persistence, graph contracts, concurrency, UI integration, and backend tests
+    notes: Completed Canvasight 0.5.1 Group and Asset visual semantics implementation and local checks
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -59,16 +59,16 @@ roles:
     replaced_by: null
     notes: Reviewed v2 persistence, daemon-backed dev saves, graph contracts, and updated AGENTS.md durable rules
   - role: Test Supervisor Agent
-    status: active
+    status: blocked
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-04T12:56:19Z
-    handoff_source: issue-asset-nodes-semantic-groups
-    last_report: integration-summary-asset-nodes-semantic-groups
+    last_seen: 2026-08-05T02:35:00Z
+    handoff_source: issue-group-asset-node-visual-semantics
+    last_report: issue-group-asset-node-visual-semantics
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Passed the 0.5.0 local automation and browser-visible Asset and Group workflow; native-host remains unverified
+    notes: Local and browser evidence PASS; owns exact 0.5.1 restarted Codex Desktop native-host acceptance blocker
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

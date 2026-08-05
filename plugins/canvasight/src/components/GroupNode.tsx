@@ -35,17 +35,6 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
     >
       <NodeResizer isVisible={selected && !collapsed} minWidth={360} minHeight={160} />
       <header className="group-node-header">
-        <TooltipAnchor className="nodrag" label={collapsed ? t("group.expand") : t("group.collapse")}>
-          <IconButton
-            className="nodrag"
-            filled={false}
-            icon={collapsed ? "chevron-right-sm" : "chevron-down-md"}
-            size="lg"
-            aria-label={collapsed ? t("group.expand") : t("group.collapse")}
-            aria-expanded={!collapsed}
-            onClick={() => taskNodeActions?.toggleGroup(id)}
-          />
-        </TooltipAnchor>
         <div className="group-node-copy">
           <input
             className="group-node-title nodrag"
@@ -74,6 +63,28 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
           ) : description ? <span className="group-node-description-summary">{description}</span> : null}
         </div>
         <span className="group-node-count">{t("group.count", { count: memberCount, assets: assetCount })}</span>
+        <TooltipAnchor className="nodrag" label={collapsed ? t("group.fitCollapsed") : memberCount ? t("group.fit") : t("group.fitEmpty")}>
+          <IconButton
+            className="nodrag"
+            filled={false}
+            icon="aspect-ratio-16-9-1"
+            size="lg"
+            aria-label={collapsed ? t("group.fitCollapsed") : memberCount ? t("group.fit") : t("group.fitEmpty")}
+            disabled={!memberCount || collapsed}
+            onClick={() => taskNodeActions?.fitGroup(id)}
+          />
+        </TooltipAnchor>
+        <TooltipAnchor className="nodrag" label={collapsed ? t("group.expand") : t("group.collapse")}>
+          <IconButton
+            className="nodrag"
+            filled={false}
+            icon={collapsed ? "expand-lg" : "collapse-lg"}
+            size="lg"
+            aria-label={collapsed ? t("group.expand") : t("group.collapse")}
+            aria-expanded={!collapsed}
+            onClick={() => taskNodeActions?.toggleGroup(id)}
+          />
+        </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={memberCount ? t("group.run") : t("group.runEmpty")}>
           <IconButton filled={false} icon="play-1" size="lg" aria-label={memberCount ? t("group.run") : t("group.runEmpty")} disabled={!memberCount} onClick={() => taskNodeActions?.runNode(id, "flow")} />
         </TooltipAnchor>
@@ -83,12 +94,6 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
           </RadixDropdownMenu.Trigger>
           <RadixDropdownMenu.Portal>
             <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="collapse-lg" label={collapsed ? t("group.expand") : t("group.collapse")} onClick={() => taskNodeActions?.toggleGroup(id)} />
-              </RadixDropdownMenu.Item>
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="aspect-ratio-16-9-1" label={t("group.fit")} onClick={() => taskNodeActions?.fitGroup(id)} />
-              </RadixDropdownMenu.Item>
               <RadixDropdownMenu.Item asChild>
                 <ActionMenuItem icon="folder-unshare" label={t("group.ungroupAll")} onClick={() => taskNodeActions?.ungroupNode(id)} />
               </RadixDropdownMenu.Item>

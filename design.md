@@ -38,7 +38,7 @@ The active implementation is a Codex plugin workspace, not a landing page. The f
 - Topbar: compact global commands for project/workspace actions, running flows, opening the task list, and accessing settings. Do not add a manual workspace Diagnostics toolbar button or panel.
 - Canvas: the dominant surface, powered by draggable task nodes, asset nodes, semantic groups, and visible relationships.
 - Task node: the primary executable object, with title, prompt/body content, compact attachments, connection affordances, run controls, and mode controls.
-- Asset node: one managed project file promoted to a first-class visible input, reference, option, or output that can connect to tasks and participate in Run.
+- Asset node: one managed project file promoted to a first-class visible input, reference, option, or output that can connect to tasks and travel as evidence in Task/Group Run scope. It is a file object, not an executable or text-editing surface.
 - Group: a single-level semantic container between Page and Task/Asset nodes. Membership is containment, never an Edge.
 - Right drawer: contextual workspace surfaces such as task list, Markdown/run output, and related inspection views.
 - Sidebar or project list: secondary navigation only; it must not compete visually with the active canvas.
@@ -79,21 +79,24 @@ Task attachments remain compact references. Dropping a file on a Task adds an at
 
 Asset nodes make visual and file-based evidence inspectable on the canvas rather than turning Canvasight into a general asset library.
 
-- Use a stable 320 px width and the existing node surface, radius, border, shadow, typography, focus, and selection tokens.
-- The 40 px header contains an editable title, one neutral role badge (`input`, `reference`, `option`, or `output`), Run, and overflow actions. Role must not be encoded through four competing colors.
-- Images render through the native asset proxy in a bounded 320 × 240 px `object-fit: contain` preview. Loading and error states include explicit text and never imitate content.
-- Non-image assets show a file-type icon, filename, type, and formatted size. Open and Show in folder remain keyboard-reachable overflow actions.
-- The plain multi-line description grows with its content and is included in Run and Markdown.
-- Left and right relationship handles match Task nodes. Asset-only Run is valid even when no Task body exists.
+- Use a stable 360 px width and one Canvasight node surface. Do not nest a separate file card inside a task-like shell or add a persistent header bar.
+- Images use the native asset proxy and a large bounded `object-fit: contain` preview. A compact footer shows the original filename plus file type and formatted byte size. Loading and error states include explicit text and never imitate content.
+- Other files use a horizontal document-card layout: a prominent file-type icon on the left and two information lines on the right. The first line is the original filename with ellipsis; the second is a concise extension/type plus formatted byte size.
+- Asset cards expose no editable title, description field, visible role tag, duplicate command, or Run control. Persisted title/description fields remain readable for document compatibility and Markdown context, but the card itself represents the managed file.
+- Left and right relationship handles match Task nodes, remain vertically centered, and reveal the same hover/focus connection affordance.
+- Role (`input`, `reference`, `option`, or `output`) is metadata, not primary visual content. Keep it in the overflow menu as an accessible single-choice classification with a clear selected state; never encode roles through four competing colors.
+- Overflow contains explicit Replace file, classification, and Delete management. Direct file opening may remain available from the card itself. Replacement uses the managed-asset import path, preserves node ID, position, Group membership, Edges, and role, and never deletes the previous managed file.
 - Empty-canvas drops create Asset nodes at the pointer; Task drops remain attachments; dropping on an existing Asset never silently replaces its file.
 
-File import cannot be drag-only. The existing keyboard-reachable file picker must create Asset nodes when no Task is the explicit target, while an explicit Task target continues to receive attachments. Image alternative text uses the editable Asset title and falls back to the original filename. File loading uses polite status text; failure uses an explicit message plus Retry or Open rather than color or an image-like placeholder. Title, description, role, Run, Open, Show in folder, duplicate, and delete remain keyboard reachable, with localized accessible names and visible focus.
+File import cannot be drag-only. The existing keyboard-reachable file picker must create Asset nodes when no Task is the explicit target, while an explicit Task target continues to receive attachments. Image alternative text uses the original filename. File loading uses polite status text; failure uses an explicit message plus Retry or Open rather than color or an image-like placeholder. Replace, classification, direct Open, and Delete remain keyboard reachable, with localized accessible names and visible focus.
 
 Deleting an Asset Node removes only the canvas object. The managed file under `.scatter/assets` remains available and is never silently evicted.
 
 ## Semantic Group Design
 
-Expanded Groups are semantic frames, not raised cards. They use centralized group-surface and group-border tokens, a 1 px neutral border, subtle surface, `--radius-lg`, and no resting shadow. Their stable 40 px header contains collapse, editable title and description, member/asset counts, Run, and overflow actions. Group nodes never expose ordinary Edge handles.
+Expanded Groups are semantic frames, not raised cards. Clear XYFlow's default square Group wrapper so the only visible frame is Canvasight's rounded, subtle semantic surface. Use centralized group-surface and group-border tokens, a 1 px neutral border, `--radius-lg`, and no resting shadow. Selection strengthens that rounded frame or focus ring without introducing a black rectangular outline. Group nodes never expose ordinary Edge handles.
+
+The stable 40 px header keeps editable title and description on the left, then member/asset counts and right-aligned Fit to contents, collapse/expand, Run, and overflow controls. Fit and collapse use the same registry icons that previously appeared in overflow, remain individually labelled, and are removed from the menu. Overflow is reserved for low-frequency Ungroup all and Delete commands. An empty Group disables Fit to contents with an explanatory tooltip.
 
 - A Group owns Task/Asset members through `parentId`. Membership is single-level and unique; Group nesting and Edge connections to Groups are invalid.
 - Parent nodes render before children. Child coordinates are relative in storage, while group, ungroup, deletion, copy/paste, and drag-in/out preserve absolute canvas placement.
@@ -104,7 +107,7 @@ Expanded Groups are semantic frames, not raised cards. They use centralized grou
 
 Layering is explicit: the Group surface sits below semantic edges and member nodes, while the Group header and resize controls remain operable above the frame. Clicking a child selects the child without selecting its Group; rectangle selection selects visible Task/Asset nodes unless it begins on the Group frame. Drag membership is committed on pointer release using the node center within the Group content area, with a visible candidate-border state. Copying a member without its Group pastes it ungrouped; copying a Group includes its members and internal edges, remaps IDs and `parentId`, and preserves their absolute arrangement.
 
-Collapsed Groups become compact 320 × 72 px summary cards at the same top-left anchor. They show title, optional one-line description, member and asset counts, Run, expand, and overflow. The Group's persisted expanded dimensions remain unchanged while collapsed; only the collapsed/expanded flag belongs to Page-local view state. Collapse is not semantic content, is not AI-editable, and is excluded from semantic merge conflicts. Collapsing clears hidden child selection and selects the Group. Empty Groups show count `0`, disable Run, and explain why in the Run tooltip.
+Collapsed Groups become compact 320 × 72 px summary cards at the same top-left anchor. They show title, optional one-line description, member and asset counts, right-aligned expand, Run, and overflow. The Group's persisted expanded dimensions remain unchanged while collapsed; only the collapsed/expanded flag belongs to Page-local view state. Collapse is not semantic content, is not AI-editable, and is excluded from semantic merge conflicts. Collapsing clears hidden child selection and selects the Group. Empty Groups show count `0`, disable Run, and explain why in the Run tooltip.
 
 Collapsing hides members and internal edges. Persisted cross-boundary edges are rendered through temporary endpoint bundles: hidden members resolve to their collapsed Group, same-Group edges disappear, and identical directed effective endpoints become one dashed summary edge with an `×N` badge when needed. Opposite directions remain distinct and use slightly separated paths when they would overlap. The count badge and tooltip state how many hidden directed relationships are summarized; the Group's accessible name also includes member and asset counts. Synthetic aggregate edges are non-selectable, non-editable, and must never enter persistence.
 
@@ -122,7 +125,7 @@ The node body is a toolbarless, Markdown-triggered WYSIWYG editor that remains p
 
 ## Codex Run
 
-Run is a single Chat submission action. It uses a play icon and sends the selected Task, Asset, or Group as a normal Codex conversation prompt; there is no Plan or Goal mode selector. Task/Asset Flow Run follows persisted semantic edges. Group Run is deliberately bounded: it includes the Group title, description, direct members, member assets, and internal edges only, and never traverses to nodes outside the Group.
+Run is a single Chat submission action on Task and Group surfaces. It uses a play icon and sends the selected Task or Group as a normal Codex conversation prompt; there is no Plan or Goal mode selector. Task Flow Run follows persisted semantic edges and includes downstream Asset evidence without making the Asset itself executable. Group Run is deliberately bounded: it includes the Group title, description, direct members, member assets, and internal edges only, and never traverses to nodes outside the Group.
 
 Run is a submit action, not a Markdown preview action. A successful node Run should report sent only after the native widget host bridge accepts the message. Browser/dev fallback surfaces may report queued output for `await_canvasight_run`, but they must never display a native sent state. Markdown preview remains a separate review command and is not proof that a Run reached Codex.
 
@@ -435,7 +438,7 @@ Every primary surface should define:
 - Do not rely on color alone for status.
 - Ensure text and controls do not overlap at mobile or desktop sizes.
 - Group and Ungroup use `Cmd/Ctrl+G` and `Cmd/Ctrl+Shift+G`; these shortcuts are ignored while focus is in a title, description, rich-text editor, menu, dialog, or other editable control.
-- Group collapse uses `aria-expanded`. Group roots are named by their title, member count, and asset count; Run, collapse/expand, overflow, role changes, Open, Group, and Ungroup remain reachable without pointer precision.
+- Group collapse uses `aria-expanded`. Group roots are named by their title, member count, and asset count; Fit, Run, collapse/expand, overflow, Asset replacement/classification/direct Open, Group, and Ungroup remain reachable without pointer precision.
 - Status announcements cover grouping, ungrouping, attachment promotion, collapse/expand, and failed asset loading. A disabled empty-Group Run exposes a reason.
 - Preserve the current `disableKeyboardA11y` choice until XYFlow global keyboard navigation receives a dedicated regression pass. Core command access comes from explicit shortcuts and focusable object controls; Group resize may remain pointer-only in this release because keyboard canvas resizing is not an established capability.
 

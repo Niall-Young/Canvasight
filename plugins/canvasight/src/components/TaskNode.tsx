@@ -56,6 +56,7 @@ export interface RuntimeActions {
   addFilesToNode: (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => Promise<void>;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   promoteAttachment: (nodeId: string, attachmentId: string) => void;
+  replaceAsset: (nodeId: string) => void;
   createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
   duplicateNode: (nodeId: string) => void;
   saveNodeAsTemplate: (nodeId: string, data: ScatterNodeData) => Promise<void>;

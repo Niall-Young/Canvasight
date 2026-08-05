@@ -89,7 +89,7 @@ const taskNodeWidth = 400;
 const taskNodeHeight = 220;
 const taskNodeHorizontalGap = 180;
 const taskNodeVerticalGap = 72;
-const assetNodeWidth = 320;
+const assetNodeWidth = 360;
 const assetNodeHeight = 360;
 const groupHeaderHeight = 40;
 const groupPadding = 32;
@@ -1091,9 +1091,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const canRun = Boolean(project && selectedNode && (
     selectedNode.type === "task"
       ? selectedNode.data.body.trim().length > 0 || selectedNode.data.attachments.length > 0
-      : selectedNode.type === "asset"
-        ? Boolean(selectedNode.data.asset?.storedPath)
-        : nodes.some((node) => node.type !== "group" && node.parentId === selectedNode.id)
+      : selectedNode.type === "group"
+        ? nodes.some((node) => node.type !== "group" && node.parentId === selectedNode.id)
+        : false
   ));
   const canDeletePage = pages.length > 1;
   const canGroup = selectedNodes.filter((node) => node.type !== "group").length >= 2;
@@ -2529,6 +2529,28 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     input.click();
   }, [createAssetNodes, getVisibleCanvasCenterPosition]);
 
+  const replaceAsset = useCallback((nodeId: string) => {
+    if (!project || nodes.find((node) => node.id === nodeId)?.type !== "asset") return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = false;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void (async () => {
+        try {
+          const [attachment] = await canvasightApi.saveAttachments(project.path, await filesToInputs([file], "upload"));
+          if (!attachment) throw new Error(t("status.replaceAssetFailed"));
+          updateNodeData(nodeId, { asset: attachment, title: attachment.originalName });
+          setStatus(t("status.assetReplaced"));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : t("status.replaceAssetFailed"));
+        }
+      })();
+    };
+    input.click();
+  }, [nodes, project, setStatus, t, updateNodeData]);
+
   const promoteAttachment = useCallback((nodeId: string, attachmentId: string) => {
     const task = nodes.find((node): node is ScatterTaskNode => node.id === nodeId && node.type === "task");
     const attachment = task?.data.attachments.find((item) => item.id === attachmentId);
@@ -2848,7 +2870,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     async (nodeId: string, _mode: RunMode = "flow") => {
       if (!project) return;
       const node = nodes.find((item) => item.id === nodeId);
-      if (!node) return;
+      if (!node || node.type === "asset") return;
       const mode: RunMode = "flow";
       const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
       const hasRunnableInput = result.nodes.some((item) =>
@@ -2905,6 +2927,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       },
       fitGroup,
       promoteAttachment,
+      replaceAsset,
       removeAttachment,
       runNode,
       saveNodeAsTemplate,
@@ -2913,7 +2936,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       ungroupNode,
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
-  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
+  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -3154,7 +3177,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const runActiveNode = useCallback(() => {
-    if (!selectedNode) return;
+    if (!selectedNode || selectedNode.type === "asset") return;
     void runNode(selectedNode.id, "flow");
   }, [runNode, selectedNode]);
 

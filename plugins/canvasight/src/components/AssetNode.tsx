@@ -1,29 +1,30 @@
-import { memo, useEffect, useState, useSyncExternalStore, type ReactElement } from "react";
+import { memo, useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { AssetRole, ScatterAssetNodeData } from "../../shared/types";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import { useI18n } from "../lib/i18n";
 import { formatBytes } from "../lib/utils";
-import { shortcuts } from "../lib/shortcuts";
 import { taskNodeActions } from "./TaskNode";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
-import { TooltipAnchor } from "./ui/tooltip";
 
 const roles: AssetRole[] = ["input", "reference", "option", "output"];
 
+function fileTypeLabel(name: string, mime: string): string {
+  const extension = name.includes(".") ? name.split(".").pop()?.trim() : "";
+  if (extension && extension.length <= 8) return extension.toUpperCase();
+  const mimeSubtype = mime.split("/")[1]?.split(/[;+]/)[0]?.trim();
+  return mimeSubtype ? mimeSubtype.toUpperCase() : "";
+}
+
 function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetNodeData, "asset">>): ReactElement {
   const { t } = useI18n();
-  const [title, setTitle] = useState(data.title);
-  const [description, setDescription] = useState(data.description);
   const [imageSrc, setImageSrc] = useState("");
   const [imageStatus, setImageStatus] = useState<"loading" | "ready" | "error">(data.asset.kind === "image" ? "loading" : "ready");
   const assetBaseUrl = useSyncExternalStore(subscribeCanvasightRuntimeData, getCanvasightAssetBaseUrl, getCanvasightAssetBaseUrl);
 
-  useEffect(() => setTitle(data.title), [data.title]);
-  useEffect(() => setDescription(data.description), [data.description]);
   useEffect(() => {
     let current = true;
     if (data.asset.kind !== "image") return () => { current = false; };
@@ -42,19 +43,21 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
     return () => { current = false; };
   }, [assetBaseUrl, data.asset.fileUrl, data.asset.kind, data.asset.storedPath]);
 
-  const commitTitle = (): void => {
-    const next = title.trim() || data.asset.originalName;
-    setTitle(next);
-    if (next !== data.title) taskNodeActions?.updateNodeData(id, { title: next });
+  const displayName = data.asset.originalName || data.title;
+  const typeLabel = fileTypeLabel(displayName, data.asset.mime) || t("asset.file");
+  const openFile = (): void => {
+    void window.scatter.openFile(data.asset.storedPath);
   };
-  const commitDescription = (): void => {
-    if (description !== data.description) taskNodeActions?.updateNodeData(id, { description });
+  const handleFileKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openFile();
   };
 
   return (
     <article
       className={`asset-node ${selected ? "is-selected" : ""}`}
-      aria-label={`${title || data.asset.originalName}, ${t(`asset.role.${data.role}`)}`}
+      aria-label={`${displayName}, ${t(`asset.role.${data.role}`)}`}
       onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
       onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
     >
@@ -63,76 +66,80 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
           <Icon name="plus-lg" size={16} />
         </button>
       </Handle>
-      <header className="asset-node-header">
-        <input
-          className="asset-node-title nodrag"
-          value={title}
-          aria-label={t("asset.title")}
-          onChange={(event) => setTitle(event.currentTarget.value)}
-          onBlur={commitTitle}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-            if (event.key === "Escape") { setTitle(data.title); event.currentTarget.blur(); }
-          }}
-        />
-        <span className="asset-role-badge">{t(`asset.role.${data.role}`)}</span>
-        <TooltipAnchor className="nodrag" label={t("task.run")} shortcut={shortcuts.runCurrentTask}>
-          <IconButton filled={false} icon="play-1" size="lg" aria-label={t("task.run")} onClick={() => taskNodeActions?.runNode(id, "flow")} />
-        </TooltipAnchor>
-        <RadixDropdownMenu.Root>
-          <RadixDropdownMenu.Trigger asChild>
-            <IconButton className="nodrag" filled={false} icon="dots-horizontal" size="lg" aria-label={t("task.more")} />
-          </RadixDropdownMenu.Trigger>
-          <RadixDropdownMenu.Portal>
-            <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
-              {roles.map((role) => (
-                <RadixDropdownMenu.Item asChild key={role}>
-                  <ActionMenuItem className={role === data.role ? "is-selected" : ""} icon="tag" label={t(`asset.role.${role}`)} onClick={() => taskNodeActions?.updateNodeData(id, { role })} />
+      <section className="asset-node-card">
+        <div className="asset-node-menu">
+          <RadixDropdownMenu.Root>
+            <RadixDropdownMenu.Trigger asChild>
+              <IconButton className="nodrag" filled={false} icon="dots-horizontal" size="lg" aria-label={t("task.more")} />
+            </RadixDropdownMenu.Trigger>
+            <RadixDropdownMenu.Portal>
+              <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
+                <RadixDropdownMenu.Item asChild>
+                  <ActionMenuItem icon="upload-documents" label={t("asset.replaceFile")} onClick={() => taskNodeActions?.replaceAsset(id)} />
                 </RadixDropdownMenu.Item>
-              ))}
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="external-link" label={t("asset.openFile")} onClick={() => window.scatter.openFile(data.asset.storedPath)} />
-              </RadixDropdownMenu.Item>
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="folder-open" label={t("asset.showInFolder")} onClick={() => window.scatter.showInFolder(data.asset.storedPath)} />
-              </RadixDropdownMenu.Item>
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="copy" label={t("task.copy")} onClick={() => taskNodeActions?.duplicateNode(id)} />
-              </RadixDropdownMenu.Item>
-              <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
-              </RadixDropdownMenu.Item>
-            </RadixDropdownMenu.Content>
-          </RadixDropdownMenu.Portal>
-        </RadixDropdownMenu.Root>
-      </header>
-      <section className="asset-node-card" onDoubleClick={() => window.scatter.openFile(data.asset.storedPath)}>
-        {data.asset.kind === "image" ? (
-          <div className="asset-preview">
-            {imageStatus === "loading" ? <div className="asset-preview-status" role="status" aria-live="polite">{t("asset.loading")}</div> : null}
-            {imageStatus === "ready" && imageSrc ? <img src={imageSrc} alt={title || data.asset.originalName} /> : null}
-            {imageStatus === "error" ? <div className="asset-preview-status is-error" role="status"><Icon name="warning" size={20} />{t("asset.loadFailed")}</div> : null}
-          </div>
-        ) : (
-          <div className="asset-file-summary">
-            <Icon name="analyze-data" size={32} />
-            <strong>{data.asset.originalName}</strong>
-            <span>{data.asset.mime || t("asset.file")}</span>
-            <span>{formatBytes(data.asset.size)}</span>
-          </div>
-        )}
-        <textarea
-          className="asset-description nodrag nowheel"
-          value={description}
-          rows={3}
-          placeholder={t("asset.descriptionPlaceholder")}
-          aria-label={t("asset.description")}
-          onChange={(event) => setDescription(event.currentTarget.value)}
-          onBlur={commitDescription}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") { setDescription(data.description); event.currentTarget.blur(); }
-          }}
-        />
+                <RadixDropdownMenu.Sub>
+                  <RadixDropdownMenu.SubTrigger asChild>
+                    <ActionMenuItem icon="category" label={t("asset.classification")} />
+                  </RadixDropdownMenu.SubTrigger>
+                  <RadixDropdownMenu.Portal>
+                    <RadixDropdownMenu.SubContent className="dropdown-content node-action-menu" sideOffset={6} alignOffset={-4}>
+                      <RadixDropdownMenu.RadioGroup
+                        value={data.role}
+                        onValueChange={(role) => taskNodeActions?.updateNodeData(id, { role: role as AssetRole })}
+                      >
+                        {roles.map((role) => (
+                          <RadixDropdownMenu.RadioItem asChild key={role} value={role}>
+                            <ActionMenuItem
+                              className={`asset-role-option ${role === data.role ? "is-selected" : ""}`}
+                              icon={role === data.role ? "check-md" : null}
+                              label={t(`asset.role.${role}`)}
+                            />
+                          </RadixDropdownMenu.RadioItem>
+                        ))}
+                      </RadixDropdownMenu.RadioGroup>
+                    </RadixDropdownMenu.SubContent>
+                  </RadixDropdownMenu.Portal>
+                </RadixDropdownMenu.Sub>
+                <RadixDropdownMenu.Item asChild>
+                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
+                </RadixDropdownMenu.Item>
+              </RadixDropdownMenu.Content>
+            </RadixDropdownMenu.Portal>
+          </RadixDropdownMenu.Root>
+        </div>
+        <div
+          className="asset-node-file"
+          role="button"
+          tabIndex={0}
+          aria-label={t("asset.openFileNamed", { name: displayName })}
+          onDoubleClick={openFile}
+          onKeyDown={handleFileKeyDown}
+        >
+          {data.asset.kind === "image" ? (
+            <div className="asset-image-summary">
+              <div className="asset-preview">
+                {imageStatus === "loading" ? <div className="asset-preview-status" role="status" aria-live="polite">{t("asset.loading")}</div> : null}
+                {imageStatus === "ready" && imageSrc ? <img src={imageSrc} alt={displayName} /> : null}
+                {imageStatus === "error" ? <div className="asset-preview-status is-error" role="status"><Icon name="warning" size={20} />{t("asset.loadFailed")}</div> : null}
+              </div>
+              <span className="asset-file-copy asset-image-copy">
+                <strong title={displayName}>{displayName}</strong>
+                <span>{typeLabel} · {formatBytes(data.asset.size)}</span>
+              </span>
+            </div>
+          ) : (
+            <div className="asset-file-summary">
+              <span className="asset-file-icon">
+                <Icon name="notepad" size={44} />
+                <small className="asset-file-type-mark">{typeLabel}</small>
+              </span>
+              <span className="asset-file-copy">
+                <strong>{displayName}</strong>
+                <span>{typeLabel} · {formatBytes(data.asset.size)}</span>
+              </span>
+            </div>
+          )}
+        </div>
       </section>
       <Handle type="source" position={Position.Right} className="node-handle">
         <button className="node-connect-button" type="button" aria-label={t("task.connectRight")} onClick={() => taskNodeActions?.createConnectedNode(id, "right")}>
