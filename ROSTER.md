@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T06:15:00Z
-    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
-    last_report: 20260805-1415-integration-summary
+    last_seen: 2026-08-05T10:22:00Z
+    handoff_source: edge-geometry-agents-guardrail
+    last_report: 20260805-1822-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Corrected endpoint semantics from real DOM evidence; current XYFlow requires inward half-Handle conversion to reach node boundaries
+    notes: Reviewed AGENTS.md separation of Edge attachment geometry from connect-button occlusion
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T06:15:00Z
-    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
-    last_report: 20260805-1415-development-solution-edge-endpoint-gap
+    last_seen: 2026-08-05T10:22:00Z
+    handoff_source: edge-geometry-agents-guardrail
+    last_report: 20260805-1822-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Restored inward half-Handle endpoint conversion and added regression assertions against outward/direct gaps
+    notes: Reviewed explicit AGENTS.md inward half-Handle implementation guardrail and forbidden regressions
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T06:15:00Z
-    handoff_source: 20260805-1407-issue-edge-endpoint-gap-regression
-    last_report: 20260805-1415-integration-summary
+    last_seen: 2026-08-05T10:22:00Z
+    handoff_source: edge-geometry-agents-guardrail
+    last_report: 20260805-1822-integration-summary
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Browser PASS for zero-gap endpoints, button hit order, Edge selection, Group layering and real drag-connect; native-host remains unverified
+    notes: Defined AGENTS.md real-browser Edge geometry gate with <=0.5 CSS px endpoint gaps and full interaction checks
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
