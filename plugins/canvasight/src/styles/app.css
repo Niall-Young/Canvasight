@@ -2569,23 +2569,14 @@ button.achievement-card.is-unlocked:focus-visible {
   object-fit: contain;
 }
 
-.asset-video-toolbar {
+.asset-video-selection-layer {
   position: absolute;
+  top: 0;
   right: 0;
-  bottom: 0;
+  bottom: 48px;
   left: 0;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  min-height: 52px;
-  padding: 12px;
-  pointer-events: none;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: linear-gradient(to bottom, transparent, var(--color-overlay));
-}
-
-.asset-video-playback {
-  pointer-events: auto;
+  z-index: 1;
+  cursor: pointer;
 }
 
 .asset-node-content {

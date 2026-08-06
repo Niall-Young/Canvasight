@@ -6,11 +6,11 @@ status: resolved
 owner: Development Agent
 created_by: Development Agent
 priority: medium
-version: 1
+version: 2
 agent_id: /root/development_agent
 thread_id: null
 created_at: 2026-08-06T04:13:46Z
-updated_at: 2026-08-06T04:13:46Z
+updated_at: 2026-08-06T13:44:18Z
 depends_on:
   - issue-asset-media-focus-video-playback-controls
 related_issue: agent-reports/assigned/issue-asset-media-focus-video-playback-controls.md
@@ -27,7 +27,7 @@ verification_evidence:
   - 双主题真实浏览器媒体交互与几何回归矩阵；console 0/0
 ---
 
-# 媒体 Asset 聚焦边框与显式视频播放工具栏
+# 媒体 Asset 聚焦边框与原生视频控制栏
 
 ## 负责 Agent
 
@@ -39,38 +39,38 @@ Development Agent
 
 ## Root Cause
 
-内容优先的图片/视频 Asset 移除了外壳与 border，却只保留 hover shadow，没有独立选中边界。视频继续使用 native controls，浏览器将画面点击解释为播放/暂停；同时 Canvasight 全局 Space-pan 快捷键会阻止 focused button 的原生 Space 激活。
+内容优先的图片/视频 Asset 移除了外壳与 border，却只保留 hover shadow，没有独立选中边界。浏览器原生播放器会把画面点击解释为播放/暂停，但用户同时要求保留完整原生底栏，因此需要把画面选择命中区与底部 controls 命中区分离。
 
 ## 调研过程
 
-- 真实浏览器确认旧 video surface 点击会同时选中并切换 paused。
-- 先用 focused smoke 固化无原生 controls、focus-token overlay、命名 toolbar、事件驱动状态与几何边界。
-- Browser QA 发现 ended 视频不能重播及 Space 被全局 handler 阻断，分别完成红绿修复。
+- 用户验收明确否决自定义播放按钮，要求恢复此前的原生进度、时间、音量与全屏工具栏。
+- focused smoke 固化 `video[controls]`、无 custom toolbar、focus-token overlay、picture-only selection layer 与几何边界。
+- Chromium browser QA 对 selection layer 的最后 1px 和原生 controls 的第 1px 分别探针，确认无覆盖、无空隙。
 
 ## 可选方案
 
 - 给媒体节点增加布局 border：会改变 bounds 与 Edge 端点，不采用。
-- 继续使用 native controls 并阻止 picture click：跨浏览器 shadow controls 行为不稳定，不采用。
-- 在内容内部叠加 border，并使用自定义底部 play/pause toolbar：采用。
+- 移除 native controls 并使用自定义 play/pause：丢失进度、时间、音量和全屏，用户已否决。
+- 在内容内部叠加 border，并让透明 selection layer 只覆盖画面、为原生底栏保留安全区：采用。
 
 ## 推荐方案
 
-图片/视频的 selected 状态通过 absolute `::after` 绘制 1px `--color-border-focus` border。Video 移除 `controls`，画面 click 仅 prevent default 并冒泡给 XYFlow；底部常驻命名 toolbar 的原生 IconButton 执行 play/pause，状态由 play/pause/ended 事件更新。全局 Space-pan 跳过 native/ARIA 交互控件，ended 视频播放前先归零。
+图片/视频的 selected 状态通过 absolute `::after` 绘制 1px `--color-border-focus` border。Video 保留无裁剪限制的 `controls`；透明 sibling selection layer 覆盖上方 172px 画面并自然冒泡给 XYFlow，底部 48px 完整透传给浏览器原生 controls。全局 Space-pan 跳过 `video[controls]` 和 `audio[controls]`。
 
 ## 实施步骤
 
-1. 添加媒体 selected overlay 与工具栏层级，不改变 node/content/video 尺寸。
-2. 引入本地化 toolbar/play/pause 名称和既有 SVG 图标。
-3. 分离视频选择与播放事件，处理 rejected play 与 ended replay。
-4. 修复 Space-pan 与 button 原生键盘激活冲突并加入 focused contracts。
+1. 保留媒体 selected overlay，不改变 node/content/video 尺寸。
+2. 恢复 `<video controls>` 并删除 custom toolbar、播放状态、命令及翻译。
+3. 添加 picture-only selection layer，准确避开底部 48px 原生 controls。
+4. 让 Space-pan 跳过原生受控媒体，并加入 focused contracts。
 
 ## 风险与回滚
 
-回滚可移除 toolbar、overlay 和 keyboard-interactive guard，恢复 native controls；但会重新引入用户报告的选择/播放冲突。未增加持久字段或 runtime contract。
+回滚 selection layer 会重新引入画面点击切换播放；增大 safe area 可能在不同浏览器留下画面误触区域。未增加持久字段或 runtime contract，Safari 的 UA controls 仍需单独实测。
 
 ## 处理结果
 
-已修复。图片/视频选中边框、视频画面选择、底部播放控制、Space/Enter、ended replay 与几何稳定均通过浏览器验证。
+已纠正。图片/视频选中边框、画面选择、原生 Play/Pause、seek、fullscreen、More 和几何稳定均通过 Chromium 浏览器验证。
 
 ## 修改文件
 
@@ -80,8 +80,8 @@ Development Agent
 
 - `npm run test:asset-presentation`
 - `npm run typecheck`
-- 双主题 real-browser pointer/keyboard/playback/computed-style/geometry/console matrix
+- 双主题 real-browser pointer/native-controls/playback/computed-style/geometry/console matrix
 
 ## 后续风险
 
-真实 Codex native widget 验收由 assigned issue 继续跟踪；浏览器证据不能替代 native-host acceptance。
+Safari UA controls safe area 与真实 Codex native widget 验收由 assigned issue 继续跟踪；浏览器证据不能替代 native-host acceptance。

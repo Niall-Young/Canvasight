@@ -6,11 +6,11 @@ status: assigned
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: medium
-version: 2
+version: 4
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-08-06T03:49:52Z
-updated_at: 2026-08-06T04:13:46Z
+updated_at: 2026-08-06T13:44:18Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/components/AssetNode.tsx
@@ -22,9 +22,9 @@ related_files:
   - README.md
 verification_status: failed
 verification_evidence:
-  - Focused Asset presentation smoke、TypeScript、build、composed production widget、MCP bundle、release metadata 与 plugin validation 通过。
-  - 双主题真实浏览器通过媒体选择、focus ring、surface-only selection、pointer/Space/Enter playback、ended replay、More、双击打开与几何不变矩阵；console 0/0。
-  - 精确交付快照的真实 Codex native widget 尚未验收。
+  - 用户验收否决自定义播放工具栏；正确合同是保留原生完整底部 controls，同时让画面点击只选择节点。
+  - Chromium browser QA 通过完整原生 controls、48px safe area 边界、画面选择、播放/暂停、seek、fullscreen、双主题 focus ring 与稳定 Edge 几何；console 0/0。
+  - 真实 Codex native widget 尚未验收，因此按项目合同保持 failed/assigned，不以 browser 证据关闭。
 solution_report: agent-reports/resolved/solution-asset-media-focus-video-playback-controls.md
 ---
 
@@ -48,12 +48,12 @@ Development Agent
 
 ## 问题描述
 
-媒体内容本体作为 Asset Node 边界时仍需明确选中反馈。图片和视频点击应先完成画布节点选中，选中态使用现有 focus border token，且不得因边框改变节点尺寸、Handle 或 Edge 端点。视频播放控制必须与节点选择分离：点击视频画面只选中，播放/暂停只能通过视频下方工具栏中的图标按钮操作。
+媒体内容本体作为 Asset Node 边界时仍需明确选中反馈。图片和视频点击应先完成画布节点选中，选中态使用现有 focus border token，且不得因边框改变节点尺寸、Handle 或 Edge 端点。视频画面点击只负责选中；浏览器原生底部 controls 必须完整保留，包括进度、时间、播放/暂停、音量与全屏。
 
 ## 现象
 
 - 图片/视频 `selected` 状态只有 hover shadow，没有聚焦色边框。
-- 原生 video surface 点击会切换播放/暂停，单击语义与画布其他节点不一致。
+- 自定义 video toolbar 错误移除了原生进度、时间、音量与全屏控制。
 
 ## 复现方式
 
@@ -90,25 +90,25 @@ Development Agent
 
 ## 期望结果
 
-图片/视频点击后显示 `--color-border-focus` 选中边框且节点几何不变；视频画面单击只选中节点，只有底部播放/暂停图标按钮能改变播放状态。
+图片/视频点击后显示 `--color-border-focus` 选中边框且节点几何不变；视频画面单击只选中节点，底部浏览器原生完整 controls 保持可见且可操作。
 
 ## Closure Criteria
 
 - [x] 图片与视频选中态显示 focus token 边框
 - [x] 边框不改变节点尺寸、Handle 或 Edge 端点
 - [x] 视频画面点击只选中且不播放/暂停
-- [x] 底部播放/暂停按钮可通过指针和键盘操作
+- [x] 恢复浏览器原生完整底部 controls，包括进度、时间、播放/暂停、音量与全屏
 - [x] 图片、视频、文件与 More/连接控件无回归
 - [x] focused tests、typecheck、build 与双主题 browser QA 通过
 - [ ] 真实 Codex native widget 验收状态被明确记录
 
 ## 当前状态
 
-assigned：本地实现、自动化与双主题浏览器验证已通过；交给 Test Supervisor Agent 等待真实 Codex native widget 验收。
+assigned：纠正后的源码、构建和 Chromium browser QA 已通过；交给 Test Supervisor Agent 等待真实 Codex native widget 验收。
 
 ## 处理结果
 
-媒体选中态使用不参与布局的 focus-token overlay border。视频移除 native controls，画面点击只选择节点，底部命名 toolbar 的播放/暂停按钮独占播放；Space-pan 对交互控件豁免，ended 视频可归零重播。真实 native host 尚未验证。
+媒体 focus border 保留；视频已恢复原生完整 controls，48px picture/control 边界通过实测。
 
 ## 修改文件
 
@@ -129,4 +129,4 @@ assigned：本地实现、自动化与双主题浏览器验证已通过；交给
 
 ## 后续风险
 
-真实 Codex native widget 仍需用户验收；在此之前不得把 browser/dev 证据描述为 native-host 通过。
+必须验证 selection overlay 不覆盖原生底部 controls，且原生进度、时间、音量、全屏与键盘操作仍可用。

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
+import { memo, useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { ScatterAssetNodeData } from "../../shared/types";
@@ -16,8 +16,6 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
   const { t } = useI18n();
   const [imageSrc, setImageSrc] = useState("");
   const [imageStatus, setImageStatus] = useState<"loading" | "ready" | "error">(data.asset.kind === "image" ? "loading" : "ready");
-  const [videoPlaying, setVideoPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const assetBaseUrl = useSyncExternalStore(subscribeCanvasightRuntimeData, getCanvasightAssetBaseUrl, getCanvasightAssetBaseUrl);
   const hasParent = useScatterStore((state) =>
     state.edges.some((edge) => edge.target === id && state.nodes.some((node) => node.id === edge.source))
@@ -45,11 +43,6 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
   const video = isVideoAsset(displayName, data.asset.mime);
   const presentation = data.asset.kind === "image" ? "image" : video ? "video" : "file";
   const videoSrc = video ? resolveCanvasightAssetUrl(data.asset.fileUrl, assetBaseUrl) : "";
-
-  useEffect(() => {
-    setVideoPlaying(false);
-  }, [videoSrc]);
-
   const extension = assetExtension(displayName);
   const fileType = extension ? extension.toUpperCase() : t("asset.file");
   const openFile = (): void => {
@@ -60,26 +53,6 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     openFile();
-  };
-  const handleVideoSurfaceClick = (event: MouseEvent<HTMLVideoElement>): void => {
-    event.preventDefault();
-  };
-  const toggleVideoPlayback = async (): Promise<void> => {
-    const videoElement = videoRef.current;
-    if (!videoElement) return;
-    if (videoElement.paused) {
-      if (videoElement.ended || (Number.isFinite(videoElement.duration) && videoElement.currentTime >= videoElement.duration)) {
-        videoElement.currentTime = 0;
-      }
-      try {
-        await videoElement.play();
-      } catch {
-        setVideoPlaying(false);
-        return;
-      }
-      return;
-    }
-    videoElement.pause();
   };
 
   return (
@@ -140,31 +113,13 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
         ) : video ? (
           <div className="asset-video-stage">
             <video
-              ref={videoRef}
               className="asset-video"
               src={videoSrc}
+              controls
               preload="metadata"
               aria-label={displayName}
-              onClick={handleVideoSurfaceClick}
-              onPlay={() => setVideoPlaying(true)}
-              onPause={() => setVideoPlaying(false)}
-              onEnded={() => setVideoPlaying(false)}
             />
-            <div className="asset-video-toolbar nodrag nopan" role="toolbar" aria-label={t("asset.videoControls")}>
-              <IconButton
-                className="asset-video-playback"
-                icon={videoPlaying ? "pause" : "play"}
-                size="md"
-                aria-label={t(videoPlaying ? "asset.pauseVideo" : "asset.playVideo")}
-                aria-pressed={videoPlaying}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void toggleVideoPlayback();
-                }}
-                onDoubleClick={(event) => event.stopPropagation()}
-              />
-            </div>
+            <div className="asset-video-selection-layer" aria-hidden="true" />
           </div>
         ) : (
           <div className="asset-file-summary">

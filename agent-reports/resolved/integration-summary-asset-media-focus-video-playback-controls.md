@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 2
+version: 3
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T04:13:46Z
-updated_at: 2026-08-06T04:17:00Z
+updated_at: 2026-08-06T13:44:18Z
 depends_on:
   - issue-asset-media-focus-video-playback-controls
   - solution-asset-media-focus-video-playback-controls
@@ -29,7 +29,7 @@ related_files:
 verification_status: passed
 verification_evidence:
   - Focused tests、typecheck、build、composed production widget、bundle/release/plugin gates 通过。
-  - 双主题真实浏览器通过 pointer/Space/Enter、ended replay、focus ring、More/open 与 geometry/Edge 不变矩阵；console 0/0。
+  - 双主题真实浏览器通过 picture/control 边界、原生 Play/Pause、seek、fullscreen、focus ring、More/open 与 geometry/Edge 不变矩阵；console 0/0。
   - Agent Team validator 已运行，但继续被历史 legacy reports/templates/QUEUE schema 漂移阻塞；本轮报告字段符合当前 schema。
 ---
 
@@ -38,7 +38,7 @@ verification_evidence:
 ## 本轮目标
 
 - 图片/视频选中时显示 focus-token 边框且不改变几何。
-- 视频画面点击只选择节点，播放/暂停仅由底部按钮操作。
+- 视频画面点击只选择节点，底部保留浏览器原生完整控制栏。
 
 ## Agent 状态
 
@@ -51,20 +51,20 @@ verification_evidence:
 
 ## Agent 输入
 
-- Design：使用不参与布局的内部 focus ring；保留独立 keyboard focus；自定义常驻底部 toolbar。
-- Development：移除 native controls、事件驱动播放状态、处理 play reject/ended replay，并让 Space-pan 跳过交互控件。
-- Test：验证 selection/playback 分离、Space/Enter、双主题 token、rect/Handle/Edge 稳定及 console 0/0。
+- Design：使用不参与布局的内部 focus ring；透明画面选择层避开浏览器原生底部 controls。
+- Development：恢复 native controls、删除 custom toolbar，并让 Space-pan 跳过受控媒体。
+- Test：验证 48px selection/control 边界、原生 Play/Pause/seek/fullscreen、双主题 token、rect/Handle/Edge 稳定及 console 0/0。
 
 ## 报告状态变更
 
-- 新建 issue 并交给 Development Agent；本地实现验证后转交 Test Supervisor Agent等待 native acceptance。
-- 新建 resolved solution；issue 保持 assigned/failed 以记录 native-host 缺口。
+- 用户否决第一次自定义 toolbar 实现后，issue v3 重新交给 Development Agent 按原生 controls 合同纠正。
+- Chromium browser QA 通过后 issue v4 转交 Test Supervisor Agent；保持 assigned/failed 记录 native-host 缺口。
 
 ## 已解决
 
 - 图片和视频 selected 显示 1px focus-token overlay border。
-- 视频画面点击只选中，底部命名 toolbar 的按钮独占 play/pause。
-- Space/Enter、ended replay、More、双击打开与 Edge 几何均无回归。
+- 视频画面点击只选中，底部浏览器原生 Play/Pause、进度、时间、音量与全屏保持可用。
+- 原生 seek/fullscreen、More、双击打开与 Edge 几何均无回归。
 
 ## 未解决
 
@@ -80,7 +80,7 @@ verification_evidence:
 
 ## 已完成改动
 
-- UI、translations、global keyboard boundary、focused tests、design/README 与 production Web artifacts。
+- UI、global keyboard boundary、focused tests、design/README 与 production Web artifacts；移除错误 custom-toolbar translations。
 
 ## 处理结果
 
@@ -103,7 +103,8 @@ verification_evidence:
 
 ## 验证记录
 
-- Video `controls=false`；surface click 不切换播放；按钮 pointer/Space/Enter 与 ended replay 通过。
+- Video `controls=true`；selection layer 高 172px、底部原生区高 48px；本地 y=171 只选中，y=172 已命中原生 Play。
+- 原生 Play/Pause、seek 与 fullscreen 通过；音量、fullscreen 和 native More 视觉无遮挡。
 - Light/dark ring 分别匹配 `#525252`/`#E0E0E0`；node/content/video rect、Handle 中心与 Edge path 前后一致。
 - Console Errors 0 / Warnings 0。
 
@@ -118,6 +119,6 @@ verification_evidence:
 ## Git 状态
 
 - branch: `main`
-- baseline: `a0a8c0e7fe9f3ca3c34877049d5dad867d50b510`
-- commit: `e867d31506bfa076cb75bed7275c012484fad00a` (`fix: 完善媒体节点聚焦与播放交互`)
-- worktree: 实现提交后只剩两个预先存在且未改动的 untracked dist duplicate 文件。
+- baseline: `9e72ade0f5ff00908a35907b11efafafa867c8b1`
+- commit: pending（本轮纠正尚待选择性提交）
+- worktree: 提交前保留两个预先存在且未改动的 untracked dist duplicate 文件。

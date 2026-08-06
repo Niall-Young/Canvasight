@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T13:18:00Z
-    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
-    last_report: 20260805-2118-integration-summary
+    last_seen: 2026-08-06T13:44:18Z
+    handoff_source: issue-asset-media-focus-video-playback-controls
+    last_report: integration-summary-asset-media-focus-video-playback-controls
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Defined source SVG as a direct Image Asset and reviewed passive img rendering, natural ratio, transparent surfaces, failure boundaries, and security constraints
+    notes: Reviewed restored browser-native video controls, picture-only selection safe area, focus ring geometry, control layering, and browser acceptance risks
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T04:13:46Z
+    last_seen: 2026-08-06T13:44:18Z
     handoff_source: issue-asset-media-focus-video-playback-controls
     last_report: solution-asset-media-focus-video-playback-controls
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented media focus overlay, explicit video toolbar, ended replay, and interactive-control Space-pan boundary with focused gates passing
+    notes: Restored complete native video controls, removed the rejected custom toolbar, and preserved surface-only selection and media focus border
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T04:13:46Z
+    last_seen: 2026-08-06T13:44:18Z
     handoff_source: issue-asset-media-focus-video-playback-controls
     last_report: issue-asset-media-focus-video-playback-controls
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified media focus tokens, selection/playback separation, pointer and keyboard controls, ended replay, stable node/Handle/Edge geometry and console 0/0; native host remains unverified
+    notes: Verified the 48px picture/control boundary, native Play/Pause/seek/fullscreen, focus tokens, stable node/Handle/Edge geometry and console 0/0; native host remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
