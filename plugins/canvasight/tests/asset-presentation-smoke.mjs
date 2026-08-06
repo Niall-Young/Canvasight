@@ -11,6 +11,7 @@ const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx"
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 const appCssPath = path.join(pluginRoot, "src", "styles", "app.css");
+const translationsPath = path.join(pluginRoot, "src", "lib", "translations.ts");
 
 const compiled = ts.transpileModule(fs.readFileSync(presentationPath, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -60,6 +61,7 @@ const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
 const appCssSource = fs.readFileSync(appCssPath, "utf8");
+const translationsSource = fs.readFileSync(translationsPath, "utf8");
 assert.doesNotMatch(assetNodeSource, /AssetRoleOptions|asset-role-trigger|asset-role-option|asset\.classification|asset\.role\.|data\.role/, "Asset nodes must not render or expose the persisted compatibility role");
 assert.doesNotMatch(assetNodeSource, /RadioGroup|RadioItem/, "Asset classification must not return inside More");
 assert.match(assetNodeSource, /className="asset-node-menu"/, "More must remain a distinct hover control");
@@ -71,6 +73,29 @@ assert.doesNotMatch(appCssSource, /\.asset-node-menu \.kit-icon-button\s*\{[^}]*
 assert.match(appCssSource, /\.asset-preview\.is-loading,[\s\S]*?min-height:\s*220px/, "only pending image states keep a placeholder");
 assert.match(appCssSource, /\.asset-preview img\s*\{[^}]*width:\s*100%;[^}]*height:\s*auto;/s, "ready images must preserve their natural ratio");
 assert.doesNotMatch(appCssSource, /\.asset-preview\s*\{[^}]*height:\s*280px/s, "images must not use a fixed viewport");
+assert.match(appCssSource, /\.asset-node-content\s*\{[^}]*position:\s*relative;/s, "media selection decoration must anchor without changing Asset geometry");
+assert.match(
+  appCssSource,
+  /\.asset-node\.is-image\.is-selected \.asset-node-content::after,\s*\.asset-node\.is-video\.is-selected \.asset-node-content::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*pointer-events:\s*none;[^}]*border:\s*var\(--border-weight-sm\) solid var\(--color-border-focus\);[^}]*border-radius:\s*inherit;/s,
+  "selected image and video Assets must draw a focus-token overlay border without moving Handles or Edges"
+);
+assert.doesNotMatch(assetNodeSource, /<video[^>]*\bcontrols\b/s, "video Assets must not expose native controls");
+assert.match(assetNodeSource, /const handleVideoSurfaceClick[^=]*=\s*\([^)]*\)[^=]*=>\s*\{\s*event\.preventDefault\(\);\s*\};/s, "video surface clicks must only suppress native playback behavior and bubble to XYFlow selection");
+assert.match(assetNodeSource, /<video[^>]*ref=\{videoRef\}[^>]*onClick=\{handleVideoSurfaceClick\}[^>]*onPlay=\{[^}]*setVideoPlaying\(true\)[^}]*\}[^>]*onPause=\{[^}]*setVideoPlaying\(false\)[^}]*\}[^>]*onEnded=\{[^}]*setVideoPlaying\(false\)[^}]*\}/s, "video playback state must follow media events while the surface only selects the node");
+assert.match(assetNodeSource, /videoElement\.paused[\s\S]*?videoElement\.play\(\)[\s\S]*?videoElement\.pause\(\)/s, "the custom playback button must own play and pause commands");
+assert.match(assetNodeSource, /videoElement\.ended\s*\|\|\s*\(Number\.isFinite\(videoElement\.duration\)\s*&&\s*videoElement\.currentTime\s*>=\s*videoElement\.duration\)[\s\S]*?videoElement\.currentTime\s*=\s*0;[\s\S]*?await videoElement\.play\(\);/s, "replaying an ended video must rewind to the start before play");
+assert.match(assetNodeSource, /await videoElement\.play\(\);\s*\} catch \{\s*setVideoPlaying\(false\);\s*return;/s, "a rejected play request must restore the paused control state");
+assert.match(assetNodeSource, /className="asset-video-toolbar nodrag nopan"[^>]*role="toolbar"[^>]*aria-label=\{t\("asset\.videoControls"\)\}[\s\S]*?<IconButton[^>]*className="asset-video-playback"[^>]*icon=\{videoPlaying \? "pause" : "play"\}[^>]*aria-label=\{t\(videoPlaying \? "asset\.pauseVideo" : "asset\.playVideo"\)\}[^>]*aria-pressed=\{videoPlaying\}/s, "video Assets must expose a named, persistent, keyboard-operable bottom toolbar using existing play and pause icons");
+assert.match(assetNodeSource, /className="asset-video-playback"[\s\S]*?onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}[\s\S]*?onClick=\{\(event\) => \{\s*event\.stopPropagation\(\);\s*void toggleVideoPlayback\(\);\s*\}\}/s, "the playback control must not initiate canvas dragging or node selection");
+assert.match(appSource, /function isKeyboardInteractiveTarget\([\s\S]*?closest\("button, a\[href\], input, textarea, select,[\s\S]*?\[role='button'\][\s\S]*?\);\s*\}/s, "canvas Space-pan shortcuts must recognize native and ARIA interactive controls");
+assert.match(appSource, /function handleKeyDown\(event: KeyboardEvent\): void \{\s*if \(isEditableTarget\(event\.target\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keydown on playback buttons must keep native keyboard activation");
+assert.match(appSource, /function handleKeyUp\(event: KeyboardEvent\): void \{\s*if \(!isSpaceKey\(event\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keyup on playback buttons must not be prevented by canvas pan handling");
+assert.match(assetNodeSource, /onDoubleClick=\{openFile\}/, "media Assets must retain double-click file opening");
+assert.match(assetNodeSource, /className="node-connect-button"[\s\S]*?className="asset-node-menu"[\s\S]*?className="node-connect-button"/s, "video controls must not replace More or the left and right connection controls");
+assert.match(appCssSource, /\.asset-video-stage\s*\{[^}]*position:\s*relative;[^}]*width:\s*100%;/s, "the video toolbar must anchor within the media geometry");
+assert.match(appCssSource, /\.asset-video-toolbar\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*bottom:\s*0;[^}]*left:\s*0;[^}]*z-index:\s*3;[^}]*pointer-events:\s*none;/s, "the persistent video toolbar must layer above the selection ring without intercepting the surface");
+assert.match(appCssSource, /\.asset-video-playback\s*\{[^}]*pointer-events:\s*auto;/s, "only the custom playback button must receive toolbar pointer input");
+assert.match(translationsSource, /"asset\.videoControls":\s*"视频控制"[\s\S]*?"asset\.playVideo":\s*"播放视频"[\s\S]*?"asset\.pauseVideo":\s*"暂停视频"[\s\S]*?"asset\.videoControls":\s*"Video controls"[\s\S]*?"asset\.playVideo":\s*"Play video"[\s\S]*?"asset\.pauseVideo":\s*"Pause video"/s, "custom playback toolbar and controls must have bilingual accessible names");
 assert.match(assetNodeSource, /className="asset-file-icon"[\s\S]*?className="asset-file-copy"[\s\S]*?className="asset-file-name"[\s\S]*?className="asset-file-meta"/, "file Assets must render a horizontal icon, name, and metadata row");
 assert.match(assetNodeSource, /\{fileType\} · \{formatBytes\(data\.asset\.size\)\}/, "file Assets must show lightweight format and size metadata");
 assert.match(appCssSource, /\.asset-node\s*\{[^}]*width:\s*360px;/s, "all Asset nodes must retain the specified 360px width");

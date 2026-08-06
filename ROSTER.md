@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T03:39:00Z
-    handoff_source: issue-task-code-block-dark-canvas-background
-    last_report: solution-task-code-background-canvas
+    last_seen: 2026-08-06T04:13:46Z
+    handoff_source: issue-asset-media-focus-video-playback-controls
+    last_report: solution-asset-media-focus-video-playback-controls
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented the dark inline-code divider border with a transparent light baseline and explicit nested pre-code border reset; focused verification passed
+    notes: Implemented media focus overlay, explicit video toolbar, ended replay, and interactive-control Space-pan boundary with focused gates passing
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T03:42:00Z
-    handoff_source: issue-task-code-block-dark-canvas-background
-    last_report: issue-task-code-block-dark-canvas-background
+    last_seen: 2026-08-06T04:13:46Z
+    handoff_source: issue-asset-media-focus-video-playback-controls
+    last_report: issue-asset-media-focus-video-playback-controls
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified dark divider, light transparent border, fenced single border, nested pre reset, stable tokens and browser console 0/0; native host remains unverified
+    notes: Verified media focus tokens, selection/playback separation, pointer and keyboard controls, ended replay, stable node/Handle/Edge geometry and console 0/0; native host remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

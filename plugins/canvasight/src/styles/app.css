@@ -2554,6 +2554,11 @@ button.achievement-card.is-unlocked:focus-visible {
   line-height: var(--line-12);
 }
 
+.asset-video-stage {
+  position: relative;
+  width: 100%;
+}
+
 .asset-video {
   display: block;
   width: 100%;
@@ -2564,11 +2569,42 @@ button.achievement-card.is-unlocked:focus-visible {
   object-fit: contain;
 }
 
+.asset-video-toolbar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 12px;
+  pointer-events: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: linear-gradient(to bottom, transparent, var(--color-overlay));
+}
+
+.asset-video-playback {
+  pointer-events: auto;
+}
+
 .asset-node-content {
+  position: relative;
   width: 100%;
   border-radius: var(--radius-lg);
   outline: none;
   cursor: pointer;
+}
+
+.asset-node.is-image.is-selected .asset-node-content::after,
+.asset-node.is-video.is-selected .asset-node-content::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  content: "";
+  border: var(--border-weight-sm) solid var(--color-border-focus);
+  border-radius: inherit;
 }
 
 .asset-node.is-image .asset-node-content,

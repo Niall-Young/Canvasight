@@ -402,6 +402,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
+function isKeyboardInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest("button, a[href], input, textarea, select, summary, [contenteditable='true'], [role='button'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='menuitem'], [role='option'], [role='tab']")
+  );
+}
+
 function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {
   return {
     ...webDefaultAppSettings,
@@ -3219,7 +3226,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
-      if (isEditableTarget(event.target)) return;
+      if (isEditableTarget(event.target) || isKeyboardInteractiveTarget(event.target)) return;
 
       if (isSpaceKey(event)) {
         event.preventDefault();
@@ -3310,7 +3317,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     }
 
     function handleKeyUp(event: KeyboardEvent): void {
-      if (!isSpaceKey(event)) return;
+      if (!isSpaceKey(event) || isKeyboardInteractiveTarget(event.target)) return;
       event.preventDefault();
       setSpacePanActive(false);
     }
