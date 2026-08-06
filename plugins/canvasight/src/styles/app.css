@@ -2938,46 +2938,6 @@ button.achievement-card.is-unlocked:focus-visible {
   margin: 0;
 }
 
-.task-body-content ul[data-type="taskList"] {
-  padding-inline-start: 0;
-  list-style: none;
-}
-
-.task-body-content li[data-type="taskItem"] {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-6);
-}
-
-.task-body-content li[data-type="taskItem"] > label {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  min-height: var(--line-14);
-}
-
-.task-body-content li[data-type="taskItem"] input {
-  width: var(--size-control-sm);
-  height: var(--size-control-sm);
-  margin: 0;
-  accent-color: var(--color-primary);
-}
-
-.task-body-content li[data-type="taskItem"] input:focus-visible {
-  outline: var(--border-weight-sm) solid var(--color-border-focus);
-  outline-offset: var(--space-2);
-}
-
-.task-body.is-readonly .task-body-content li[data-type="taskItem"] input {
-  accent-color: var(--color-icon-subtle);
-  pointer-events: none;
-}
-
-.task-body-content li[data-type="taskItem"] > div {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
 .task-body-content blockquote {
   padding-inline-start: var(--space-10);
   color: var(--color-text-subtle);

@@ -10,13 +10,10 @@ import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import Heading from "@tiptap/extension-heading";
 import Italic from "@tiptap/extension-italic";
-import ListItem from "@tiptap/extension-list-item";
 import OrderedList from "@tiptap/extension-ordered-list";
 import Paragraph from "@tiptap/extension-paragraph";
 import Strike from "@tiptap/extension-strike";
 import { Markdown } from "@tiptap/markdown";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
 import Text from "@tiptap/extension-text";
 import { createRequire } from "node:module";
 import fs from "node:fs";
@@ -33,7 +30,14 @@ const compiledRawExtensions = ts.transpileModule(fs.readFileSync(rawExtensionPat
 }).outputText;
 const rawExtensionModule = { exports: {} };
 vm.runInNewContext(compiledRawExtensions, { exports: rawExtensionModule.exports, module: rawExtensionModule, require }, { filename: "richTextExtensions.cjs" });
-const { InlineCode, insertUnmarkedSpaceAfterInlineCode, rawMarkdownExtensions, SafeLink } = rawExtensionModule.exports;
+const {
+  InlineCode,
+  insertUnmarkedSpaceAfterInlineCode,
+  LegacyTaskMarker,
+  LegacyTaskMarkerListItem,
+  rawMarkdownExtensions,
+  SafeLink
+} = rawExtensionModule.exports;
 
 const extensions = [
   Blockquote,
@@ -45,13 +49,12 @@ const extensions = [
   HardBreak,
   Heading.configure({ levels: [1, 2, 3] }),
   Italic,
+  LegacyTaskMarker,
   SafeLink.configure({ autolink: true, openOnClick: false, protocols: ["http", "https", "mailto"] }),
-  ListItem,
+  LegacyTaskMarkerListItem,
   OrderedList,
   Paragraph,
   Strike,
-  TaskList,
-  TaskItem.configure({ nested: true }),
   Text,
   ...rawMarkdownExtensions,
   Markdown
@@ -68,8 +71,8 @@ const supportedSource = [
   "",
   "- 项目",
   "  - 嵌套项目",
-  "- [x] 已完成",
-  "- [ ] 未完成",
+  "",
+  "1. 编号项目",
   "",
   "> 引用",
   "",
@@ -86,11 +89,37 @@ const serialized = editor.getMarkdown();
 assert.match(serialized, /^## 中文标题/m);
 assert.match(serialized, /\*\*粗体\*\*/);
 assert.match(serialized, /~~删除线~~/);
-assert.match(serialized, /- \[x\] 已完成/);
+assert.match(serialized, /- 项目/);
+assert.match(serialized, /  - 嵌套项目/);
+assert.match(serialized, /1\. 编号项目/);
 assert.match(serialized, /> 引用/);
 assert.match(serialized, /```ts\nconst value = 1;\n```/);
 assert.match(serialized, /\[安全链接\]\(https:\/\/example\.com\)/);
 editor.destroy();
+
+const legacyTaskMarkerSource = [
+  "- [ ] 未完成",
+  "  - [x] 嵌套完成",
+  "- [x] 已完成",
+  "- [X] 大写标记",
+  "- 普通项目"
+].join("\n");
+const legacyTaskMarkerEditor = createMarkdownEditor(legacyTaskMarkerSource);
+assert.equal(
+  legacyTaskMarkerEditor.getMarkdown(),
+  legacyTaskMarkerSource,
+  "legacy task markers must round-trip as ordinary list text"
+);
+assert.doesNotMatch(JSON.stringify(legacyTaskMarkerEditor.getJSON()), /taskList|taskItem/);
+legacyTaskMarkerEditor.destroy();
+
+const markerDomSpec = LegacyTaskMarker.config.renderHTML?.({
+  HTMLAttributes: {},
+  node: { attrs: { marker: "[x]" } }
+});
+assert.ok(Array.isArray(markerDomSpec));
+assert.equal(`${markerDomSpec.at(-1)}已完成`, "[x] 已完成", "legacy marker DOM text must retain its visible separator");
+assert.match(`<span data-legacy-task-marker>${markerDomSpec.at(-1)}</span>已完成`, />\[x\] <\/span>已完成/);
 
 const legacyPlainText = "旧节点正文\n第二行仍然可见";
 const legacyEditor = createMarkdownEditor(legacyPlainText);
@@ -176,6 +205,9 @@ assert.equal(inlineCodeInputRegexMatch("'code'"), null, "apostrophes are ordinar
 assert.equal(inlineCodeInputRegexMatch("‘code’"), null, "curly single quotation marks are not Markdown code delimiters");
 
 const taskNodeSource = fs.readFileSync(path.join(pluginRoot, "src", "components", "TaskNode.tsx"), "utf8");
+assert.doesNotMatch(taskNodeSource, /extension-task-(?:item|list)|\bTaskItem\b|\bTaskList\b/);
+assert.match(taskNodeSource, /LegacyTaskMarkerListItem/);
+assert.match(fs.readFileSync(rawExtensionPath, "utf8"), /data-legacy-task-marker/);
 assert.match(taskNodeSource, /setContent\(data\.body, \{ contentType: "markdown", emitUpdate: false \}\)/);
 assert.match(taskNodeSource, /onUpdate: \(\{ editor \}\) =>/);
 assert.match(taskNodeSource, /injectCSS: false/);
@@ -189,10 +221,24 @@ assert.match(taskNodeSource, /event\.key === " ".*insertUnmarkedSpaceAfterInline
 assert.match(taskNodeSource, /bodyEditorRef\.current = bodyEditor/);
 
 const appCssSource = fs.readFileSync(path.join(pluginRoot, "src", "styles", "app.css"), "utf8");
+assert.doesNotMatch(appCssSource, /data-type="task(?:Item|List)"/);
 assert.match(
   appCssSource,
   /\.task-body-content > \* \+ pre,[\s\S]*\.task-body-content > pre \+ \*[\s\S]*margin-top: var\(--space-10\)/,
   "code blocks must have explicit separation from adjacent rich-text blocks"
 );
+
+const frameworkQuestionsSource = fs.readFileSync(path.join(pluginRoot, "src", "components", "FrameworkQuestionsCard.tsx"), "utf8");
+assert.match(frameworkQuestionsSource, /selectionMode === "single" \? "radio" : "checkbox"/);
+const checkboxPrimitiveSource = fs.readFileSync(path.join(pluginRoot, "src", "components", "ui", "checkbox.tsx"), "utf8");
+assert.match(checkboxPrimitiveSource, /export function Checkbox/);
+assert.match(checkboxPrimitiveSource, /kit-checkbox/);
+const rightDrawerSource = fs.readFileSync(path.join(pluginRoot, "src", "components", "RightDrawer.tsx"), "utf8");
+assert.match(rightDrawerSource, /className="task-list"/);
+
+const packageSource = fs.readFileSync(path.join(pluginRoot, "package.json"), "utf8");
+const packageLockSource = fs.readFileSync(path.join(pluginRoot, "package-lock.json"), "utf8");
+assert.doesNotMatch(packageSource, /@tiptap\/extension-task-(?:item|list)/);
+assert.doesNotMatch(packageLockSource, /@tiptap\/extension-task-(?:item|list)/);
 
 console.log("Rich-text Markdown smoke test passed");

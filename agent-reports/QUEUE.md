@@ -10,6 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `issue-remove-rich-text-task-list` | assigned | medium | Test Supervisor Agent | 移除 Task 正文富文本复选框 | `agent-reports/assigned/issue-remove-rich-text-task-list.md` | 5 | 2026-08-06T03:18:00Z
 - `issue-asset-content-first-media-file-icons` | blocked | high | Test Supervisor Agent | Asset 内容本体与统一文件图标仍不符合预期 | `agent-reports/assigned/issue-asset-content-first-media-file-icons.md` | 3 | 2026-08-05T03:36:00Z
 - `issue-group-asset-node-visual-semantics` | blocked | medium | Test Supervisor Agent | Group 与 Asset Node 视觉语义不一致 | `agent-reports/assigned/issue-group-asset-node-visual-semantics.md` | 3 | 2026-08-05T02:35:00Z
 - `issue-codex-react-185-sidebar-recovery` | assigned | critical | Test Supervisor Agent | Codex 历史 Canvasight 侧栏恢复触发 React #185 | `agent-reports/assigned/issue-codex-react-185-sidebar-recovery.md` | 8 | 2026-07-26T06:55:43Z
@@ -34,6 +35,8 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Recently Resolved
 
+- `agent-reports/resolved/integration-summary-remove-rich-text-task-list.md` - 集成 Task 正文 checkbox 移除、legacy marker 兼容、14 类样式总览、生产构建与 browser/合成 widget 验证；真实 native host 等待用户验收。
+- `agent-reports/resolved/solution-remove-rich-text-task-list.md` - 记录扩展/依赖/CSS 删除、legacy marker 兼容、DOM 间距修复和 focused/browser 验证。
 - `agent-reports/resolved/20260805-2118-integration-summary.md` - 集成一等 SVG Asset、跨 runtime 被动安全预览、daemon/Vite headers、0.5.4 生成物与独立 browser/dev 验收；real native-host 保持 unverified。
 - `agent-reports/resolved/20260805-2055-issue-svg-asset-first-class-support.md` - 关闭 SVG legacy/generic MIME 归类、伪装 MIME、安全清理与被动预览合同缺失。
 - `agent-reports/resolved/20260805-2103-development-svg-asset-first-class-solution.md` - 记录受管扩展权威、跨 runtime sanitizer、SMIL/外链防护、响应头与回归门禁。

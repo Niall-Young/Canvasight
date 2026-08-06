@@ -1,6 +1,7 @@
 import { mergeAttributes, Node, type Editor, type MarkdownToken } from "@tiptap/core";
 import Code from "@tiptap/extension-code";
 import Link from "@tiptap/extension-link";
+import ListItem from "@tiptap/extension-list-item";
 
 export const InlineCode = Code.extend({
   keepOnSplit: false
@@ -45,6 +46,59 @@ export const SafeLink = Link.extend({
       },
       content
     };
+  }
+});
+
+export const LegacyTaskMarker = Node.create({
+  name: "legacyTaskMarker",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: false,
+  addAttributes() {
+    return {
+      marker: { default: "[ ]" }
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-legacy-task-marker]' }];
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    return [
+      "span",
+      mergeAttributes(HTMLAttributes, { "data-legacy-task-marker": "" }),
+      `${String(node.attrs.marker)} `
+    ];
+  },
+  renderMarkdown(node) {
+    return `${String(node.attrs?.marker ?? "[ ]")} `;
+  }
+});
+
+export const LegacyTaskMarkerListItem = ListItem.extend({
+  parseMarkdown(token, helpers) {
+    const parsed = ListItem.config.parseMarkdown?.(token, helpers) ?? [];
+    const marker = String(token.raw ?? "").match(/^\s*[-+*]\s+(\[[ xX]\])(?:\s+|$)/)?.[1];
+    if (!marker || Array.isArray(parsed)) return parsed;
+
+    const content = [...(parsed.content ?? [])];
+    const markerNode = { type: "legacyTaskMarker", attrs: { marker } };
+    const firstChild = content[0];
+    if (firstChild?.type === "paragraph") {
+      content[0] = {
+        ...firstChild,
+        content: [markerNode, ...(firstChild.content ?? [])]
+      };
+    } else {
+      const firstBlockIndex = content.findIndex((child) => child.type !== "text");
+      const inlineEnd = firstBlockIndex === -1 ? content.length : firstBlockIndex;
+      content.splice(0, inlineEnd, {
+        type: "paragraph",
+        content: [markerNode, ...content.slice(0, inlineEnd)]
+      });
+    }
+
+    return { ...parsed, content };
   }
 });
 

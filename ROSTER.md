@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T13:18:00Z
-    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
-    last_report: 20260805-2103-development-svg-asset-first-class-solution
+    last_seen: 2026-08-06T03:14:00Z
+    handoff_source: issue-remove-rich-text-task-list
+    last_report: solution-remove-rich-text-task-list
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Implemented managed SVG normalization, spoof-resistant MIME handling, browser/native/data/blob sanitization, passive img rendering, daemon/Vite security headers, and focused regression coverage
+    notes: Removed Task body TaskList/TaskItem checkbox support while preserving legacy markers as non-interactive ordinary list text with focused and production-browser coverage
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-05T13:18:00Z
-    handoff_source: 20260805-2055-issue-svg-asset-first-class-support
-    last_report: 20260805-2118-integration-summary
+    last_seen: 2026-08-06T03:18:00Z
+    handoff_source: issue-remove-rich-text-task-list
+    last_report: issue-remove-rich-text-task-list
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently verified direct transparent SVG media, intrinsic ratios, sanitization, inactive malicious content, handles, More/Open/Replace, legacy normalization, widget runtime, and dev asset security headers
+    notes: Independently verified Task body checkbox removal, legacy marker spacing and roundtrip, ordinary lists, Framework Questions checkboxes, Task drawer, browser console, and production widget regression; waiting for user native-host acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent
