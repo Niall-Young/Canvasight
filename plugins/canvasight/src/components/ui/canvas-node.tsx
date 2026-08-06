@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type HTMLAttributes, type ReactElement } from "react";
+import { useEffect, useRef, useState, type HTMLAttributes, type ReactElement } from "react";
 import type { EffortLevel } from "../../../shared/types";
 import { useI18n } from "../../lib/i18n";
 import { shortcuts } from "../../lib/shortcuts";
@@ -30,18 +30,14 @@ interface CanvasNodeProps extends HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
   onCopy?: () => void;
   onDelete?: () => void;
-  onAddInput?: () => void;
   onAddLeft?: () => void;
   onAddRight?: () => void;
   onMenu?: () => void;
   onEffortChange?: (effort: CanvasNodeEffort) => void;
   onRun?: () => void;
-  onUploadFiles?: (files: FileList) => void;
   prompt?: string;
   selected?: boolean;
   unconnected?: boolean;
-  uploadAccept?: string;
-  uploadMultiple?: boolean;
   uploads?: CanvasNodeUpload[];
 }
 
@@ -53,25 +49,20 @@ export function CanvasNode({
   hover = false,
   onCopy,
   onDelete,
-  onAddInput,
   onAddLeft,
   onAddRight,
   onEffortChange,
   onMenu,
   onRun,
-  onUploadFiles,
   prompt,
   selected = false,
   unconnected = false,
-  uploadAccept,
-  uploadMultiple = true,
   uploads = [],
   ...props
 }: CanvasNodeProps): ReactElement {
   const { t } = useI18n();
   const hasUploads = uploads.length > 0;
   const rootRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [effortMenuOpen, setEffortMenuOpen] = useState(false);
   const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   const [localEffort, setLocalEffort] = useState<CanvasNodeEffort>(effortLabel ?? "xhigh");
@@ -90,14 +81,6 @@ export function CanvasNode({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [effortMenuOpen, nodeMenuOpen]);
-
-  function handleUploadChange(event: ChangeEvent<HTMLInputElement>): void {
-    const files = event.currentTarget.files;
-    if (files && files.length > 0) {
-      onUploadFiles?.(files);
-    }
-    event.currentTarget.value = "";
-  }
 
   return (
     <div ref={rootRef} className={cn("kit-canvas-node", filled && "is-filled", hover && "is-hover", selected && "is-selected", unconnected && "is-unconnected", className)} {...props}>
@@ -160,19 +143,6 @@ export function CanvasNode({
         <div className="kit-canvas-node-footer">
           <div className="kit-canvas-node-divider" />
           <div className="kit-canvas-node-footer-row">
-            <input ref={fileInputRef} className="kit-canvas-node-file-input" type="file" accept={uploadAccept} multiple={uploadMultiple} tabIndex={-1} onChange={handleUploadChange} />
-            <TooltipAnchor label={t("task.uploadAttachment")}>
-              <IconButton
-                filled={false}
-                icon="plus-lg"
-                size="lg"
-                aria-label={t("task.uploadAttachment")}
-                onClick={() => {
-                  onAddInput?.();
-                  fileInputRef.current?.click();
-                }}
-              />
-            </TooltipAnchor>
             <div className="kit-canvas-node-settings">
               <div className="kit-canvas-node-effort-picker">
                 <DropdownTrigger label={t(effortLabelKey(currentEffort))} size="lg" aria-haspopup="menu" aria-expanded={effortMenuOpen} onClick={() => setEffortMenuOpen((open) => !open)} />

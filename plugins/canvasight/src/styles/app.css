@@ -631,8 +631,7 @@ button {
 }
 
 .sidebar-actions,
-.topbar-actions,
-.task-node-footer {
+.topbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3145,25 +3144,6 @@ button.achievement-card.is-unlocked:focus-visible {
   transform: translateX(16px);
 }
 
-.task-node-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: var(--border-weight-sm) solid var(--color-border-divider);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-
-.task-node:hover .task-node-footer,
-.task-node:focus-within .task-node-footer,
-.task-node.is-selected .task-node-footer {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 .task-node-settings {
   display: inline-flex;
   align-items: center;
@@ -3954,10 +3934,6 @@ button.achievement-card.is-unlocked:focus-visible {
   background: transparent;
   cursor: pointer;
   line-height: 0;
-}
-
-.kit-canvas-node-file-input {
-  display: none;
 }
 
 .kit-canvas-node-side .app-icon {

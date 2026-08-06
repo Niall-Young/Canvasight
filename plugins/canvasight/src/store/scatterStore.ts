@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type {
-  Attachment,
   RunMode,
   ScatterDocument,
   ScatterEdge,
@@ -64,7 +63,6 @@ interface ScatterState {
   undo: () => void;
   redo: () => void;
   updateNodeData: (nodeId: string, patch: Partial<ScatterNode["data"]>) => void;
-  appendAttachments: (nodeId: string, attachments: Attachment[]) => void;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   setSelectedNodeId: (nodeId: string | null) => void;
   setDrawer: (drawer: DrawerMode | null) => void;
@@ -588,16 +586,6 @@ export const useScatterStore = create<ScatterState>((set, get) => {
             : node
         )
       });
-    },
-    appendAttachments: (nodeId, attachments) => {
-      const state = get();
-      const next = updateNodeInPages(state, nodeId, (node) =>
-        node.type === "task"
-          ? { ...node, data: { ...node.data, attachments: [...node.data.attachments, ...attachments] } }
-          : node
-      );
-      if (next.currentPageChanged) state.commitCanvasChange({ nodes: next.nodes });
-      else set({ pages: next.pages });
     },
     removeAttachment: (nodeId, attachmentId) => {
       const state = get();

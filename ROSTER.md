@@ -19,12 +19,12 @@ roles:
     agent_id: /root/design_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T13:44:18Z
-    handoff_source: issue-asset-media-focus-video-playback-controls
-    last_report: integration-summary-asset-media-focus-video-playback-controls
+    last_seen: 2026-08-06T06:13:39Z
+    handoff_source: issue-remove-task-node-attachment-upload
+    last_report: integration-summary-remove-task-node-attachment-upload
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Reviewed restored browser-native video controls, picture-only selection safe area, focus ring geometry, control layering, and browser acceptance risks
+    notes: Reviewed removal of Task attachment creation, unified Asset import routing, legacy attachment compatibility, collision-free placement, and UI acceptance
   - role: Design Standards Expert
     status: active
     agent_id: /root/design_standards_agent
@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T13:44:18Z
-    handoff_source: issue-asset-media-focus-video-playback-controls
-    last_report: solution-asset-media-focus-video-playback-controls
+    last_seen: 2026-08-06T06:13:39Z
+    handoff_source: issue-remove-task-node-attachment-upload
+    last_report: solution-remove-task-node-attachment-upload
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Restored complete native video controls, removed the rejected custom toolbar, and preserved surface-only selection and media focus border
+    notes: Removed Task attachment creation UI/Store paths, routed Task drop/paste to collision-free Asset placement, and preserved legacy attachment compatibility
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T13:44:18Z
-    handoff_source: issue-asset-media-focus-video-playback-controls
-    last_report: issue-asset-media-focus-video-playback-controls
+    last_seen: 2026-08-06T06:13:39Z
+    handoff_source: issue-remove-task-node-attachment-upload
+    last_report: issue-remove-task-node-attachment-upload
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Verified the 48px picture/control boundary, native Play/Pause/seek/fullscreen, focus tokens, stable node/Handle/Edge geometry and console 0/0; native host remains unverified
+    notes: Verified Task UI removal, Asset drop/paste routing, Group collision repair, legacy attachment-only Run/save/reload, stable geometry and browser console; native host remains unverified
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

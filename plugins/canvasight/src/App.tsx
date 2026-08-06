@@ -770,6 +770,40 @@ function absoluteNodePosition(node: ScatterNode, nodes: ScatterNode[]): FlowPosi
   return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
 }
 
+function assetPositionNextToTask(task: ScatterTaskNode, nodes: ScatterNode[]): FlowPosition {
+  const taskPosition = absoluteNodePosition(task, nodes);
+  const gap = 96;
+  const group = task.parentId ? nodes.find((node) => node.type === "group" && node.id === task.parentId) : undefined;
+  const candidates = [
+    { x: taskPosition.x - assetNodeWidth - gap, y: taskPosition.y },
+    { x: taskPosition.x + nodeBounds(task).width + gap, y: taskPosition.y }
+  ];
+  const yOffsets = [0, assetNodeHeight + gap, -(assetNodeHeight + gap)];
+  const occupiedNodes = nodes.filter((node) => node.type !== "group");
+  const isOpen = (position: FlowPosition): boolean => occupiedNodes.every((node) => {
+    const nodePosition = absoluteNodePosition(node, nodes);
+    const bounds = nodeBounds(node);
+    return position.x + assetNodeWidth <= nodePosition.x
+      || position.x >= nodePosition.x + bounds.width
+      || position.y + assetNodeHeight <= nodePosition.y
+      || position.y >= nodePosition.y + bounds.height;
+  });
+
+  for (const yOffset of yOffsets) {
+    for (const candidate of candidates) {
+      const rawPosition = { x: candidate.x, y: candidate.y + yOffset };
+      const position = group
+        ? {
+            x: Math.max(group.position.x + groupPadding, rawPosition.x),
+            y: Math.max(group.position.y + groupHeaderHeight + groupPadding, rawPosition.y)
+          }
+        : rawPosition;
+      if (isOpen(position)) return position;
+    }
+  }
+  return candidates[1];
+}
+
 function orderedFlowNodes(nodes: ScatterNode[], collapsedGroupIds: string[]): Node[] {
   const collapsed = new Set(collapsedGroupIds);
   return [...nodes]
@@ -965,7 +999,6 @@ function parseCanvasClipboardPayload(text: string): CanvasClipboardPayload | nul
 function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWorkspaceProps): ReactElement {
   const { language, t } = useI18n();
   const {
-    appendAttachments,
     canRedo,
     canUndo,
     commitCanvasChange,
@@ -2485,22 +2518,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [commitCanvasChange, edges, nodes, project, setSelectedNodeId, setStatus, t]
   );
 
-  const addFilesToNode = useCallback(
-    async (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => {
-      if (!project) return;
-      try {
-        const inputs = await filesToInputs(files, source);
-        const attachments = await canvasightApi.saveAttachments(project.path, inputs);
-        if (nodes.find((node) => node.id === nodeId)?.type !== "task") throw new Error("Files can only be attached directly to Task nodes.");
-        appendAttachments(nodeId, attachments);
-        setStatus(t("status.attachmentsAdded", { count: attachments.length }));
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : t("status.addAttachmentFailed"));
-      }
-    },
-    [appendAttachments, nodes, project, setStatus, t]
-  );
-
   const createAssetNodes = useCallback(async (files: FileList | File[], source: "upload" | "drop" | "paste", position: FlowPosition, parentId?: string) => {
     if (!project) return;
     try {
@@ -2523,7 +2540,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       setSelectedNodeId(assets[0]?.id ?? null);
       setStatus(language === "zh" ? `已创建 ${assets.length} 个资产节点` : `Created ${assets.length} asset nodes`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : t("status.addAttachmentFailed"));
+      setStatus(error instanceof Error ? error.message : t("status.addAssetFailed"));
     }
   }, [commitCanvasChange, language, nodes, project, setSelectedNodeId, setStatus, t]);
 
@@ -2663,19 +2680,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     setStatus(language === "zh" ? (collapsing ? "分组已折叠" : "分组已展开") : (collapsing ? "Group collapsed" : "Group expanded"));
   }, [collapsedGroupIds, language, nodes, replaceCanvasLive, setCollapsedGroupIds, setSelectedNodeId, setStatus]);
 
-  const chooseFilesForNode = useCallback(
-    async (nodeId: string) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.multiple = true;
-      input.onchange = () => {
-        if (input.files?.length) void addFilesToNode(nodeId, input.files, "upload");
-      };
-      input.click();
-    },
-    [addFilesToNode]
-  );
-
   const persistTemplate = useCallback(
     async (input: NodeTemplateInput, options: { replaceOldest?: boolean } = {}) => {
       try {
@@ -2810,15 +2814,21 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const targetNodeId = nodeIdFromElementTarget(event.target);
       const targetNode = nodes.find((node) => node.id === targetNodeId);
       const flowPosition = flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      if (targetNode?.type === "task") {
-        void addFilesToNode(targetNode.id, event.dataTransfer.files, "drop");
-      } else if (targetNode?.type === "asset") {
+      if (targetNode?.type === "asset") {
         setStatus(language === "zh" ? "资产节点首版不支持替换文件" : "Replacing an asset file is not supported yet");
       } else if (flowPosition) {
-        void createAssetNodes(event.dataTransfer.files, "drop", { x: flowPosition.x - assetNodeWidth / 2, y: flowPosition.y - 60 }, targetNode?.type === "group" ? targetNode.id : undefined);
+        const assetPosition = targetNode?.type === "task"
+          ? assetPositionNextToTask(targetNode, nodes)
+          : { x: flowPosition.x - assetNodeWidth / 2, y: flowPosition.y - 60 };
+        void createAssetNodes(
+          event.dataTransfer.files,
+          "drop",
+          assetPosition,
+          targetNode?.type === "group" ? targetNode.id : targetNode?.type === "task" ? targetNode.parentId : undefined
+        );
       }
     },
-    [addFilesToNode, createAssetNodes, insertTemplateAtPosition, language, nodes, setStatus, templateFromDragEvent]
+    [createAssetNodes, insertTemplateAtPosition, language, nodes, setStatus, templateFromDragEvent]
   );
 
   const handleCanvasDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -2866,13 +2876,21 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const canvasTarget = documentLevelTarget || Boolean(canvasShellRef.current?.contains(target));
       event.preventDefault();
       const targetNode = nodes.find((node) => node.id === targetNodeId);
-      if (targetNode?.type === "task") void addFilesToNode(targetNode.id, files, "paste");
-      else if (canvasTarget) void createAssetNodes(files, "paste", getVisibleCanvasCenterPosition(), targetNode?.type === "group" ? targetNode.id : undefined);
+      if (!canvasTarget) return;
+      const assetPosition = targetNode?.type === "task"
+        ? assetPositionNextToTask(targetNode, nodes)
+        : getVisibleCanvasCenterPosition();
+      void createAssetNodes(
+        files,
+        "paste",
+        assetPosition,
+        targetNode?.type === "group" ? targetNode.id : targetNode?.type === "task" ? targetNode.parentId : undefined
+      );
     }
 
     window.addEventListener("paste", handlePaste, true);
     return () => window.removeEventListener("paste", handlePaste, true);
-  }, [addFilesToNode, createAssetNodes, getVisibleCanvasCenterPosition, nodes, pasteCanvasClipboard, project]);
+  }, [createAssetNodes, getVisibleCanvasCenterPosition, nodes, pasteCanvasClipboard, project]);
 
   const runNode = useCallback(
     async (nodeId: string, _mode: RunMode = "flow") => {
@@ -2921,9 +2939,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   useEffect(() => {
     setTaskNodeActions({
-      addFilesToNode,
       beginNodeEdit: () => undefined,
-      chooseFilesForNode,
       commitNodeEdit: () => undefined,
       createConnectedNode,
       deleteNode,
@@ -2944,7 +2960,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       ungroupNode,
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
     });
-  }, [addFilesToNode, chooseFilesForNode, createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
+  }, [createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {

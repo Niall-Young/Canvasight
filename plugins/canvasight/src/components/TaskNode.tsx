@@ -51,8 +51,6 @@ export interface RuntimeActions {
   updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
   beginNodeEdit: () => void;
   commitNodeEdit: () => void;
-  chooseFilesForNode: (nodeId: string) => Promise<void>;
-  addFilesToNode: (nodeId: string, files: FileList | File[], source: "upload" | "drop" | "paste") => Promise<void>;
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   promoteAttachment: (nodeId: string, attachmentId: string) => void;
   replaceAsset: (nodeId: string) => void;
@@ -147,6 +145,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
 
   const runMode = data.runMode || "flow";
   const hasBody = bodyDraft.trim().length > 0;
+  const hasRunnableInput = hasBody || data.attachments.length > 0;
   const hasParent = useScatterStore((state) =>
     state.edges.some((edge) => edge.target === id && state.nodes.some((node) => node.id === edge.source))
   );
@@ -351,6 +350,13 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           },
           paste: (_view, event) => {
             if (event.clipboardData && [...event.clipboardData.files].length > 0) {
+              event.preventDefault();
+              return true;
+            }
+            return false;
+          },
+          drop: (_view, event) => {
+            if (event.dataTransfer && [...event.dataTransfer.files].length > 0) {
               event.preventDefault();
               return true;
             }
@@ -725,14 +731,14 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           onCompositionEnd={handleCompositionEnd}
           onChange={handleTitleChange}
         />
-        <TooltipAnchor className="nodrag" label={hasBody ? t("task.run") : t("task.runEmpty")} shortcut={shortcuts.runCurrentTask}>
+        <TooltipAnchor className="nodrag" label={hasRunnableInput ? t("task.run") : t("task.runEmpty")} shortcut={shortcuts.runCurrentTask}>
           <IconButton
             className="nodrag"
             filled={false}
             icon="play-1"
             size="lg"
-            aria-label={hasBody ? t("task.run") : t("task.runEmpty")}
-            disabled={!hasBody}
+            aria-label={hasRunnableInput ? t("task.run") : t("task.runEmpty")}
+            disabled={!hasRunnableInput}
             onClick={() => taskNodeActions?.runNode(id, "flow")}
           />
         </TooltipAnchor>
@@ -859,11 +865,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
           </div>
         ) : null}
 
-        <div className="task-node-footer">
-          <TooltipAnchor className="nodrag" label={t("task.addAttachment")}>
-            <IconButton className="nodrag" filled={false} icon="plus-lg" size="lg" aria-label={t("task.addAttachment")} onClick={() => taskNodeActions?.chooseFilesForNode(id)} />
-          </TooltipAnchor>
-        </div>
       </div>
       <Handle type="source" position={Position.Right} className="node-handle">
         {hasChild ? <span className="node-edge-cap" aria-hidden="true" /> : null}

@@ -22,7 +22,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 在节点内使用无工具栏富文本编辑：Markdown 快捷语法会直接呈现为紧凑的富文本，同时正文仍以 Markdown 保存，兼容模板、预览、导出和 Run。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
 - 多个 Codex 任务可以同时编辑同一项目：不同对象自动合并，同一对象冲突时保留完整冲突副本。
-- 给节点添加图片、文件和上下文附件。
+- 通过画布选择器、拖放或粘贴，把图片、视频和文件添加为一等 Asset Node。
 - Task/Group Run 始终通过 Chat 把对应范围发送到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
 - AI 写入后可从画布右上角手动刷新到项目的最新画布版本，同时保护未保存的本地修改。
@@ -88,11 +88,11 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 6. **刷新到最新版本。** 如果 AI 已完成写入，但当前画布没有及时显示新节点，点击画布右上角的刷新图标。Canvasight 会先等待当前修改保存，再加载项目的最新画布版本，并尽量保留当前 Page、视口和选中状态。如果本地修改尚未保存或刷新期间又发生了修改，刷新会取消并保留当前内容。
 
-7. **编辑、加入素材并运行。** 你可以继续在画布中拖拽节点、编辑正文、添加附件、连接节点或切换 Page。每个 Task/Asset 可以没有父节点；第一条入边连接后，Canvasight 会拒绝任何第二父连接并完整保留原连线。一个节点仍可分支连接多个下游。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
+7. **编辑、加入素材并运行。** 你可以继续在画布中拖拽节点、编辑正文、创建 Asset、连接节点或切换 Page。每个 Task/Asset 可以没有父节点；第一条入边连接后，Canvasight 会拒绝任何第二父连接并完整保留原连线。一个节点仍可分支连接多个下游。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
 
    正文支持通过 Markdown 快捷语法输入一级至三级标题、粗体、斜体、删除线、项目列表、编号列表、引用、行内代码、围栏代码块和链接，也支持常用格式快捷键。任务标记不会变成交互式复选框；已有的 `- [ ]` / `- [x]` 内容会作为普通列表文字显示并原样保存。显示虽然是所见即所得的富文本，底层仍保存 Markdown 字符串，因此已有纯文本节点、节点模板、Markdown 预览与导出、并发保存和 Run 保持兼容。
 
-   在正文输入 `$` 会继续搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。把文件拖到 Task 上会继续添加普通附件；拖到画布空白处，或点击底部的资产按钮选择文件，会为每个文件创建一个 Asset。图片（包括 SVG）和视频直接显示媒体本体，不再显示外壳、文件名或尺寸；媒体选中时在内容边界内显示聚焦边框，不会改变节点或连接点位置。视频画面点击只选中节点，不会播放或暂停；底部保留浏览器原生的完整控制栏，可操作播放/暂停、进度、时间、音量、画中画和全屏，并支持浏览器原生键盘交互。SVG 会按图片安全清理后被动显示，不会作为可执行文档注入页面。其他文件使用单层白底横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标；这里的 SVG 仅是普通文件的格式图标，不代表源 `.svg` 图片。Asset 不再显示或编辑输入/参考/候选/产出分类，关系含义由连线方向、标签和上下文表达。右上角更多操作只在悬停、聚焦或选中时显示，并只保留更换受管文件和删除节点。Asset 不编辑标题/说明，也不单独运行；双击或按 Enter 可打开非视频文件。更换时会保留节点位置、Group 归属和连线，旧受管文件不会被删除。附件上的“提升为资产节点”会复用原文件、移除内嵌引用，并建立 `Asset → Task` 参考关系，不复制或删除 `.scatter/assets` 中的文件。
+   在正文输入 `$` 会继续搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。Task 不再提供附件上传入口；通过底部资产按钮选择文件，或把文件拖放、粘贴到画布、Task 或 Group，都会为每个文件创建一个 Asset。历史 Task 附件仍可读取、运行、导出、移除或显式提升，不会在打开或保存时被自动删除。图片（包括 SVG）和视频直接显示媒体本体，不再显示外壳、文件名或尺寸；媒体选中时在内容边界内显示聚焦边框，不会改变节点或连接点位置。视频画面点击只选中节点，不会播放或暂停；底部保留浏览器原生的完整控制栏，可操作播放/暂停、进度、时间、音量、画中画和全屏，并支持浏览器原生键盘交互。SVG 会按图片安全清理后被动显示，不会作为可执行文档注入页面。其他文件使用单层白底横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标；这里的 SVG 仅是普通文件的格式图标，不代表源 `.svg` 图片。Asset 不再显示或编辑输入/参考/候选/产出分类，关系含义由连线方向、标签和上下文表达。右上角更多操作只在悬停、聚焦或选中时显示，并只保留更换受管文件和删除节点。Asset 不编辑标题/说明，也不单独运行；双击或按 Enter 可打开非视频文件。更换时会保留节点位置、Group 归属和连线，旧受管文件不会被删除。历史附件上的“提升为资产节点”会复用原文件、移除内嵌引用，并建立 `Asset → Task` 参考关系，不复制或删除 `.scatter/assets` 中的文件。
 
    多选至少两个 Task/Asset 后按 `⌘/Ctrl+G` 创建 Group；按 `⌘/Ctrl+Shift+G` 解除成员归属。Group 不嵌套，一个节点最多属于一个 Group；删除 Group 只释放成员。Group 标题右侧外显“适应内容”和折叠/展开，更多菜单只保留低频管理操作。折叠只改变当前 Page 的视图，原节点和连线保持不变。Task Run 继续按下游关系发送并携带范围内的 Asset 证据；Group Run 只发送组标题、说明、直接成员、内部连线和成员资产，不会沿跨组连线带出组外节点。Markdown 预览与导出保留说明、受管文件引用、关系方向/标签和 Group 章节。
 
@@ -279,6 +279,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:task-attachments
 npm run test:single-parent
 npm run test:svg-asset
 npm run test:skills
@@ -293,7 +294,7 @@ npm run release:prepare -- 0.5.4
 npm run release:verify -- 0.5.4
 ```
 
-`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:task-attachments` 验证 Task 新增附件入口保持移除、文件 drop/paste 创建 Asset，并保留历史附件兼容；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
 
 `npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
 
@@ -374,9 +375,9 @@ npm.cmd ci --omit=dev
 
 browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_thread` 绑定当前任务后，它只会把 Run 放入队列，再由 `await_canvasight_run` 领取。
 
-**文件什么时候是 Task 附件，什么时候是 Asset Node？**
+**文件会成为 Task 附件还是 Asset Node？**
 
-文件投到 Task 上时是该 Task 的内嵌附件；投到画布空白处或通过底部资产按钮选择时，每个文件会成为一个 Asset Node。需要让已有附件参与连线或分组时，使用“提升为资产节点”；它复用同一受管文件，不复制文件。图片（包括安全清理后被动显示的 SVG）和视频 Asset 直接显示媒体；普通文件在单层白底中横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式使用未知文件图标。Asset 本身不单独运行，也不显示输入/参考/候选/产出分类；用途由连线方向、标签和上下文表达。更多菜单只保留更换文件和删除。更换或删除 Asset Node 都不会删除 `.scatter/assets` 中已有的受管文件。
+新导入的文件一律成为 Asset Node：底部资产按钮、画布/Task/Group 上的拖放，以及文件或图片粘贴都遵循同一规则。Task 不再提供附件上传入口。旧项目中已有的内嵌附件仍保留兼容，可继续参与 Run 和导出，也可移除或使用“提升为资产节点”显式迁移；提升复用同一受管文件，不复制文件。图片（包括安全清理后被动显示的 SVG）和视频 Asset 直接显示媒体；普通文件在单层白底中横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式使用未知文件图标。Asset 本身不单独运行，也不显示输入/参考/候选/产出分类；用途由连线方向、标签和上下文表达。更多菜单只保留更换文件和删除。更换或删除 Asset Node 都不会删除 `.scatter/assets` 中已有的受管文件。
 
 **Group Run 和普通 Run 有什么区别？**
 
@@ -416,7 +417,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Edit node bodies as toolbarless rich text: Markdown shortcuts render directly as compact formatted content while the body remains stored as Markdown for templates, preview, export, and Run.
 - Use multiple Pages as isolated canvas workspaces within one project.
 - Edit one project from multiple Codex tasks: different objects merge automatically, while same-object conflicts preserve a complete conflict copy.
-- Add images, files, and contextual attachments to nodes.
+- Add images and files as first-class Asset Nodes through the canvas picker, drop, or paste.
 - Task/Group Run always uses Chat to send its corresponding scope to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
 - After an AI write, manually refresh from the upper-right canvas controls to load the project's latest canvas version without discarding unsaved local changes.
@@ -482,11 +483,11 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 6. **Refresh to the latest version.** If AI has finished writing but the open canvas does not yet show the new nodes, click the refresh icon in the upper-right canvas controls. Canvasight waits for current changes to save, then loads the project's latest canvas version while preserving the active Page, viewport, and selection where possible. If local changes are still unsaved or new edits occur during refresh, it cancels the refresh and preserves the current content.
 
-7. **Edit, add material, and run.** You can keep dragging nodes, editing their bodies, adding attachments, connecting nodes, or switching Pages directly on the canvas. Each Task/Asset may remain a root with no parent; after its first incoming Edge, Canvasight rejects any second parent while preserving the existing connection. A node may still branch to multiple downstream targets. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
+7. **Edit, add material, and run.** You can keep dragging nodes, editing their bodies, creating Assets, connecting nodes, or switching Pages directly on the canvas. Each Task/Asset may remain a root with no parent; after its first incoming Edge, Canvasight rejects any second parent while preserving the existing connection. A node may still branch to multiple downstream targets. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
 
    Node bodies support Markdown shortcuts for level-one through level-three headings, bold, italic, strikethrough, bullet lists, numbered lists, blockquotes, inline code, fenced code blocks, and links, along with common formatting keyboard shortcuts. Task markers do not become interactive checkboxes; existing `- [ ]` / `- [x]` content remains visible as ordinary list text and round-trips unchanged. The editing surface is rich text, but Canvasight still stores the body as a Markdown string, preserving compatibility with existing plain-text nodes, node templates, Markdown preview and export, concurrent saves, and Run.
 
-   Type `$` in the body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. Drop a file on a Task to keep it as an attachment. Drop it on empty canvas space, or use the Asset button in the bottom toolbar, to create one Asset per file. Images, including SVG, and videos show the media itself with no shell, filename, or size. Selected media shows a focus border inside the content boundary without moving the node or its connection points. Clicking a video picture only selects the node and never plays or pauses it; the complete browser-native control bar remains available at the bottom for play/pause, progress, time, volume, picture-in-picture, fullscreen, and native keyboard interaction. SVG previews are sanitized and displayed as passive images rather than injected as executable documents. Other files use one white surface with a horizontal SVG format icon, filename, and format/size summary, while unmatched formats use the unknown-file icon; those SVGs are format icons for ordinary files, not source `.svg` images. Assets no longer show or edit Input/Reference/Option/Output classification; connection direction, labels, and surrounding context express the relationship. More appears in the upper-right only on hover, focus, or selection and contains only Replace file and Delete. Assets do not edit a title/description or run independently. Double-click or press Enter to open a non-video file. Replacement preserves the node position, Group membership, and Edges without deleting the previous managed file. “Promote to asset node” reuses the managed file, removes the inline reference, and creates an editable `Asset → Task` reference relationship without copying or deleting the file under `.scatter/assets`.
+   Type `$` in the body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. Tasks no longer expose an attachment-upload entry. Choosing files through the bottom Asset button, or dropping or pasting files over the canvas, a Task, or a Group, creates one Asset per file. Existing legacy Task attachments remain readable, runnable, exportable, removable, and explicitly promotable; opening or saving an old project does not delete them automatically. Images, including SVG, and videos show the media itself with no shell, filename, or size. Selected media shows a focus border inside the content boundary without moving the node or its connection points. Clicking a video picture only selects the node and never plays or pauses it; the complete browser-native control bar remains available at the bottom for play/pause, progress, time, volume, picture-in-picture, fullscreen, and native keyboard interaction. SVG previews are sanitized and displayed as passive images rather than injected as executable documents. Other files use one white surface with a horizontal SVG format icon, filename, and format/size summary, while unmatched formats use the unknown-file icon; those SVGs are format icons for ordinary files, not source `.svg` images. Assets no longer show or edit Input/Reference/Option/Output classification; connection direction, labels, and surrounding context express the relationship. More appears in the upper-right only on hover, focus, or selection and contains only Replace file and Delete. Assets do not edit a title/description or run independently. Double-click or press Enter to open a non-video file. Replacement preserves the node position, Group membership, and Edges without deleting the previous managed file. “Promote to asset node” remains available only for legacy inline attachments; it reuses the managed file, removes the inline reference, and creates an editable `Asset → Task` reference relationship without copying or deleting the file under `.scatter/assets`.
 
    Select at least two Task/Asset nodes and press `Cmd/Ctrl+G` to create a Group; press `Cmd/Ctrl+Shift+G` to release members. Groups do not nest and each node belongs to at most one Group. Deleting a Group only releases its members. Fit to contents and collapse/expand are exposed on the right side of the Group header, while More keeps low-frequency management. Collapsing is Page-local view state: the underlying nodes and edges remain unchanged. Task Run follows downstream relationships and carries Asset evidence in scope, while Group Run includes only its title, description, direct members, internal edges, and member assets. It never follows cross-Group edges outside the Group. Markdown review and export preserve descriptions, managed-file references, relationship direction/labels, and Group chapters.
 
@@ -671,6 +672,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:task-attachments
 npm run test:single-parent
 npm run test:svg-asset
 npm run test:skills
@@ -685,7 +687,7 @@ npm run release:prepare -- 0.5.4
 npm run release:verify -- 0.5.4
 ```
 
-`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:task-attachments` verifies that new Task attachment entries stay removed, file drop/paste creates Assets, and legacy attachments remain compatible; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
 
 `npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
 
@@ -766,9 +768,9 @@ The current Codex task's Canvasight MCP transport is closed or stale; it is not 
 
 Browser/dev pages do not have the native widget host bridge. After `claim_canvasight_thread`, they queue Runs for `await_canvasight_run`.
 
-**When is a file a Task attachment, and when is it an Asset Node?**
+**Does a file become a Task attachment or an Asset Node?**
 
-A file dropped on a Task stays as that Task's inline attachment. A file dropped on empty canvas space, or chosen through the bottom Asset button, becomes one Asset Node per file. Use “Promote to asset node” when an existing attachment should connect to other nodes or join a Group. Promotion reuses the same managed file without copying it. Image Assets—including sanitized, passively displayed SVG—and video Assets show media directly. Ordinary files show a horizontal matching SVG format icon, filename, and format/size summary on one white surface; unmatched formats use the unknown-file icon. Assets do not run independently and do not show Input/Reference/Option/Output classification; connection direction, labels, and context express their purpose. More only replaces the file or deletes the node. Replacing or deleting an Asset Node does not delete an existing managed file under `.scatter/assets`.
+Every newly imported file becomes an Asset Node. The bottom Asset button, drops over the canvas/Task/Group, and file or image paste all follow the same rule; Tasks no longer expose an attachment-upload entry. Existing inline attachments from older projects remain compatible with Run and export and may be removed or explicitly migrated with “Promote to asset node,” which reuses the managed file without copying it. Image Assets—including sanitized, passively displayed SVG—and video Assets show media directly. Ordinary files show a horizontal matching SVG format icon, filename, and format/size summary on one white surface; unmatched formats use the unknown-file icon. Assets do not run independently and do not show Input/Reference/Option/Output classification; connection direction, labels, and context express their purpose. More only replaces the file or deletes the node. Replacing or deleting an Asset Node does not delete an existing managed file under `.scatter/assets`.
 
 **How is Group Run different from ordinary Run?**
 

@@ -10,6 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
+- `issue-remove-task-node-attachment-upload` | assigned | medium | Test Supervisor Agent | 移除 Task 节点内上传附件功能 | `agent-reports/assigned/issue-remove-task-node-attachment-upload.md` | 2 | 2026-08-06T06:13:39Z
 - `issue-asset-media-focus-video-playback-controls` | assigned | medium | Test Supervisor Agent | 图片/视频 Asset 缺少选中边框且视频画面点击误触播放 | `agent-reports/assigned/issue-asset-media-focus-video-playback-controls.md` | 4 | 2026-08-06T13:44:18Z
 - `issue-task-code-block-dark-canvas-background` | assigned | low | Test Supervisor Agent | Task 代码背景与画布不一致 | `agent-reports/assigned/issue-task-code-block-dark-canvas-background.md` | 8 | 2026-08-06T03:42:00Z
 - `issue-remove-rich-text-task-list` | assigned | medium | Test Supervisor Agent | 移除 Task 正文富文本复选框 | `agent-reports/assigned/issue-remove-rich-text-task-list.md` | 5 | 2026-08-06T03:18:00Z
