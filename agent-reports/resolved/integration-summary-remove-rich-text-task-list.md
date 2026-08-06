@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T03:18:00Z
-updated_at: 2026-08-06T03:18:00Z
+updated_at: 2026-08-06T03:20:00Z
 depends_on:
   - issue-remove-rich-text-task-list
 related_files:
@@ -129,5 +129,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `5dcf0a789c36632362d9a511c34b695c92343147`
-- commit: pending Main Thread selective staging
-- worktree: 仅暂存本轮拥有的文件，保留两个预先存在的 untracked dist duplicate 文件。
+- commit: `6326c69d45823afb7e8f0daccf1b00d27065f5fa` (`fix: 移除任务正文复选框`)
+- worktree: 提交后仅保留两个预先存在且未纳入本轮的 untracked dist duplicate 文件。
