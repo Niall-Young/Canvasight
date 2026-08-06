@@ -41,12 +41,12 @@ roles:
     agent_id: /root/development_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T03:14:00Z
-    handoff_source: issue-remove-rich-text-task-list
-    last_report: solution-remove-rich-text-task-list
+    last_seen: 2026-08-06T03:30:00Z
+    handoff_source: issue-task-code-block-dark-canvas-background
+    last_report: solution-task-code-background-canvas
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Removed Task body TaskList/TaskItem checkbox support while preserving legacy markers as non-interactive ordinary list text with focused and production-browser coverage
+    notes: Unified Task inline and fenced code on the canvas background token while preserving transparent nested pre code and the separate raw Markdown inline surface
   - role: Development Standards Lead
     status: active
     agent_id: /root/development_standards_agent
@@ -63,12 +63,12 @@ roles:
     agent_id: /root/test_supervisor_agent
     thread_id: null
     created_at: 2026-07-11T11:08:45Z
-    last_seen: 2026-08-06T03:18:00Z
-    handoff_source: issue-remove-rich-text-task-list
-    last_report: issue-remove-rich-text-task-list
+    last_seen: 2026-08-06T03:34:00Z
+    handoff_source: issue-task-code-block-dark-canvas-background
+    last_report: issue-task-code-block-dark-canvas-background
     rebuild_on_new_thread: true
     replaced_by: null
-    notes: Independently verified Task body checkbox removal, legacy marker spacing and roundtrip, ordinary lists, Framework Questions checkboxes, Task drawer, browser console, and production widget regression; waiting for user native-host acceptance
+    notes: Independently verified light/dark inline and fenced code canvas backgrounds, unchanged text/border/pre-code transparency, raw-inline boundary, focused tests, and zero browser console errors; waiting for user native-host acceptance
   - role: Customer Support Agent
     status: active
     agent_id: /root/customer_support_agent

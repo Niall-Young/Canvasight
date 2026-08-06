@@ -224,6 +224,26 @@ const appCssSource = fs.readFileSync(path.join(pluginRoot, "src", "styles", "app
 assert.doesNotMatch(appCssSource, /data-type="task(?:Item|List)"/);
 assert.match(
   appCssSource,
+  /\.task-body-content code\s*\{[^}]*background:\s*var\(--color-background-canvas\);/s,
+  "inline code must use the canvas background token"
+);
+assert.match(
+  appCssSource,
+  /\.task-body-content pre\s*\{[^}]*background:\s*var\(--color-background-canvas\);/s,
+  "fenced code blocks must use the canvas background token"
+);
+assert.match(
+  appCssSource,
+  /\.task-body-content pre code\s*\{[^}]*background:\s*transparent;/s,
+  "code inside fenced blocks must inherit one transparent background layer"
+);
+assert.match(
+  appCssSource,
+  /\.task-body-raw-markdown\.is-inline\s*\{[^}]*background:\s*var\(--color-background-input\);/s,
+  "raw Markdown inline placeholders must keep their separate input-surface semantics"
+);
+assert.match(
+  appCssSource,
   /\.task-body-content > \* \+ pre,[\s\S]*\.task-body-content > pre \+ \*[\s\S]*margin-top: var\(--space-10\)/,
   "code blocks must have explicit separation from adjacent rich-text blocks"
 );

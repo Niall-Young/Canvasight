@@ -2947,7 +2947,7 @@ button.achievement-card.is-unlocked:focus-visible {
 .task-body-content code {
   padding: var(--space-1) var(--space-4);
   border-radius: var(--radius-xs);
-  background: var(--color-background-input);
+  background: var(--color-background-canvas);
   font-family: var(--font-family-mono);
   font-size: var(--text-12);
   line-height: var(--line-12);
@@ -2961,7 +2961,7 @@ button.achievement-card.is-unlocked:focus-visible {
   color: var(--color-text);
   border: var(--border-weight-sm) solid var(--color-border-divider);
   border-radius: var(--radius-xs);
-  background: var(--color-background-input);
+  background: var(--color-background-canvas);
   font-family: var(--font-family-mono);
   white-space: pre;
 }
