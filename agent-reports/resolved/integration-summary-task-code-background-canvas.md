@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: low
-version: 4
+version: 5
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T03:34:00Z
-updated_at: 2026-08-06T03:44:00Z
+updated_at: 2026-08-06T03:46:00Z
 depends_on:
   - issue-task-code-block-dark-canvas-background
 related_files:
@@ -121,5 +121,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `b9f116da1d2daa44f1abdb0db701aa41d5957058`
-- commits: `9bd471472c4c2ec38249dfba7fa72ebe826df8c9`（背景 token）；补充边框提交待 Main Thread selective staging
-- worktree: 仅暂存本轮拥有的文件，保留两个预先存在的 untracked dist duplicate 文件。
+- commits: `9bd471472c4c2ec38249dfba7fa72ebe826df8c9`（背景 token）；`b55cf1a04e6aad1131554e408f68660183b442a3`（暗色 inline 边框与最终产物）
+- worktree: 提交后只剩两个预先存在且未改动的 untracked dist duplicate 文件。
