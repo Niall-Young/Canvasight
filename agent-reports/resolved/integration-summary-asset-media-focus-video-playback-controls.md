@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 3
+version: 4
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T04:13:46Z
-updated_at: 2026-08-06T13:44:18Z
+updated_at: 2026-08-06T13:46:42Z
 depends_on:
   - issue-asset-media-focus-video-playback-controls
   - solution-asset-media-focus-video-playback-controls
@@ -120,5 +120,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `9e72ade0f5ff00908a35907b11efafafa867c8b1`
-- commit: pending（本轮纠正尚待选择性提交）
-- worktree: 提交前保留两个预先存在且未改动的 untracked dist duplicate 文件。
+- commit: `74677671b270ab6aac26b88aba08eaa927cc9689` (`fix: 恢复视频原生控制栏`)
+- worktree: 修复提交后只剩两个预先存在且校验值未变的 untracked dist duplicate 文件。
