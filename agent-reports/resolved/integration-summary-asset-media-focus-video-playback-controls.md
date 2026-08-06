@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T04:13:46Z
-updated_at: 2026-08-06T04:13:46Z
+updated_at: 2026-08-06T04:17:00Z
 depends_on:
   - issue-asset-media-focus-video-playback-controls
   - solution-asset-media-focus-video-playback-controls
@@ -119,6 +119,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `a0a8c0e7fe9f3ca3c34877049d5dad867d50b510`
-- planned commit: `fix: 完善媒体节点聚焦与播放交互`
-- commit: pending Main Thread selective staging
-- worktree: 保留两个预先存在且未改动的 untracked dist duplicate 文件。
+- commit: `e867d31506bfa076cb75bed7275c012484fad00a` (`fix: 完善媒体节点聚焦与播放交互`)
+- worktree: 实现提交后只剩两个预先存在且未改动的 untracked dist duplicate 文件。
