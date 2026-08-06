@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: medium
-version: 1
+version: 2
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T06:13:39Z
-updated_at: 2026-08-06T06:13:39Z
+updated_at: 2026-08-06T06:20:03Z
 depends_on:
   - issue-remove-task-node-attachment-upload
   - solution-remove-task-node-attachment-upload
@@ -130,6 +130,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `7de2944084414e008dc992e94387e142decf7c5d`
-- planned commit: `fix: 移除节点附件上传`
-- commit: pending（验证后选择性提交）
-- worktree: 提交前保留两个预先存在且未改动的 untracked dist duplicate 文件。
+- implementation commit: `6fde1f0aa4df4922e70a373af0d82605caca4fd6` (`fix: 移除节点附件上传`)
+- worktree: 实现提交后仅保留两个预先存在且校验值未变的 untracked dist duplicate 文件。
