@@ -6,20 +6,20 @@ status: assigned
 owner: Test Supervisor Agent
 created_by: Main Thread
 priority: low
-version: 5
+version: 8
 agent_id: /root/test_supervisor_agent
 thread_id: null
 created_at: 2026-08-06T03:28:00Z
-updated_at: 2026-08-06T03:35:00Z
+updated_at: 2026-08-06T03:42:00Z
 depends_on: []
 related_files:
   - plugins/canvasight/src/styles/app.css
   - plugins/canvasight/tests/rich-text-smoke.mjs
 verification_status: failed
 verification_evidence:
-  - npm run test:rich-text
-  - npm run typecheck
-  - git diff --check
+  - 用户新增暗色 inline border 的 npm run test:rich-text、npm run typecheck 与 git diff --check 已通过。
+  - Test Supervisor Vite source browser 复测通过：暗色 1px divider、浅色 1px transparent、fenced 单框、nested pre code 无框透明，console 0/0。
+  - 真实 native host 继续 unverified。
 solution_report: agent-reports/resolved/solution-task-code-background-canvas.md
 ---
 
@@ -50,6 +50,7 @@ Development Agent
 - 暗色 `--color-background-input` 为 `#1C1C1C`。
 - 暗色 `--color-background-canvas` 为 `#0A0A0A`。
 - 用户补充要求 inline code 与 fenced code block 一并改为 canvas background。
+- 用户再次补充：暗色 inline code 需要 1px 中性 divider border；浅色不得出现可见边框，fenced pre 已有边框，nested `pre code` 不得双框。
 
 ## 复现方式
 
@@ -59,7 +60,7 @@ Development Agent
 
 ## 影响范围
 
-Task Node inline code 与 fenced code block 背景。`pre code` 继续透明继承；raw Markdown inline 是 unsupported syntax 占位，不属于 inline code，保持原 surface；其他组件不变。
+Task Node inline code 与 fenced code block 背景及暗色 inline border。`pre code` 继续透明继承且无内框；raw Markdown inline 是 unsupported syntax 占位，不属于 inline code，保持原 surface；其他组件不变。
 
 ## 证据
 
@@ -85,7 +86,7 @@ Development Agent
 
 ## 期望结果
 
-Inline code 与 fenced code block 使用 `--color-background-canvas`；fenced block 内部 `code` 继续透明，raw Markdown inline 继续使用现有 input surface。
+Inline code 与 fenced code block 使用 `--color-background-canvas`；inline code 基础态保留透明 1px border，暗色切换到 divider border；fenced block 内部 `code` 继续透明且无 border，raw Markdown inline 继续使用现有 input surface。
 
 ## Closure Criteria
 
@@ -97,11 +98,11 @@ Inline code 与 fenced code block 使用 `--color-background-canvas`；fenced bl
 
 ## 当前状态
 
-assigned：源码、自动化、双主题浏览器与合成 production widget 验证已通过，等待用户在真实 Codex native widget 中自行验收。
+assigned：Development、focused 与 Test Supervisor browser 复测均通过；等待用户在真实 Codex native widget 中验收。
 
 ## 处理结果
 
-Inline code 与 fenced code block 已统一使用 canvas background token；focused、双主题浏览器与合成 production widget 验证通过。真实 Codex native host 尚未验收，因此问题保持 assigned/unverified。
+Inline code 使用透明 base border，暗色切换 divider；nested `pre code` 清除 border。Focused 与 Vite source browser 验证均通过，真实 native host 未验证。
 
 ## 修改文件
 
@@ -116,4 +117,4 @@ Inline code 与 fenced code block 已统一使用 canvas background token；focu
 
 ## 后续风险
 
-`pre code` 继续透明，raw Markdown inline 保持 input token。Web 发布产物已由 Main Thread 重建；MCP runtime 不受影响。仍缺少安装精确交付快照后的真实 Codex native widget 验收。
+不得给浅色 inline code 添加可见边框，不得让暗色 override 造成 fenced block 内双框。Web 产物需刷新；真实 native host 仍需用户验收。

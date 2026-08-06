@@ -224,18 +224,23 @@ const appCssSource = fs.readFileSync(path.join(pluginRoot, "src", "styles", "app
 assert.doesNotMatch(appCssSource, /data-type="task(?:Item|List)"/);
 assert.match(
   appCssSource,
-  /\.task-body-content code\s*\{[^}]*background:\s*var\(--color-background-canvas\);/s,
-  "inline code must use the canvas background token"
+  /\.task-body-content code\s*\{[^}]*border:\s*var\(--border-weight-sm\) solid transparent;[^}]*background:\s*var\(--color-background-canvas\);/s,
+  "inline code must use a transparent base border and the canvas background token"
 );
 assert.match(
   appCssSource,
-  /\.task-body-content pre\s*\{[^}]*background:\s*var\(--color-background-canvas\);/s,
-  "fenced code blocks must use the canvas background token"
+  /:root\[data-theme="dark"\] \.task-body-content code\s*\{[^}]*border-color:\s*var\(--color-border-divider\);/s,
+  "dark inline code must reveal the neutral divider border"
 );
 assert.match(
   appCssSource,
-  /\.task-body-content pre code\s*\{[^}]*background:\s*transparent;/s,
-  "code inside fenced blocks must inherit one transparent background layer"
+  /\.task-body-content pre\s*\{[^}]*border:\s*var\(--border-weight-sm\) solid var\(--color-border-divider\);[^}]*background:\s*var\(--color-background-canvas\);/s,
+  "fenced code blocks must keep their single divider border and canvas background"
+);
+assert.match(
+  appCssSource,
+  /\.task-body-content pre code\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s,
+  "code inside fenced blocks must clear the inline border and inherit one transparent background layer"
 );
 assert.match(
   appCssSource,

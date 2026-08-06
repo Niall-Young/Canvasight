@@ -6,11 +6,11 @@ status: resolved
 owner: Main Thread
 created_by: Main Thread
 priority: low
-version: 3
+version: 4
 agent_id: /root
 thread_id: null
 created_at: 2026-08-06T03:34:00Z
-updated_at: 2026-08-06T03:36:00Z
+updated_at: 2026-08-06T03:44:00Z
 depends_on:
   - issue-task-code-block-dark-canvas-background
 related_files:
@@ -24,7 +24,7 @@ related_files:
 verification_status: passed
 verification_evidence:
   - Rich-text smoke、TypeScript、production widget smoke、MCP bundle、release metadata、plugin validation 与生产构建通过。
-  - 双主题真实浏览器确认 inline/fenced code computed background 精确等于 canvas token，且 text、border、pre-code transparency 与 raw-inline boundary 未回归。
+  - 双主题 Vite source browser 确认 inline/fenced code computed background 精确等于 canvas token；暗色 inline 为 1px divider，浅色为 1px transparent，fenced 保持单框且 nested pre-code 无框透明。
   - Browser console Errors 0 / Warnings 0。
   - 缺少安装精确交付快照后的真实 Codex native widget 用户验收。
 ---
@@ -34,12 +34,13 @@ verification_evidence:
 ## 本轮目标
 
 - 将 Task Node 的行内代码与 fenced code block 背景统一为画布背景 token。
-- 保持 nested `pre code` 透明、文字与边框不变，并避免误改 raw Markdown inline 占位。
+- 暗色 inline code 增加 1px 中性 divider border，浅色保留透明边框以避免主题切换尺寸跳动。
+- 保持 fenced block 单框、nested `pre code` 透明无框，并避免误改 raw Markdown inline 占位。
 
 ## Agent 状态
 
 - Product Agent：固定席位本轮不可调用；Main Thread 将范围限定为代码表面的视觉语义修复。
-- Design Agent：确认 canvas token、两类 code surface、边框与 nested transparency 规则。
+- Design Agent：确认 canvas token、暗色 inline divider、浅色透明占位边框及 nested reset 规则。
 - Development Agent：完成 CSS、focused tests 与 solution report。
 - Test Supervisor Agent：完成双主题 computed-style 基线和真实浏览器复验。
 - Customer Support Agent：固定席位本轮不可调用；Main Thread 执行 good-readme gate，结论 README 无需修改。
@@ -50,9 +51,9 @@ verification_evidence:
 
 ## Agent 输入
 
-- Design Agent：inline/fenced code 应使用 `--color-background-canvas`，fenced block 保留 divider border，nested `pre code` 必须透明。
-- Development Agent：最小修改两个背景声明，raw Markdown inline 继续使用 input token，并加入四条 focused CSS contract。
-- Test Supervisor Agent：暗色 canvas/node 为 `#0A0A0A`/`#1C1C1C`，浅色为 `#F2F2F2`/`#FFFFFF`；修改后两类 code surface 均精确匹配 canvas。
+- Design Agent：inline/fenced code 应使用 `--color-background-canvas`；inline 采用透明 base border 并在暗色显示 divider，nested `pre code` 清零 border。
+- Development Agent：实现 base/dark/reset 三层合同，raw Markdown inline 继续使用 input token，并扩展 focused assertions。
+- Test Supervisor Agent：暗色 inline 为 canvas `#0A0A0A` + divider `#404040`，浅色为 canvas `#F2F2F2` + transparent border；fenced 单框、nested 无框，console 0/0。
 
 ## 报告状态变更
 
@@ -62,7 +63,8 @@ verification_evidence:
 ## 已解决
 
 - 行内代码和 fenced code block 在 light/dark/translucent token 体系下使用画布背景。
-- `pre code` 不产生第二层背景；代码文字、1px divider border 与 raw Markdown inline 均保持既有语义。
+- 暗色 inline code 具有可见的 1px divider；浅色边框透明且盒尺寸稳定。
+- Fenced pre 只保留自身一层 divider；`pre code` 不产生第二层背景或边框，raw Markdown inline 保持既有语义。
 
 ## 未解决
 
@@ -70,7 +72,7 @@ verification_evidence:
 
 ## 风险
 
-- Canvas token 会同时影响浅色与暗色，这是用户要求的统一语义，不是暗色专属 override。
+- Canvas token 会同时影响浅色与暗色；只有 inline border-color 是暗色专属 override。
 - Agent Team 全库 validator 继续被历史 report/template/QUEUE schema 漂移阻塞；本轮新报告未新增错误。
 
 ## 下一轮分派
@@ -83,7 +85,7 @@ verification_evidence:
 
 ## 处理结果
 
-代码与 browser/合成 production widget 验证完成；真实 native host 保持 unverified。
+代码、Vite source browser 与合成 production widget 验证完成；真实 native host 保持 unverified。
 
 ## 修改文件
 
@@ -98,7 +100,7 @@ verification_evidence:
 - `npm run check:mcp-bundle`
 - `npm run release:verify -- 0.5.4`
 - plugin validator
-- 双主题 real-browser computed styles 与 console
+- 双主题 Vite source browser computed styles 与 console
 
 ## 验证记录
 
@@ -119,5 +121,5 @@ verification_evidence:
 
 - branch: `main`
 - baseline: `b9f116da1d2daa44f1abdb0db701aa41d5957058`
-- commit: pending Main Thread selective staging
+- commits: `9bd471472c4c2ec38249dfba7fa72ebe826df8c9`（背景 token）；补充边框提交待 Main Thread selective staging
 - worktree: 仅暂存本轮拥有的文件，保留两个预先存在的 untracked dist duplicate 文件。

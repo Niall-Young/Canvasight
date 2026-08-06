@@ -2946,11 +2946,16 @@ button.achievement-card.is-unlocked:focus-visible {
 
 .task-body-content code {
   padding: var(--space-1) var(--space-4);
+  border: var(--border-weight-sm) solid transparent;
   border-radius: var(--radius-xs);
   background: var(--color-background-canvas);
   font-family: var(--font-family-mono);
   font-size: var(--text-12);
   line-height: var(--line-12);
+}
+
+:root[data-theme="dark"] .task-body-content code {
+  border-color: var(--color-border-divider);
 }
 
 .task-body-content pre {
@@ -2969,6 +2974,7 @@ button.achievement-card.is-unlocked:focus-visible {
 .task-body-content pre code {
   padding: 0;
   color: inherit;
+  border: 0;
   background: transparent;
 }
 

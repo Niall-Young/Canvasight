@@ -10,7 +10,7 @@ Protocol effective from `2026-07-05 19:14`. Older Markdown files directly under 
 
 ## Assigned
 
-- `issue-task-code-block-dark-canvas-background` | assigned | low | Test Supervisor Agent | Task 代码背景与画布不一致 | `agent-reports/assigned/issue-task-code-block-dark-canvas-background.md` | 5 | 2026-08-06T03:35:00Z
+- `issue-task-code-block-dark-canvas-background` | assigned | low | Test Supervisor Agent | Task 代码背景与画布不一致 | `agent-reports/assigned/issue-task-code-block-dark-canvas-background.md` | 8 | 2026-08-06T03:42:00Z
 - `issue-remove-rich-text-task-list` | assigned | medium | Test Supervisor Agent | 移除 Task 正文富文本复选框 | `agent-reports/assigned/issue-remove-rich-text-task-list.md` | 5 | 2026-08-06T03:18:00Z
 - `issue-asset-content-first-media-file-icons` | blocked | high | Test Supervisor Agent | Asset 内容本体与统一文件图标仍不符合预期 | `agent-reports/assigned/issue-asset-content-first-media-file-icons.md` | 3 | 2026-08-05T03:36:00Z
 - `issue-group-asset-node-visual-semantics` | blocked | medium | Test Supervisor Agent | Group 与 Asset Node 视觉语义不一致 | `agent-reports/assigned/issue-group-asset-node-visual-semantics.md` | 3 | 2026-08-05T02:35:00Z
