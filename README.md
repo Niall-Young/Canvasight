@@ -294,8 +294,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.5.4
-npm run release:verify -- 0.5.4
+npm run release:prepare -- 0.5.5
+npm run release:verify -- 0.5.5
 ```
 
 `npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:unit` 验证抽离后的领域规则，`npm run test:architecture` 检查模块依赖和组合入口不会重新膨胀，`npm run test:core` 运行核心行为矩阵，`npm run verify` 依次检查 bundle、类型和核心行为。完整的模块职责和新增代码放置规则见[架构说明](docs/architecture.md)。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:task-attachments` 验证 Task 新增附件入口保持移除、文件 drop/paste 创建 Asset，并保留历史附件兼容；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
@@ -691,8 +691,8 @@ npm run test:plugin-distribution
 npm run test:update
 npm run test:widget-runtime
 npm run diagnose:mcp
-npm run release:prepare -- 0.5.4
-npm run release:verify -- 0.5.4
+npm run release:prepare -- 0.5.5
+npm run release:verify -- 0.5.5
 ```
 
 `npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:unit` verifies extracted domain rules, `npm run test:architecture` checks module dependencies and composition-root growth, `npm run test:core` runs the core behavior matrix, and `npm run verify` checks the bundle, types, and core behavior in order. See the [architecture guide](docs/architecture.md) for module responsibilities and placement rules for new code. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:task-attachments` verifies that new Task attachment entries stay removed, file drop/paste creates Assets, and legacy attachments remain compatible; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.

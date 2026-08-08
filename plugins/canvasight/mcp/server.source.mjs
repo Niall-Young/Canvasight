@@ -26,7 +26,7 @@ import {
 } from "./domain/concurrent-document.mjs";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.4";
+const SERVER_VERSION = "0.5.5";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
