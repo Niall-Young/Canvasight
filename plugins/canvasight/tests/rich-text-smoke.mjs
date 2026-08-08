@@ -220,7 +220,11 @@ assert.match(taskNodeSource, /target\.closest\("pre"\).*event\.stopPropagation\(
 assert.match(taskNodeSource, /event\.key === " ".*insertUnmarkedSpaceAfterInlineCode\(editor\)/);
 assert.match(taskNodeSource, /bodyEditorRef\.current = bodyEditor/);
 
-const appCssSource = fs.readFileSync(path.join(pluginRoot, "src", "styles", "app.css"), "utf8");
+const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
+  .filter((name) => name.endsWith(".css"))
+  .sort()
+  .map((name) => fs.readFileSync(path.join(pluginRoot, "src", "styles", name), "utf8"))
+  .join("\n");
 assert.doesNotMatch(appCssSource, /data-type="task(?:Item|List)"/);
 assert.match(
   appCssSource,

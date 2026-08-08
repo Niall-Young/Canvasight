@@ -19,7 +19,8 @@ import Text from "@tiptap/extension-text";
 import { Dropcursor, Gapcursor, UndoRedo } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type { Attachment, RunMode, ScatterNodeData, ScatterTaskNodeData } from "../../shared/types";
+import type { Attachment, ScatterNodeData, ScatterTaskNodeData } from "../../shared/types";
+import { useCanvasActions, type ConnectedNodeSide } from "../application/CanvasActionsContext";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
@@ -44,35 +45,10 @@ import { UploadChip } from "./ui/upload-chip";
 
 type TaskNodeProps = NodeProps<Node<ScatterTaskNodeData, "task">>;
 type EditableField = "title" | "body";
-type ConnectedNodeSide = "left" | "right";
 type EditorSkillQuery = SkillQueryRange & { from: number; to: number };
 
-export interface RuntimeActions {
-  updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
-  beginNodeEdit: () => void;
-  commitNodeEdit: () => void;
-  removeAttachment: (nodeId: string, attachmentId: string) => void;
-  promoteAttachment: (nodeId: string, attachmentId: string) => void;
-  replaceAsset: (nodeId: string) => void;
-  createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
-  duplicateNode: (nodeId: string) => void;
-  saveNodeAsTemplate: (nodeId: string, data: ScatterNodeData) => Promise<void>;
-  deleteNode: (nodeId: string) => void;
-  setNodeHover: (nodeId: string, hovered: boolean) => void;
-  runNode: (nodeId: string, mode: RunMode) => Promise<void>;
-  toggleGroup: (groupId: string) => void;
-  ungroupNode: (nodeId: string) => void;
-  fitGroup: (groupId: string) => void;
-  listSkills: (forceReload?: boolean) => Promise<SkillSummary[]>;
-}
-
-export let taskNodeActions: RuntimeActions | null = null;
-
-export function setTaskNodeActions(actions: RuntimeActions): void {
-  taskNodeActions = actions;
-}
-
 function TaskAttachmentChip({ attachment, nodeId, assetBaseUrl }: { attachment: Attachment; nodeId: string; assetBaseUrl: string }): ReactElement {
+  const actions = useCanvasActions();
   const [imageSrc, setImageSrc] = useState("");
   const [imageStatus, setImageStatus] = useState<"idle" | "loading" | "ready" | "error">(attachment.kind === "image" ? "loading" : "idle");
 
@@ -107,15 +83,16 @@ function TaskAttachmentChip({ attachment, nodeId, assetBaseUrl }: { attachment: 
       kind={attachment.kind}
       title={`${attachment.storedPath} · ${formatBytes(attachment.size)}`}
       onDoubleClick={() => window.scatter.showInFolder(attachment.storedPath)}
-      onPromote={() => taskNodeActions?.promoteAttachment(nodeId, attachment.id)}
+      onPromote={() => actions.promoteAttachment(nodeId, attachment.id)}
       onRemove={() => {
-        taskNodeActions?.removeAttachment(nodeId, attachment.id);
+        actions.removeAttachment(nodeId, attachment.id);
       }}
     />
   );
 }
 
 function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement {
+  const actions = useCanvasActions();
   const { t } = useI18n();
   const updateNodeInternals = useUpdateNodeInternals();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -158,7 +135,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const loadSkills = useCallback(async (forceReload = false) => {
     setSkillStatus("loading");
     try {
-      const nextSkills = await taskNodeActions?.listSkills(forceReload);
+      const nextSkills = await actions.listSkills(forceReload);
       setSkills(nextSkills ?? []);
       setSkillStatus("ready");
     } catch {
@@ -333,12 +310,12 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
               if (markdown !== bodyDraftRef.current) {
                 bodyDraftRef.current = markdown;
                 setBodyDraft(markdown);
-                taskNodeActions?.updateNodeData(id, { body: markdown });
+                actions.updateNodeData(id, { body: markdown });
               }
               syncSkillQuery(currentEditor);
               if (pendingFinishAfterCompositionRef.current && !currentEditor.isFocused) {
                 pendingFinishAfterCompositionRef.current = false;
-                taskNodeActions?.commitNodeEdit();
+                actions.commitNodeEdit();
                 setEditingField(null);
               }
             }, 0);
@@ -383,7 +360,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         if (markdown === bodyDraftRef.current) return;
         bodyDraftRef.current = markdown;
         setBodyDraft(markdown);
-        taskNodeActions?.updateNodeData(id, { body: markdown });
+        actions.updateNodeData(id, { body: markdown });
         syncSkillQuery(editor);
       }
     },
@@ -433,7 +410,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       }
 
       if (Object.keys(patch).length > 0) {
-        taskNodeActions?.updateNodeData(id, patch);
+        actions.updateNodeData(id, patch);
       }
     },
     [data.body, data.title, id]
@@ -444,7 +421,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       if (field && editingField !== field) return;
       pendingFinishAfterCompositionRef.current = false;
       flushDraftToStore(field ?? editingField ?? undefined);
-      taskNodeActions?.commitNodeEdit();
+      actions.commitNodeEdit();
       setEditingField(null);
     },
     [editingField, flushDraftToStore]
@@ -490,7 +467,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const startEditing = useCallback(
     (field: EditableField) => {
       if (!pointerStartedSelectedRef.current) return;
-      taskNodeActions?.beginNodeEdit();
+      actions.beginNodeEdit();
       setEditingField(field);
     },
     []
@@ -559,7 +536,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       setTitleDraft(value);
 
       if (!isChangeDuringComposition(event) && value !== data.title) {
-        taskNodeActions?.updateNodeData(id, { title: value });
+        actions.updateNodeData(id, { title: value });
       }
     },
     [data.title, id, isChangeDuringComposition]
@@ -661,7 +638,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         suppressConnectButtonClickRef.current = true;
         if (dragged) return;
         upEvent.preventDefault();
-        taskNodeActions?.createConnectedNode(id, side);
+        actions.createConnectedNode(id, side);
       }
 
       window.addEventListener("mousemove", handleMouseMove);
@@ -679,7 +656,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         return;
       }
 
-      taskNodeActions?.createConnectedNode(id, side);
+      actions.createConnectedNode(id, side);
     },
     [id]
   );
@@ -688,8 +665,8 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     <div
       ref={rootRef}
       className={`task-node ${selected ? "is-selected" : ""}`}
-      onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
-      onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
+      onMouseEnter={() => actions.setNodeHover(id, true)}
+      onMouseLeave={() => actions.setNodeHover(id, false)}
     >
       <Handle
         type="target"
@@ -739,7 +716,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             size="lg"
             aria-label={hasRunnableInput ? t("task.run") : t("task.runEmpty")}
             disabled={!hasRunnableInput}
-            onClick={() => taskNodeActions?.runNode(id, "flow")}
+            onClick={() => actions.runNode(id, "flow")}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={t("task.more")}>
@@ -750,7 +727,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
             <RadixDropdownMenu.Portal>
               <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
                 <RadixDropdownMenu.Item asChild>
-                  <ActionMenuItem icon="copy" label={t("task.copy")} onClick={() => taskNodeActions?.duplicateNode(id)} />
+                  <ActionMenuItem icon="copy" label={t("task.copy")} onClick={() => actions.duplicateNode(id)} />
                 </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item asChild disabled={!hasBody}>
                   <ActionMenuItem
@@ -766,15 +743,15 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
                         runMode
                       };
                       flushDraftToStore();
-                      void taskNodeActions?.saveNodeAsTemplate(id, templateData);
+                      void actions.saveNodeAsTemplate(id, templateData);
                     }}
                   />
                 </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item
                   asChild
-                  onSelect={() => taskNodeActions?.deleteNode(id)}
+                  onSelect={() => actions.deleteNode(id)}
                 >
-                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
+                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => actions.deleteNode(id)} />
                 </RadixDropdownMenu.Item>
               </RadixDropdownMenu.Content>
             </RadixDropdownMenu.Portal>

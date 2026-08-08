@@ -7,12 +7,13 @@ import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, resolveCanvasightA
 import { useI18n } from "../lib/i18n";
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
-import { taskNodeActions } from "./TaskNode";
+import { useCanvasActions } from "../application/CanvasActionsContext";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 
 function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetNodeData, "asset">>): ReactElement {
+  const actions = useCanvasActions();
   const { t } = useI18n();
   const [imageSrc, setImageSrc] = useState("");
   const [imageStatus, setImageStatus] = useState<"loading" | "ready" | "error">(data.asset.kind === "image" ? "loading" : "ready");
@@ -59,8 +60,8 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
     <article
       className={`asset-node is-${presentation} ${selected ? "is-selected" : ""}`}
       aria-label={displayName}
-      onMouseEnter={() => taskNodeActions?.setNodeHover(id, true)}
-      onMouseLeave={() => taskNodeActions?.setNodeHover(id, false)}
+      onMouseEnter={() => actions.setNodeHover(id, true)}
+      onMouseLeave={() => actions.setNodeHover(id, false)}
     >
       <Handle
         type="target"
@@ -72,7 +73,7 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
       >
         {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
         {!hasParent ? (
-          <button className="node-connect-button" type="button" aria-label={t("task.connectLeft")} onClick={() => taskNodeActions?.createConnectedNode(id, "left")}>
+          <button className="node-connect-button" type="button" aria-label={t("task.connectLeft")} onClick={() => actions.createConnectedNode(id, "left")}>
             <Icon name="plus-lg" size={16} />
           </button>
         ) : null}
@@ -86,10 +87,10 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
             <RadixDropdownMenu.Portal>
               <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
                 <RadixDropdownMenu.Item asChild>
-                  <ActionMenuItem icon="upload-documents" label={t("asset.replaceFile")} onClick={() => taskNodeActions?.replaceAsset(id)} />
+                  <ActionMenuItem icon="upload-documents" label={t("asset.replaceFile")} onClick={() => actions.replaceAsset(id)} />
                 </RadixDropdownMenu.Item>
                 <RadixDropdownMenu.Item asChild>
-                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
+                  <ActionMenuItem icon="trash" label={t("task.delete")} onClick={() => actions.deleteNode(id)} />
                 </RadixDropdownMenu.Item>
               </RadixDropdownMenu.Content>
             </RadixDropdownMenu.Portal>
@@ -132,7 +133,7 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
         )}
       </div>
       <Handle type="source" position={Position.Right} className="node-handle">
-        <button className="node-connect-button" type="button" aria-label={t("task.connectRight")} onClick={() => taskNodeActions?.createConnectedNode(id, "right")}>
+        <button className="node-connect-button" type="button" aria-label={t("task.connectRight")} onClick={() => actions.createConnectedNode(id, "right")}>
           <Icon name="plus-lg" size={16} />
         </button>
       </Handle>

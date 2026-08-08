@@ -4,12 +4,13 @@ import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
 import type { ScatterGroupNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { useScatterStore } from "../store/scatterStore";
-import { taskNodeActions } from "./TaskNode";
+import { useCanvasActions } from "../application/CanvasActionsContext";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { IconButton } from "./ui/icon-button";
 import { TooltipAnchor } from "./ui/tooltip";
 
 function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupNodeData, "group">>): ReactElement {
+  const actions = useCanvasActions();
   const { t } = useI18n();
   const [title, setTitle] = useState(data.title);
   const [description, setDescription] = useState(data.description);
@@ -24,7 +25,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
     const nextTitle = title.trim() || t("group.untitled");
     setTitle(nextTitle);
     if (nextTitle !== data.title || description !== data.description) {
-      taskNodeActions?.updateNodeData(id, { title: nextTitle, description });
+      actions.updateNodeData(id, { title: nextTitle, description });
     }
   };
 
@@ -71,7 +72,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
             size="lg"
             aria-label={collapsed ? t("group.fitCollapsed") : memberCount ? t("group.fit") : t("group.fitEmpty")}
             disabled={!memberCount || collapsed}
-            onClick={() => taskNodeActions?.fitGroup(id)}
+            onClick={() => actions.fitGroup(id)}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={collapsed ? t("group.expand") : t("group.collapse")}>
@@ -82,11 +83,11 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
             size="lg"
             aria-label={collapsed ? t("group.expand") : t("group.collapse")}
             aria-expanded={!collapsed}
-            onClick={() => taskNodeActions?.toggleGroup(id)}
+            onClick={() => actions.toggleGroup(id)}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={memberCount ? t("group.run") : t("group.runEmpty")}>
-          <IconButton filled={false} icon="play-1" size="lg" aria-label={memberCount ? t("group.run") : t("group.runEmpty")} disabled={!memberCount} onClick={() => taskNodeActions?.runNode(id, "flow")} />
+          <IconButton filled={false} icon="play-1" size="lg" aria-label={memberCount ? t("group.run") : t("group.runEmpty")} disabled={!memberCount} onClick={() => actions.runNode(id, "flow")} />
         </TooltipAnchor>
         <RadixDropdownMenu.Root>
           <RadixDropdownMenu.Trigger asChild>
@@ -95,10 +96,10 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
           <RadixDropdownMenu.Portal>
             <RadixDropdownMenu.Content className="dropdown-content node-action-menu" sideOffset={8} align="end">
               <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="folder-unshare" label={t("group.ungroupAll")} onClick={() => taskNodeActions?.ungroupNode(id)} />
+                <ActionMenuItem icon="folder-unshare" label={t("group.ungroupAll")} onClick={() => actions.ungroupNode(id)} />
               </RadixDropdownMenu.Item>
               <RadixDropdownMenu.Item asChild>
-                <ActionMenuItem icon="trash" label={t("group.delete")} onClick={() => taskNodeActions?.deleteNode(id)} />
+                <ActionMenuItem icon="trash" label={t("group.delete")} onClick={() => actions.deleteNode(id)} />
               </RadixDropdownMenu.Item>
             </RadixDropdownMenu.Content>
           </RadixDropdownMenu.Portal>

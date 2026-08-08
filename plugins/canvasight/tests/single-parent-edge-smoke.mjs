@@ -9,13 +9,16 @@ const pluginRoot = path.resolve(import.meta.dirname, "..");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 const appSource = fs.readFileSync(appPath, "utf8");
 const sourceFile = ts.createSourceFile(appPath, appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const functionNode = sourceFile.statements.find(
+const graphPath = path.join(pluginRoot, "src", "domain", "canvasGraph.ts");
+const graphSource = fs.readFileSync(graphPath, "utf8");
+const graphFile = ts.createSourceFile(graphPath, graphSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const functionNode = graphFile.statements.find(
   (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "isConnectionAllowed"
 );
 
-assert.ok(functionNode, "App must define the shared manual-connection rule");
+assert.ok(functionNode, "the graph domain module must define the shared manual-connection rule");
 
-const compiled = ts.transpileModule(`export ${functionNode.getText(sourceFile)}`, {
+const compiled = ts.transpileModule(`export ${functionNode.getText(graphFile)}`, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   fileName: "connection-rule.ts"
 }).outputText;

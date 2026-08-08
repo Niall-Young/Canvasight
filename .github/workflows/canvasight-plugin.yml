@@ -63,3 +63,6 @@ jobs:
 
       - name: Test MCP runtime
         run: npm run test:mcp
+
+      - name: Test core behavior and architecture boundaries
+        run: npm run test:core
