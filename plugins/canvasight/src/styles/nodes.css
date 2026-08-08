@@ -323,6 +323,14 @@
   border: 0;
   background: transparent;
 }
+
+.react-flow__node-group.selectable:hover,
+.react-flow__node-group.selectable.selected,
+.react-flow__node-group.selectable:focus,
+.react-flow__node-group.selectable:focus-visible {
+  box-shadow: none;
+}
+
 .react-flow__node-task,
 .react-flow__node-asset { z-index: 2 !important; }
 

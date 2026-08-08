@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import type { ScatterGroupNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { useScatterStore } from "../store/scatterStore";
@@ -34,7 +34,6 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
       className={`group-node ${collapsed ? "is-collapsed" : "is-expanded"} ${selected ? "is-selected" : ""}`}
       aria-label={t("group.ariaLabel", { title: title || t("group.untitled"), count: memberCount, assets: assetCount })}
     >
-      <NodeResizer isVisible={selected && !collapsed} minWidth={360} minHeight={160} />
       <header className="group-node-header">
         <div className="group-node-copy">
           <input

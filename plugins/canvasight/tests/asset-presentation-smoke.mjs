@@ -8,6 +8,7 @@ import ts from "typescript";
 const pluginRoot = path.resolve(import.meta.dirname, "..");
 const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.ts");
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
+const groupNodePath = path.join(pluginRoot, "src", "components", "GroupNode.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 
@@ -56,6 +57,7 @@ for (const [, , icon] of expectedMappings) {
 }
 
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
+const groupNodeSource = fs.readFileSync(groupNodePath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
 const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
@@ -65,6 +67,18 @@ const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
   .join("\n");
 assert.doesNotMatch(assetNodeSource, /AssetRoleOptions|asset-role-trigger|asset-role-option|asset\.classification|asset\.role\.|data\.role/, "Asset nodes must not render or expose the persisted compatibility role");
 assert.doesNotMatch(assetNodeSource, /RadioGroup|RadioItem/, "Asset classification must not return inside More");
+assert.doesNotMatch(groupNodeSource, /\bNodeResizer\b/, "selected Groups must not render the blue XYFlow resize frame");
+assert.match(groupNodeSource, /group-node[^`]*is-selected/, "Group selection must decorate the Group's own container border");
+assert.match(
+  appCssSource,
+  /\.group-node\.is-selected\s*\{[^}]*border-color:\s*var\(--color-border-focus\);/s,
+  "Group selection must recolor only the Group container border with the focus token"
+);
+assert.match(
+  appCssSource,
+  /\.react-flow__node-group\.selectable:hover,[\s\S]*?\.react-flow__node-group\.selectable\.selected,[\s\S]*?\.react-flow__node-group\.selectable:focus,[\s\S]*?\.react-flow__node-group\.selectable:focus-visible\s*\{[^}]*box-shadow:\s*none;/s,
+  "Group hover and selection must suppress XYFlow's default outer focus frame"
+);
 assert.match(assetNodeSource, /className="asset-node-menu"/, "More must remain a distinct hover control");
 assert.match(appCssSource, /\.asset-node-controls\s*\{[^}]*right:\s*12px;[^}]*left:\s*auto;[^}]*justify-content:\s*flex-end;/s, "Asset controls must remain right-aligned after classification removal");
 assert.match(appCssSource, /\.asset-node-menu:has\(\.kit-icon-button\[data-state="open"\]\)/, "an open Portal menu must keep More visible");
