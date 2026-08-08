@@ -18,6 +18,12 @@ export type FlowPosition = { x: number; y: number };
 export type ConnectionStart = { nodeId: string; handleType: "source" | "target" };
 export type ConnectionHoverTarget = { sourceId: string; targetId: string; hoveredNodeId: string };
 
+export interface UngroupNodesResult {
+  nodes: ScatterNode[];
+  dissolvedGroupIds: string[];
+  releasedNodeIds: string[];
+}
+
 type MeasuredScatterNode = ScatterNode & { measured?: { width?: number; height?: number } };
 
 export function roundPosition(position: FlowPosition): FlowPosition {
@@ -144,6 +150,31 @@ export function absoluteNodePosition(node: ScatterNode, nodes: ScatterNode[]): F
   if (node.type === "group" || !node.parentId) return node.position;
   const parent = nodes.find((candidate) => candidate.id === node.parentId && candidate.type === "group");
   return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
+}
+
+export function ungroupNodes(nodes: ScatterNode[], targetIds: Iterable<string>): UngroupNodesResult {
+  const targets = new Set(targetIds);
+  const groups = new Map(nodes.filter((node) => node.type === "group").map((node) => [node.id, node]));
+  const dissolvedGroupIds = nodes
+    .filter((node) => node.type === "group" && targets.has(node.id))
+    .map((node) => node.id);
+  const dissolvedGroups = new Set(dissolvedGroupIds);
+  const releasedNodeIds: string[] = [];
+  const nextNodes = nodes.flatMap((node): ScatterNode[] => {
+    if (node.type === "group") return dissolvedGroups.has(node.id) ? [] : [node];
+    if (!node.parentId || (!targets.has(node.id) && !dissolvedGroups.has(node.parentId))) return [node];
+    const group = groups.get(node.parentId);
+    releasedNodeIds.push(node.id);
+    return [{
+      ...node,
+      parentId: undefined,
+      position: group
+        ? { x: group.position.x + node.position.x, y: group.position.y + node.position.y }
+        : node.position
+    }];
+  });
+
+  return { nodes: nextNodes, dissolvedGroupIds, releasedNodeIds };
 }
 
 export function assetPositionNextToTask(task: ScatterTaskNode, nodes: ScatterNode[]): FlowPosition {

@@ -79,6 +79,7 @@ import {
   taskNodeHeight,
   taskNodeHorizontalGap,
   taskNodeWidth,
+  ungroupNodes,
   type ConnectionHoverTarget,
   type ConnectionStart,
   type FlowPosition
@@ -1933,35 +1934,39 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     return true;
   }, [commitCanvasChange, language, nodes, selectedNodes, setSelectedNodeId, setStatus]);
 
+  const applyUngroup = useCallback((targetIds: string[]) => {
+    const current = useScatterStore.getState();
+    const result = ungroupNodes(current.nodes, targetIds);
+    if (!result.dissolvedGroupIds.length && !result.releasedNodeIds.length) return false;
+    current.commitCanvasChange({ nodes: result.nodes });
+    if (result.dissolvedGroupIds.length) {
+      const dissolvedGroups = new Set(result.dissolvedGroupIds);
+      current.setCollapsedGroupIds(current.collapsedGroupIds.filter((id) => !dissolvedGroups.has(id)));
+      if (current.selectedNodeId && dissolvedGroups.has(current.selectedNodeId)) {
+        current.setSelectedNodeId(result.nodes.find((node) => node.selected)?.id ?? null);
+      }
+      current.setStatus(language === "zh" ? "分组已解散" : "Group dissolved");
+      return true;
+    }
+    current.setStatus(language === "zh" ? "已移出分组" : "Removed from group");
+    return true;
+  }, [language]);
+
   const ungroupNode = useCallback((nodeId: string) => {
-    const target = nodes.find((node) => node.id === nodeId);
-    if (!target) return;
-    const groupId = target.type === "group" ? target.id : target.parentId;
-    if (!groupId) return;
-    const group = nodes.find((node): node is ScatterGroupNode => node.id === groupId && node.type === "group");
-    if (!group) return;
-    const releaseAll = target.type === "group";
-    commitCanvasChange({ nodes: nodes.map((node): ScatterNode => {
-      if (node.type === "group" || node.parentId !== group.id || (!releaseAll && node.id !== target.id)) return node;
-      return { ...node, parentId: undefined, position: { x: group.position.x + node.position.x, y: group.position.y + node.position.y } };
-    }) });
-    setStatus(language === "zh" ? "已解除分组" : "Ungrouped");
-  }, [commitCanvasChange, language, nodes, setStatus]);
+    applyUngroup([nodeId]);
+  }, [applyUngroup]);
 
   const ungroupSelection = useCallback(() => {
-    const targets = selectedNodes.filter((node) => node.type === "group" || node.parentId);
-    if (!targets.length) return false;
-    const groupIds = new Set(targets.filter((node) => node.type === "group").map((node) => node.id));
-    const groups = new Map(nodes.filter((node): node is ScatterGroupNode => node.type === "group").map((node) => [node.id, node]));
-    commitCanvasChange({ nodes: nodes.map((node): ScatterNode => {
-      if (node.type === "group" || !node.parentId) return node;
-      if (!groupIds.has(node.parentId) && !targets.some((target) => target.id === node.id)) return node;
-      const group = groups.get(node.parentId);
-      return group ? { ...node, parentId: undefined, position: { x: group.position.x + node.position.x, y: group.position.y + node.position.y } } : { ...node, parentId: undefined };
-    }) });
-    setStatus(language === "zh" ? "已解除分组" : "Ungrouped");
-    return true;
-  }, [commitCanvasChange, language, nodes, selectedNodes, setStatus]);
+    const current = useScatterStore.getState();
+    const targetIds = new Set(current.nodes
+      .filter((node) => node.selected && (node.type === "group" || node.parentId))
+      .map((node) => node.id));
+    const primarySelection = current.nodes.find((node) => node.id === current.selectedNodeId);
+    if (primarySelection && (primarySelection.type === "group" || primarySelection.parentId)) {
+      targetIds.add(primarySelection.id);
+    }
+    return applyUngroup([...targetIds]);
+  }, [applyUngroup]);
 
   const fitGroup = useCallback((groupId: string) => {
     const group = nodes.find((node): node is ScatterGroupNode => node.id === groupId && node.type === "group");
