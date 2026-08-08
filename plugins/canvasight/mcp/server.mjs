@@ -268,10 +268,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path2) {
-  if (!path2)
+function getElementAtPath(obj, path3) {
+  if (!path3)
     return obj;
-  return path2.reduce((acc, key) => acc?.[key], obj);
+  return path3.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -599,11 +599,11 @@ function explicitlyAborted(x2, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path2, issues) {
+function prefixIssues(path3, issues) {
   return issues.map((iss) => {
     var _a4;
     (_a4 = iss).path ?? (_a4.path = []);
-    iss.path.unshift(path2);
+    iss.path.unshift(path3);
     return iss;
   });
 }
@@ -820,16 +820,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path2 = []) => {
+  const processError = (error52, path3 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else {
-        const fullpath = [...path2, ...issue2.path];
+        const fullpath = [...path3, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -856,17 +856,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path2 = []) => {
+  const processError = (error52, path3 = []) => {
     var _a4, _b2;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else {
-        const fullpath = [...path2, ...issue2.path];
+        const fullpath = [...path3, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -898,8 +898,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path2 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path2) {
+  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path3) {
     if (typeof seg === "number")
       segs.push("[".concat(seg, "]"));
     else if (typeof seg === "symbol")
@@ -14268,13 +14268,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path2 = ref.slice(1).split("/").filter(Boolean);
-  if (path2.length === 0) {
+  const path3 = ref.slice(1).split("/").filter(Boolean);
+  if (path3.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path2[0] === defsKey) {
-    const key = path2[1];
+  if (path3[0] === defsKey) {
+    const key = path3[1];
     if (!key || !ctx.defs[key]) {
       throw new Error("Reference not found: ".concat(ref));
     }
@@ -15050,12 +15050,12 @@ var init_v4 = __esm({
 
 // mcp/server.source.mjs
 import { spawn } from "node:child_process";
-import crypto from "node:crypto";
-import fs from "node:fs";
-import fsp from "node:fs/promises";
+import crypto2 from "node:crypto";
+import fs2 from "node:fs";
+import fsp2 from "node:fs/promises";
 import http from "node:http";
-import os from "node:os";
-import path from "node:path";
+import os2 from "node:os";
+import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
@@ -17437,9 +17437,408 @@ function edgeIncidentConflict(basePage, currentPage, localPage, reasons) {
   }
 }
 
+// mcp/infrastructure/generated-images.mjs
+import crypto from "node:crypto";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+var MAX_GENERATED_IMAGE_COUNT = 16;
+var MAX_GENERATED_IMAGE_BYTES = 10 * 1024 * 1024;
+var MAX_GENERATED_IMAGE_BATCH_BYTES = 100 * 1024 * 1024;
+var GENERATED_IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([".jpg", ".jpeg", ".png", ".webp"]);
+function createGeneratedImageWriter(dependencies) {
+  const {
+    GRAPH_LAYER_GAP: GRAPH_LAYER_GAP2,
+    GRAPH_ROW_GAP: GRAPH_ROW_GAP2,
+    MAX_DOCUMENT_MUTATION_RECEIPTS: MAX_DOCUMENT_MUTATION_RECEIPTS2,
+    HttpError: HttpError2,
+    assetUrlForPath: assetUrlForPath2,
+    assertDocumentEdgeMutationAllowed: assertDocumentEdgeMutationAllowed2,
+    createConflictPage: createConflictPage2,
+    deterministicUniqueId: deterministicUniqueId2,
+    documentFingerprint: documentFingerprint2,
+    documentObjectWriters: documentObjectWriters2,
+    ensureProjectRevisionState: ensureProjectRevisionState2,
+    graphNodeBounds: graphNodeBounds2,
+    isObject: isObject3,
+    isPathInside: isPathInside2,
+    normalizeAttachment: normalizeAttachment2,
+    normalizeScatterDocument: normalizeScatterDocument2,
+    nowIso: nowIso2,
+    persistProjectRevisionState: persistProjectRevisionState2,
+    readGraphContextSnapshot: readGraphContextSnapshot2,
+    readScatterDocument: readScatterDocument2,
+    rebuildDocumentMirrors: rebuildDocumentMirrors2,
+    rememberProjectBestEffort: rememberProjectBestEffort2,
+    safeFileName: safeFileName2,
+    scatterAssetsDir: scatterAssetsDir2,
+    scatterPath: scatterPath2,
+    toRelativeProjectPath: toRelativeProjectPath2,
+    withProjectWriteLock: withProjectWriteLock2,
+    writeScatterDocument: writeScatterDocument2
+  } = dependencies;
+  function generatedImagesRoot() {
+    const configuredHome = typeof process.env.CODEX_HOME === "string" && process.env.CODEX_HOME.trim() ? process.env.CODEX_HOME.trim() : path.join(os.homedir(), ".codex");
+    return path.resolve(configuredHome, "generated_images");
+  }
+  function normalizeGeneratedImageRequests(value) {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new HttpError2(400, "images must contain at least one generated image.", "generated_images_required");
+    }
+    if (value.length > MAX_GENERATED_IMAGE_COUNT) {
+      throw new HttpError2(413, "Canvasight accepts at most ".concat(MAX_GENERATED_IMAGE_COUNT, " generated images per import."), "generated_image_count_exceeded");
+    }
+    return value.map((image, index) => {
+      if (!isObject3(image) || typeof image.path !== "string" || !image.path.trim()) {
+        throw new HttpError2(400, "images[".concat(index, "].path is required."), "generated_image_path_required");
+      }
+      if (!path.isAbsolute(image.path.trim())) {
+        throw new HttpError2(400, "images[".concat(index, "].path must be absolute."), "generated_image_path_not_absolute");
+      }
+      const sourcePath = path.resolve(image.path.trim());
+      const extension = path.extname(sourcePath).toLowerCase();
+      if (!GENERATED_IMAGE_EXTENSIONS.has(extension)) {
+        throw new HttpError2(415, "images[".concat(index, "] must be PNG, JPEG, or WebP."), "generated_image_format_unsupported");
+      }
+      const title = typeof image.title === "string" ? image.title.trim().slice(0, 200) : "";
+      return { sourcePath, title };
+    });
+  }
+  function generatedImageFormat(header) {
+    if (header.length >= 8 && header.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "png";
+    if (header.length >= 3 && header[0] === 255 && header[1] === 216 && header[2] === 255) return "jpeg";
+    if (header.length >= 12 && header.subarray(0, 4).toString("ascii") === "RIFF" && header.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
+    return "";
+  }
+  function generatedImageMime(format) {
+    if (format === "png") return "image/png";
+    if (format === "jpeg") return "image/jpeg";
+    if (format === "webp") return "image/webp";
+    return "application/octet-stream";
+  }
+  function generatedImageExtensionMatches(extension, format) {
+    if (format === "jpeg") return extension === ".jpg" || extension === ".jpeg";
+    return extension === ".".concat(format);
+  }
+  async function readFileHeader(filePath, length = 12) {
+    const handle = await fsp.open(filePath, "r");
+    try {
+      const header = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(header, 0, length, 0);
+      return header.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  }
+  async function sha256File(filePath) {
+    const hash2 = crypto.createHash("sha256");
+    await new Promise((resolve, reject) => {
+      const stream = fs.createReadStream(filePath);
+      stream.on("data", (chunk) => hash2.update(chunk));
+      stream.on("end", resolve);
+      stream.on("error", reject);
+    });
+    return hash2.digest("hex");
+  }
+  async function generatedImageAllowedRoots(projectPath) {
+    const candidates = [projectPath, generatedImagesRoot()];
+    const roots = [];
+    for (const candidate of candidates) {
+      try {
+        const realPath = await fsp.realpath(candidate);
+        if (!roots.includes(realPath)) roots.push(realPath);
+      } catch (error51) {
+        if (error51?.code !== "ENOENT") throw error51;
+      }
+    }
+    return roots;
+  }
+  async function inspectGeneratedImages(projectPath, requests) {
+    const allowedRoots = await generatedImageAllowedRoots(projectPath);
+    const inspected = [];
+    let totalBytes = 0;
+    for (let index = 0; index < requests.length; index += 1) {
+      const request = requests[index];
+      let stat;
+      try {
+        stat = await fsp.lstat(request.sourcePath);
+      } catch (error51) {
+        if (error51?.code === "ENOENT") throw new HttpError2(404, "Generated image does not exist: ".concat(path.basename(request.sourcePath)), "generated_image_not_found");
+        throw error51;
+      }
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new HttpError2(403, "Generated image must be a regular non-symlink file: ".concat(path.basename(request.sourcePath)), "generated_image_not_regular_file");
+      }
+      const realSourcePath = await fsp.realpath(request.sourcePath);
+      if (!allowedRoots.some((root) => isPathInside2(realSourcePath, root))) {
+        throw new HttpError2(403, "Generated image is outside the current project and Codex generated_images directory: ".concat(path.basename(request.sourcePath)), "generated_image_path_forbidden");
+      }
+      if (stat.size <= 0 || stat.size > MAX_GENERATED_IMAGE_BYTES) {
+        throw new HttpError2(413, "Generated image must be between 1 byte and ".concat(MAX_GENERATED_IMAGE_BYTES, " bytes: ").concat(path.basename(request.sourcePath)), "generated_image_too_large");
+      }
+      totalBytes += stat.size;
+      if (totalBytes > MAX_GENERATED_IMAGE_BATCH_BYTES) {
+        throw new HttpError2(413, "Generated image batch exceeds ".concat(MAX_GENERATED_IMAGE_BATCH_BYTES, " bytes."), "generated_image_batch_too_large");
+      }
+      const extension = path.extname(realSourcePath).toLowerCase();
+      const format = generatedImageFormat(await readFileHeader(realSourcePath));
+      if (!format || !generatedImageExtensionMatches(extension, format)) {
+        throw new HttpError2(415, "Generated image extension does not match its file signature: ".concat(path.basename(request.sourcePath)), "generated_image_signature_mismatch");
+      }
+      inspected.push({
+        ...request,
+        sourcePath: realSourcePath,
+        extension,
+        format,
+        mime: generatedImageMime(format),
+        size: stat.size,
+        digest: await sha256File(realSourcePath)
+      });
+    }
+    return { images: inspected, allowedRoots };
+  }
+  function prepareGeneratedImageAssets(projectPath, inspectedImages, clientMutationId, existingDocument) {
+    const assetsRoot = scatterAssetsDir2(projectPath);
+    const usedAssetIds = new Set(
+      existingDocument.pages.flatMap((page) => page.nodes.flatMap((node) => {
+        if (node.type === "asset") return [node.data?.asset?.id].filter(Boolean);
+        if (node.type === "task") return (node.data?.attachments || []).map((attachment) => attachment.id).filter(Boolean);
+        return [];
+      }))
+    );
+    const now = nowIso2();
+    return inspectedImages.map((image, index) => {
+      const originalName = safeFileName2(path.basename(image.sourcePath));
+      const uniqueName = "".concat(Date.now(), "-").concat(crypto.randomBytes(4).toString("hex"), "-").concat(originalName);
+      const storedPath = path.join(assetsRoot, uniqueName);
+      const attachment = normalizeAttachment2({
+        id: deterministicUniqueId2("generated-asset", clientMutationId, "".concat(index + 1, ":").concat(image.digest), usedAssetIds),
+        kind: "image",
+        source: "generated",
+        originalName,
+        storedPath,
+        relativePath: toRelativeProjectPath2(projectPath, storedPath),
+        fileUrl: assetUrlForPath2(storedPath),
+        mime: image.mime,
+        size: image.size,
+        createdAt: now
+      });
+      return { ...image, attachment, storedPath, title: image.title || originalName };
+    });
+  }
+  async function commitGeneratedImageAssets(prepared, allowedRoots) {
+    const committedPaths = [];
+    try {
+      for (const image of prepared) {
+        const stat = await fsp.lstat(image.sourcePath);
+        if (!stat.isFile() || stat.isSymbolicLink()) {
+          throw new HttpError2(409, "Generated image changed before import: ".concat(path.basename(image.sourcePath)), "generated_image_changed");
+        }
+        const realSourcePath = await fsp.realpath(image.sourcePath);
+        if (!allowedRoots.some((root) => isPathInside2(realSourcePath, root))) {
+          throw new HttpError2(403, "Generated image moved outside an allowed directory: ".concat(path.basename(image.sourcePath)), "generated_image_path_forbidden");
+        }
+        await fsp.mkdir(path.dirname(image.storedPath), { recursive: true });
+        const temporaryPath = "".concat(image.storedPath, ".").concat(process.pid, ".").concat(crypto.randomBytes(4).toString("hex"), ".tmp");
+        try {
+          await fsp.copyFile(realSourcePath, temporaryPath, fs.constants.COPYFILE_EXCL);
+          const copiedFormat = generatedImageFormat(await readFileHeader(temporaryPath));
+          const copiedDigest = await sha256File(temporaryPath);
+          if (copiedFormat !== image.format || copiedDigest !== image.digest) {
+            throw new HttpError2(409, "Generated image changed while being imported: ".concat(path.basename(image.sourcePath)), "generated_image_changed");
+          }
+          await fsp.rename(temporaryPath, image.storedPath);
+        } catch (error51) {
+          await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+          throw error51;
+        }
+        committedPaths.push(image.storedPath);
+      }
+      return committedPaths;
+    } catch (error51) {
+      await Promise.all(committedPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+      throw error51;
+    }
+  }
+  function addGeneratedImageNodes(page, prepared, clientMutationId, existingDocument) {
+    const usedNodeIds = new Set(existingDocument.pages.flatMap((item) => item.nodes.map((node) => node.id)));
+    const bounds = page.nodes.map((node) => graphNodeBounds2(node, page.nodes));
+    const x2 = bounds.length ? Math.max(...bounds.map((item) => item.right)) + GRAPH_LAYER_GAP2 : 0;
+    const baseY = bounds.length ? Math.min(...bounds.map((item) => item.y)) : 0;
+    const nodes = prepared.map((image, index) => ({
+      id: deterministicUniqueId2("generated-image", clientMutationId, "".concat(index + 1, ":").concat(image.digest), usedNodeIds),
+      type: "asset",
+      position: { x: x2, y: baseY + index * (360 + GRAPH_ROW_GAP2) },
+      selected: false,
+      data: {
+        title: image.title,
+        description: "",
+        asset: image.attachment,
+        role: "output"
+      }
+    }));
+    return {
+      page: { ...page, updatedAt: nowIso2(), nodes: [...page.nodes, ...nodes] },
+      nodes
+    };
+  }
+  async function writeGeneratedImages2(projectPath, args) {
+    const requests = normalizeGeneratedImageRequests(args?.images);
+    const contextId = typeof args?.contextId === "string" ? args.contextId.trim() : "";
+    const clientMutationId = typeof args?.clientMutationId === "string" ? args.clientMutationId.trim() : "";
+    if (!contextId) throw new HttpError2(400, "contextId is required.", "generated_image_context_required");
+    if (!clientMutationId) throw new HttpError2(400, "clientMutationId is required.", "client_mutation_id_required");
+    const requestFingerprint = documentFingerprint2({
+      tool: "add_canvasight_generated_images",
+      contextId,
+      expectedRevision: args?.expectedRevision,
+      images: requests.map((image) => ({ path: image.sourcePath, title: image.title }))
+    });
+    return withProjectWriteLock2(projectPath, async () => {
+      const existingDocument = await readScatterDocument2(projectPath);
+      const revisionState = await ensureProjectRevisionState2(projectPath, existingDocument);
+      const currentRevision = revisionState.revision;
+      const priorReceipt = revisionState.receipts.find((receipt) => receipt.clientMutationId === clientMutationId);
+      if (priorReceipt) {
+        if (priorReceipt.requestFingerprint !== requestFingerprint) {
+          throw new HttpError2(409, "Canvasight mutation id was reused for a different generated-image payload.", "mutation_id_reused");
+        }
+        return { ...priorReceipt.result, written: false, replayed: true, documentRevision: currentRevision, documentVersion: revisionState.documentVersion };
+      }
+      const context = readGraphContextSnapshot2(projectPath, contextId);
+      if (!context) throw new HttpError2(409, "Canvasight graph context expired or belongs to a prior daemon process.", "context_expired");
+      if (typeof args?.expectedRevision !== "number" || args.expectedRevision !== context.documentRevision) {
+        throw new HttpError2(409, "expectedRevision does not match the bound graph context.", "context_revision_mismatch");
+      }
+      const inspected = await inspectGeneratedImages(projectPath, requests);
+      const prepared = prepareGeneratedImageAssets(projectPath, inspected.images, clientMutationId, existingDocument);
+      const currentPage = existingDocument.pages.find((page) => page.id === context.page.id);
+      const createdAt = nowIso2();
+      let pages;
+      let targetPageId;
+      let targetPageName;
+      let createdNodes;
+      let status;
+      let conflictCopies = [];
+      if (currentPage) {
+        const added = addGeneratedImageNodes(currentPage, prepared, clientMutationId, existingDocument);
+        pages = existingDocument.pages.map((page) => page.id === currentPage.id ? added.page : page);
+        targetPageId = currentPage.id;
+        targetPageName = currentPage.name;
+        createdNodes = added.nodes;
+        status = currentRevision === context.documentRevision ? "written" : "merged";
+      } else {
+        const added = addGeneratedImageNodes(context.page, prepared, clientMutationId, existingDocument);
+        const copy = createConflictPage2(added.page, {
+          baseRevision: context.documentRevision,
+          priorRevision: currentRevision,
+          clientMutationId,
+          copyKind: "recovery",
+          createdAt,
+          existingNames: new Set(existingDocument.pages.map((page) => page.name)),
+          incomingIntent: "edit",
+          language: args?.language === "en" ? "en" : "zh",
+          reasons: ["page-deleted:".concat(context.page.id)],
+          usedEdgeIds: new Set(existingDocument.pages.flatMap((page) => page.edges.map((edge) => edge.id))),
+          usedNodeIds: new Set(existingDocument.pages.flatMap((page) => page.nodes.map((node) => node.id))),
+          usedPageIds: new Set(existingDocument.pages.map((page) => page.id))
+        });
+        copy.page.conflict.source = "ai";
+        pages = [...existingDocument.pages, copy.page];
+        targetPageId = copy.page.id;
+        targetPageName = copy.page.name;
+        createdNodes = added.nodes.map((node) => ({ ...node, id: copy.nodeIdMap[node.id] }));
+        status = "conflict-copy";
+        conflictCopies = [{
+          sourcePageId: context.page.id,
+          conflictPageId: copy.page.id,
+          originalPageId: context.page.id,
+          originalPageAvailable: false,
+          copyKind: "recovery",
+          source: "ai",
+          reasons: ["page-deleted:".concat(context.page.id)],
+          nodeIdMap: copy.nodeIdMap,
+          edgeIdMap: copy.edgeIdMap
+        }];
+      }
+      const activePage = pages.find((page) => page.id === existingDocument.activePageId) || pages[0];
+      const candidateDocument = rebuildDocumentMirrors2({
+        ...existingDocument,
+        version: 2,
+        updatedAt: createdAt,
+        activePageId: activePage.id,
+        pages
+      }, projectPath);
+      assertDocumentEdgeMutationAllowed2(existingDocument, candidateDocument);
+      const documentRevision = currentRevision + 1;
+      let committedPaths = [];
+      let documentWritten = false;
+      let savedDocument;
+      try {
+        committedPaths = await commitGeneratedImageAssets(prepared, inspected.allowedRoots);
+        savedDocument = await writeScatterDocument2(projectPath, candidateDocument);
+        documentWritten = true;
+        const persistedDocument = normalizeScatterDocument2(
+          JSON.parse(await fsp.readFile(scatterPath2(projectPath), "utf8")),
+          projectPath
+        );
+        const documentVersion = documentFingerprint2(persistedDocument);
+        const assetNodes = createdNodes.map((node) => ({
+          nodeId: node.id,
+          assetId: node.data.asset.id,
+          originalName: node.data.asset.originalName,
+          relativePath: node.data.asset.relativePath
+        }));
+        const resultSummary = {
+          status,
+          written: true,
+          replayed: false,
+          projectPath,
+          capturedPageId: context.page.id,
+          targetPageId,
+          targetPageName,
+          documentRevision,
+          documentVersion,
+          rebasedFromRevision: context.documentRevision,
+          conflictCopies,
+          assetNodes
+        };
+        await persistProjectRevisionState2(projectPath, {
+          ...revisionState,
+          revision: documentRevision,
+          documentVersion,
+          receipts: [...revisionState.receipts, {
+            clientMutationId,
+            requestFingerprint,
+            result: resultSummary,
+            createdAt,
+            source: "imagegen"
+          }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS2),
+          lastSource: "ai",
+          objectWriters: documentObjectWriters2(revisionState.objectWriters, existingDocument, savedDocument, "ai")
+        });
+        await rememberProjectBestEffort2(projectPath, { name: savedDocument.projectName, updatedAt: savedDocument.updatedAt });
+        return resultSummary;
+      } catch (error51) {
+        if (documentWritten) {
+          try {
+            await writeScatterDocument2(projectPath, existingDocument);
+          } catch (rollbackError) {
+            throw new Error("Canvasight generated-image import failed and document rollback also failed: ".concat(rollbackError?.message || rollbackError), { cause: error51 });
+          }
+        }
+        await Promise.all(committedPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+        throw error51;
+      }
+    });
+  }
+  return writeGeneratedImages2;
+}
+
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.6";
+var SERVER_VERSION = "0.5.7";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17559,13 +17958,13 @@ var GRAPH_GRID_COLUMNS = 3;
 var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 var DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 var DEFAULT_CHATGPT_APP_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
-var DEFAULT_CANVASIGHT_HOME = path.join(os.homedir(), ".canvasight");
+var DEFAULT_CANVASIGHT_HOME = path2.join(os2.homedir(), ".canvasight");
 var CLI_CANVASIGHT_HOME = (() => {
   let configured = "";
   for (const argument of process.argv.slice(2)) {
     if (argument.startsWith("--canvasight-home=")) configured = argument.slice("--canvasight-home=".length).trim();
   }
-  return configured ? path.resolve(configured) : null;
+  return configured ? path2.resolve(configured) : null;
 })();
 var CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = /* @__PURE__ */ new Set(["turn/started", "item/started", "turn/completed"]);
 var AGENT_TEAM_ROLE_IDS = /* @__PURE__ */ new Set([
@@ -17615,9 +18014,9 @@ var SOFTWARE_PRODUCT_GUIDANCE_FILES = [
   }
 ];
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path.dirname(__filename);
-var pluginRoot = path.resolve(__dirname, "..");
-var distRoot = path.join(pluginRoot, "dist");
+var __dirname = path2.dirname(__filename);
+var pluginRoot = path2.resolve(__dirname, "..");
+var distRoot = path2.join(pluginRoot, "dist");
 var isDaemonMode = process.argv.includes("--daemon");
 var isStopDaemonMode = process.argv.includes("--stop-daemon");
 var sessions = /* @__PURE__ */ new Map();
@@ -17647,17 +18046,17 @@ var HttpError = class extends Error {
   }
 };
 function projectRevisionKey(projectPath) {
-  return path.resolve(projectPath);
+  return path2.resolve(projectPath);
 }
 var REVISION_POLL_INTERVAL_MS = 5e3;
 var REVISION_POLL_LEASE_MS = 1e4;
 var PRESENTATION_RECOVERY_LEASE_MS = 4e3;
 var PRESENTATION_RECOVERY_COOLDOWN_MS = 5e3;
 function revisionPollLeaseKey(projectPath, threadId) {
-  return JSON.stringify([path.resolve(projectPath), optionalThreadId(threadId) || ""]);
+  return JSON.stringify([path2.resolve(projectPath), optionalThreadId(threadId) || ""]);
 }
 function presentationRecoveryLeaseKey(projectPath, threadId) {
-  return JSON.stringify([path.resolve(projectPath), optionalThreadId(threadId) || ""]);
+  return JSON.stringify([path2.resolve(projectPath), optionalThreadId(threadId) || ""]);
 }
 function revisionPollOwner(session, identity) {
   return {
@@ -17721,21 +18120,21 @@ function serializeError(error51) {
 function appendMcpLifecycle(event, data = {}) {
   if (isDaemonMode || isStopDaemonMode) return;
   try {
-    fs.mkdirSync(canvasightHome(), { recursive: true });
+    fs2.mkdirSync(canvasightHome(), { recursive: true });
     const logPath = canvasightMcpLifecycleLogPath();
     const configuredMaxBytes = Number(process.env.CANVASIGHT_MCP_LIFECYCLE_LOG_MAX_BYTES);
     const maxBytes = Number.isFinite(configuredMaxBytes) && configuredMaxBytes >= 1024 ? configuredMaxBytes : DEFAULT_MCP_LIFECYCLE_LOG_MAX_BYTES;
     let rotatedBytes = 0;
     try {
-      const size = fs.statSync(logPath).size;
+      const size = fs2.statSync(logPath).size;
       if (size >= maxBytes) {
         rotatedBytes = size;
-        fs.truncateSync(logPath, 0);
+        fs2.truncateSync(logPath, 0);
       }
     } catch (error51) {
       if (error51?.code !== "ENOENT") throw error51;
     }
-    fs.appendFileSync(
+    fs2.appendFileSync(
       logPath,
       "".concat(JSON.stringify({
         ts: nowIso(),
@@ -17753,8 +18152,8 @@ function appendMcpLifecycle(event, data = {}) {
 }
 function appendOpenAttemptLifecycle(event, data = {}) {
   try {
-    fs.mkdirSync(canvasightHome(), { recursive: true });
-    fs.appendFileSync(
+    fs2.mkdirSync(canvasightHome(), { recursive: true });
+    fs2.appendFileSync(
       canvasightMcpLifecycleLogPath(),
       "".concat(JSON.stringify({ ts: nowIso(), pid: process.pid, version: SERVER_VERSION, pluginRoot, event, ...data }), "\n"),
       "utf8"
@@ -17794,9 +18193,9 @@ function deprecatedGraphLayoutAdvisories(args) {
     { path: "layout", value: args?.layout },
     ...Array.isArray(args?.pages) ? args.pages.map((page, index) => ({ path: "pages[".concat(index, "].layout"), value: page?.layout })) : []
   ];
-  return requested.filter(({ value }) => value === "vertical" || value === "grid").map(({ path: path2, value }) => ({
+  return requested.filter(({ value }) => value === "vertical" || value === "grid").map(({ path: path3, value }) => ({
     code: "deprecated_graph_layout",
-    path: path2,
+    path: path3,
     message: "Graph layout ".concat(value, " is deprecated for AI writes and was normalized to horizontal.")
   }));
 }
@@ -17860,16 +18259,16 @@ function codexAppRuntime() {
   const explicitBin = configuredExecutable("CANVASIGHT_CODEX_BIN");
   if (explicitBin) return { bin: explicitBin, source: "explicit_override", isDesktop: false };
   const codexDesktopBin = configuredExecutable("CANVASIGHT_CODEX_APP_BIN") || DEFAULT_CODEX_APP_BIN;
-  if (fs.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
+  if (fs2.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
   const chatGptDesktopBin = configuredExecutable("CANVASIGHT_CHATGPT_APP_BIN") || DEFAULT_CHATGPT_APP_BIN;
-  if (fs.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
+  if (fs2.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
   return { bin: "codex", source: "path_fallback", isDesktop: false };
 }
 function commandAvailableOnPath(command) {
-  const pathEntries = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const pathEntries = String(process.env.PATH || "").split(path2.delimiter).filter(Boolean);
   const extensions = process.platform === "win32" ? String(process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean) : [""];
   return pathEntries.some(
-    (entry) => extensions.some((extension) => fs.existsSync(path.join(entry, "".concat(command).concat(extension.toLowerCase()))) || fs.existsSync(path.join(entry, "".concat(command).concat(extension.toUpperCase()))))
+    (entry) => extensions.some((extension) => fs2.existsSync(path2.join(entry, "".concat(command).concat(extension.toLowerCase()))) || fs2.existsSync(path2.join(entry, "".concat(command).concat(extension.toUpperCase()))))
   );
 }
 function codexSkillsRuntime() {
@@ -17878,10 +18277,10 @@ function codexSkillsRuntime() {
   const explicitBin = configuredExecutable("CANVASIGHT_CODEX_BIN");
   if (explicitBin) return { bin: explicitBin, source: "explicit_override", isDesktop: false };
   const codexDesktopBin = configuredExecutable("CANVASIGHT_CODEX_APP_BIN") || DEFAULT_CODEX_APP_BIN;
-  if (fs.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
+  if (fs2.existsSync(codexDesktopBin)) return { bin: codexDesktopBin, source: "codex_desktop", isDesktop: true };
   if (commandAvailableOnPath("codex")) return { bin: "codex", source: "path_fallback", isDesktop: false };
   const chatGptDesktopBin = configuredExecutable("CANVASIGHT_CHATGPT_APP_BIN") || DEFAULT_CHATGPT_APP_BIN;
-  if (fs.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
+  if (fs2.existsSync(chatGptDesktopBin)) return { bin: chatGptDesktopBin, source: "chatgpt_desktop", isDesktop: true };
   return { bin: "codex", source: "path_fallback", isDesktop: false };
 }
 function codexAppServerArgs() {
@@ -17896,11 +18295,11 @@ function normalizeProjectPath(projectPath) {
   if (typeof projectPath !== "string" || !projectPath.trim()) {
     throw new HttpError(400, "projectPath is required");
   }
-  return path.resolve(projectPath);
+  return path2.resolve(projectPath);
 }
 function optionalProjectPath(projectPath) {
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
-  return path.resolve(projectPath);
+  return path2.resolve(projectPath);
 }
 function defaultProjectPath() {
   const envNames = [
@@ -17916,15 +18315,15 @@ function defaultProjectPath() {
     const candidate = optionalProjectPath(process.env[envName]);
     if (candidate && candidate !== pluginRoot) return candidate;
   }
-  if (path.basename(path.dirname(pluginRoot)) === "plugins") {
-    return path.resolve(pluginRoot, "../..");
+  if (path2.basename(path2.dirname(pluginRoot)) === "plugins") {
+    return path2.resolve(pluginRoot, "../..");
   }
-  return path.join(os.homedir(), "Canvasight");
+  return path2.join(os2.homedir(), "Canvasight");
 }
 function isPluginInternalPath(candidate) {
   if (!candidate) return false;
-  const resolved = path.resolve(candidate);
-  return resolved === pluginRoot || resolved.startsWith("".concat(pluginRoot).concat(path.sep));
+  const resolved = path2.resolve(candidate);
+  return resolved === pluginRoot || resolved.startsWith("".concat(pluginRoot).concat(path2.sep));
 }
 async function codexThreadProjectPath(threadId) {
   const resolvedThreadId = optionalThreadId(threadId);
@@ -17953,48 +18352,48 @@ async function resolveSessionProjectPath(projectPath, threadId, options = {}) {
   return defaultProjectPath();
 }
 function projectNameFromPath(projectPath) {
-  return path.basename(projectPath) || projectPath;
+  return path2.basename(projectPath) || projectPath;
 }
 function canvasightHome() {
   if (CLI_CANVASIGHT_HOME) return CLI_CANVASIGHT_HOME;
   const configured = process.env.CANVASIGHT_HOME;
-  return path.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
+  return path2.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
 }
 function canvasightStatePath() {
-  return path.join(canvasightHome(), "state.json");
+  return path2.join(canvasightHome(), "state.json");
 }
 function canvasightDaemonStatePath() {
-  return path.join(canvasightHome(), "daemon.json");
+  return path2.join(canvasightHome(), "daemon.json");
 }
 function canvasightDaemonStartLockPath() {
-  return path.join(canvasightHome(), "daemon-start.lock");
+  return path2.join(canvasightHome(), "daemon-start.lock");
 }
 function canvasightMcpLifecycleLogPath() {
-  return path.join(canvasightHome(), "mcp-lifecycle.log");
+  return path2.join(canvasightHome(), "mcp-lifecycle.log");
 }
 function canvasightTemplatesPath() {
-  return path.join(canvasightHome(), "templates.json");
+  return path2.join(canvasightHome(), "templates.json");
 }
 function canvasightPreferencesPath() {
-  return path.join(canvasightHome(), "preferences.json");
+  return path2.join(canvasightHome(), "preferences.json");
 }
 function canvasightTemplateAssetsDir() {
-  return path.join(canvasightHome(), "template-assets");
+  return path2.join(canvasightHome(), "template-assets");
 }
 function scatterDir(projectPath) {
-  return path.join(projectPath, ".scatter");
+  return path2.join(projectPath, ".scatter");
 }
 function scatterPath(projectPath) {
-  return path.join(scatterDir(projectPath), "scatter.json");
+  return path2.join(scatterDir(projectPath), "scatter.json");
 }
 function scatterRevisionStatePath(projectPath) {
-  return path.join(scatterDir(projectPath), "revision-state.json");
+  return path2.join(scatterDir(projectPath), "revision-state.json");
 }
 function scatterAssetsDir(projectPath) {
-  return path.join(scatterDir(projectPath), "assets");
+  return path2.join(scatterDir(projectPath), "assets");
 }
 function toRelativeProjectPath(projectPath, targetPath) {
-  return path.relative(projectPath, targetPath).split(path.sep).join("/");
+  return path2.relative(projectPath, targetPath).split(path2.sep).join("/");
 }
 function base64UrlEncode(value) {
   return Buffer.from(value, "utf8").toString("base64url");
@@ -18017,14 +18416,14 @@ function daemonSessionUrl(state, sessionIdValue) {
   return url2.toString();
 }
 function isScatterAssetPath(filePath) {
-  return filePath.includes("".concat(path.sep, ".scatter").concat(path.sep, "assets").concat(path.sep));
+  return filePath.includes("".concat(path2.sep, ".scatter").concat(path2.sep, "assets").concat(path2.sep));
 }
 function isTemplateAssetPath(filePath) {
-  const root = "".concat(path.resolve(canvasightTemplateAssetsDir())).concat(path.sep);
-  return path.resolve(filePath).startsWith(root);
+  const root = "".concat(path2.resolve(canvasightTemplateAssetsDir())).concat(path2.sep);
+  return path2.resolve(filePath).startsWith(root);
 }
 function safeFileName(name) {
-  const base = path.basename(typeof name === "string" && name.trim() ? name : "attachment");
+  const base = path2.basename(typeof name === "string" && name.trim() ? name : "attachment");
   const sanitized = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/\s+/g, " ").trim();
   return sanitized.slice(0, 140) || "attachment";
 }
@@ -18034,7 +18433,7 @@ function exportFileStem(value) {
 }
 function uniqueAssetExportName(originalName, usedNames) {
   const safeName = safeFileName(originalName || "attachment");
-  const extension = path.extname(safeName);
+  const extension = path2.extname(safeName);
   const stem = extension ? safeName.slice(0, -extension.length) : safeName;
   let candidate = safeName;
   let serial = 2;
@@ -18046,8 +18445,8 @@ function uniqueAssetExportName(originalName, usedNames) {
   return candidate;
 }
 function isPathInside(targetPath, parentPath) {
-  const relative = path.relative(parentPath, targetPath);
-  return relative !== "" && !relative.startsWith("..".concat(path.sep)) && relative !== ".." && !path.isAbsolute(relative);
+  const relative = path2.relative(parentPath, targetPath);
+  return relative !== "" && !relative.startsWith("..".concat(path2.sep)) && relative !== ".." && !path2.isAbsolute(relative);
 }
 function archiveExportMarkdown(markdown, assetPaths, attachments) {
   let result = markdown;
@@ -18064,9 +18463,9 @@ function archiveExportMarkdown(markdown, assetPaths, attachments) {
 async function uniqueDownloadPath(directory, stem, extension) {
   for (let serial = 1; serial < 1e4; serial += 1) {
     const suffix = serial === 1 ? "" : "-".concat(serial);
-    const candidate = path.join(directory, "".concat(stem).concat(suffix).concat(extension));
+    const candidate = path2.join(directory, "".concat(stem).concat(suffix).concat(extension));
     try {
-      await fsp.access(candidate);
+      await fsp2.access(candidate);
     } catch (error51) {
       if (error51?.code === "ENOENT") return candidate;
       throw error51;
@@ -18079,26 +18478,26 @@ async function exportMarkdownToDownloads(session, input) {
   if (typeof input?.markdown !== "string") throw new HttpError(400, "markdown must be a string", "invalid_export_markdown");
   if (!Array.isArray(input?.attachments)) throw new HttpError(400, "attachments must be an array", "invalid_export_attachments");
   const projectPath = normalizeProjectPath(session.projectPath);
-  const assetsDirectory = path.resolve(scatterAssetsDir(projectPath));
-  const templateAssetsDirectory = path.resolve(canvasightTemplateAssetsDir());
+  const assetsDirectory = path2.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsDirectory = path2.resolve(canvasightTemplateAssetsDir());
   const attachments = input.attachments.map(normalizeAttachment);
   const files = {};
   const usedAssetNames = /* @__PURE__ */ new Set();
   const assetPaths = /* @__PURE__ */ new Map();
   for (const attachment of attachments) {
-    const storedPath = path.resolve(attachment.storedPath);
+    const storedPath = path2.resolve(attachment.storedPath);
     if (!attachment.storedPath || !isPathInside(storedPath, assetsDirectory) && !isPathInside(storedPath, templateAssetsDirectory)) {
       throw new HttpError(400, "Attachment is not a Canvasight project asset: ".concat(attachment.originalName), "invalid_export_attachment_path");
     }
     let stat;
     try {
-      stat = await fsp.lstat(storedPath);
+      stat = await fsp2.lstat(storedPath);
     } catch {
       throw new HttpError(404, "Attachment is unavailable: ".concat(attachment.originalName), "export_attachment_missing");
     }
     if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, "Attachment is not a regular file: ".concat(attachment.originalName), "invalid_export_attachment_path");
     const archivePath = "assets/".concat(uniqueAssetExportName(attachment.originalName, usedAssetNames));
-    files[archivePath] = await fsp.readFile(storedPath);
+    files[archivePath] = await fsp2.readFile(storedPath);
     assetPaths.set(attachment.id, archivePath);
   }
   const stem = exportFileStem(typeof input?.title === "string" ? input.title : "scatter-prompt");
@@ -18106,24 +18505,24 @@ async function exportMarkdownToDownloads(session, input) {
   const extension = attachments.length ? ".zip" : ".md";
   if (attachments.length) files["".concat(stem, ".md")] = strToU8(markdown);
   const bytes = attachments.length ? zipSync(files) : Buffer.from(markdown, "utf8");
-  const downloadsDirectory = path.resolve(process.env.CANVASIGHT_EXPORT_DIR || path.join(os.homedir(), "Downloads"));
-  await fsp.mkdir(downloadsDirectory, { recursive: true });
+  const downloadsDirectory = path2.resolve(process.env.CANVASIGHT_EXPORT_DIR || path2.join(os2.homedir(), "Downloads"));
+  await fsp2.mkdir(downloadsDirectory, { recursive: true });
   const targetPath = await uniqueDownloadPath(downloadsDirectory, stem, extension);
-  const temporaryPath = path.join(downloadsDirectory, ".".concat(path.basename(targetPath), ".").concat(crypto.randomUUID(), ".tmp"));
+  const temporaryPath = path2.join(downloadsDirectory, ".".concat(path2.basename(targetPath), ".").concat(crypto2.randomUUID(), ".tmp"));
   try {
-    await fsp.writeFile(temporaryPath, bytes);
-    await fsp.rename(temporaryPath, targetPath);
+    await fsp2.writeFile(temporaryPath, bytes);
+    await fsp2.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
   return {
-    fileName: path.basename(targetPath),
+    fileName: path2.basename(targetPath),
     targetPath
   };
 }
 function extensionFromName(name) {
-  return path.extname(name || "").toLowerCase();
+  return path2.extname(name || "").toLowerCase();
 }
 function mimeFromPath(filePath) {
   const ext = extensionFromName(filePath);
@@ -18190,7 +18589,7 @@ function defaultScatterDocument(projectPath) {
 function defaultScatterPage(index = 0) {
   const now = nowIso();
   return {
-    id: "page-".concat(crypto.randomBytes(5).toString("hex")),
+    id: "page-".concat(crypto2.randomBytes(5).toString("hex")),
     name: "Page ".concat(index + 1),
     createdAt: now,
     updatedAt: now,
@@ -18213,7 +18612,7 @@ function emptyUserState() {
 }
 function normalizeRecentProject(value) {
   if (!isObject2(value) || typeof value.path !== "string" || !value.path.trim()) return null;
-  const projectPath = path.resolve(value.path);
+  const projectPath = path2.resolve(value.path);
   return {
     name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : projectNameFromPath(projectPath),
     path: projectPath,
@@ -18223,13 +18622,13 @@ function normalizeRecentProject(value) {
 }
 async function readUserState() {
   try {
-    const raw = await fsp.readFile(canvasightStatePath(), "utf8");
+    const raw = await fsp2.readFile(canvasightStatePath(), "utf8");
     const parsed = JSON.parse(raw);
     const recentProjects2 = Array.isArray(parsed?.recentProjects) ? parsed.recentProjects.map(normalizeRecentProject).filter(Boolean) : [];
     return {
       version: 1,
       updatedAt: typeof parsed?.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : nowIso(),
-      lastProjectPath: typeof parsed?.lastProjectPath === "string" && parsed.lastProjectPath.trim() ? path.resolve(parsed.lastProjectPath) : recentProjects2[0]?.path || null,
+      lastProjectPath: typeof parsed?.lastProjectPath === "string" && parsed.lastProjectPath.trim() ? path2.resolve(parsed.lastProjectPath) : recentProjects2[0]?.path || null,
       recentProjects: recentProjects2
     };
   } catch (error51) {
@@ -18245,8 +18644,8 @@ async function writeUserState(state) {
     lastProjectPath: normalizedRecentProjects[0]?.path || null,
     recentProjects: normalizedRecentProjects
   };
-  await fsp.mkdir(canvasightHome(), { recursive: true });
-  await fsp.writeFile(canvasightStatePath(), "".concat(JSON.stringify(normalizedState, null, 2), "\n"), "utf8");
+  await fsp2.mkdir(canvasightHome(), { recursive: true });
+  await fsp2.writeFile(canvasightStatePath(), "".concat(JSON.stringify(normalizedState, null, 2), "\n"), "utf8");
   return normalizedState;
 }
 function defaultPreferences() {
@@ -18261,7 +18660,7 @@ function normalizePreferences(value) {
 }
 async function readPreferences() {
   try {
-    const raw = await fsp.readFile(canvasightPreferencesPath(), "utf8");
+    const raw = await fsp2.readFile(canvasightPreferencesPath(), "utf8");
     return normalizePreferences(JSON.parse(raw));
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return defaultPreferences();
@@ -18270,14 +18669,14 @@ async function readPreferences() {
 }
 async function writePreferences(value) {
   const preferences = normalizePreferences(value);
-  await fsp.mkdir(canvasightHome(), { recursive: true });
+  await fsp2.mkdir(canvasightHome(), { recursive: true });
   const targetPath = canvasightPreferencesPath();
-  const temporaryPath = "".concat(targetPath, ".").concat(process.pid, ".").concat(crypto.randomBytes(4).toString("hex"), ".tmp");
+  const temporaryPath = "".concat(targetPath, ".").concat(process.pid, ".").concat(crypto2.randomBytes(4).toString("hex"), ".tmp");
   try {
-    await fsp.writeFile(temporaryPath, "".concat(JSON.stringify(preferences, null, 2), "\n"), "utf8");
-    await fsp.rename(temporaryPath, targetPath);
+    await fsp2.writeFile(temporaryPath, "".concat(JSON.stringify(preferences, null, 2), "\n"), "utf8");
+    await fsp2.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
   return preferences;
@@ -18287,7 +18686,7 @@ function normalizeNodeTemplate(value) {
   const now = nowIso();
   const body = value.body.trim();
   return {
-    id: typeof value.id === "string" && value.id ? value.id : "template-".concat(crypto.randomBytes(8).toString("hex")),
+    id: typeof value.id === "string" && value.id ? value.id : "template-".concat(crypto2.randomBytes(8).toString("hex")),
     title: typeof value.title === "string" && value.title.trim() ? value.title.trim() : body.slice(0, 40),
     body,
     attachments: Array.isArray(value.attachments) ? value.attachments.map(normalizeAttachment) : [],
@@ -18297,25 +18696,25 @@ function normalizeNodeTemplate(value) {
 }
 async function copyTemplateAttachments(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return [];
-  await fsp.mkdir(canvasightTemplateAssetsDir(), { recursive: true });
+  await fsp2.mkdir(canvasightTemplateAssetsDir(), { recursive: true });
   const copied = [];
   for (const value of attachments) {
     const attachment = normalizeAttachment(value);
-    const sourcePath = typeof value?.storedPath === "string" && value.storedPath ? path.resolve(value.storedPath) : "";
+    const sourcePath = typeof value?.storedPath === "string" && value.storedPath ? path2.resolve(value.storedPath) : "";
     if (!sourcePath) continue;
     let bytes;
     try {
-      bytes = await fsp.readFile(sourcePath);
+      bytes = await fsp2.readFile(sourcePath);
     } catch {
       continue;
     }
     const originalName = safeFileName(attachment.originalName);
-    const uniqueName = "".concat(Date.now(), "-").concat(crypto.randomBytes(4).toString("hex"), "-").concat(originalName);
-    const storedPath = path.join(canvasightTemplateAssetsDir(), uniqueName);
-    await fsp.writeFile(storedPath, bytes);
+    const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
+    const storedPath = path2.join(canvasightTemplateAssetsDir(), uniqueName);
+    await fsp2.writeFile(storedPath, bytes);
     copied.push({
       ...attachment,
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       originalName,
       storedPath,
       relativePath: "template-assets/".concat(uniqueName),
@@ -18328,7 +18727,7 @@ async function copyTemplateAttachments(attachments) {
 }
 async function readNodeTemplates() {
   try {
-    const raw = await fsp.readFile(canvasightTemplatesPath(), "utf8");
+    const raw = await fsp2.readFile(canvasightTemplatesPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.map(normalizeNodeTemplate).filter(Boolean);
@@ -18339,8 +18738,8 @@ async function readNodeTemplates() {
 }
 async function writeNodeTemplates(templates) {
   const normalized = Array.isArray(templates) ? templates.map(normalizeNodeTemplate).filter(Boolean) : [];
-  await fsp.mkdir(canvasightHome(), { recursive: true });
-  await fsp.writeFile(canvasightTemplatesPath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
+  await fsp2.mkdir(canvasightHome(), { recursive: true });
+  await fsp2.writeFile(canvasightTemplatesPath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
   return normalized;
 }
 async function createNodeTemplate(input, options = {}) {
@@ -18356,7 +18755,7 @@ async function createNodeTemplate(input, options = {}) {
     ...input,
     body,
     attachments,
-    id: "template-".concat(crypto.randomBytes(8).toString("hex")),
+    id: "template-".concat(crypto2.randomBytes(8).toString("hex")),
     createdAt: nowIso(),
     updatedAt: nowIso()
   });
@@ -18369,10 +18768,10 @@ async function deleteTemplateAssets(template) {
   if (!template || !Array.isArray(template.attachments)) return;
   await Promise.all(
     template.attachments.map(async (attachment) => {
-      const storedPath = typeof attachment.storedPath === "string" ? path.resolve(attachment.storedPath) : "";
+      const storedPath = typeof attachment.storedPath === "string" ? path2.resolve(attachment.storedPath) : "";
       if (!storedPath || !isTemplateAssetPath(storedPath)) return;
       try {
-        await fsp.unlink(storedPath);
+        await fsp2.unlink(storedPath);
       } catch {
       }
     })
@@ -18444,7 +18843,7 @@ function normalizeDaemonState(value) {
 }
 async function readDaemonState() {
   try {
-    const raw = await fsp.readFile(canvasightDaemonStatePath(), "utf8");
+    const raw = await fsp2.readFile(canvasightDaemonStatePath(), "utf8");
     return normalizeDaemonState(JSON.parse(raw));
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return null;
@@ -18453,7 +18852,7 @@ async function readDaemonState() {
 }
 function readDaemonStateSync() {
   try {
-    const raw = fs.readFileSync(canvasightDaemonStatePath(), "utf8");
+    const raw = fs2.readFileSync(canvasightDaemonStatePath(), "utf8");
     return normalizeDaemonState(JSON.parse(raw));
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return null;
@@ -18463,12 +18862,12 @@ function readDaemonStateSync() {
 async function writeDaemonState(state) {
   const normalized = normalizeDaemonState(state);
   if (!normalized) throw new Error("Invalid Canvasight daemon state");
-  await fsp.mkdir(canvasightHome(), { recursive: true });
-  await fsp.writeFile(canvasightDaemonStatePath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
+  await fsp2.mkdir(canvasightHome(), { recursive: true });
+  await fsp2.writeFile(canvasightDaemonStatePath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
   return normalized;
 }
 async function removeDaemonState() {
-  await fsp.rm(canvasightDaemonStatePath(), { force: true });
+  await fsp2.rm(canvasightDaemonStatePath(), { force: true });
 }
 async function removeOwnedDaemonState() {
   const state = await readDaemonState();
@@ -18555,14 +18954,14 @@ async function canvasightDaemonPidsForPluginRoot() {
     }).filter((entry) => {
       if (!entry || entry.pid === process.pid) return false;
       if (!entry.command.includes("mcp/server.mjs") || !entry.command.includes("--daemon")) return false;
-      const currentScript = path.join(pluginRoot, "mcp", "server.mjs");
+      const currentScript = path2.join(pluginRoot, "mcp", "server.mjs");
       const isCurrentCheckout = entry.command.includes(currentScript);
       const isCanvasightCache = /\/\.codex\/plugins\/cache\/canvasight-local\/canvasight\/[^/]+\/mcp\/server\.mjs/.test(entry.command);
       const isCanvasightPluginCheckout = /\/plugins\/canvasight\/mcp\/server\.mjs/.test(entry.command);
       if (!isCurrentCheckout && !isCanvasightCache && !isCanvasightPluginCheckout) return false;
       const homeArg = "--canvasight-home=".concat(canvasightHome());
       if (entry.command.includes(homeArg)) return true;
-      return canvasightHome() === path.resolve(DEFAULT_CANVASIGHT_HOME) && !entry.command.includes("--canvasight-home=");
+      return canvasightHome() === path2.resolve(DEFAULT_CANVASIGHT_HOME) && !entry.command.includes("--canvasight-home=");
     }).map((entry) => entry.pid);
   } catch {
     return [];
@@ -18723,7 +19122,7 @@ async function spawnDaemonWithNodeFallback(token) {
 }
 async function readDaemonStartLock() {
   try {
-    const raw = await fsp.readFile(canvasightDaemonStartLockPath(), "utf8");
+    const raw = await fsp2.readFile(canvasightDaemonStartLockPath(), "utf8");
     return JSON.parse(raw);
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return null;
@@ -18731,12 +19130,12 @@ async function readDaemonStartLock() {
   }
 }
 async function acquireDaemonStartLock() {
-  await fsp.mkdir(canvasightHome(), { recursive: true });
+  await fsp2.mkdir(canvasightHome(), { recursive: true });
   const deadline = Date.now() + DAEMON_START_LOCK_WAIT_MS;
   while (Date.now() < deadline) {
-    const token = crypto.randomBytes(12).toString("base64url");
+    const token = crypto2.randomBytes(12).toString("base64url");
     try {
-      await fsp.writeFile(
+      await fsp2.writeFile(
         canvasightDaemonStartLockPath(),
         "".concat(JSON.stringify({ pid: process.pid, token, serverVersion: SERVER_VERSION, pluginRoot, createdAt: nowIso() }), "\n"),
         { encoding: "utf8", flag: "wx" }
@@ -18752,7 +19151,7 @@ async function acquireDaemonStartLock() {
     let unreadableLockAgeMs = null;
     if (!lock) {
       try {
-        const stat = await fsp.stat(canvasightDaemonStartLockPath());
+        const stat = await fsp2.stat(canvasightDaemonStartLockPath());
         unreadableLockAgeMs = Math.max(0, Date.now() - stat.mtimeMs);
       } catch (error51) {
         if (error51?.code !== "ENOENT") throw error51;
@@ -18760,7 +19159,7 @@ async function acquireDaemonStartLock() {
     }
     const stale = lock ? !processIsAlive(Number(lock.pid)) || Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS : unreadableLockAgeMs !== null && unreadableLockAgeMs >= DAEMON_START_LOCK_UNREADABLE_STALE_MS;
     if (stale) {
-      await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+      await fsp2.rm(canvasightDaemonStartLockPath(), { force: true });
       continue;
     }
     await sleep(100);
@@ -18770,7 +19169,7 @@ async function acquireDaemonStartLock() {
 async function releaseDaemonStartLock(lock) {
   if (!lock?.acquired) return;
   const current = await readDaemonStartLock();
-  if (current?.token === lock.token) await fsp.rm(canvasightDaemonStartLockPath(), { force: true });
+  if (current?.token === lock.token) await fsp2.rm(canvasightDaemonStartLockPath(), { force: true });
 }
 async function ensureDaemonServer() {
   const initialState = await readDaemonState();
@@ -18798,7 +19197,7 @@ async function ensureDaemonServer() {
     if (!hasCurrentVersionState) {
       await stopOrphanDaemonProcesses(0, "before_spawn");
     }
-    const token = crypto.randomBytes(24).toString("base64url");
+    const token = crypto2.randomBytes(24).toString("base64url");
     const launch = await spawnDaemonWithNodeFallback(token);
     try {
       return await waitForDaemon(token);
@@ -18843,7 +19242,7 @@ async function stopDaemonFromState() {
 }
 async function rememberProject(projectPath, project) {
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
-  const resolvedProjectPath = path.resolve(projectPath);
+  const resolvedProjectPath = path2.resolve(projectPath);
   const state = await readUserState();
   const now = nowIso();
   const entry = {
@@ -18870,19 +19269,19 @@ async function recentProjects(limit) {
   const state = await readUserState();
   return state.recentProjects.slice(0, normalizeRecentLimit(limit)).map((project) => ({
     ...project,
-    exists: fs.existsSync(project.path),
-    hasScatter: fs.existsSync(scatterPath(project.path))
+    exists: fs2.existsSync(project.path),
+    hasScatter: fs2.existsSync(scatterPath(project.path))
   }));
 }
 function normalizeAttachment(value) {
-  const source = ["upload", "drop", "paste", "clipboard"].includes(value?.source) ? value.source : "upload";
+  const source = ["upload", "drop", "paste", "clipboard", "generated"].includes(value?.source) ? value.source : "upload";
   const storedPath = typeof value?.storedPath === "string" ? value.storedPath : "";
   const originalName = typeof value?.originalName === "string" ? value.originalName : "attachment";
   const relativePath = typeof value?.relativePath === "string" ? value.relativePath : "";
   const managedName = storedPath || relativePath || originalName;
   const mime = normalizedAttachmentMime(managedName, value?.mime);
   return {
-    id: typeof value?.id === "string" && value.id ? value.id : crypto.randomUUID(),
+    id: typeof value?.id === "string" && value.id ? value.id : crypto2.randomUUID(),
     kind: attachmentKind(managedName, mime),
     source,
     originalName,
@@ -19026,14 +19425,14 @@ function normalizeScatterDocument(value, projectPath) {
   };
 }
 async function ensureScatterLayout(projectPath) {
-  await fsp.mkdir(projectPath, { recursive: true });
-  await fsp.mkdir(scatterAssetsDir(projectPath), { recursive: true });
+  await fsp2.mkdir(projectPath, { recursive: true });
+  await fsp2.mkdir(scatterAssetsDir(projectPath), { recursive: true });
 }
 async function readScatterDocument(projectPath) {
   await ensureScatterLayout(projectPath);
   const target = scatterPath(projectPath);
   try {
-    const raw = await fsp.readFile(target, "utf8");
+    const raw = await fsp2.readFile(target, "utf8");
     const document2 = normalizeScatterDocument(JSON.parse(raw), projectPath);
     await ensureProjectRevisionState(projectPath, document2);
     return document2;
@@ -19054,13 +19453,13 @@ async function writeScatterDocument(projectPath, document2) {
   await ensureScatterLayout(projectPath);
   const normalized = normalizeScatterDocument(document2, projectPath);
   if (normalized.version === 2) {
-    const backupPath = path.join(scatterDir(projectPath), "scatter.v1.backup.json");
+    const backupPath = path2.join(scatterDir(projectPath), "scatter.v1.backup.json");
     try {
-      await fsp.access(backupPath);
+      await fsp2.access(backupPath);
     } catch (error51) {
       if (error51?.code !== "ENOENT") throw error51;
       try {
-        const current = JSON.parse(await fsp.readFile(scatterPath(projectPath), "utf8"));
+        const current = JSON.parse(await fsp2.readFile(scatterPath(projectPath), "utf8"));
         if (current?.version === 1) await writeJsonAtomic(backupPath, current);
       } catch (readError) {
         if (readError?.code !== "ENOENT" && !(readError instanceof SyntaxError)) throw readError;
@@ -19071,16 +19470,28 @@ async function writeScatterDocument(projectPath, document2) {
   return normalized;
 }
 function documentFingerprint(document2) {
-  return crypto.createHash("sha256").update(JSON.stringify(document2)).digest("hex");
+  const serialized = JSON.stringify(document2, function fingerprintReplacer(key, value) {
+    if (key !== "fileUrl" || typeof value !== "string" || typeof this?.storedPath !== "string" || !this.storedPath) {
+      return value;
+    }
+    try {
+      const parsed = new URL(value, "http://canvasight.local");
+      parsed.searchParams.delete("token");
+      return value.startsWith("http://") || value.startsWith("https://") ? parsed.toString() : "".concat(parsed.pathname).concat(parsed.search).concat(parsed.hash);
+    } catch {
+      return value.replace(/([?&])token=[^&#]*(&?)/, (_match, prefix, suffix) => prefix === "?" && suffix ? "?" : suffix ? "&" : "");
+    }
+  });
+  return crypto2.createHash("sha256").update(serialized).digest("hex");
 }
 async function writeJsonAtomic(targetPath, value) {
-  await fsp.mkdir(path.dirname(targetPath), { recursive: true });
-  const temporaryPath = path.join(path.dirname(targetPath), ".".concat(path.basename(targetPath), ".").concat(process.pid, ".").concat(crypto.randomUUID(), ".tmp"));
+  await fsp2.mkdir(path2.dirname(targetPath), { recursive: true });
+  const temporaryPath = path2.join(path2.dirname(targetPath), ".".concat(path2.basename(targetPath), ".").concat(process.pid, ".").concat(crypto2.randomUUID(), ".tmp"));
   try {
-    await fsp.writeFile(temporaryPath, "".concat(JSON.stringify(value, null, 2), "\n"), "utf8");
-    await fsp.rename(temporaryPath, targetPath);
+    await fsp2.writeFile(temporaryPath, "".concat(JSON.stringify(value, null, 2), "\n"), "utf8");
+    await fsp2.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
 }
@@ -19106,7 +19517,7 @@ async function ensureProjectRevisionState(projectPath, document2) {
   }
   let state;
   try {
-    state = normalizeRevisionState(JSON.parse(await fsp.readFile(scatterRevisionStatePath(projectPath), "utf8")));
+    state = normalizeRevisionState(JSON.parse(await fsp2.readFile(scatterRevisionStatePath(projectPath), "utf8")));
   } catch (error51) {
     if (error51?.code !== "ENOENT" && !(error51 instanceof SyntaxError)) throw error51;
     state = normalizeRevisionState(null);
@@ -19174,7 +19585,7 @@ function conflictCopyName(sourceName, language, createdAt, existingNames, copyKi
   return candidate;
 }
 function deterministicUniqueId(prefix, mutationId, sourceId, usedIds) {
-  const digest = crypto.createHash("sha256").update("".concat(mutationId, ":").concat(sourceId)).digest("hex").slice(0, 12);
+  const digest = crypto2.createHash("sha256").update("".concat(mutationId, ":").concat(sourceId)).digest("hex").slice(0, 12);
   const safeSource = String(sourceId || "item").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48);
   let candidate = "".concat(prefix, "-").concat(safeSource, "-").concat(digest);
   let serial = 2;
@@ -19437,11 +19848,11 @@ function graphHasGuidanceNode(rawNodes, guidanceFile) {
   });
 }
 function projectGuidanceFileStatus(projectPath, guidanceFile) {
-  const existingPath = guidanceFile.candidates.map((candidate) => path.join(projectPath, candidate)).find((candidate) => fs.existsSync(candidate));
+  const existingPath = guidanceFile.candidates.map((candidate) => path2.join(projectPath, candidate)).find((candidate) => fs2.existsSync(candidate));
   if (!existingPath) return "missing";
   if (guidanceFile.canonicalName !== "AGENTS.md") return "present";
   try {
-    const existing = fs.readFileSync(existingPath, "utf8");
+    const existing = fs2.readFileSync(existingPath, "utf8");
     const startIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_START);
     const endIndex = existing.indexOf(AGENT_TEAM_AGENTS_MD_END);
     if (startIndex >= 0 && endIndex > startIndex) {
@@ -19750,8 +20161,8 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
   if (selectedTemplateIds.size === 0) {
     return { templates, pendingAssetPaths: /* @__PURE__ */ new Set(), entries: [] };
   }
-  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
-  const templateAssetsRoot = path.resolve(canvasightTemplateAssetsDir());
+  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsRoot = path2.resolve(canvasightTemplateAssetsDir());
   const pendingAssetPaths = /* @__PURE__ */ new Set();
   const entries = [];
   const preparedTemplates = [];
@@ -19763,14 +20174,14 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
     const attachments = [];
     for (const value of template.attachments) {
       const attachment = normalizeAttachment(value);
-      const sourceCandidate = typeof value?.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : typeof value?.relativePath === "string" && value.relativePath.trim() ? path.resolve(canvasightHome(), value.relativePath.trim()) : "";
-      const sourcePath = path.resolve(sourceCandidate || ".");
+      const sourceCandidate = typeof value?.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : typeof value?.relativePath === "string" && value.relativePath.trim() ? path2.resolve(canvasightHome(), value.relativePath.trim()) : "";
+      const sourcePath = path2.resolve(sourceCandidate || ".");
       if (!sourceCandidate || !isPathInside(sourcePath, templateAssetsRoot)) {
         throw new HttpError(400, "Template attachment is not a Canvasight template asset: ".concat(attachment.originalName), "invalid_template_asset_path");
       }
       let stat;
       try {
-        stat = await fsp.lstat(sourcePath);
+        stat = await fsp2.lstat(sourcePath);
       } catch {
         throw new HttpError(400, "Template attachment is unavailable: ".concat(attachment.originalName), "template_asset_unavailable");
       }
@@ -19778,12 +20189,12 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
         throw new HttpError(400, "Template attachment must be a regular file: ".concat(attachment.originalName), "invalid_template_asset_file");
       }
       const originalName = safeFileName(attachment.originalName);
-      const uniqueName = "".concat(Date.now(), "-").concat(crypto.randomBytes(4).toString("hex"), "-").concat(originalName);
-      const storedPath = path.join(assetsRoot, uniqueName);
+      const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
+      const storedPath = path2.join(assetsRoot, uniqueName);
       const mime = normalizedAttachmentMime(originalName, attachment.mime);
       const prepared = normalizeAttachment({
         ...attachment,
-        id: crypto.randomUUID(),
+        id: crypto2.randomUUID(),
         originalName,
         storedPath,
         relativePath: toRelativeProjectPath(projectPath, storedPath),
@@ -19793,64 +20204,64 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
         createdAt: nowIso()
       });
       attachments.push(prepared);
-      pendingAssetPaths.add(path.resolve(storedPath));
-      entries.push({ sourcePath, storedPath: path.resolve(storedPath) });
+      pendingAssetPaths.add(path2.resolve(storedPath));
+      entries.push({ sourcePath, storedPath: path2.resolve(storedPath) });
     }
     preparedTemplates.push({ ...template, attachments });
   }
   return { templates: preparedTemplates, pendingAssetPaths, entries };
 }
 async function commitPreparedGraphAssets(entries, referencedPaths) {
-  const selected = entries.filter((entry) => referencedPaths.has(path.resolve(entry.storedPath)));
+  const selected = entries.filter((entry) => referencedPaths.has(path2.resolve(entry.storedPath)));
   const committedPaths = [];
   try {
     for (const entry of selected) {
-      const stat = await fsp.lstat(entry.sourcePath);
+      const stat = await fsp2.lstat(entry.sourcePath);
       if (!stat.isFile() || stat.isSymbolicLink()) {
-        throw new HttpError(400, "Template attachment must remain a regular file: ".concat(path.basename(entry.sourcePath)), "invalid_template_asset_file");
+        throw new HttpError(400, "Template attachment must remain a regular file: ".concat(path2.basename(entry.sourcePath)), "invalid_template_asset_file");
       }
-      await fsp.mkdir(path.dirname(entry.storedPath), { recursive: true });
-      const temporaryPath = "".concat(entry.storedPath, ".").concat(process.pid, ".").concat(crypto.randomBytes(4).toString("hex"), ".tmp");
+      await fsp2.mkdir(path2.dirname(entry.storedPath), { recursive: true });
+      const temporaryPath = "".concat(entry.storedPath, ".").concat(process.pid, ".").concat(crypto2.randomBytes(4).toString("hex"), ".tmp");
       try {
-        await fsp.copyFile(entry.sourcePath, temporaryPath, fs.constants.COPYFILE_EXCL);
-        await fsp.rename(temporaryPath, entry.storedPath);
+        await fsp2.copyFile(entry.sourcePath, temporaryPath, fs2.constants.COPYFILE_EXCL);
+        await fsp2.rename(temporaryPath, entry.storedPath);
       } catch (error51) {
-        await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+        await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
         throw error51;
       }
       committedPaths.push(entry.storedPath);
     }
     return committedPaths;
   } catch (error51) {
-    await Promise.all(committedPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+    await Promise.all(committedPaths.map((storedPath) => fsp2.rm(storedPath, { force: true }).catch(() => void 0)));
     throw error51;
   }
 }
 function referencedPreparedAssetPaths(pages, pendingAssetPaths) {
   return new Set(
-    pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").map((node) => path.resolve(node.data?.asset?.storedPath || ".")).filter((storedPath) => pendingAssetPaths.has(storedPath))
+    pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").map((node) => path2.resolve(node.data?.asset?.storedPath || ".")).filter((storedPath) => pendingAssetPaths.has(storedPath))
   );
 }
 function normalizeManagedGraphAsset(value, projectPath, fieldPath, pendingAssetPaths = /* @__PURE__ */ new Set()) {
   if (!isObject2(value)) throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
-  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
+  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
   const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
-  const candidatePath = typeof value.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : relativePath ? path.resolve(projectPath, relativePath) : "";
-  const storedPath = path.resolve(candidatePath || ".");
+  const candidatePath = typeof value.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : relativePath ? path2.resolve(projectPath, relativePath) : "";
+  const storedPath = path2.resolve(candidatePath || ".");
   if (!candidatePath || !isPathInside(storedPath, assetsRoot)) {
     throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
   }
   const asset = normalizeAttachment({
     ...value,
     storedPath,
-    relativePath: relativePath || path.relative(projectPath, storedPath),
-    originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path.basename(storedPath),
+    relativePath: relativePath || path2.relative(projectPath, storedPath),
+    originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path2.basename(storedPath),
     fileUrl: assetUrlForPath(storedPath)
   });
   if (!pendingAssetPaths.has(storedPath)) {
     let stat;
     try {
-      stat = fs.lstatSync(storedPath);
+      stat = fs2.lstatSync(storedPath);
     } catch {
       throw new HttpError(400, "".concat(fieldPath, " must reference an available managed project asset"));
     }
@@ -20071,7 +20482,7 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
     });
   });
   return {
-    id: typeof page.id === "string" && page.id.trim() ? page.id.trim() : "page-".concat(crypto.randomBytes(5).toString("hex")),
+    id: typeof page.id === "string" && page.id.trim() ? page.id.trim() : "page-".concat(crypto2.randomBytes(5).toString("hex")),
     name: typeof page.name === "string" && page.name.trim() ? page.name.trim() : typeof args?.pageName === "string" && args.pageName.trim() ? args.pageName.trim() : "AI Canvas ".concat(index + 1),
     createdAt: typeof page.createdAt === "string" && page.createdAt ? page.createdAt : now,
     updatedAt: now,
@@ -20892,14 +21303,14 @@ function validateGraphCandidate(page, args, projectPath, options = {}) {
   };
 }
 function graphContextProjectKey(projectPath) {
-  return path.resolve(projectPath);
+  return path2.resolve(projectPath);
 }
 function rememberGraphContext(projectPath, document2, revisionState) {
   const projectKey = graphContextProjectKey(projectPath);
   const createdAt = Date.now();
   const activePage = cloneJson(activeScatterPage(document2));
   const context = {
-    id: "graph-context-".concat(crypto.randomUUID()),
+    id: "graph-context-".concat(crypto2.randomUUID()),
     projectKey,
     pageId: activePage.id,
     page: activePage,
@@ -20920,6 +21331,36 @@ function readGraphContextSnapshot(projectPath, contextId) {
   projectGraphContexts.set(projectKey, contexts);
   return contexts.find((item) => item.id === contextId) || null;
 }
+var writeGeneratedImages = createGeneratedImageWriter({
+  GRAPH_LAYER_GAP,
+  GRAPH_ROW_GAP,
+  MAX_DOCUMENT_MUTATION_RECEIPTS,
+  HttpError,
+  assetUrlForPath,
+  assertDocumentEdgeMutationAllowed,
+  createConflictPage,
+  deterministicUniqueId,
+  documentFingerprint,
+  documentObjectWriters,
+  ensureProjectRevisionState,
+  graphNodeBounds,
+  isObject: isObject2,
+  isPathInside,
+  normalizeAttachment,
+  normalizeScatterDocument,
+  nowIso,
+  persistProjectRevisionState,
+  readGraphContextSnapshot,
+  readScatterDocument,
+  rebuildDocumentMirrors,
+  rememberProjectBestEffort,
+  safeFileName,
+  scatterAssetsDir,
+  scatterPath,
+  toRelativeProjectPath,
+  withProjectWriteLock,
+  writeScatterDocument
+});
 function remapAiAdditionCollisions(basePage, currentPage, candidatePage, clientMutationId) {
   const baseNodes = itemMap(basePage.nodes);
   const currentNodes = itemMap(currentPage.nodes);
@@ -21231,7 +21672,7 @@ async function writeScatterGraph(projectPath, args) {
         edges: activePage.edges
       });
     } catch (error51) {
-      await Promise.all(committedGraphAssetPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+      await Promise.all(committedGraphAssetPaths.map((storedPath) => fsp2.rm(storedPath, { force: true }).catch(() => void 0)));
       throw error51;
     }
     const documentRevision = currentRevision + 1;
@@ -21280,12 +21721,12 @@ async function openProject(projectPath) {
   };
 }
 function safeGraphContextAssetRelativePath(value, projectPath) {
-  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
-  const storedPath = typeof value?.storedPath === "string" && value.storedPath.trim() ? path.resolve(value.storedPath.trim()) : "";
+  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
+  const storedPath = typeof value?.storedPath === "string" && value.storedPath.trim() ? path2.resolve(value.storedPath.trim()) : "";
   if (storedPath && isPathInside(storedPath, assetsRoot)) return toRelativeProjectPath(projectPath, storedPath);
   const relativePath = typeof value?.relativePath === "string" ? value.relativePath.trim() : "";
-  if (!relativePath || path.isAbsolute(relativePath)) return "";
-  const resolvedPath = path.resolve(projectPath, relativePath);
+  if (!relativePath || path2.isAbsolute(relativePath)) return "";
+  const resolvedPath = path2.resolve(projectPath, relativePath);
   return isPathInside(resolvedPath, assetsRoot) ? toRelativeProjectPath(projectPath, resolvedPath) : "";
 }
 function summarizeGraphContextNode(node, projectPath) {
@@ -21388,10 +21829,10 @@ function graphContext(projectPath, document2, preferences = defaultPreferences()
   };
 }
 function sessionId() {
-  return "session-".concat(Date.now().toString(36), "-").concat(crypto.randomBytes(4).toString("hex"));
+  return "session-".concat(Date.now().toString(36), "-").concat(crypto2.randomBytes(4).toString("hex"));
 }
 function openAttemptId() {
-  return "open-".concat(Date.now().toString(36), "-").concat(crypto.randomBytes(6).toString("hex"));
+  return "open-".concat(Date.now().toString(36), "-").concat(crypto2.randomBytes(6).toString("hex"));
 }
 var lastWidgetBindingIssuedAt = 0;
 function nextWidgetBindingIssuedAt() {
@@ -21715,7 +22156,7 @@ function claimRevisionPollLease(session, identity, evidence = {}) {
   const expiresAt = now + REVISION_POLL_LEASE_MS;
   revisionPollLeases.set(context.key, {
     owner: context.owner,
-    projectPath: path.resolve(session.projectPath),
+    projectPath: path2.resolve(session.projectPath),
     threadId: context.threadId,
     expiresAt
   });
@@ -21821,7 +22262,7 @@ function claimPresentationRecovery(session, identity) {
   const cooldownExpiresAt = now + PRESENTATION_RECOVERY_COOLDOWN_MS;
   presentationRecoveryLeases.set(key, {
     owner,
-    projectPath: path.resolve(session.projectPath),
+    projectPath: path2.resolve(session.projectPath),
     threadId,
     bindingIssuedAt: attempt.bindingIssuedAt,
     leaseExpiresAt,
@@ -21843,11 +22284,11 @@ function claimPresentationRecovery(session, identity) {
   };
 }
 function projectThreadClaimKey(projectPath) {
-  return path.resolve(projectPath);
+  return path2.resolve(projectPath);
 }
 function sessionsForProject(projectPath) {
-  const resolved = path.resolve(projectPath);
-  return Array.from(sessions.values()).filter((session) => path.resolve(session.projectPath) === resolved);
+  const resolved = path2.resolve(projectPath);
+  return Array.from(sessions.values()).filter((session) => path2.resolve(session.projectPath) === resolved);
 }
 function sessionSortTime(session) {
   return Date.parse(session.threadClaimedAt || session.createdAt || "") || 0;
@@ -21871,7 +22312,7 @@ function resolvedThreadClaim(projectPath) {
   const claim = projectThreadClaims.get(projectThreadClaimKey(projectPath));
   if (claim) {
     const session = sessions.get(claim.sessionId);
-    if (session && path.resolve(session.projectPath) === path.resolve(projectPath) && session.codexThreadId === claim.threadId) {
+    if (session && path2.resolve(session.projectPath) === path2.resolve(projectPath) && session.codexThreadId === claim.threadId) {
       return {
         claim,
         session
@@ -21897,7 +22338,7 @@ async function claimThreadForProject({ projectPath, sessionId: sessionId2, langu
   }
   let targetSession = sessionId2 ? getSession(sessionId2) : null;
   const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || await resolveSessionProjectPath(null, resolvedThreadId, { requireThreadProject: Boolean(resolvedThreadId) });
-  if (targetSession && path.resolve(targetSession.projectPath) !== path.resolve(resolvedProjectPath)) {
+  if (targetSession && path2.resolve(targetSession.projectPath) !== path2.resolve(resolvedProjectPath)) {
     targetSession = null;
   }
   const projectSessions = sessionsForProject(resolvedProjectPath);
@@ -21912,7 +22353,7 @@ async function claimThreadForProject({ projectPath, sessionId: sessionId2, langu
   }
   const claimedSessionIds = [];
   for (const session of projectSessions) {
-    if (path.resolve(session.projectPath) !== path.resolve(resolvedProjectPath)) continue;
+    if (path2.resolve(session.projectPath) !== path2.resolve(resolvedProjectPath)) continue;
     rememberThreadClaim(session, resolvedThreadId);
     claimedSessionIds.push(session.id);
   }
@@ -21955,7 +22396,7 @@ function disabledAgentTeamAgentsMdResult(projectPath, reason) {
   return {
     status: "skipped",
     reason,
-    path: projectPath ? path.join(projectPath, "AGENTS.md") : null
+    path: projectPath ? path2.join(projectPath, "AGENTS.md") : null
   };
 }
 function agentTeamTimestamp() {
@@ -21982,33 +22423,33 @@ function initialAgentTeamRoster(agentTeam) {
   return "# Canvasight Agent Team Roster\n\nThis registry stores role-seat runtime mappings. Issue reports remain authoritative for issue ownership.\n\n```yaml\nschema_version: 1\nroles:\n".concat(roles.join("\n"), "\n```\n");
 }
 async function ensureAgentTeamRoster(projectPath, agentTeam, agentsMd) {
-  const rosterPath = path.join(projectPath, "ROSTER.md");
+  const rosterPath = path2.join(projectPath, "ROSTER.md");
   if (!agentTeam.enabled) return { status: "skipped", reason: "agent_team_disabled", path: rosterPath };
   if (agentsMd.status === "skipped" || agentsMd.status === "failed") {
     return { status: "skipped", reason: "agents_md_unavailable", path: rosterPath };
   }
   try {
-    await fsp.access(rosterPath);
+    await fsp2.access(rosterPath);
     return { status: "unchanged", reason: "existing_roster", path: rosterPath };
   } catch (error51) {
     if (error51?.code !== "ENOENT") return { status: "failed", reason: "read_failed", path: rosterPath, error: error51?.message || String(error51) };
   }
   try {
-    await fsp.writeFile(rosterPath, initialAgentTeamRoster(agentTeam), "utf8");
+    await fsp2.writeFile(rosterPath, initialAgentTeamRoster(agentTeam), "utf8");
     return { status: "created", reason: "missing_roster", path: rosterPath };
   } catch (error51) {
     return { status: "failed", reason: "write_failed", path: rosterPath, error: error51?.message || String(error51) };
   }
 }
 async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
-  const agentsPath = path.join(projectPath, "AGENTS.md");
+  const agentsPath = path2.join(projectPath, "AGENTS.md");
   if (!agentTeam.enabled) return disabledAgentTeamAgentsMdResult(projectPath, "agent_team_disabled");
   try {
-    await fsp.mkdir(projectPath, { recursive: true });
+    await fsp2.mkdir(projectPath, { recursive: true });
     let existing = "";
     let existed = true;
     try {
-      existing = await fsp.readFile(agentsPath, "utf8");
+      existing = await fsp2.readFile(agentsPath, "utf8");
     } catch (error51) {
       if (error51?.code !== "ENOENT") throw error51;
       existed = false;
@@ -22027,7 +22468,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
       const after = existing.slice(endIndex + AGENT_TEAM_AGENTS_MD_END.length).replace(/^\s*/, "");
       const next2 = [before, AGENT_TEAM_AGENTS_MD_BLOCK, after].filter(Boolean).join("\n\n") + "\n";
       if (next2 !== existing) {
-        await fsp.writeFile(agentsPath, next2, "utf8");
+        await fsp2.writeFile(agentsPath, next2, "utf8");
         return {
           status: "updated",
           reason: "managed_block_refreshed",
@@ -22041,7 +22482,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
       };
     }
     const next = existed && existing.trim() ? "".concat(existing.replace(/\s*$/, ""), "\n\n").concat(AGENT_TEAM_AGENTS_MD_BLOCK, "\n") : "".concat(AGENT_TEAM_AGENTS_MD_BLOCK, "\n");
-    await fsp.writeFile(agentsPath, next, "utf8");
+    await fsp2.writeFile(agentsPath, next, "utf8");
     return {
       status: existed ? "appended" : "created",
       reason: existed ? "missing_managed_block" : "missing_agents_md",
@@ -22058,7 +22499,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
 }
 function normalizeRunPayload(session, value) {
   const payload = isObject2(value) ? value : {};
-  const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path.resolve(payload.projectPath) : session.projectPath;
+  const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path2.resolve(payload.projectPath) : session.projectPath;
   const codexMode = normalizeCodexMode();
   return {
     status: "received",
@@ -22089,7 +22530,7 @@ function completeWaiter(waiter, payload) {
 }
 function waiterMatches(waiter, session, payload) {
   if (waiter.sessionId && waiter.sessionId !== session.id) return false;
-  if (waiter.projectPath && path.resolve(waiter.projectPath) !== path.resolve(payload.projectPath || session.projectPath)) return false;
+  if (waiter.projectPath && path2.resolve(waiter.projectPath) !== path2.resolve(payload.projectPath || session.projectPath)) return false;
   if (waiter.threadId && session.codexThreadId && waiter.threadId !== session.codexThreadId) return false;
   return true;
 }
@@ -22221,7 +22662,7 @@ function takeQueuedRun(sessionIdValue, projectPath, threadId = null) {
     if (!session) return null;
     if (projectPath) {
       const index2 = session.runQueue.findIndex(
-        (run) => queuedRunMatchesThread(run, threadId) && path.resolve(run.projectPath || session.projectPath) === path.resolve(projectPath)
+        (run) => queuedRunMatchesThread(run, threadId) && path2.resolve(run.projectPath || session.projectPath) === path2.resolve(projectPath)
       );
       return index2 >= 0 ? session.runQueue.splice(index2, 1)[0] : null;
     }
@@ -22233,7 +22674,7 @@ function takeQueuedRun(sessionIdValue, projectPath, threadId = null) {
     const index = session.runQueue.findIndex((run) => {
       if (!queuedRunMatchesThread(run, threadId)) return false;
       if (!resolvedProjectPath) return true;
-      return path.resolve(run.projectPath || session.projectPath) === resolvedProjectPath;
+      return path2.resolve(run.projectPath || session.projectPath) === resolvedProjectPath;
     });
     if (index >= 0) return session.runQueue.splice(index, 1)[0];
   }
@@ -22397,19 +22838,19 @@ async function saveAttachments(projectPath, files) {
     if (!isObject2(input)) throw new HttpError(400, "attachment input must be an object");
     const originalName = safeFileName(input.name);
     const mime = normalizedAttachmentMime(originalName, input.mime);
-    const uniqueName = "".concat(Date.now(), "-").concat(crypto.randomBytes(4).toString("hex"), "-").concat(originalName);
-    const storedPath = path.join(assetsDir, uniqueName);
+    const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
+    const storedPath = path2.join(assetsDir, uniqueName);
     let bytes;
     if (typeof input.dataBase64 === "string") {
       bytes = Buffer.from(input.dataBase64, "base64");
     } else if (typeof input.path === "string" && input.path.trim()) {
-      bytes = await fsp.readFile(path.resolve(input.path));
+      bytes = await fsp2.readFile(path2.resolve(input.path));
     } else {
       throw new HttpError(400, "attachment requires dataBase64 or path");
     }
-    await fsp.writeFile(storedPath, bytes);
+    await fsp2.writeFile(storedPath, bytes);
     saved.push({
-      id: crypto.randomUUID(),
+      id: crypto2.randomUUID(),
       kind: attachmentKind(originalName, mime),
       source: ["upload", "drop", "paste", "clipboard"].includes(input.source) ? input.source : "upload",
       originalName,
@@ -22425,7 +22866,7 @@ async function saveAttachments(projectPath, files) {
 }
 function revealPath(targetPath) {
   if (typeof targetPath !== "string" || !targetPath.trim()) return;
-  const resolved = path.resolve(targetPath);
+  const resolved = path2.resolve(targetPath);
   let command;
   let args;
   if (process.platform === "darwin") {
@@ -22436,7 +22877,7 @@ function revealPath(targetPath) {
     args = ["/select,", resolved];
   } else {
     command = "xdg-open";
-    args = [fs.existsSync(resolved) && fs.statSync(resolved).isDirectory() ? resolved : path.dirname(resolved)];
+    args = [fs2.existsSync(resolved) && fs2.statSync(resolved).isDirectory() ? resolved : path2.dirname(resolved)];
   }
   const child = spawn(command, args, {
     detached: true,
@@ -22447,7 +22888,7 @@ function revealPath(targetPath) {
 }
 function openPath(targetPath) {
   if (typeof targetPath !== "string" || !targetPath.trim()) return;
-  const resolved = path.resolve(targetPath);
+  const resolved = path2.resolve(targetPath);
   let command;
   let args;
   if (process.platform === "darwin") {
@@ -22504,16 +22945,16 @@ function escapeInlineStyle(source) {
 }
 function inlineCanvasightApp() {
   if (cachedInlineCanvasightApp) return cachedInlineCanvasightApp;
-  const indexPath = path.join(distRoot, "index.html");
-  const indexHtml = fs.readFileSync(indexPath, "utf8");
+  const indexPath = path2.join(distRoot, "index.html");
+  const indexHtml = fs2.readFileSync(indexPath, "utf8");
   const scriptMatch = indexHtml.match(/<script[^>]+src="([^"]+)"[^>]*><\/script>/);
   const styleMatch = indexHtml.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"[^>]*>/);
   if (!scriptMatch) throw new Error("Could not find Canvasight app bundle in dist/index.html.");
-  const scriptPath = path.join(distRoot, scriptMatch[1].replace(/^\//, ""));
-  const stylePath = styleMatch ? path.join(distRoot, styleMatch[1].replace(/^\//, "")) : "";
+  const scriptPath = path2.join(distRoot, scriptMatch[1].replace(/^\//, ""));
+  const stylePath = styleMatch ? path2.join(distRoot, styleMatch[1].replace(/^\//, "")) : "";
   cachedInlineCanvasightApp = {
-    script: fs.readFileSync(scriptPath, "utf8"),
-    style: stylePath ? fs.readFileSync(stylePath, "utf8") : ""
+    script: fs2.readFileSync(scriptPath, "utf8"),
+    style: stylePath ? fs2.readFileSync(stylePath, "utf8") : ""
   };
   return cachedInlineCanvasightApp;
 }
@@ -23062,10 +23503,10 @@ async function applyWidgetCodexMode(session, payload) {
 function staticTarget(urlPath) {
   const decodedPath = decodeURIComponent(urlPath);
   const requested = decodedPath === "/" ? "/index.html" : decodedPath;
-  const normalized = path.normalize(requested).replace(/^(\.\.[/\\])+/, "");
-  const target = path.join(distRoot, normalized);
-  const resolved = path.resolve(target);
-  if (!resolved.startsWith(path.resolve(distRoot))) {
+  const normalized = path2.normalize(requested).replace(/^(\.\.[/\\])+/, "");
+  const target = path2.join(distRoot, normalized);
+  const resolved = path2.resolve(target);
+  if (!resolved.startsWith(path2.resolve(distRoot))) {
     throw new HttpError(403, "Forbidden");
   }
   return resolved;
@@ -23073,12 +23514,12 @@ function staticTarget(urlPath) {
 async function serveStatic(req, res, url2) {
   let target = staticTarget(url2.pathname);
   try {
-    const stat = await fsp.stat(target);
-    if (stat.isDirectory()) target = path.join(target, "index.html");
+    const stat = await fsp2.stat(target);
+    if (stat.isDirectory()) target = path2.join(target, "index.html");
   } catch {
-    const indexPath = path.join(distRoot, "index.html");
+    const indexPath = path2.join(distRoot, "index.html");
     try {
-      await fsp.access(indexPath);
+      await fsp2.access(indexPath);
       target = indexPath;
     } catch {
       sendText(res, 503, "Canvasight dist is not built. Run the plugin build before opening the UI.");
@@ -23086,7 +23527,7 @@ async function serveStatic(req, res, url2) {
     }
   }
   try {
-    const stat = await fsp.stat(target);
+    const stat = await fsp2.stat(target);
     if (!stat.isFile()) {
       sendText(res, 404, "Not found");
       return;
@@ -23095,7 +23536,7 @@ async function serveStatic(req, res, url2) {
       "content-type": mimeFromPath(target),
       "content-length": stat.size
     }));
-    fs.createReadStream(target).pipe(res);
+    fs2.createReadStream(target).pipe(res);
   } catch {
     sendText(res, 404, "Not found");
   }
@@ -23128,9 +23569,9 @@ function managedAssetResponseHeaders(assetPath, headers = {}) {
 }
 async function serveAsset(req, res, url2) {
   assertMethod(req, "GET");
-  const assetPath = path.resolve(base64UrlDecode(url2.searchParams.get("path")));
+  const assetPath = path2.resolve(base64UrlDecode(url2.searchParams.get("path")));
   if (!isScatterAssetPath(assetPath) && !isTemplateAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
-  const stat = await fsp.stat(assetPath);
+  const stat = await fsp2.stat(assetPath);
   if (!stat.isFile()) throw new HttpError(404, "Asset not found");
   const range = parseSingleByteRange(req.headers.range, stat.size);
   if (range === false) {
@@ -23149,14 +23590,14 @@ async function serveAsset(req, res, url2) {
       "content-range": "bytes ".concat(range.start, "-").concat(range.end, "/").concat(stat.size),
       "content-length": contentLength
     })));
-    fs.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res);
+    fs2.createReadStream(assetPath, { start: range.start, end: range.end }).pipe(res);
     return;
   }
   res.writeHead(200, responseHeaders(managedAssetResponseHeaders(assetPath, {
     "accept-ranges": "bytes",
     "content-length": stat.size
   })));
-  fs.createReadStream(assetPath).pipe(res);
+  fs2.createReadStream(assetPath).pipe(res);
 }
 async function handleSessionApi(req, res, url2) {
   const match = url2.pathname.match(/^\/api\/sessions\/([^/]+)(?:\/([^/]+))?$/);
@@ -23396,19 +23837,19 @@ async function handleSessionApi(req, res, url2) {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
     const storedPath = typeof body?.storedPath === "string" ? body.storedPath.trim() : "";
-    if (!storedPath || !path.isAbsolute(storedPath)) {
+    if (!storedPath || !path2.isAbsolute(storedPath)) {
       throw new HttpError(400, "Canvasight attachment preview requires an absolute storedPath.", "invalid_attachment_preview_path");
     }
-    const assetPath = path.resolve(storedPath);
+    const assetPath = path2.resolve(storedPath);
     const projectPath = normalizeProjectPath(session.projectPath);
     const allowedRoots = [scatterAssetsDir(projectPath), canvasightTemplateAssetsDir()];
-    const stat = await fsp.lstat(assetPath);
+    const stat = await fsp2.lstat(assetPath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw new HttpError(403, "Canvasight attachment preview requires a regular project asset.", "forbidden_attachment_preview_path");
     }
-    const realAssetPath = await fsp.realpath(assetPath);
+    const realAssetPath = await fsp2.realpath(assetPath);
     const realAllowedRoots = await Promise.all(
-      allowedRoots.map((root) => fsp.realpath(root).catch(() => null))
+      allowedRoots.map((root) => fsp2.realpath(root).catch(() => null))
     );
     if (!realAllowedRoots.some((root) => root && isPathInside(realAssetPath, root))) {
       throw new HttpError(403, "Canvasight attachment preview is outside the current project.", "forbidden_attachment_preview_path");
@@ -23420,7 +23861,7 @@ async function handleSessionApi(req, res, url2) {
     if (!mime.startsWith("image/")) {
       throw new HttpError(415, "Canvasight attachment preview requires an image.", "attachment_preview_not_image");
     }
-    const bytes = await fsp.readFile(realAssetPath);
+    const bytes = await fsp2.readFile(realAssetPath);
     sendJson(res, 200, {
       dataBase64: bytes.toString("base64"),
       mime,
@@ -23607,6 +24048,15 @@ async function handleHttp(req, res) {
       const threadId = optionalThreadId(body?.threadId) || optionalThreadId(body?.args?.threadId);
       const projectPath = await resolveSessionProjectPath(body.projectPath || body?.args?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
       sendJson(res, 200, await writeScatterGraph(projectPath, body.args || body));
+      return;
+    }
+    if (url2.pathname === "/api/graphs/generated-images") {
+      assertDaemonAuthorized(req, url2);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const threadId = optionalThreadId(body?.threadId);
+      const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+      sendJson(res, 200, await writeGeneratedImages(projectPath, body));
       return;
     }
     if (url2.pathname === "/api/sessions/claim") {
@@ -23864,6 +24314,7 @@ function canvasRoutingContext() {
     status: "active",
     activeCanvasContext: true,
     preferredTool: "write_canvasight_graph",
+    generatedImageTool: "add_canvasight_generated_images",
     preferredMode: "append-page",
     templateDiscoveryTool: "list_canvasight_node_templates",
     fullTemplateTool: "get_canvasight_node_template",
@@ -23875,7 +24326,8 @@ function canvasRoutingContext() {
       "product_or_feature_planning",
       "codebase_architecture_analysis",
       "article_or_document_structure_mapping",
-      "task_plans_with_dependencies_or_risks"
+      "task_plans_with_dependencies_or_risks",
+      "new_image_generation_into_the_active_page"
     ],
     bypassCanvasFor: [
       "small_direct_commands",
@@ -24019,6 +24471,36 @@ var canvasightGraphContextOutputSchema = {
   },
   required: ["status", "projectPath", "contextId", "documentRevision", "documentVersion", "preferences", "activePage", "nodes", "edges", "pages"],
   additionalProperties: true
+};
+var generatedImagesOutputSchema = {
+  type: "object",
+  properties: {
+    targetPage: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" }
+      },
+      required: ["id", "name"],
+      additionalProperties: false
+    },
+    documentRevision: { type: "integer" },
+    images: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          assetId: { type: "string" },
+          relativePath: { type: "string" }
+        },
+        required: ["nodeId", "assetId", "relativePath"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["targetPage", "documentRevision", "images"],
+  additionalProperties: false
 };
 function publicWidgetOpenResult(widgetData) {
   return {
@@ -24298,6 +24780,28 @@ async function toolWriteCanvasightGraph(args) {
     summary
   );
 }
+async function toolAddCanvasightGeneratedImages(args) {
+  const threadId = requiredNativeThreadId(args?.threadId);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: true });
+  const daemon = await ensureDaemonServer();
+  const result = await daemonJson(daemon, "/api/graphs/generated-images", {
+    method: "POST",
+    body: JSON.stringify({ ...args || {}, projectPath, threadId })
+  });
+  const output = {
+    targetPage: { id: result.targetPageId, name: result.targetPageName },
+    documentRevision: result.documentRevision,
+    images: result.assetNodes.map((assetNode) => ({
+      nodeId: assetNode.nodeId,
+      assetId: assetNode.assetId,
+      relativePath: assetNode.relativePath
+    }))
+  };
+  return toolResult(
+    output,
+    "".concat(result.assetNodes.length, " generated image").concat(result.assetNodes.length === 1 ? "" : "s", " added to Canvasight Page ").concat(result.targetPageName, ".")
+  );
+}
 async function toolAwaitCanvasightRun(args) {
   const sessionIdValue = typeof args?.sessionId === "string" && args.sessionId ? args.sessionId : "";
   let projectPathValue = optionalProjectPath(args?.projectPath);
@@ -24516,7 +25020,7 @@ function normalizeFrameworkQuestions(args) {
   return {
     kind: "canvasight.framework-questions",
     schemaVersion: 1,
-    confirmationId: "framework-confirmation-".concat(crypto.randomUUID()),
+    confirmationId: "framework-confirmation-".concat(crypto2.randomUUID()),
     language: args?.language === "en" ? "en" : "zh",
     title: requiredTrimmedString(args?.title, "title", 240),
     ...optionalTrimmedString(args?.description, "description", 800) ? { description: optionalTrimmedString(args.description, "description", 800) } : {},
@@ -25064,6 +25568,64 @@ var tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "add_canvasight_generated_images",
+    description: "Import final PNG, JPEG, or WebP files produced by Codex imagegen into the current project's managed .scatter/assets directory and atomically add one ungrouped Asset Node per image to the right side of the Page captured by get_canvasight_graph_context. This tool does not generate images. Call it only after verified native Canvasight readiness and successful imagegen inspection, using the captured contextId, revision, exact current threadId, and one stable clientMutationId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: {
+          type: "string",
+          description: "Exact current Codex task id. Read CODEX_THREAD_ID and pass it explicitly."
+        },
+        projectPath: {
+          type: "string",
+          description: "Exact project path returned by get_canvasight_graph_context."
+        },
+        contextId: {
+          type: "string",
+          description: "Context id captured before image generation; it permanently binds this import to that Page."
+        },
+        expectedRevision: {
+          type: "integer",
+          description: "Exact documentRevision returned with contextId."
+        },
+        clientMutationId: {
+          type: "string",
+          description: "Stable unique id for this exact image batch. Reuse only when retrying the same payload."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Language for a recovery-copy label when the captured Page was deleted."
+        },
+        images: {
+          type: "array",
+          minItems: 1,
+          maxItems: 16,
+          description: "Final inspected image files in their desired top-to-bottom canvas order.",
+          items: {
+            type: "object",
+            properties: {
+              path: {
+                type: "string",
+                description: "Absolute path under the current project or CODEX_HOME/generated_images."
+              },
+              title: {
+                type: "string",
+                description: "Optional Asset Node title. Defaults to the generated file name."
+              }
+            },
+            required: ["path"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["threadId", "contextId", "expectedRevision", "clientMutationId", "images"],
+      additionalProperties: false
+    },
+    outputSchema: generatedImagesOutputSchema
+  },
+  {
     name: "canvasight_widget_api",
     description: "Internal app-only proxy for Canvasight native widget session APIs. The widget uses this instead of fetching localhost directly.",
     inputSchema: {
@@ -25176,6 +25738,7 @@ async function callTool(name, args) {
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
+  if (name === "add_canvasight_generated_images") return toolAddCanvasightGeneratedImages(args || {});
   if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
@@ -25361,7 +25924,7 @@ function drainInputBuffer() {
   }
 }
 async function runDaemon() {
-  if (!daemonAuthToken) daemonAuthToken = crypto.randomBytes(24).toString("base64url");
+  if (!daemonAuthToken) daemonAuthToken = crypto2.randomBytes(24).toString("base64url");
   daemonStartedAt = nowIso();
   await ensureHttpServer();
 }

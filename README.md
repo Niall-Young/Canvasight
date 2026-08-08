@@ -25,6 +25,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 通过画布选择器、拖放或粘贴，把图片、视频和文件添加为一等 Asset Node。
 - Task/Group Run 始终通过 Chat 把对应范围发送到当前 Codex 任务。
 - 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
+- 直接输入 `@Canvasight 生成……`：Canvasight 会先验证或打开当前项目的原生画布，再用 Codex 内置 imagegen 生图，并把每张最终图片作为独立 Asset Node 放到生成开始时活动 Page 的最右侧。
 - AI 写入后可从画布右上角手动刷新到项目的最新画布版本，同时保护未保存的本地修改。
 - 梳理框架遇到会改变方向的关键歧义时，在当前 Codex 消息中直接显示 Canvasight 确认卡；提交后自动继续原 Graph Writer 请求，无需打开画布。
 - 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
@@ -78,6 +79,12 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
    内容：
    在这里粘贴文章或资料
+   ```
+
+   直接生图到当前画布：
+
+   ```text
+   @Canvasight 生成一张雨夜霓虹街道的电影感概念图，并直接放到当前画布。
    ```
 
 5. **继续修改当前画布。** 复制下面的提示词，并把方括号中的内容换成你的要求：
@@ -138,6 +145,8 @@ Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatt
 当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page、`contextId`、`documentRevision` 和 `documentVersion`，再用 `merge-active-page` 提交最小的节点/连线 operations，同时传回该上下文的 revision 和可在重试时复用的稳定 mutation ID。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改始终写回上下文捕获的 Page，不会被之后的 Page 切换重新定向。
 
 Graph Context 会返回 Task、Asset、Group 摘要、Group 归属、Asset 的受管 `id` / `relativePath` 引用，以及旧 Task 附件不含绝对路径和文件 URL 的轻量句柄。Graph Writer 可以创建和更新三种节点及 Task/Asset 的 `parentId`，但 Asset 只能复用当前项目 `.scatter/assets` 下经服务端验证的文件；图片、SVG、视频和普通文件共用同一种 Asset Node，由文件自动决定展示。AI 不能创建新的 Task 内联附件，旧附件只能在带 `contextId`、revision 和稳定 mutation ID 的 `merge-active-page` 中通过 `promote-attachment` 原子提升。持久化的 Asset `role` 仅为旧数据兼容，当前关系由 Edge 方向、标签和上下文表达。Group 不能嵌套，也不能作为 Edge 端点，成员归属不会重复写成 Edge。Group 折叠状态属于用户的 Page 视图，AI 写入和重基都会保留，不能把它当作语义意图修改。
+
+新图片生成走独立的 `canvasight-imagegen` Skill：它先完成原生 ready 校验并捕获当前 Page，再遵循系统 imagegen Skill 生成和检查位图，最后调用 `add_canvasight_generated_images`。该工具只接受当前项目或 `$CODEX_HOME/generated_images` 下不超过 10 MB 的 PNG、JPEG、WebP，一次最多 16 张且总计不超过 100 MB；它保留源文件，将受管副本与 Asset Node 在同一写锁内提交，并通过 context 保证等待期间切换 Page 不会改变目标。返回结果只包含轻量节点/资产标识与项目相对路径。
 
 生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
 
@@ -425,6 +434,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Add images and files as first-class Asset Nodes through the canvas picker, drop, or paste.
 - Task/Group Run always uses Chat to send its corresponding scope to the current Codex task.
 - Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
+- Enter `@Canvasight Generate…` directly: Canvasight verifies or opens the current project's native canvas, uses Codex's built-in imagegen flow, and adds every final image as its own Asset Node at the far right of the Page that was active when generation began.
 - After an AI write, manually refresh from the upper-right canvas controls to load the project's latest canvas version without discarding unsaved local changes.
 - Resolve consequential framework ambiguity through a Canvasight confirmation card embedded directly in the current Codex message, then continue the original Graph Writer request without opening the canvas.
 - Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
@@ -478,6 +488,12 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
    Content:
    Paste the article or source material here
+   ```
+
+   Generate directly into the current canvas:
+
+   ```text
+   @Canvasight Generate a cinematic concept image of a neon street on a rainy night and add it directly to the current canvas.
    ```
 
 5. **Update the current canvas.** Copy this prompt and replace the bracketed text with your request:
@@ -538,6 +554,8 @@ Codex should use `write_canvasight_graph` instead of manually assembling the ful
 When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page, `contextId`, `documentRevision`, and `documentVersion`. It then submits minimal node/edge operations with `merge-active-page`, returns that context's revision, and uses a stable mutation ID across retries. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits always return to the Page captured by the context and cannot be redirected by a later Page switch.
 
 Graph Context returns Task, Asset, and Group summaries, Group membership, managed Asset `id` / `relativePath` handles, and lightweight legacy Task-attachment handles without absolute paths or file URLs. Graph Writer can create and update all three node types plus Task/Asset `parentId`, but an Asset may only reuse a server-validated file under the current project's `.scatter/assets`; images, SVG, video, and ordinary files share one Asset Node shape and infer presentation from the file. AI cannot create new inline Task attachments. A legacy attachment can be promoted atomically only through context-bound `merge-active-page` with `promote-attachment`, the captured revision, and a stable mutation ID. Persisted Asset `role` is legacy compatibility only; current relationship meaning comes from Edge direction, labels, and context. Groups cannot nest or become Edge endpoints, and membership is never duplicated as an Edge. Group collapse belongs to the user's Page view state; AI writes and rebases preserve it and cannot treat it as semantic intent.
+
+New-image generation uses the dedicated `canvasight-imagegen` Skill. It verifies native readiness and captures the active Page, follows the system imagegen Skill to generate and inspect the bitmap outputs, then calls `add_canvasight_generated_images`. The tool accepts only PNG, JPEG, or WebP files up to 10 MB each from the current project or `$CODEX_HOME/generated_images`, with at most 16 images and 100 MB per call. It preserves the sources, commits managed copies and Asset Nodes under one write lock, and uses the captured context so Page switches during generation cannot retarget the result. Its response contains only lightweight node/asset identifiers and project-relative paths.
 
 Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
 

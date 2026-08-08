@@ -1,5 +1,5 @@
 export type AttachmentKind = "image" | "file";
-export type AttachmentSource = "upload" | "drop" | "paste" | "clipboard";
+export type AttachmentSource = "upload" | "drop" | "paste" | "clipboard" | "generated";
 export type AssetRole = "input" | "reference" | "option" | "output";
 export type RunMode = "flow" | "node";
 export type EffortLevel = "low" | "medium" | "high" | "xhigh";

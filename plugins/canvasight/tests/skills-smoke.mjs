@@ -16,6 +16,8 @@ const graphWriterNodeTypesPath = path.join(pluginRoot, "skills", "canvasight-gra
 const graphWriterMarkdownPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "references", "task-body-markdown.md");
 const graphWritingContractPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "references", "quality", "graph-writing.md");
 const updateSkillPath = path.join(pluginRoot, "skills", "canvasight-update", "SKILL.md");
+const indexSkillPath = path.join(pluginRoot, "skills", "canvasight", "SKILL.md");
+const imagegenSkillPath = path.join(pluginRoot, "skills", "canvasight-imagegen", "SKILL.md");
 
 function loadTypescriptModule(sourcePath) {
   const source = fs.readFileSync(sourcePath, "utf8");
@@ -35,6 +37,17 @@ const graphWriterNodeTypes = fs.readFileSync(graphWriterNodeTypesPath, "utf8");
 const graphWriterMarkdown = fs.readFileSync(graphWriterMarkdownPath, "utf8");
 const graphWritingContract = fs.readFileSync(graphWritingContractPath, "utf8");
 const updateSkill = fs.readFileSync(updateSkillPath, "utf8");
+const indexSkill = fs.readFileSync(indexSkillPath, "utf8");
+const imagegenSkill = fs.readFileSync(imagegenSkillPath, "utf8");
+
+assert.match(indexSkill, /canvasight-imagegen/);
+assert.match(indexSkill, /\@Canvasight/);
+assert.match(imagegenSkill, /system `\$imagegen` Skill/);
+assert.match(imagegenSkill, /open_canvasight.*await_canvasight_widget_ready/s);
+assert.match(imagegenSkill, /get_canvasight_graph_context/);
+assert.match(imagegenSkill, /add_canvasight_generated_images/);
+assert.match(imagegenSkill, /one stable unique `clientMutationId`/);
+assert.match(imagegenSkill, /Do not generate anything when native Canvasight opening or ready verification fails/);
 
 assert.match(updateSkill, /Run exactly that one bundled-updater command and no other shell command/);
 assert.match(updateSkill, /Do not run `npm install`, `npm ci`, another package manager, builds, tests, release preparation or verification/);

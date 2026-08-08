@@ -1,0 +1,4 @@
+interface:
+  display_name: "Canvasight Image Generation"
+  short_description: "Generate images directly into Canvasight"
+  default_prompt: "Use $canvasight-imagegen to generate an image and add it to the active Canvasight page."

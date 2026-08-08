@@ -24,9 +24,10 @@ import {
   pageEdgeConstraintViolations,
   sameValue
 } from "./domain/concurrent-document.mjs";
+import { createGeneratedImageWriter } from "./infrastructure/generated-images.mjs";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.6";
+const SERVER_VERSION = "0.5.7";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -1695,7 +1696,7 @@ async function recentProjects(limit) {
 }
 
 function normalizeAttachment(value) {
-  const source = ["upload", "drop", "paste", "clipboard"].includes(value?.source) ? value.source : "upload";
+  const source = ["upload", "drop", "paste", "clipboard", "generated"].includes(value?.source) ? value.source : "upload";
   const storedPath = typeof value?.storedPath === "string" ? value.storedPath : "";
   const originalName = typeof value?.originalName === "string" ? value.originalName : "attachment";
   const relativePath = typeof value?.relativePath === "string" ? value.relativePath : "";
@@ -1919,7 +1920,21 @@ async function writeScatterDocument(projectPath, document) {
 }
 
 function documentFingerprint(document) {
-  return crypto.createHash("sha256").update(JSON.stringify(document)).digest("hex");
+  const serialized = JSON.stringify(document, function fingerprintReplacer(key, value) {
+    if (key !== "fileUrl" || typeof value !== "string" || typeof this?.storedPath !== "string" || !this.storedPath) {
+      return value;
+    }
+    try {
+      const parsed = new URL(value, "http://canvasight.local");
+      parsed.searchParams.delete("token");
+      return value.startsWith("http://") || value.startsWith("https://")
+        ? parsed.toString()
+        : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+      return value.replace(/([?&])token=[^&#]*(&?)/, (_match, prefix, suffix) => (prefix === "?" && suffix ? "?" : suffix ? "&" : ""));
+    }
+  });
+  return crypto.createHash("sha256").update(serialized).digest("hex");
 }
 
 async function writeJsonAtomic(targetPath, value) {
@@ -4004,6 +4019,36 @@ function readGraphContextSnapshot(projectPath, contextId) {
   return contexts.find((item) => item.id === contextId) || null;
 }
 
+const writeGeneratedImages = createGeneratedImageWriter({
+  GRAPH_LAYER_GAP,
+  GRAPH_ROW_GAP,
+  MAX_DOCUMENT_MUTATION_RECEIPTS,
+  HttpError,
+  assetUrlForPath,
+  assertDocumentEdgeMutationAllowed,
+  createConflictPage,
+  deterministicUniqueId,
+  documentFingerprint,
+  documentObjectWriters,
+  ensureProjectRevisionState,
+  graphNodeBounds,
+  isObject,
+  isPathInside,
+  normalizeAttachment,
+  normalizeScatterDocument,
+  nowIso,
+  persistProjectRevisionState,
+  readGraphContextSnapshot,
+  readScatterDocument,
+  rebuildDocumentMirrors,
+  rememberProjectBestEffort,
+  safeFileName,
+  scatterAssetsDir,
+  scatterPath,
+  toRelativeProjectPath,
+  withProjectWriteLock,
+  writeScatterDocument
+});
 function remapAiAdditionCollisions(basePage, currentPage, candidatePage, clientMutationId) {
   const baseNodes = itemMap(basePage.nodes);
   const currentNodes = itemMap(currentPage.nodes);
@@ -7079,6 +7124,16 @@ async function handleHttp(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/graphs/generated-images") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      const body = await readJsonBody(req);
+      const threadId = optionalThreadId(body?.threadId);
+      const projectPath = await resolveSessionProjectPath(body?.projectPath, threadId, { requireThreadProject: Boolean(threadId) });
+      sendJson(res, 200, await writeGeneratedImages(projectPath, body));
+      return;
+    }
+
     if (url.pathname === "/api/sessions/claim") {
       assertDaemonAuthorized(req, url);
       assertMethod(req, "POST");
@@ -7350,6 +7405,7 @@ function canvasRoutingContext() {
     status: "active",
     activeCanvasContext: true,
     preferredTool: "write_canvasight_graph",
+    generatedImageTool: "add_canvasight_generated_images",
     preferredMode: "append-page",
     templateDiscoveryTool: "list_canvasight_node_templates",
     fullTemplateTool: "get_canvasight_node_template",
@@ -7362,7 +7418,8 @@ function canvasRoutingContext() {
       "product_or_feature_planning",
       "codebase_architecture_analysis",
       "article_or_document_structure_mapping",
-      "task_plans_with_dependencies_or_risks"
+      "task_plans_with_dependencies_or_risks",
+      "new_image_generation_into_the_active_page"
     ],
     bypassCanvasFor: [
       "small_direct_commands",
@@ -7516,6 +7573,37 @@ const canvasightGraphContextOutputSchema = {
   },
   required: ["status", "projectPath", "contextId", "documentRevision", "documentVersion", "preferences", "activePage", "nodes", "edges", "pages"],
   additionalProperties: true
+};
+
+const generatedImagesOutputSchema = {
+  type: "object",
+  properties: {
+    targetPage: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" }
+      },
+      required: ["id", "name"],
+      additionalProperties: false
+    },
+    documentRevision: { type: "integer" },
+    images: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          nodeId: { type: "string" },
+          assetId: { type: "string" },
+          relativePath: { type: "string" }
+        },
+        required: ["nodeId", "assetId", "relativePath"],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["targetPage", "documentRevision", "images"],
+  additionalProperties: false
 };
 
 function publicWidgetOpenResult(widgetData) {
@@ -7816,6 +7904,29 @@ async function toolWriteCanvasightGraph(args) {
       document
     },
     summary
+  );
+}
+
+async function toolAddCanvasightGeneratedImages(args) {
+  const threadId = requiredNativeThreadId(args?.threadId);
+  const projectPath = await resolveSessionProjectPath(args?.projectPath, threadId, { requireThreadProject: true });
+  const daemon = await ensureDaemonServer();
+  const result = await daemonJson(daemon, "/api/graphs/generated-images", {
+    method: "POST",
+    body: JSON.stringify({ ...(args || {}), projectPath, threadId })
+  });
+  const output = {
+    targetPage: { id: result.targetPageId, name: result.targetPageName },
+    documentRevision: result.documentRevision,
+    images: result.assetNodes.map((assetNode) => ({
+      nodeId: assetNode.nodeId,
+      assetId: assetNode.assetId,
+      relativePath: assetNode.relativePath
+    }))
+  };
+  return toolResult(
+    output,
+    `${result.assetNodes.length} generated image${result.assetNodes.length === 1 ? "" : "s"} added to Canvasight Page ${result.targetPageName}.`
   );
 }
 
@@ -8625,6 +8736,65 @@ const tools = [
     outputSchema: looseObjectOutputSchema
   },
   {
+    name: "add_canvasight_generated_images",
+    description:
+      "Import final PNG, JPEG, or WebP files produced by Codex imagegen into the current project's managed .scatter/assets directory and atomically add one ungrouped Asset Node per image to the right side of the Page captured by get_canvasight_graph_context. This tool does not generate images. Call it only after verified native Canvasight readiness and successful imagegen inspection, using the captured contextId, revision, exact current threadId, and one stable clientMutationId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: {
+          type: "string",
+          description: "Exact current Codex task id. Read CODEX_THREAD_ID and pass it explicitly."
+        },
+        projectPath: {
+          type: "string",
+          description: "Exact project path returned by get_canvasight_graph_context."
+        },
+        contextId: {
+          type: "string",
+          description: "Context id captured before image generation; it permanently binds this import to that Page."
+        },
+        expectedRevision: {
+          type: "integer",
+          description: "Exact documentRevision returned with contextId."
+        },
+        clientMutationId: {
+          type: "string",
+          description: "Stable unique id for this exact image batch. Reuse only when retrying the same payload."
+        },
+        language: {
+          type: "string",
+          enum: ["zh", "en"],
+          description: "Language for a recovery-copy label when the captured Page was deleted."
+        },
+        images: {
+          type: "array",
+          minItems: 1,
+          maxItems: 16,
+          description: "Final inspected image files in their desired top-to-bottom canvas order.",
+          items: {
+            type: "object",
+            properties: {
+              path: {
+                type: "string",
+                description: "Absolute path under the current project or CODEX_HOME/generated_images."
+              },
+              title: {
+                type: "string",
+                description: "Optional Asset Node title. Defaults to the generated file name."
+              }
+            },
+            required: ["path"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["threadId", "contextId", "expectedRevision", "clientMutationId", "images"],
+      additionalProperties: false
+    },
+    outputSchema: generatedImagesOutputSchema
+  },
+  {
     name: "canvasight_widget_api",
     description: "Internal app-only proxy for Canvasight native widget session APIs. The widget uses this instead of fetching localhost directly.",
     inputSchema: {
@@ -8739,6 +8909,7 @@ async function callTool(name, args) {
   if (name === "get_canvasight_node_template") return toolGetCanvasightNodeTemplate(args || {});
   if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
+  if (name === "add_canvasight_generated_images") return toolAddCanvasightGeneratedImages(args || {});
   if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});

@@ -139,10 +139,15 @@ try {
     toolNames.includes("ask_canvasight_framework_questions"),
     "ask_canvasight_framework_questions is missing from tools/list"
   );
+  assert.ok(
+    toolNames.includes("add_canvasight_generated_images"),
+    "add_canvasight_generated_images is missing from tools/list"
+  );
   record("tools_list_ok", {
     toolCount: toolNames.length,
     requiredToolsPresent: true,
-    frameworkQuestionsToolPresent: true
+    frameworkQuestionsToolPresent: true,
+    generatedImagesToolPresent: true
   });
 
   const lifecycleRaw = await readFile(diagnostic.lifecycleLogPath, "utf8");

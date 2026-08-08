@@ -2533,6 +2533,214 @@ async function assertMultimodalGraphContracts(origin) {
   assert.deepEqual(replaced.structuredContent.document.pages.find((page) => page.id === replaced.structuredContent.document.activePageId).viewState.collapsedGroupIds, ["visual-group"], "AI replacement cannot modify human collapse state");
 }
 
+async function assertGeneratedImageImportContracts() {
+  const projectPath = path.join(tempRoot, "generated-image-project");
+  await fsp.mkdir(projectPath, { recursive: true });
+  const pngBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z7xkAAAAASUVORK5CYII=", "base64");
+  const firstSource = path.join(projectPath, "first.png");
+  const secondSource = path.join(projectPath, "second.png");
+  await Promise.all([fsp.writeFile(firstSource, pngBytes), fsp.writeFile(secondSource, pngBytes)]);
+
+  await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "replace-active-page",
+      pageName: "Generated image target",
+      nodes: [{ id: "seed", title: "Seed", body: "Existing content", x: 120, y: 40 }],
+      edges: []
+    }
+  });
+  const captured = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath, threadId: "thread-smoke" }
+  });
+  const concurrentWrite = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: captured.structuredContent.contextId,
+      expectedRevision: captured.structuredContent.documentRevision,
+      clientMutationId: "generated-image-concurrent-node",
+      operations: [{ op: "add-node", node: { id: "concurrent-node", title: "Concurrent", body: "Added while generation runs", x: 900, y: 40 } }]
+    }
+  });
+  assert.equal(concurrentWrite.structuredContent.status, "written");
+  await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      pageId: "later-active-page",
+      pageName: "Later active page",
+      nodes: [{ id: "later-node", title: "Later", body: "This Page must remain active." }],
+      edges: []
+    }
+  });
+
+  const argumentsValue = {
+    threadId: "thread-smoke",
+    projectPath,
+    contextId: captured.structuredContent.contextId,
+    expectedRevision: captured.structuredContent.documentRevision,
+    clientMutationId: "generated-image-batch",
+    images: [{ path: firstSource, title: "First generated image" }, { path: secondSource }]
+  };
+  const imported = await request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: argumentsValue
+  });
+  assert.equal(imported.structuredContent.images.length, 2);
+  assert.equal(imported.structuredContent.targetPage.id, captured.structuredContent.activePage.id, "Page switches must not retarget generated images");
+  assert.deepEqual(Object.keys(imported.structuredContent).sort(), ["documentRevision", "images", "targetPage"]);
+  assert.doesNotMatch(JSON.stringify(imported.structuredContent), /projectPath|storedPath|fileUrl|originalName|firstSource|secondSource/);
+  const document = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.equal(document.version, 2);
+  assert.equal(document.activePageId, "later-active-page", "the user's active Page must remain unchanged");
+  const targetPage = document.pages.find((page) => page.id === captured.structuredContent.activePage.id);
+  const generatedNodes = targetPage.nodes.filter((node) => node.type === "asset" && node.data.asset.source === "generated");
+  assert.equal(generatedNodes.length, 2);
+  assert.equal(generatedNodes[0].data.title, "First generated image");
+  assert.equal(generatedNodes[1].data.title, "second.png");
+  assert.equal(generatedNodes[0].position.x, generatedNodes[1].position.x);
+  assert.ok(generatedNodes[0].position.x > 1300, "generated images must be placed to the right of concurrent content");
+  assert.equal(generatedNodes[1].position.y - generatedNodes[0].position.y, 520);
+  for (const node of generatedNodes) {
+    assert.equal(await fsp.readFile(node.data.asset.storedPath).then((bytes) => bytes.equals(pngBytes)), true);
+    assert.match(node.data.asset.relativePath, /^\.scatter\/assets\//);
+  }
+  assert.equal(await fsp.stat(path.join(projectPath, ".scatter", "scatter.v1.backup.json")).then((stat) => stat.isFile()), true);
+  assert.equal(await fsp.stat(firstSource).then((stat) => stat.isFile()), true, "generated sources must be preserved");
+
+  const replay = await request("tools/call", { name: "add_canvasight_generated_images", arguments: argumentsValue });
+  assert.deepEqual(replay.structuredContent, imported.structuredContent);
+  const replayedDocument = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.equal(replayedDocument.pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").length, 2);
+
+  await assert.rejects(
+    request("tools/call", {
+      name: "add_canvasight_generated_images",
+      arguments: { ...argumentsValue, images: [{ path: firstSource, title: "Different payload" }] }
+    }),
+    /mutation id|different generated-image payload/i
+  );
+
+  const rejectedRevision = imported.structuredContent.documentRevision;
+  const rejectedAssetFiles = (await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort();
+  const outsideSource = path.join(tempRoot, "outside-generated.png");
+  const mismatchedSource = path.join(projectPath, "mismatched.png");
+  const svgSource = path.join(projectPath, "generated.svg");
+  const missingSource = path.join(projectPath, "missing.png");
+  const symlinkSource = path.join(projectPath, "generated-link.png");
+  const tooLargeSource = path.join(projectPath, "too-large.png");
+  const batchLimitSource = path.join(projectPath, "batch-limit.png");
+  await fsp.writeFile(outsideSource, pngBytes);
+  await fsp.writeFile(mismatchedSource, "not a png", "utf8");
+  await fsp.writeFile(svgSource, "<svg/>", "utf8");
+  await fsp.symlink(firstSource, symlinkSource);
+  await fsp.writeFile(tooLargeSource, Buffer.concat([pngBytes.subarray(0, 8), Buffer.alloc(10 * 1024 * 1024)]));
+  const batchLimitHandle = await fsp.open(batchLimitSource, "w");
+  try {
+    await batchLimitHandle.truncate(10 * 1024 * 1024);
+    await batchLimitHandle.write(pngBytes.subarray(0, 8), 0, 8, 0);
+  } finally {
+    await batchLimitHandle.close();
+  }
+  const rejectionCases = [
+    { label: "outside", path: outsideSource },
+    { label: "signature", path: mismatchedSource },
+    { label: "svg", path: svgSource },
+    { label: "missing", path: missingSource },
+    { label: "symlink", path: symlinkSource },
+    { label: "large", path: tooLargeSource }
+  ];
+  for (const testCase of rejectionCases) {
+    await assert.rejects(request("tools/call", {
+      name: "add_canvasight_generated_images",
+      arguments: {
+        ...argumentsValue,
+        clientMutationId: `generated-image-rejected-${testCase.label}`,
+        images: [{ path: testCase.path }]
+      }
+    }));
+  }
+  await assert.rejects(request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: {
+      ...argumentsValue,
+      clientMutationId: "generated-image-bad-revision",
+      expectedRevision: captured.structuredContent.documentRevision + 1,
+      images: [{ path: firstSource }]
+    }
+  }), /expectedRevision|context revision/i);
+  await assert.rejects(request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: {
+      ...argumentsValue,
+      clientMutationId: "generated-image-expired-context",
+      contextId: "missing-context",
+      images: [{ path: firstSource }]
+    }
+  }), /context expired|prior daemon/i);
+  await assert.rejects(request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: {
+      ...argumentsValue,
+      clientMutationId: "generated-image-too-many",
+      images: Array.from({ length: 17 }, () => ({ path: firstSource }))
+    }
+  }));
+  await assert.rejects(request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: {
+      ...argumentsValue,
+      clientMutationId: "generated-image-batch-too-large",
+      images: Array.from({ length: 11 }, () => ({ path: batchLimitSource }))
+    }
+  }), /batch exceeds/i);
+  const afterRejectedContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath, threadId: "thread-smoke" }
+  });
+  assert.equal(afterRejectedContext.structuredContent.documentRevision, rejectedRevision);
+  assert.deepEqual((await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort(), rejectedAssetFiles);
+
+  const recoveryProjectPath = path.join(tempRoot, "generated-image-recovery-project");
+  await fsp.mkdir(recoveryProjectPath, { recursive: true });
+  const recoverySource = path.join(recoveryProjectPath, "recovery.png");
+  await fsp.writeFile(recoverySource, pngBytes);
+  const recoveryContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath: recoveryProjectPath, threadId: "thread-smoke" }
+  });
+  await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath: recoveryProjectPath,
+      mode: "replace-document",
+      activePageId: "replacement-page",
+      pages: [{ id: "replacement-page", name: "Replacement", nodes: [{ id: "replacement-node", title: "Replacement", body: "Current content" }], edges: [] }]
+    }
+  });
+  const recovered = await request("tools/call", {
+    name: "add_canvasight_generated_images",
+    arguments: {
+      threadId: "thread-smoke",
+      projectPath: recoveryProjectPath,
+      contextId: recoveryContext.structuredContent.contextId,
+      expectedRevision: recoveryContext.structuredContent.documentRevision,
+      clientMutationId: "generated-image-recovery",
+      images: [{ path: recoverySource }]
+    }
+  });
+  const recoveredDocument = JSON.parse(await fsp.readFile(path.join(recoveryProjectPath, ".scatter", "scatter.json"), "utf8"));
+  assert.equal(recoveredDocument.activePageId, "replacement-page");
+  const recoveryPage = recoveredDocument.pages.find((page) => page.id === recovered.structuredContent.targetPage.id);
+  assert.equal(recoveryPage.conflict.copyKind, "recovery");
+  assert.equal(recoveryPage.nodes.some((node) => node.data?.asset?.source === "generated"), true);
+  return { argumentsValue, expectedOutput: imported.structuredContent };
+}
+
 function softwareProductMergeManifest(nodeId, overrides = {}) {
   const coverageKeys = [
     "product.goal", "product.users", "product.value", "product.capabilities", "product.scope", "product.journey",
@@ -3572,10 +3780,16 @@ async function main() {
     assert.equal(toolNames.has("get_canvasight_node_template"), true);
     assert.equal(toolNames.has("get_canvasight_graph_context"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
+    assert.equal(toolNames.has("add_canvasight_generated_images"), true);
     assert.equal(toolNames.has("await_canvasight_widget_ready"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
     assert.equal(toolNames.has("ask_canvasight_framework_questions"), true);
+    const generatedImagesTool = listed.tools.find((tool) => tool.name === "add_canvasight_generated_images");
+    assert.deepEqual(generatedImagesTool.inputSchema.required, ["threadId", "contextId", "expectedRevision", "clientMutationId", "images"]);
+    assert.equal(generatedImagesTool.inputSchema.properties.images.maxItems, 16);
+    assert.deepEqual(generatedImagesTool.outputSchema.required, ["targetPage", "documentRevision", "images"]);
+    assert.equal(generatedImagesTool.outputSchema.additionalProperties, false);
     const frameworkQuestionsTool = listed.tools.find((tool) => tool.name === "ask_canvasight_framework_questions");
     assert.equal(frameworkQuestionsTool._meta.ui.resourceUri, "ui://widget/canvasight/framework-questions.html");
     assert.deepEqual(frameworkQuestionsTool._meta.ui.visibility, ["model", "app"]);
@@ -4643,6 +4857,7 @@ async function main() {
     await assertSkillAssignmentAndContentModeContracts(origin);
     await assertGraphContextMergeAndValidationContracts();
     await assertMultimodalGraphContracts(origin);
+    const generatedImageReplayFixture = await assertGeneratedImageImportContracts();
     await assertUniversalHorizontalAndBlueprintTopologyContracts();
     await assertSoftwareProductMergeGuidanceContracts();
 
@@ -6208,6 +6423,27 @@ async function main() {
     } finally {
       mcpOldWaiter.stop();
       mcpC.stop();
+    }
+
+    await stopDaemon();
+    const mcpAfterDaemonRestart = createMcpClient("generated-image-replay-after-daemon-restart", {
+      CANVASIGHT_CODEX_NATIVE: "0",
+      CODEX_THREAD_ID: "thread-smoke"
+    });
+    try {
+      await mcpAfterDaemonRestart.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "canvasight-generated-image-replay", version: "0.0.0" }
+      });
+      mcpAfterDaemonRestart.notify("notifications/initialized", {});
+      const replayAfterRestart = await mcpAfterDaemonRestart.request("tools/call", {
+        name: "add_canvasight_generated_images",
+        arguments: generatedImageReplayFixture.argumentsValue
+      });
+      assert.deepEqual(replayAfterRestart.structuredContent, generatedImageReplayFixture.expectedOutput);
+    } finally {
+      mcpAfterDaemonRestart.stop();
     }
 
     clearTimeout(killTimer);

@@ -562,7 +562,7 @@ function normalizeLocalAttachment(value: unknown): Attachment | null {
   return {
     id: typeof attachment.id === "string" && attachment.id ? attachment.id : createTemplateId(),
     kind: attachment.kind === "image" ? "image" : "file",
-    source: attachment.source === "drop" || attachment.source === "paste" || attachment.source === "clipboard" ? attachment.source : "upload",
+    source: attachment.source === "drop" || attachment.source === "paste" || attachment.source === "clipboard" || attachment.source === "generated" ? attachment.source : "upload",
     originalName: typeof attachment.originalName === "string" && attachment.originalName ? attachment.originalName : "attachment",
     storedPath: typeof attachment.storedPath === "string" ? attachment.storedPath : "",
     relativePath: typeof attachment.relativePath === "string" ? attachment.relativePath : "",

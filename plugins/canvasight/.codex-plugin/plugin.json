@@ -1,7 +1,7 @@
 {
   "name": "canvasight",
-  "version": "0.5.6",
-  "description": "A local canvas workspace that turns tasks, managed assets, and semantic groups into structured Codex prompts.",
+  "version": "0.5.7",
+  "description": "A local canvas workspace for structured Codex prompts and generated image assets.",
   "author": {
     "name": "Niall Young"
   },
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Canvasight",
     "shortDescription": "Build prompt flows on a local canvas",
-    "longDescription": "Canvasight opens a native Codex widget canvas for arranging task nodes, attachments, and flows, then sends generated Markdown to the current Codex thread through the widget host bridge. Browser fallback pages are diagnostic and keep Runs queued for await_canvasight_run.",
+    "longDescription": "Canvasight opens a native Codex widget canvas for arranging task nodes, managed assets, and flows. @Canvasight image requests can use Codex imagegen and add final images directly to the active Page as Asset Nodes. Runs return through the current Codex task's widget host bridge; browser fallback pages remain diagnostic.",
     "developerName": "Niall Young",
     "category": "Productivity",
     "capabilities": [
