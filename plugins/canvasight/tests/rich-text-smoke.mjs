@@ -219,6 +219,11 @@ assert.match(taskNodeSource, /clipboardData && \[\.\.\.event\.clipboardData\.fil
 assert.match(taskNodeSource, /target\.closest\("pre"\).*event\.stopPropagation\(\)/);
 assert.match(taskNodeSource, /event\.key === " ".*insertUnmarkedSpaceAfterInlineCode\(editor\)/);
 assert.match(taskNodeSource, /bodyEditorRef\.current = bodyEditor/);
+assert.match(
+  taskNodeSource,
+  /Placeholder\.configure\(\{\s*placeholder:\s*t\("task\.bodyPlaceholder"\),\s*showOnlyWhenEditable:\s*false\s*\}\)/s,
+  "empty Task placeholders must remain available while the editor is read-only"
+);
 
 const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
   .filter((name) => name.endsWith(".css"))
@@ -235,6 +240,11 @@ assert.match(
   appCssSource,
   /:root\[data-theme="dark"\] \.task-body-content code\s*\{[^}]*border-color:\s*var\(--color-border-divider\);/s,
   "dark inline code must reveal the neutral divider border"
+);
+assert.match(
+  appCssSource,
+  /\.task-body-content\.ProseMirror-focused p\.is-editor-empty:first-child::before\s*\{[^}]*content:\s*none;/s,
+  "the empty Task placeholder must disappear while the body editor is focused"
 );
 assert.match(
   appCssSource,

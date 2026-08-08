@@ -276,7 +276,10 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
         LegacyTaskMarkerListItem,
         OrderedList,
         Paragraph,
-        Placeholder.configure({ placeholder: t("task.bodyPlaceholder") }),
+        Placeholder.configure({
+          placeholder: t("task.bodyPlaceholder"),
+          showOnlyWhenEditable: false
+        }),
         Strike,
         Text,
         UndoRedo,

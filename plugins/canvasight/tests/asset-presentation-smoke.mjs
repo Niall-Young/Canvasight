@@ -106,6 +106,11 @@ assert.match(appCssSource, /\.react-flow \.react-flow__nodes\s*\{[^}]*z-index:\s
 assert.match(appCssSource, /\.react-flow \.react-flow__edges > svg\s*\{[^}]*z-index:\s*1 !important;/s, "XYFlow edge SVGs must stay between Groups and content nodes");
 assert.match(appCssSource, /\.react-flow__node-group\s*\{[^}]*z-index:\s*0 !important;/s, "Groups must stay below Edges");
 assert.match(appCssSource, /\.react-flow__node-task,\s*\.react-flow__node-asset\s*\{\s*z-index:\s*2 !important;/s, "Task and Asset nodes must stay above Edges");
+assert.match(
+  appCssSource,
+  /\.react-flow__handle\.node-handle\s*\{[^}]*z-index:\s*4;/s,
+  "connection Handles must paint above Asset media, selection overlays, and node controls"
+);
 assert.match(scatterEdgeSource, /function nodeEdgeX\([^)]*\)[^{]*\{\s*return capSide\(position\) === "left" \? x \+ 10 : x - 10;\s*\}/s, "persistent Edge endpoints must move inward by half the 20px Handle width");
 assert.doesNotMatch(scatterEdgeSource, /return capSide\(position\) === "left" \? x - 10 : x \+ 10;/, "persistent Edge endpoints must not be pushed outside the node");
 assert.match(scatterEdgeSource, /getBezierPath\(\{\s*sourceX:\s*sourceEdgeX,[\s\S]*?targetX:\s*targetEdgeX,/s, "persistent Edge paths must use the node-boundary coordinates");
