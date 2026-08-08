@@ -296,7 +296,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const {
     canRedo,
     canUndo,
+    beginHistoryTransaction,
     commitCanvasChange,
+    commitHistoryTransaction,
     createPage,
     deleteActivePage,
     edges,
@@ -2273,46 +2275,54 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [commitCanvasChange, replaceCanvasLive, selectedNodeId, setSelectedNodeId]
   );
 
+  const handleNodeDragStart = useCallback(() => {
+    beginHistoryTransaction();
+  }, [beginHistoryTransaction]);
+
   const handleNodeDragStop = useCallback((_event: MouseEvent | TouchEvent, dragged: Node) => {
-    const current = useScatterStore.getState();
-    const node = current.nodes.find((item) => item.id === dragged.id);
-    if (!node || node.type === "group") return;
-    const absolute = absoluteNodePosition(node, current.nodes);
-    const bounds = nodeBounds(node);
-    const center = { x: absolute.x + bounds.width / 2, y: absolute.y + bounds.height / 2 };
-    const currentGroup = node.parentId ? current.nodes.find((item): item is ScatterGroupNode => item.id === node.parentId && item.type === "group") : undefined;
-    if (currentGroup) {
-      const groupBounds = nodeBounds(currentGroup);
-      const inside = center.x >= currentGroup.position.x - 12 && center.x <= currentGroup.position.x + groupBounds.width + 12 && center.y >= currentGroup.position.y + groupHeaderHeight - 12 && center.y <= currentGroup.position.y + groupBounds.height + 12;
-      if (!inside) {
-        commitCanvasChange({ nodes: current.nodes.map((item) => item.id === node.id ? { ...node, parentId: undefined, position: absolute } : item) });
-      } else {
-        const width = Math.max(currentGroup.width ?? groupMinWidth, node.position.x + bounds.width + groupPadding);
-        const height = Math.max(currentGroup.height ?? groupMinHeight, node.position.y + bounds.height + groupPadding);
-        if (width !== currentGroup.width || height !== currentGroup.height) {
-          commitCanvasChange({ nodes: current.nodes.map((item) => item.id === currentGroup.id ? { ...currentGroup, width, height } : item) });
+    try {
+      const current = useScatterStore.getState();
+      const node = current.nodes.find((item) => item.id === dragged.id);
+      if (!node || node.type === "group") return;
+      const absolute = absoluteNodePosition(node, current.nodes);
+      const bounds = nodeBounds(node);
+      const center = { x: absolute.x + bounds.width / 2, y: absolute.y + bounds.height / 2 };
+      const currentGroup = node.parentId ? current.nodes.find((item): item is ScatterGroupNode => item.id === node.parentId && item.type === "group") : undefined;
+      if (currentGroup) {
+        const groupBounds = nodeBounds(currentGroup);
+        const inside = center.x >= currentGroup.position.x - 12 && center.x <= currentGroup.position.x + groupBounds.width + 12 && center.y >= currentGroup.position.y + groupHeaderHeight - 12 && center.y <= currentGroup.position.y + groupBounds.height + 12;
+        if (!inside) {
+          commitCanvasChange({ nodes: current.nodes.map((item) => item.id === node.id ? { ...node, parentId: undefined, position: absolute } : item) });
+        } else {
+          const width = Math.max(currentGroup.width ?? groupMinWidth, node.position.x + bounds.width + groupPadding);
+          const height = Math.max(currentGroup.height ?? groupMinHeight, node.position.y + bounds.height + groupPadding);
+          if (width !== currentGroup.width || height !== currentGroup.height) {
+            commitCanvasChange({ nodes: current.nodes.map((item) => item.id === currentGroup.id ? { ...currentGroup, width, height } : item) });
+          }
         }
+        return;
       }
-      return;
+      const target = [...current.nodes].reverse().find((item): item is ScatterGroupNode => {
+        if (item.type !== "group" || collapsedGroupIds.includes(item.id)) return false;
+        const groupBounds = nodeBounds(item);
+        return center.x >= item.position.x && center.x <= item.position.x + groupBounds.width && center.y >= item.position.y + groupHeaderHeight && center.y <= item.position.y + groupBounds.height;
+      });
+      if (!target) return;
+      const position = {
+        x: Math.max(groupPadding, absolute.x - target.position.x),
+        y: Math.max(groupHeaderHeight + groupPadding, absolute.y - target.position.y)
+      };
+      const width = Math.max(target.width ?? groupMinWidth, position.x + bounds.width + groupPadding);
+      const height = Math.max(target.height ?? groupMinHeight, position.y + bounds.height + groupPadding);
+      commitCanvasChange({ nodes: current.nodes.map((item) => {
+        if (item.id === node.id) return { ...node, parentId: target.id, position };
+        if (item.id === target.id) return { ...target, width, height };
+        return item;
+      }) });
+    } finally {
+      commitHistoryTransaction();
     }
-    const target = [...current.nodes].reverse().find((item): item is ScatterGroupNode => {
-      if (item.type !== "group" || collapsedGroupIds.includes(item.id)) return false;
-      const groupBounds = nodeBounds(item);
-      return center.x >= item.position.x && center.x <= item.position.x + groupBounds.width && center.y >= item.position.y + groupHeaderHeight && center.y <= item.position.y + groupBounds.height;
-    });
-    if (!target) return;
-    const position = {
-      x: Math.max(groupPadding, absolute.x - target.position.x),
-      y: Math.max(groupHeaderHeight + groupPadding, absolute.y - target.position.y)
-    };
-    const width = Math.max(target.width ?? groupMinWidth, position.x + bounds.width + groupPadding);
-    const height = Math.max(target.height ?? groupMinHeight, position.y + bounds.height + groupPadding);
-    commitCanvasChange({ nodes: current.nodes.map((item) => {
-      if (item.id === node.id) return { ...node, parentId: target.id, position };
-      if (item.id === target.id) return { ...target, width, height };
-      return item;
-    }) });
-  }, [collapsedGroupIds, commitCanvasChange]);
+  }, [collapsedGroupIds, commitCanvasChange, commitHistoryTransaction]);
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
@@ -2845,6 +2855,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 onMoveEnd={handleMoveEnd}
                 onMoveStart={handleMoveStart}
                 onNodeClick={(_event, node) => selectNode(node.id, selectedRunMode)}
+                onNodeDragStart={handleNodeDragStart}
                 onNodeMouseEnter={handleNodeMouseEnter}
                 onNodeMouseLeave={handleNodeMouseLeave}
                 onNodeDragStop={handleNodeDragStop}
