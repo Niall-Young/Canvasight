@@ -30,6 +30,7 @@ const fileIconByMime: Array<[test: (mime: string) => boolean, icon: string]> = [
 ];
 
 const videoExtensions = new Set(["mp4", "m4v", "mov", "webm", "ogv", "avi", "mkv"]);
+const imageExtensions = new Set(["apng", "avif", "gif", "jpeg", "jpg", "png", "svg", "webp"]);
 
 export function assetExtension(name: string): string {
   const extension = name.includes(".") ? name.split(".").pop()?.trim().toLowerCase() : "";
@@ -38,6 +39,14 @@ export function assetExtension(name: string): string {
 
 export function isVideoAsset(name: string, mime: string): boolean {
   return mime.toLowerCase().startsWith("video/") || videoExtensions.has(assetExtension(name));
+}
+
+export function isMediaAssetFile(name: string, mime: string): boolean {
+  const extension = assetExtension(name);
+  if (extension) return imageExtensions.has(extension) || videoExtensions.has(extension);
+  const normalizedMime = mime.toLowerCase().split(";", 1)[0].trim();
+  return normalizedMime.startsWith("image/") && normalizedMime !== "image/svg+xml"
+    || normalizedMime.startsWith("video/");
 }
 
 export function fileIconName(name: string, mime: string): string {

@@ -1,8 +1,25 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { RunMode, ScatterNodeData } from "../../shared/types";
 import type { SkillSummary } from "../lib/canvasightApi";
+import type { FlowPosition } from "../domain/canvasGraph";
+import type { ConnectedNodeKind, ConnectedNodeSide } from "../domain/connectedNodeCreation";
 
-export type ConnectedNodeSide = "left" | "right";
+export type { ConnectedNodeKind, ConnectedNodeSide } from "../domain/connectedNodeCreation";
+
+export interface ConnectedNodeMenuAnchor {
+  clientX: number;
+  clientY: number;
+  focusTarget?: HTMLButtonElement;
+}
+
+export interface ConnectedNodeMenuRequest {
+  id: string;
+  nodeId: string;
+  side: ConnectedNodeSide;
+  anchor: ConnectedNodeMenuAnchor;
+  dropPosition?: FlowPosition;
+  projectPath: string;
+}
 
 export interface CanvasActions {
   updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => void;
@@ -11,7 +28,8 @@ export interface CanvasActions {
   removeAttachment: (nodeId: string, attachmentId: string) => void;
   promoteAttachment: (nodeId: string, attachmentId: string) => void;
   replaceAsset: (nodeId: string) => void;
-  createConnectedNode: (nodeId: string, side: ConnectedNodeSide) => void;
+  activeConnectedNodeMenu: { nodeId: string; side: ConnectedNodeSide } | null;
+  requestConnectedNodeMenu: (nodeId: string, side: ConnectedNodeSide, anchor: ConnectedNodeMenuAnchor) => void;
   duplicateNode: (nodeId: string) => void;
   saveNodeAsTemplate: (nodeId: string, data: ScatterNodeData) => Promise<void>;
   deleteNode: (nodeId: string) => void;

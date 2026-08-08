@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScatterEdge, ScatterGroupNode, ScatterTaskNode } from "../../shared/types";
-import { assetPositionNextToTask, connectionFromStart, findConnectionDropPosition, flowEdges, isConnectionAllowed, storeEdges } from "./canvasGraph";
+import { assetNodeHeight, assetNodeWidth, assetPositionNextToTask, connectionFromStart, findConnectionDropPosition, findOpenPositionToLeft, flowEdges, isConnectionAllowed, storeEdges } from "./canvasGraph";
 
 const task = (id: string, x = 0): ScatterTaskNode => ({
   id,
@@ -37,6 +37,26 @@ describe("canvas graph rules", () => {
     expect(position.x).toBeGreaterThanOrEqual(416);
   });
 
+  it("uses Asset dimensions for left and dropped connected-node placement", () => {
+    const source = task("source", 600);
+    const left = findOpenPositionToLeft(
+      { x: source.position.x - assetNodeWidth - 180, y: source.position.y },
+      [source],
+      { width: assetNodeWidth, height: assetNodeHeight }
+    );
+    expect(left.x + assetNodeWidth).toBeLessThan(source.position.x);
+
+    const dropped = findConnectionDropPosition(
+      { x: 700, y: 180 },
+      "target",
+      source,
+      [source],
+      { width: assetNodeWidth, height: assetNodeHeight }
+    );
+    expect(dropped.x + assetNodeWidth).toBeLessThanOrEqual(source.position.x - 16);
+    expect(dropped.y).toBe(0);
+  });
+
   it("places a Task-targeted Asset beside the Task and keeps it inside Group padding", () => {
     const parent = { ...group("group"), position: { x: 100, y: 100 }, width: 1200, height: 700 };
     const groupedTask = { ...task("task", 32), position: { x: 32, y: 72 }, parentId: parent.id };
@@ -57,7 +77,7 @@ describe("canvas graph rules", () => {
       { id: "outgoing", source: insideB.id, target: outsideRight.id }
     ];
 
-    const rendered = flowEdges(edges, [parent, outsideLeft, insideA, insideB, outsideRight], [parent.id], null, null, null);
+    const rendered = flowEdges(edges, [parent, outsideLeft, insideA, insideB, outsideRight], [parent.id], null, null, null, null);
 
     expect(rendered).toHaveLength(2);
     expect(rendered).toEqual(expect.arrayContaining([
@@ -84,6 +104,7 @@ describe("canvas graph rules", () => {
       edges,
       [sourceGroup, targetGroup, sourceA, sourceB, targetA, targetB],
       [sourceGroup.id, targetGroup.id],
+      null,
       null,
       null,
       null

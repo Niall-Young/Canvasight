@@ -17,7 +17,7 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 ### 主要功能
 
-- 创建、拖拽、删除和连接任务节点与资产节点；每个节点可以是无上游的根节点，但作为子节点连接后只能有一个父节点，同时仍可连接多个下游。图片（包括 SVG）和视频直接成为 Asset 的可见内容，选中时显示聚焦边框；视频画面点击只选中节点，底部保留浏览器原生的播放/暂停、进度、时间、音量和全屏控制。其他文件在单层白底中显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标。Asset 通过连线参与 Task/Group Run，作为文件证据但不单独运行。
+- 创建、拖拽、删除和连接任务节点与资产节点；点击任一节点左右侧的加号，或把连接拖到画布空白处，可从菜单选择任务节点、文件节点或媒体节点，文件与媒体都在单选文件成功后才创建。拖到已有节点仍直接连线。每个节点可以是无上游的根节点，但作为子节点连接后只能有一个父节点，同时仍可连接多个下游。图片（包括 SVG）和视频直接成为 Asset 的可见内容，选中时显示聚焦边框；视频画面点击只选中节点，底部保留浏览器原生的播放/暂停、进度、时间、音量和全屏控制。其他文件在单层白底中显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标。Asset 通过连线参与 Task/Group Run，作为文件证据但不单独运行。
 - 用单层语义 Group 收纳 Task/Asset 节点，支持 `⌘/Ctrl+G` 分组、`⌘/Ctrl+Shift+G` 解除；对整个 Group 解除会释放成员并让容器立即消失，对单个成员解除则保留 Group。还支持整体移动、右侧一键适应内容、折叠摘要和仅组内 Run。
 - 在节点内使用无工具栏富文本编辑：Markdown 快捷语法会直接呈现为紧凑的富文本，同时正文仍以 Markdown 保存，兼容模板、预览、导出和 Run。
 - 使用多个 Page 隔离同一项目中的不同画布工作区。
@@ -283,6 +283,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:node-creation
 npm run test:task-attachments
 npm run test:single-parent
 npm run test:svg-asset
@@ -298,7 +299,7 @@ npm run release:prepare -- 0.5.5
 npm run release:verify -- 0.5.5
 ```
 
-`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:unit` 验证抽离后的领域规则，`npm run test:architecture` 检查模块依赖和组合入口不会重新膨胀，`npm run test:core` 运行核心行为矩阵，`npm run verify` 依次检查 bundle、类型和核心行为。完整的模块职责和新增代码放置规则见[架构说明](docs/architecture.md)。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:task-attachments` 验证 Task 新增附件入口保持移除、文件 drop/paste 创建 Asset，并保留历史附件兼容；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:unit` 验证抽离后的领域规则，`npm run test:architecture` 检查模块依赖和组合入口不会重新膨胀，`npm run test:core` 运行核心行为矩阵，`npm run verify` 依次检查 bundle、类型和核心行为。完整的模块职责和新增代码放置规则见[架构说明](docs/architecture.md)。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:node-creation` 验证左右加号与拖空白共用任务/文件/媒体创建菜单、单文件限制和提交前连接复核；`npm run test:task-attachments` 验证 Task 新增附件入口保持移除、文件 drop/paste 创建 Asset，并保留历史附件兼容；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
 
 `npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
 
@@ -416,7 +417,7 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 
 ### Main Features
 
-- Create, drag, delete, and connect task and asset nodes. A node may be a root with no incoming Edge; once connected as a child it has exactly one parent, while it may still branch to multiple downstream nodes. Images, including SVG, and videos become the visible Asset content directly and show a focus border when selected; clicking a video picture only selects the node, while the browser's native play/pause, progress, time, volume, and fullscreen controls remain available at the bottom. Other files show the matching SVG format icon, filename, and format/size on one white surface, with unmatched formats using the unknown-file icon. Assets contribute file evidence to Task/Group Run through their connections without running on their own.
+- Create, drag, delete, and connect task and asset nodes. Clicking either side plus on any node, or dropping a dragged connection on blank canvas, opens a menu for a Task, file, or media node; file and media choices create only after one file is selected successfully. Dropping on an existing node still connects directly. A node may be a root with no incoming Edge; once connected as a child it has exactly one parent, while it may still branch to multiple downstream nodes. Images, including SVG, and videos become the visible Asset content directly and show a focus border when selected; clicking a video picture only selects the node, while the browser's native play/pause, progress, time, volume, and fullscreen controls remain available at the bottom. Other files show the matching SVG format icon, filename, and format/size on one white surface, with unmatched formats using the unknown-file icon. Assets contribute file evidence to Task/Group Run through their connections without running on their own.
 - Organize Task/Asset nodes in single-level semantic Groups with `Cmd/Ctrl+G` and ungroup with `Cmd/Ctrl+Shift+G`. Ungrouping a whole Group releases its members and immediately removes the container, while ungrouping an individual member keeps the Group. Groups can also move together, fit their contents from the right-side header action, collapse to a summary, and Run only their own contents.
 - Edit node bodies as toolbarless rich text: Markdown shortcuts render directly as compact formatted content while the body remains stored as Markdown for templates, preview, export, and Run.
 - Use multiple Pages as isolated canvas workspaces within one project.
@@ -680,6 +681,7 @@ npm run test:markdown
 npm run test:rich-text
 npm run test:markdown-export
 npm run test:asset-presentation
+npm run test:node-creation
 npm run test:task-attachments
 npm run test:single-parent
 npm run test:svg-asset
@@ -695,7 +697,7 @@ npm run release:prepare -- 0.5.5
 npm run release:verify -- 0.5.5
 ```
 
-`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:unit` verifies extracted domain rules, `npm run test:architecture` checks module dependencies and composition-root growth, `npm run test:core` runs the core behavior matrix, and `npm run verify` checks the bundle, types, and core behavior in order. See the [architecture guide](docs/architecture.md) for module responsibilities and placement rules for new code. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:task-attachments` verifies that new Task attachment entries stay removed, file drop/paste creates Assets, and legacy attachments remain compatible; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:unit` verifies extracted domain rules, `npm run test:architecture` checks module dependencies and composition-root growth, `npm run test:core` runs the core behavior matrix, and `npm run verify` checks the bundle, types, and core behavior in order. See the [architecture guide](docs/architecture.md) for module responsibilities and placement rules for new code. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:node-creation` verifies the shared Task/file/media menu for side pluses and blank-canvas drops, the single-file limit, and connection revalidation before commit; `npm run test:task-attachments` verifies that new Task attachment entries stay removed, file drop/paste creates Assets, and legacy attachments remain compatible; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
 
 `npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
 

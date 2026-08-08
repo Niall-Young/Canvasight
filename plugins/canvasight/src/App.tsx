@@ -62,9 +62,7 @@ import {
   assetPositionNextToTask,
   connectionPreviewEdgeId,
   connectionFromStart,
-  findConnectionDropPosition,
   findOpenPositionNear,
-  findOpenPositionToLeft,
   findOpenPositionToRight,
   flowEdges,
   groupHeaderHeight,
@@ -85,7 +83,9 @@ import {
   type FlowPosition
 } from "./domain/canvasGraph";
 import { assetNodeFromAttachment, emptyNode, nodeFromTemplate } from "./domain/canvasNodes";
+import { buildConnectedNodeCandidate } from "./domain/connectedNodeCreation";
 import { clipboardImageFiles, filesToInputs } from "./infrastructure/fileInputs";
+import { openConnectedNodeFilePicker } from "./application/connectedNodeFilePicker";
 import {
   canvasightApi,
   getCanvasightBindingKey,
@@ -104,6 +104,7 @@ import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
 import { shortcuts } from "./lib/shortcuts";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { ConnectedNodeMenu } from "./components/ConnectedNodeMenu";
 import { CanvasightErrorBoundary } from "./components/CanvasightErrorBoundary";
 import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
 import { RightDrawer } from "./components/RightDrawer";
@@ -119,10 +120,16 @@ import { IconButton } from "./components/ui/icon-button";
 import { TooltipAnchor } from "./components/ui/tooltip";
 import { Toast, ToastViewport, type ToastTone } from "./components/ui/toast";
 import { useScatterStore } from "./store/scatterStore";
-import { CanvasActionsProvider, type CanvasActions } from "./application/CanvasActionsContext";
+import {
+  CanvasActionsProvider,
+  type CanvasActions,
+  type ConnectedNodeKind,
+  type ConnectedNodeMenuAnchor,
+  type ConnectedNodeMenuRequest,
+  type ConnectedNodeSide
+} from "./application/CanvasActionsContext";
 import "@xyflow/react/dist/style.css";
 import "./styles/app.css";
-
 const nodeTypes = { task: TaskNode, asset: AssetNode, group: GroupNode } as NodeTypes;
 const edgeTypes = { scatter: ScatterFlowEdge } satisfies EdgeTypes;
 const defaultEdgeOptions = { type: "scatter" };
@@ -145,9 +152,7 @@ const zoomOptions = [
   { label: "150%", value: 1.5 },
   { label: "200%", value: 2 }
 ];
-
 type CanvasTool = "select" | "pan";
-
 function isThreadStoreModePreflightFailure(message: string): boolean {
   return (
     /Canvasight Run blocked before sendMessage/i.test(message) &&
@@ -337,6 +342,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [connectionPreview, setConnectionPreview] = useState<ConnectionHoverTarget | null>(null);
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("select");
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [spacePanActive, setSpacePanActive] = useState(false);
   const [viewportZoom, setViewportZoom] = useState(1);
   const [selectedRunMode, setSelectedRunMode] = useState<RunMode>("flow");
@@ -345,6 +351,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const [pageNameDraft, setPageNameDraft] = useState("");
   const [deletePageRequest, setDeletePageRequest] = useState<{ id: string; name: string } | null>(null);
   const [deleteTemplateRequest, setDeleteTemplateRequest] = useState<{ id: string; title: string } | null>(null);
+  const [connectedNodeMenuRequest, setConnectedNodeMenuRequest] = useState<ConnectedNodeMenuRequest | null>(null);
   const [templates, setTemplates] = useState<NodeTemplate[]>([]);
   const [templateSearch, setTemplateSearch] = useState("");
   const [templateLimitRequest, setTemplateLimitRequest] = useState<NodeTemplateInput | null>(null);
@@ -466,8 +473,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
   const renderedNodes = useMemo(() => orderedFlowNodes(nodes, collapsedGroupIds), [collapsedGroupIds, nodes]);
   const renderedEdges = useMemo(
-    () => flowEdges(edges, nodes, collapsedGroupIds, selectedNodeId, hoveredNodeId, connectionPreview),
-    [collapsedGroupIds, connectionPreview, edges, hoveredNodeId, nodes, selectedNodeId]
+    () => flowEdges(edges, nodes, collapsedGroupIds, selectedNodeId, hoveredNodeId, selectedEdgeId, connectionPreview),
+    [collapsedGroupIds, connectionPreview, edges, hoveredNodeId, nodes, selectedEdgeId, selectedNodeId]
   );
   const hideRunFeedback = useCallback(() => {
     if (runFeedbackTimerRef.current) {
@@ -1631,43 +1638,49 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     setStatus("Node created.");
   }, [commitCanvasChange, getVisibleCanvasCenterPosition, nodes, project, selectedNode, setSelectedNodeId, setStatus]);
 
-  const createConnectedNode = useCallback(
-    (nodeId: string, side: "left" | "right") => {
-      if (!project) return;
-      const source = nodes.find((node) => node.id === nodeId);
-      if (!source) return;
-      clearConnectionHoverTarget();
-      const sourceBounds = nodeBounds(source);
-      const position =
-        side === "right"
-          ? findOpenPositionToRight(
-              {
-                x: source.position.x + sourceBounds.width + taskNodeHorizontalGap,
-                y: source.position.y
-              },
-              nodes
-            )
-          : findOpenPositionToLeft(
-              {
-                x: source.position.x - taskNodeWidth - taskNodeHorizontalGap,
-                y: source.position.y
-              },
-              nodes
-            );
-      const node = emptyNode(position, nodes.length);
-      const edge =
-        side === "right"
-          ? { id: nanoid(), source: source.id, target: node.id }
-          : { id: nanoid(), source: node.id, target: source.id };
-      if (!isConnectionAllowed(edge, edges, nodes)) return;
-      commitCanvasChange({
-        nodes: [...nodes.map((item) => ({ ...item, selected: false })), node],
-        edges: [...edges, edge]
-      });
-      setSelectedNodeId(node.id);
-    },
-    [clearConnectionHoverTarget, commitCanvasChange, edges, nodes, project, setSelectedNodeId]
-  );
+  const requestConnectedNodeMenu = useCallback((nodeId: string, side: ConnectedNodeSide, anchor: ConnectedNodeMenuAnchor) => {
+    if (!project || !nodes.some((node) => node.id === nodeId && node.type !== "group")) return;
+    clearConnectionHoverTarget();
+    setConnectedNodeMenuRequest({ id: nanoid(), nodeId, side, anchor, projectPath: project.path });
+  }, [clearConnectionHoverTarget, nodes, project]);
+
+  const commitConnectedNode = useCallback((request: ConnectedNodeMenuRequest, kind: ConnectedNodeKind, attachment?: Awaited<ReturnType<typeof canvasightApi.saveAttachments>>[number]) => {
+    const current = useScatterStore.getState();
+    if (!current.project || current.project.path !== request.projectPath) {
+      setStatus(t("status.connectedNodeUnavailable"));
+      return false;
+    }
+    const candidate = buildConnectedNodeCandidate(request, kind, attachment, current.nodes, current.edges);
+    if (!candidate) {
+      setStatus(t("status.connectedNodeUnavailable"));
+      return false;
+    }
+
+    commitCanvasChange({
+      nodes: [...current.nodes.map((item) => ({ ...item, selected: false })), candidate.node],
+      edges: [...current.edges, candidate.edge]
+    });
+    setSelectedNodeId(candidate.node.id);
+    setStatus(kind === "task" ? t("status.taskNodeCreated") : t("status.assetNodeCreated"));
+    return true;
+  }, [commitCanvasChange, setSelectedNodeId, setStatus, t]);
+
+  const handleConnectedNodeKind = useCallback((kind: ConnectedNodeKind) => {
+    const request = connectedNodeMenuRequest;
+    if (!request) return;
+    setConnectedNodeMenuRequest(null);
+    if (kind === "task") {
+      commitConnectedNode(request, kind);
+      return;
+    }
+    openConnectedNodeFilePicker({
+      request,
+      kind,
+      messages: { addAssetFailed: t("status.addAssetFailed"), connectedNodeUnavailable: t("status.connectedNodeUnavailable"), documentFileRequired: t("status.documentFileRequired"), mediaFileRequired: t("status.mediaFileRequired") },
+      onAttachment: (attachment) => { commitConnectedNode(request, kind, attachment); },
+      onStatus: setStatus
+    });
+  }, [commitConnectedNode, connectedNodeMenuRequest, setStatus, t]);
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
@@ -2245,9 +2258,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const canvasActions = useMemo<CanvasActions>(() => ({
+      activeConnectedNodeMenu: connectedNodeMenuRequest
+        ? { nodeId: connectedNodeMenuRequest.nodeId, side: connectedNodeMenuRequest.side }
+        : null,
       beginNodeEdit: () => undefined,
       commitNodeEdit: () => undefined,
-      createConnectedNode,
       deleteNode,
       duplicateNode,
       listSkills: async (forceReload = false) => {
@@ -2257,6 +2272,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       },
       fitGroup,
       promoteAttachment,
+      requestConnectedNodeMenu,
       replaceAsset,
       removeAttachment,
       runNode,
@@ -2265,7 +2281,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       toggleGroup,
       ungroupNode,
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
-    }), [createConnectedNode, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
+    }), [connectedNodeMenuRequest, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, requestConnectedNodeMenu, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -2443,20 +2459,16 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       const sourceNode = nodes.find((node) => node.id === connectionStart.nodeId);
       if (!sourceNode) return;
 
-      const nodePosition = findConnectionDropPosition(flowPosition, connectionStart.handleType, sourceNode, nodes);
-      const newNode = emptyNode(nodePosition, nodes.length);
-      const newEdge =
-        connectionStart.handleType === "source"
-          ? { id: nanoid(), source: sourceNode.id, target: newNode.id }
-          : { id: nanoid(), source: newNode.id, target: sourceNode.id };
-
-      commitCanvasChange({
-        nodes: [...nodes.map((node) => ({ ...node, selected: false })), newNode],
-        edges: [...edges, newEdge]
+      setConnectedNodeMenuRequest({
+        id: nanoid(),
+        nodeId: sourceNode.id,
+        side: connectionStart.handleType === "source" ? "right" : "left",
+        anchor: { clientX: clientPosition.x, clientY: clientPosition.y },
+        dropPosition: flowPosition,
+        projectPath: project.path
       });
-      setSelectedNodeId(newNode.id);
     },
-    [clearConnectionHoverTarget, commitCanvasChange, commitExistingConnection, edges, nodes, project, setSelectedNodeId]
+    [clearConnectionHoverTarget, commitExistingConnection, nodes, project]
   );
 
   const handleNodeMouseEnter = useCallback(
@@ -2852,6 +2864,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 onConnect={onConnect}
                 onConnectEnd={handleConnectEnd}
                 onConnectStart={handleConnectStart}
+                onEdgeClick={(_event, edge) => setSelectedEdgeId(edge.id)}
                 onEdgesChange={onEdgesChange}
                 onInit={(instance) => {
                   flowInstanceRef.current = instance;
@@ -2865,7 +2878,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 onNodeMouseLeave={handleNodeMouseLeave}
                 onNodeDragStop={handleNodeDragStop}
                 onNodesChange={onNodesChange}
-                onPaneClick={() => selectNode(null)}
+                onPaneClick={() => { setSelectedEdgeId(null); selectNode(null); }}
               >
                 <Background gap={28} size={1} color="rgba(125, 125, 125, 0.22)" />
               </ReactFlow>
@@ -3081,6 +3094,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             if (deleteTemplateRequest) void deleteTemplate(deleteTemplateRequest.id);
           }}
         />
+        {connectedNodeMenuRequest ? (
+          <ConnectedNodeMenu
+            request={connectedNodeMenuRequest}
+            onClose={() => setConnectedNodeMenuRequest(null)}
+            onSelect={handleConnectedNodeKind}
+          />
+        ) : null}
         {runFeedback ? (
           <ToastViewport className="canvas-run-toast-viewport">
             <Toast tone={runFeedback.tone} message={runFeedback.message} onClose={hideRunFeedback} />

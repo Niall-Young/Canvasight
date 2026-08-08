@@ -844,6 +844,14 @@
   right: 0;
 }
 
+.asset-node.is-file > .react-flow__handle-left.node-handle {
+  left: -1px;
+}
+
+.asset-node.is-file > .react-flow__handle-right.node-handle {
+  right: -1px;
+}
+
 .react-flow__handle.group-summary-handle {
   pointer-events: none;
 }
@@ -949,6 +957,21 @@
 
 .node-action-menu {
   width: max-content;
+}
+
+.connected-node-menu-anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+.connected-node-menu {
+  min-width: 195px;
 }
 
 .dropdown-item {

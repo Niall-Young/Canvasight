@@ -20,7 +20,7 @@ import { Dropcursor, Gapcursor, UndoRedo } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Attachment, ScatterNodeData, ScatterTaskNodeData } from "../../shared/types";
-import { useCanvasActions, type ConnectedNodeSide } from "../application/CanvasActionsContext";
+import { useCanvasActions } from "../application/CanvasActionsContext";
 import { useI18n } from "../lib/i18n";
 import { getCanvasightAssetBaseUrl, loadCanvasightImageAsset, subscribeCanvasightRuntimeData } from "../lib/canvasightApi";
 import type { SkillSummary } from "../lib/canvasightApi";
@@ -38,6 +38,7 @@ import { filterSkills, findSkillQuery, type SkillQueryRange } from "../lib/skill
 import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { ActionMenuItem } from "./ui/action-menu-item";
+import { ConnectButton } from "./ConnectButton";
 import { IconButton } from "./ui/icon-button";
 import { Icon } from "./ui/icon";
 import { TooltipAnchor } from "./ui/tooltip";
@@ -102,7 +103,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
   const skillOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const pointerStartedSelectedRef = useRef(false);
   const bodyPointerPositionRef = useRef<{ left: number; top: number } | null>(null);
-  const suppressConnectButtonClickRef = useRef(false);
   const isComposingRef = useRef(false);
   const pendingFinishAfterCompositionRef = useRef(false);
   const bodyEditorRef = useRef<Editor | null>(null);
@@ -616,54 +616,6 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
     }
   }, [activeSkillIndex, bodyEditor, editingField, skillPickerId, skillQuery, visibleSkills]);
 
-  const handleConnectButtonMouseDown = useCallback(
-    (side: ConnectedNodeSide) => (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) return;
-      const startX = event.clientX;
-      const startY = event.clientY;
-      let dragged = false;
-
-      function removeListeners(): void {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      }
-
-      function handleMouseMove(moveEvent: MouseEvent): void {
-        const deltaX = moveEvent.clientX - startX;
-        const deltaY = moveEvent.clientY - startY;
-        if (deltaX * deltaX + deltaY * deltaY > 16) {
-          dragged = true;
-        }
-      }
-
-      function handleMouseUp(upEvent: MouseEvent): void {
-        removeListeners();
-        suppressConnectButtonClickRef.current = true;
-        if (dragged) return;
-        upEvent.preventDefault();
-        actions.createConnectedNode(id, side);
-      }
-
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    },
-    [id]
-  );
-
-  const handleConnectButtonClick = useCallback(
-    (side: ConnectedNodeSide) => (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (suppressConnectButtonClickRef.current) {
-        suppressConnectButtonClickRef.current = false;
-        event.preventDefault();
-        return;
-      }
-
-      actions.createConnectedNode(id, side);
-    },
-    [id]
-  );
-
   return (
     <div
       ref={rootRef}
@@ -681,15 +633,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       >
         {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
         {!hasParent ? (
-          <button
-            className="node-connect-button"
-            type="button"
-            aria-label={t("task.connectLeft")}
-            onMouseDown={handleConnectButtonMouseDown("left")}
-            onClick={handleConnectButtonClick("left")}
-          >
-            <Icon name="plus-lg" size={16} />
-          </button>
+          <ConnectButton nodeId={id} side="left" />
         ) : null}
       </Handle>
       <div className="task-node-header">
@@ -848,15 +792,7 @@ function TaskNodeComponent({ id, data, selected }: TaskNodeProps): ReactElement 
       </div>
       <Handle type="source" position={Position.Right} className="node-handle">
         {hasChild ? <span className="node-edge-cap" aria-hidden="true" /> : null}
-        <button
-          className="node-connect-button"
-          type="button"
-          aria-label={t("task.connectRight")}
-          onMouseDown={handleConnectButtonMouseDown("right")}
-          onClick={handleConnectButtonClick("right")}
-        >
-          <Icon name="plus-lg" size={16} />
-        </button>
+        <ConnectButton nodeId={id} side="right" />
       </Handle>
     </div>
   );

@@ -8,6 +8,7 @@ import ts from "typescript";
 const pluginRoot = path.resolve(import.meta.dirname, "..");
 const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.ts");
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
+const connectButtonPath = path.join(pluginRoot, "src", "components", "ConnectButton.tsx");
 const groupNodePath = path.join(pluginRoot, "src", "components", "GroupNode.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
@@ -18,7 +19,7 @@ const compiled = ts.transpileModule(fs.readFileSync(presentationPath, "utf8"), {
 }).outputText;
 const module = { exports: {} };
 vm.runInNewContext(compiled, { exports: module.exports, module, require() {} }, { filename: "assetPresentation.cjs" });
-const { fileIconName, isVideoAsset } = module.exports;
+const { fileIconName, isMediaAssetFile, isVideoAsset } = module.exports;
 
 const expectedMappings = [
   ["brief.pdf", "application/octet-stream", "file-format-pdf"],
@@ -44,6 +45,14 @@ assert.equal(fileIconName("notes", "text/markdown"), "file-format-md");
 assert.equal(fileIconName("dataset", "application/vnd.ms-excel"), "file-format-xls");
 assert.equal(isVideoAsset("clip.mov", "application/octet-stream"), true);
 assert.equal(isVideoAsset("notes.md", "text/markdown"), false);
+assert.equal(isMediaAssetFile("photo.png", "application/octet-stream"), true);
+assert.equal(isMediaAssetFile("vector.svg", "application/octet-stream"), true);
+assert.equal(isMediaAssetFile("clip.mkv", "application/octet-stream"), true);
+assert.equal(isMediaAssetFile("extensionless", "image/webp"), true);
+assert.equal(isMediaAssetFile("extensionless", "video/mp4"), true);
+assert.equal(isMediaAssetFile("notes.md", "image/png"), false, "a known non-media extension must win over a spoofed MIME");
+assert.equal(isMediaAssetFile("unsafe.bin", "image/svg+xml"), false, "SVG MIME must not make a non-SVG file media");
+assert.equal(isMediaAssetFile("sound.mp3", "audio/mpeg"), false, "audio is outside the media-node picker contract");
 
 const availableIcons = new Set();
 for (const iconPath of fs.readdirSync(path.join(pluginRoot, "src", "assets", "icons", "icon"))) {
@@ -57,6 +66,7 @@ for (const [, , icon] of expectedMappings) {
 }
 
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
+const connectButtonSource = fs.readFileSync(connectButtonPath, "utf8");
 const groupNodeSource = fs.readFileSync(groupNodePath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
@@ -102,7 +112,8 @@ assert.match(appSource, /function isKeyboardInteractiveTarget\([\s\S]*?closest\(
 assert.match(appSource, /function handleKeyDown\(event: KeyboardEvent\): void \{\s*if \(isEditableTarget\(event\.target\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keydown on native media controls must keep browser keyboard behavior");
 assert.match(appSource, /function handleKeyUp\(event: KeyboardEvent\): void \{\s*if \(!isSpaceKey\(event\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keyup on native media controls must not be prevented by canvas pan handling");
 assert.match(assetNodeSource, /onDoubleClick=\{openFile\}/, "media Assets must retain double-click file opening");
-assert.match(assetNodeSource, /className="node-connect-button"[\s\S]*?className="asset-node-menu"[\s\S]*?className="node-connect-button"/s, "video controls must not replace More or the left and right connection controls");
+assert.match(assetNodeSource, /<ConnectButton nodeId=\{id\} side="left" \/>[\s\S]*?className="asset-node-menu"[\s\S]*?<ConnectButton nodeId=\{id\} side="right" \/>/s, "video controls must not replace More or the left and right connection controls");
+assert.match(connectButtonSource, /className="node-connect-button"/, "the shared connection control must retain the geometry-critical button class");
 assert.match(appCssSource, /\.asset-video-stage\s*\{[^}]*position:\s*relative;[^}]*width:\s*100%;/s, "the video selection layer must anchor within the media geometry");
 assert.match(appCssSource, /\.asset-video-selection-layer\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*48px;[^}]*left:\s*0;[^}]*z-index:\s*1;[^}]*cursor:\s*pointer;/s, "the transparent selection layer must cover only the picture and leave native bottom controls unobstructed");
 assert.match(appCssSource, /\.asset-node-controls\s*\{[^}]*z-index:\s*3;/s, "More must remain above the video selection layer");
@@ -125,6 +136,8 @@ assert.match(
   /\.react-flow__handle\.node-handle\s*\{[^}]*z-index:\s*4;/s,
   "connection Handles must paint above Asset media, selection overlays, and node controls"
 );
+assert.match(appCssSource, /\.asset-node\.is-file > \.react-flow__handle-left\.node-handle\s*\{[^}]*left:\s*-1px;/s, "a file Asset's left Handle must compensate for its one-pixel visible border");
+assert.match(appCssSource, /\.asset-node\.is-file > \.react-flow__handle-right\.node-handle\s*\{[^}]*right:\s*-1px;/s, "a file Asset's right Handle must compensate for its one-pixel visible border");
 assert.match(scatterEdgeSource, /function nodeEdgeX\([^)]*\)[^{]*\{\s*return capSide\(position\) === "left" \? x \+ 10 : x - 10;\s*\}/s, "persistent Edge endpoints must move inward by half the 20px Handle width");
 assert.doesNotMatch(scatterEdgeSource, /return capSide\(position\) === "left" \? x - 10 : x \+ 10;/, "persistent Edge endpoints must not be pushed outside the node");
 assert.match(scatterEdgeSource, /getBezierPath\(\{\s*sourceX:\s*sourceEdgeX,[\s\S]*?targetX:\s*targetEdgeX,/s, "persistent Edge paths must use the node-boundary coordinates");

@@ -6,7 +6,7 @@ export const taskNodeHeight = 220;
 export const taskNodeHorizontalGap = 180;
 const taskNodeVerticalGap = 72;
 export const assetNodeWidth = 360;
-const assetNodeHeight = 360;
+export const assetNodeHeight = 360;
 export const groupHeaderHeight = 40;
 export const groupPadding = 32;
 export const groupMinWidth = 360;
@@ -15,6 +15,7 @@ export const aggregateEdgePrefix = "__canvasight-group-aggregate__";
 export const connectionPreviewEdgeId = "__canvasight-connection-preview__";
 
 export type FlowPosition = { x: number; y: number };
+export type NodePlacementSize = { width: number; height: number };
 export type ConnectionStart = { nodeId: string; handleType: "source" | "target" };
 export type ConnectionHoverTarget = { sourceId: string; targetId: string; hoveredNodeId: string };
 
@@ -38,46 +39,49 @@ export function nodeBounds(node: ScatterNode): { width: number; height: number }
   };
 }
 
-function positionOverlapsNode(position: FlowPosition, node: ScatterNode): boolean {
+const taskPlacementSize = { width: taskNodeWidth, height: taskNodeHeight } satisfies NodePlacementSize;
+
+function positionOverlapsNode(position: FlowPosition, node: ScatterNode, size: NodePlacementSize): boolean {
   const margin = 32;
   const bounds = nodeBounds(node);
   return position.x < node.position.x + bounds.width + margin
-    && position.x + taskNodeWidth > node.position.x - margin
+    && position.x + size.width > node.position.x - margin
     && position.y < node.position.y + bounds.height + margin
-    && position.y + taskNodeHeight > node.position.y - margin;
+    && position.y + size.height > node.position.y - margin;
 }
 
-function positionIntersectsNode(position: FlowPosition, node: ScatterNode): boolean {
+function positionIntersectsNode(position: FlowPosition, node: ScatterNode, size: NodePlacementSize): boolean {
   const bounds = nodeBounds(node);
   return position.x < node.position.x + bounds.width
-    && position.x + taskNodeWidth > node.position.x
+    && position.x + size.width > node.position.x
     && position.y < node.position.y + bounds.height
-    && position.y + taskNodeHeight > node.position.y;
+    && position.y + size.height > node.position.y;
 }
 
-function isOpenPosition(position: FlowPosition, nodes: ScatterNode[]): boolean {
-  return nodes.every((node) => !positionOverlapsNode(position, node));
+function isOpenPosition(position: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize): boolean {
+  return nodes.every((node) => !positionOverlapsNode(position, node, size));
 }
 
 export function findConnectionDropPosition(
   dropPosition: FlowPosition,
   handleType: ConnectionStart["handleType"],
   sourceNode: ScatterNode,
-  nodes: ScatterNode[]
+  nodes: ScatterNode[],
+  size: NodePlacementSize = taskPlacementSize
 ): FlowPosition {
   const sourceBounds = nodeBounds(sourceNode);
   const directionalGap = 16;
   const base = roundPosition({
-    x: handleType === "source" ? dropPosition.x : dropPosition.x - taskNodeWidth,
-    y: dropPosition.y - taskNodeHeight / 2
+    x: handleType === "source" ? dropPosition.x : dropPosition.x - size.width,
+    y: dropPosition.y - size.height / 2
   });
-  const directionAdjusted = positionIntersectsNode(base, sourceNode)
+  const directionAdjusted = positionIntersectsNode(base, sourceNode, size)
     ? roundPosition({
         ...base,
-        x: handleType === "source" ? sourceNode.position.x + sourceBounds.width + directionalGap : sourceNode.position.x - taskNodeWidth - directionalGap
+        x: handleType === "source" ? sourceNode.position.x + sourceBounds.width + directionalGap : sourceNode.position.x - size.width - directionalGap
       })
     : base;
-  const isOpen = (position: FlowPosition) => nodes.every((node) => !positionIntersectsNode(position, node));
+  const isOpen = (position: FlowPosition) => nodes.every((node) => !positionIntersectsNode(position, node, size));
   if (isOpen(directionAdjusted)) return directionAdjusted;
   const offsets = [0, 48, -48, 96, -96, 144, -144, 192, -192, 240, -240, 288, -288];
   for (const yOffset of offsets) {
@@ -93,40 +97,40 @@ export function findConnectionDropPosition(
   return directionAdjusted;
 }
 
-export function findOpenPositionNear(preferred: FlowPosition, nodes: ScatterNode[]): FlowPosition {
+export function findOpenPositionNear(preferred: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize = taskPlacementSize): FlowPosition {
   const base = roundPosition(preferred);
-  if (isOpenPosition(base, nodes)) return base;
-  const stepX = taskNodeWidth + taskNodeHorizontalGap;
-  const stepY = taskNodeHeight + taskNodeVerticalGap;
+  if (isOpenPosition(base, nodes, size)) return base;
+  const stepX = size.width + taskNodeHorizontalGap;
+  const stepY = size.height + taskNodeVerticalGap;
   for (let ring = 1; ring <= 6; ring += 1) {
     for (let column = -ring; column <= ring; column += 1) {
       for (let row = -ring; row <= ring; row += 1) {
         if (Math.abs(column) !== ring && Math.abs(row) !== ring) continue;
         const candidate = roundPosition({ x: preferred.x + column * stepX, y: preferred.y + row * stepY });
-        if (isOpenPosition(candidate, nodes)) return candidate;
+        if (isOpenPosition(candidate, nodes, size)) return candidate;
       }
     }
   }
   return base;
 }
 
-function findOpenPositionInDirection(preferred: FlowPosition, nodes: ScatterNode[], direction: 1 | -1): FlowPosition {
+function findOpenPositionInDirection(preferred: FlowPosition, nodes: ScatterNode[], direction: 1 | -1, size: NodePlacementSize): FlowPosition {
   const base = roundPosition(preferred);
-  if (isOpenPosition(base, nodes)) return base;
-  const stepX = taskNodeWidth + taskNodeHorizontalGap;
-  const stepY = taskNodeHeight + taskNodeVerticalGap;
+  if (isOpenPosition(base, nodes, size)) return base;
+  const stepX = size.width + taskNodeHorizontalGap;
+  const stepY = size.height + taskNodeVerticalGap;
   const rowOffsets = [0, 1, -1, 2, -2, 3, -3, 4, -4];
   for (let column = 0; column <= 4; column += 1) {
     for (const row of rowOffsets) {
       const candidate = roundPosition({ x: preferred.x + direction * column * stepX, y: preferred.y + row * stepY });
-      if (isOpenPosition(candidate, nodes)) return candidate;
+      if (isOpenPosition(candidate, nodes, size)) return candidate;
     }
   }
   return base;
 }
 
-export const findOpenPositionToRight = (preferred: FlowPosition, nodes: ScatterNode[]) => findOpenPositionInDirection(preferred, nodes, 1);
-export const findOpenPositionToLeft = (preferred: FlowPosition, nodes: ScatterNode[]) => findOpenPositionInDirection(preferred, nodes, -1);
+export const findOpenPositionToRight = (preferred: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize = taskPlacementSize) => findOpenPositionInDirection(preferred, nodes, 1, size);
+export const findOpenPositionToLeft = (preferred: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize = taskPlacementSize) => findOpenPositionInDirection(preferred, nodes, -1, size);
 
 export function connectionFromStart(connectionStart: ConnectionStart, targetNodeId: string): Pick<ScatterEdge, "source" | "target"> | null {
   if (connectionStart.nodeId === targetNodeId) return null;
@@ -228,6 +232,7 @@ export function flowEdges(
   collapsedGroupIds: string[],
   selectedNodeId: string | null,
   hoveredNodeId: string | null,
+  selectedEdgeId: string | null,
   connectionPreview: ConnectionHoverTarget | null
 ): Edge[] {
   const activeNodeIds = new Set([selectedNodeId, hoveredNodeId, connectionPreview?.sourceId, connectionPreview?.targetId].filter(Boolean) as string[]);
@@ -253,6 +258,7 @@ export function flowEdges(
       target: bundle.target,
       type: "scatter",
       selectable: !synthetic,
+      selected: !synthetic && bundle.edges[0].id === selectedEdgeId,
       data: { active: activeNodeIds.has(bundle.source) || activeNodeIds.has(bundle.target), aggregate: synthetic, count: bundle.edges.length }
     } as Edge;
   });

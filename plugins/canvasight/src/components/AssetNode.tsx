@@ -9,6 +9,7 @@ import { formatBytes } from "../lib/utils";
 import { useScatterStore } from "../store/scatterStore";
 import { useCanvasActions } from "../application/CanvasActionsContext";
 import { ActionMenuItem } from "./ui/action-menu-item";
+import { ConnectButton } from "./ConnectButton";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
 
@@ -73,9 +74,7 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
       >
         {hasParent ? <span className="node-edge-cap" aria-hidden="true" /> : null}
         {!hasParent ? (
-          <button className="node-connect-button" type="button" aria-label={t("task.connectLeft")} onClick={() => actions.createConnectedNode(id, "left")}>
-            <Icon name="plus-lg" size={16} />
-          </button>
+          <ConnectButton nodeId={id} side="left" />
         ) : null}
       </Handle>
       <div className="asset-node-controls">
@@ -133,9 +132,7 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
         )}
       </div>
       <Handle type="source" position={Position.Right} className="node-handle">
-        <button className="node-connect-button" type="button" aria-label={t("task.connectRight")} onClick={() => actions.createConnectedNode(id, "right")}>
-          <Icon name="plus-lg" size={16} />
-        </button>
+        <ConnectButton nodeId={id} side="right" />
       </Handle>
     </article>
   );
