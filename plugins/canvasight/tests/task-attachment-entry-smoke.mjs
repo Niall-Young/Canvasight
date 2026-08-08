@@ -30,6 +30,7 @@ assert.match(appSource, /const files = clipboardImageFiles\(event\.clipboardData
 assert.match(taskNodeSource, /data\.attachments\.length[\s\S]*?data\.attachments\.map\(\(attachment\) =>[\s\S]*?<TaskAttachmentChip/s, "historical Task attachments must remain visible");
 assert.match(taskNodeSource, /const hasRunnableInput = hasBody \|\| data\.attachments\.length > 0;[\s\S]*?label=\{hasRunnableInput \? t\("task\.run"\) : t\("task\.runEmpty"\)\}[\s\S]*?disabled=\{!hasRunnableInput\}/s, "a historical attachment must keep an otherwise empty Task runnable");
 assert.match(taskNodeSource, /onPromote=\{\(\) => actions\.promoteAttachment\(nodeId, attachment\.id\)\}/, "historical attachments must remain promotable");
+assert.match(appSource, /edges:\s*\[\.\.\.edges,\s*\{ id: nanoid\(\), source: task\.id, target: asset\.id, label: language === "zh" \? "附件" : "Attachment" \}\]/, "promoted attachments must fan out from the Task so Task Run includes every Asset");
 assert.match(taskNodeSource, /actions\.removeAttachment\(nodeId, attachment\.id\)/, "historical attachments must remain removable");
 assert.match(appSource, /item\.type === "task" && \(item\.data\.body\.trim\(\)\.length > 0 \|\| item\.data\.attachments\.length > 0\)/, "historical attachments must remain runnable");
 assert.match(storeSource, /attachments:\s*attachments\.map\(\(attachment\) => \(\{ \.\.\.attachment \}\)\)/, "history cloning must preserve persisted Task attachments");

@@ -15,7 +15,7 @@ For a merge, pass the latest `expectedRevision` and minimal operations. Preserve
 - Express meaningful dependency, sequence, evidence, decision, navigation, or flow relationships as edges instead of hiding submodules in body prose. Group membership uses `parentId`; never duplicate it with a containment Edge. Allow shallow and uneven branches when the material warrants them; do not manufacture uniform depth.
 - Treat semantic order separately from dependency. Reading order, numbered sections, workflow stages, and ordered source material do not justify a full-chain topology. Connect consecutive nodes only when the later responsibility actually requires the earlier result; otherwise place them as sibling or parallel branches and record order in their content.
 - For every edge connecting two covered nodes, add its final edge ID to `frameworkManifest.semanticRelationships` with one type (`dependency`, `sequence`, `containment`, `evidence`, `decision`, `navigation`, or `flow`) and a concrete rationale for that exact source-target relationship.
-- No self-edge, duplicate `source -> target`, missing endpoint, or Edge connected to a Group. Multiple semantic inputs may target the same Task/Asset; single ownership applies only to Group `parentId`.
+- No self-edge, duplicate `source -> target`, missing endpoint, or Edge connected to a Group. Each Task/Asset target may have at most one incoming Edge and may fan out to multiple downstream nodes; Group `parentId` ownership is a separate invariant.
 - Removing a node may remove its incident edges; account for that in the final topology and coverage.
 - Treat visible `$skill-name` text as part of the node responsibility, not as hidden graph metadata. Keep a node-level Skill scoped to that node unless the user also chose it as a canvas-level content Skill.
 
@@ -43,7 +43,7 @@ Apply output-specific full-chain rules to the covered-node subgraph. `exploratio
 
 ## Templates
 
-Query `list_canvasight_node_templates` with a specific purpose. Fetch a full template only after a summary is relevant. Templates may supply title, body, and attachments, but never decide framework, mode, Page behavior, or Codex mode.
+Query `list_canvasight_node_templates` with a specific purpose. Fetch a full template only after a summary is relevant. Templates may supply title and Markdown body, but never decide framework, mode, Page behavior, or Codex mode. When a selected legacy template contains attachments, Canvasight copies each validated template file into the current project's managed assets and creates a separate downstream Asset Node; it never restores those files as inline Task attachments.
 
 ## Compatibility
 

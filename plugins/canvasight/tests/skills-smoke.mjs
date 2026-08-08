@@ -12,6 +12,9 @@ const pluginRoot = path.resolve(__dirname, "..");
 const skillsPath = path.join(pluginRoot, "src", "lib", "skills.ts");
 const placementPath = path.join(pluginRoot, "src", "lib", "skillPickerPlacement.ts");
 const graphWriterSkillPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "SKILL.md");
+const graphWriterNodeTypesPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "references", "node-types.md");
+const graphWriterMarkdownPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "references", "task-body-markdown.md");
+const graphWritingContractPath = path.join(pluginRoot, "skills", "canvasight-graph-writer", "references", "quality", "graph-writing.md");
 const updateSkillPath = path.join(pluginRoot, "skills", "canvasight-update", "SKILL.md");
 
 function loadTypescriptModule(sourcePath) {
@@ -28,6 +31,9 @@ function loadTypescriptModule(sourcePath) {
 const { filterSkills, findSkillQuery, insertSkillToken } = loadTypescriptModule(skillsPath);
 const { placeSkillPicker, toViewportCaretRect } = loadTypescriptModule(placementPath);
 const graphWriterSkill = fs.readFileSync(graphWriterSkillPath, "utf8");
+const graphWriterNodeTypes = fs.readFileSync(graphWriterNodeTypesPath, "utf8");
+const graphWriterMarkdown = fs.readFileSync(graphWriterMarkdownPath, "utf8");
+const graphWritingContract = fs.readFileSync(graphWritingContractPath, "utf8");
 const updateSkill = fs.readFileSync(updateSkillPath, "utf8");
 
 assert.match(updateSkill, /Run exactly that one bundled-updater command and no other shell command/);
@@ -54,6 +60,19 @@ assert.match(graphWriterSkill, /Re-run step 1 before writing/);
 assert.match(graphWriterSkill, /tool is unavailable.*ordinary text/s);
 assert.match(graphWriterSkill, /never open Canvasight, invoke another visualization surface, guess a consequential answer, or proceed with a write/);
 assert.match(graphWriterSkill, /Never write pending choices or `confirmationId` into `\.scatter`/);
+assert.match(graphWriterSkill, /Read \[task-body-markdown\.md\].*whenever the write creates or updates a Task body/);
+assert.match(graphWriterSkill, /Image, SVG, video, and ordinary-file presentation is inferred/);
+assert.match(graphWriterSkill, /exactly one incoming Edge.*fan out to multiple downstream nodes/);
+assert.match(graphWriterSkill, /`promote-attachment`.*context-bound `merge-active-page`/s);
+assert.match(graphWriterNodeTypes, /Image, managed SVG, video, and ordinary files all use this same node shape/);
+assert.match(graphWriterNodeTypes, /persisted `role` field remains readable only for legacy schema compatibility/);
+assert.match(graphWriterNodeTypes, /adds `Task -> Asset` atomically/);
+assert.match(graphWriterMarkdown, /Task `body` is always one Markdown string/);
+assert.match(graphWriterMarkdown, /Never persist HTML, editor JSON/);
+assert.match(graphWriterMarkdown, /Do not intentionally author tables.*raw HTML.*inline Markdown images/s);
+assert.match(graphWriterMarkdown, /Never represent new file content through Task `attachments`/);
+assert.match(graphWritingContract, /Each Task\/Asset target may have at most one incoming Edge and may fan out/);
+assert.match(graphWritingContract, /never restores those files as inline Task attachments/);
 
 const catalog = [
   { name: "write-product-promo-article", displayName: "产品推广文章", description: "撰写中文产品发布和教程文章", scope: "user" },

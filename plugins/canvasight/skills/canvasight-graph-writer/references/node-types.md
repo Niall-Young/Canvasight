@@ -16,6 +16,8 @@ Use these shapes only through `write_canvasight_graph`. Do not edit `.scatter/sc
 
 Task Nodes own executable, decidable, or verifiable responsibilities. Only Task Nodes participate in framework responsibility coverage and node-level `$Skill` assignment.
 
+Task `body` is persisted Markdown. Read [task-body-markdown.md](task-body-markdown.md) before creating or updating it. New inline `attachments` are forbidden; existing legacy attachments remain readable and can be removed or atomically promoted with `promote-attachment`.
+
 ## Asset Node
 
 ```json
@@ -24,7 +26,6 @@ Task Nodes own executable, decidable, or verifiable responsibilities. Only Task 
   "type": "asset",
   "title": "Homepage reference",
   "description": "Spacing and hierarchy reference.",
-  "role": "reference",
   "parentId": "visual-group",
   "asset": {
     "id": "existing-asset-id",
@@ -33,7 +34,24 @@ Task Nodes own executable, decidable, or verifiable responsibilities. Only Task 
 }
 ```
 
-An Asset Node references exactly one file already managed under the current project's `.scatter/assets` directory. Reuse the `id` and `relativePath` returned by `get_canvasight_graph_context`; the server resolves and validates the stored path. Never invent an absolute path or reference an external file. Allowed roles are `input`, `reference`, `option`, and `output`.
+An Asset Node references exactly one file already managed under the current project's `.scatter/assets` directory. Reuse the `id` and `relativePath` returned by `get_canvasight_graph_context`; the server resolves and validates the stored path. Never invent an absolute path, MIME, `kind`, or external file reference. Image, managed SVG, video, and ordinary files all use this same node shape; Canvasight infers their presentation from the validated file.
+
+Asset Nodes do not receive node-level Skills, satisfy Task responsibility coverage, or run independently. The persisted `role` field remains readable only for legacy schema compatibility. Do not author it as current intent; express evidence, dependency, output, or other meaning with the `Task -> Asset` Edge direction, its label, and surrounding context.
+
+To promote a legacy Task attachment, first read its lightweight handle from the Task's `legacyAttachments`, then use a modern context-bound merge:
+
+```json
+{
+  "op": "promote-attachment",
+  "nodeId": "visual-brief",
+  "attachmentId": "existing-attachment-id",
+  "assetNodeId": "visual-brief-reference",
+  "edgeId": "visual-brief-reference-edge",
+  "edgeLabel": "Attachment"
+}
+```
+
+Canvasight validates the existing managed file, removes only that inline reference, creates the Asset in the same Group, and adds `Task -> Asset` atomically. Reuse the same `clientMutationId` only when retrying this exact operation.
 
 ## Group Node
 

@@ -17439,7 +17439,7 @@ function edgeIncidentConflict(basePage, currentPage, localPage, reasons) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.5";
+var SERVER_VERSION = "0.5.6";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -17798,6 +17798,31 @@ function deprecatedGraphLayoutAdvisories(args) {
     code: "deprecated_graph_layout",
     path: path2,
     message: "Graph layout ".concat(value, " is deprecated for AI writes and was normalized to horizontal.")
+  }));
+}
+function deprecatedAssetRoleAdvisories(args) {
+  const entries = [];
+  const inspectNode = (node, nodePath) => {
+    if (!isObject2(node)) return;
+    if (Object.prototype.hasOwnProperty.call(node, "role")) entries.push("".concat(nodePath, ".role"));
+    if (isObject2(node.data) && Object.prototype.hasOwnProperty.call(node.data, "role")) entries.push("".concat(nodePath, ".data.role"));
+  };
+  if (Array.isArray(args?.nodes)) args.nodes.forEach((node, index) => inspectNode(node, "nodes[".concat(index, "]")));
+  if (Array.isArray(args?.pages)) {
+    args.pages.forEach((page, pageIndex) => {
+      if (Array.isArray(page?.nodes)) page.nodes.forEach((node, nodeIndex) => inspectNode(node, "pages[".concat(pageIndex, "].nodes[").concat(nodeIndex, "]")));
+    });
+  }
+  if (Array.isArray(args?.operations)) {
+    args.operations.forEach((operation, index) => {
+      if (operation?.op === "add-node") inspectNode(operation.node, "operations[".concat(index, "].node"));
+      if (operation?.op === "update-node" && isObject2(operation.changes)) inspectNode(operation.changes, "operations[".concat(index, "].changes"));
+    });
+  }
+  return [...new Set(entries)].map((pathValue) => ({
+    code: "deprecated_asset_role",
+    path: pathValue,
+    message: "Asset role is retained only for legacy schema compatibility; use Edge direction, labels, and surrounding context for relationship meaning."
   }));
 }
 function normalizeCodexMode() {
@@ -19700,7 +19725,113 @@ function findTemplateForGraphNode(value, data, templates, index) {
   const template = title ? templates.find((item) => normalizeTemplateQuery(item.title) === normalizeTemplateQuery(title)) : null;
   return { template: template || null, match: template ? "title" : "" };
 }
-function normalizeManagedGraphAsset(value, projectPath, fieldPath) {
+function graphRequestNodeInputs(args) {
+  const inputs = [];
+  if (Array.isArray(args?.nodes)) inputs.push(...args.nodes);
+  if (Array.isArray(args?.pages)) {
+    args.pages.forEach((page) => {
+      if (Array.isArray(page?.nodes)) inputs.push(...page.nodes);
+    });
+  }
+  if (Array.isArray(args?.operations)) {
+    args.operations.forEach((operation) => {
+      if (operation?.op === "add-node" && isObject2(operation.node)) inputs.push(operation.node);
+    });
+  }
+  return inputs;
+}
+async function prepareGraphTemplateAssets(args, templates, projectPath) {
+  const selectedTemplateIds = /* @__PURE__ */ new Set();
+  graphRequestNodeInputs(args).forEach((value, index) => {
+    const data = isObject2(value?.data) ? value.data : {};
+    const { template } = findTemplateForGraphNode(value, data, templates, index);
+    if (template?.attachments?.length) selectedTemplateIds.add(template.id);
+  });
+  if (selectedTemplateIds.size === 0) {
+    return { templates, pendingAssetPaths: /* @__PURE__ */ new Set(), entries: [] };
+  }
+  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsRoot = path.resolve(canvasightTemplateAssetsDir());
+  const pendingAssetPaths = /* @__PURE__ */ new Set();
+  const entries = [];
+  const preparedTemplates = [];
+  for (const template of templates) {
+    if (!selectedTemplateIds.has(template.id)) {
+      preparedTemplates.push(template);
+      continue;
+    }
+    const attachments = [];
+    for (const value of template.attachments) {
+      const attachment = normalizeAttachment(value);
+      const sourceCandidate = typeof value?.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : typeof value?.relativePath === "string" && value.relativePath.trim() ? path.resolve(canvasightHome(), value.relativePath.trim()) : "";
+      const sourcePath = path.resolve(sourceCandidate || ".");
+      if (!sourceCandidate || !isPathInside(sourcePath, templateAssetsRoot)) {
+        throw new HttpError(400, "Template attachment is not a Canvasight template asset: ".concat(attachment.originalName), "invalid_template_asset_path");
+      }
+      let stat;
+      try {
+        stat = await fsp.lstat(sourcePath);
+      } catch {
+        throw new HttpError(400, "Template attachment is unavailable: ".concat(attachment.originalName), "template_asset_unavailable");
+      }
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new HttpError(400, "Template attachment must be a regular file: ".concat(attachment.originalName), "invalid_template_asset_file");
+      }
+      const originalName = safeFileName(attachment.originalName);
+      const uniqueName = "".concat(Date.now(), "-").concat(crypto.randomBytes(4).toString("hex"), "-").concat(originalName);
+      const storedPath = path.join(assetsRoot, uniqueName);
+      const mime = normalizedAttachmentMime(originalName, attachment.mime);
+      const prepared = normalizeAttachment({
+        ...attachment,
+        id: crypto.randomUUID(),
+        originalName,
+        storedPath,
+        relativePath: toRelativeProjectPath(projectPath, storedPath),
+        fileUrl: assetUrlForPath(storedPath),
+        mime,
+        size: stat.size,
+        createdAt: nowIso()
+      });
+      attachments.push(prepared);
+      pendingAssetPaths.add(path.resolve(storedPath));
+      entries.push({ sourcePath, storedPath: path.resolve(storedPath) });
+    }
+    preparedTemplates.push({ ...template, attachments });
+  }
+  return { templates: preparedTemplates, pendingAssetPaths, entries };
+}
+async function commitPreparedGraphAssets(entries, referencedPaths) {
+  const selected = entries.filter((entry) => referencedPaths.has(path.resolve(entry.storedPath)));
+  const committedPaths = [];
+  try {
+    for (const entry of selected) {
+      const stat = await fsp.lstat(entry.sourcePath);
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new HttpError(400, "Template attachment must remain a regular file: ".concat(path.basename(entry.sourcePath)), "invalid_template_asset_file");
+      }
+      await fsp.mkdir(path.dirname(entry.storedPath), { recursive: true });
+      const temporaryPath = "".concat(entry.storedPath, ".").concat(process.pid, ".").concat(crypto.randomBytes(4).toString("hex"), ".tmp");
+      try {
+        await fsp.copyFile(entry.sourcePath, temporaryPath, fs.constants.COPYFILE_EXCL);
+        await fsp.rename(temporaryPath, entry.storedPath);
+      } catch (error51) {
+        await fsp.rm(temporaryPath, { force: true }).catch(() => void 0);
+        throw error51;
+      }
+      committedPaths.push(entry.storedPath);
+    }
+    return committedPaths;
+  } catch (error51) {
+    await Promise.all(committedPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+    throw error51;
+  }
+}
+function referencedPreparedAssetPaths(pages, pendingAssetPaths) {
+  return new Set(
+    pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").map((node) => path.resolve(node.data?.asset?.storedPath || ".")).filter((storedPath) => pendingAssetPaths.has(storedPath))
+  );
+}
+function normalizeManagedGraphAsset(value, projectPath, fieldPath, pendingAssetPaths = /* @__PURE__ */ new Set()) {
   if (!isObject2(value)) throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
   const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
   const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
@@ -19716,16 +19847,18 @@ function normalizeManagedGraphAsset(value, projectPath, fieldPath) {
     originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path.basename(storedPath),
     fileUrl: assetUrlForPath(storedPath)
   });
-  let stat;
-  try {
-    stat = fs.lstatSync(storedPath);
-  } catch {
-    throw new HttpError(400, "".concat(fieldPath, " must reference an available managed project asset"));
+  if (!pendingAssetPaths.has(storedPath)) {
+    let stat;
+    try {
+      stat = fs.lstatSync(storedPath);
+    } catch {
+      throw new HttpError(400, "".concat(fieldPath, " must reference an available managed project asset"));
+    }
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, "".concat(fieldPath, " must reference a regular managed project asset"));
   }
-  if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, "".concat(fieldPath, " must reference a regular managed project asset"));
   return asset;
 }
-function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, templates = [], reusedTemplates = []) {
+function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, templates = [], reusedTemplates = [], templateExpansions = [], pendingAssetPaths = /* @__PURE__ */ new Set()) {
   if (!isObject2(value)) throw new HttpError(400, "nodes[".concat(index, "] must be an object"));
   const explicitId = typeof value.id === "string" && value.id.trim() ? value.id.trim() : "";
   const id = explicitId || generatedGraphId("node", index, usedNodeIds);
@@ -19742,7 +19875,10 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, temp
   const height = optionalDimension(value.height);
   const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : typeof data.title === "string" && data.title.trim() ? data.title.trim() : template?.title || "";
   const body = typeof value.body === "string" && value.body.trim() ? value.body : typeof data.body === "string" && data.body.trim() ? data.body : template?.body || "";
-  const attachments = Array.isArray(value.attachments) ? value.attachments.map(normalizeAttachment) : Array.isArray(data.attachments) ? data.attachments.map(normalizeAttachment) : template ? template.attachments.map(normalizeAttachment) : [];
+  const requestedAttachments = Array.isArray(value.attachments) ? value.attachments : Array.isArray(data.attachments) ? data.attachments : [];
+  if (type === "task" && requestedAttachments.length > 0) {
+    throw new HttpError(400, "nodes[".concat(index, "].attachments cannot create inline Task attachments; create managed Asset nodes instead"), "task_inline_attachments_forbidden");
+  }
   if (template) {
     reusedTemplates.push({
       nodeId: id,
@@ -19779,9 +19915,16 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, temp
         title,
         description: typeof value.description === "string" ? value.description : typeof data.description === "string" ? data.description : "",
         role: normalizeAssetRole(value.role || data.role),
-        asset: normalizeManagedGraphAsset(assetInput, projectPath, "nodes[".concat(index, "].asset"))
+        asset: normalizeManagedGraphAsset(assetInput, projectPath, "nodes[".concat(index, "].asset"), pendingAssetPaths)
       }
     };
+  }
+  if (template?.attachments?.length) {
+    templateExpansions.push({
+      taskNodeId: id,
+      parentId: parentId || void 0,
+      attachments: template.attachments.map(normalizeAttachment)
+    });
   }
   return {
     ...base,
@@ -19794,11 +19937,56 @@ function normalizeGraphNode(value, index, layout, usedNodeIds, projectPath, temp
       } : {},
       title,
       body,
-      attachments,
+      attachments: [],
       effort: normalizeEffort(value.effort || data.effort),
       runMode: normalizeRunMode(value.runMode || data.runMode)
     }
   };
+}
+function derivedGraphId(prefix, sourceId, usedIds) {
+  const safeSource = String(sourceId || "item").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 56) || "item";
+  let id = "".concat(prefix, "-").concat(safeSource);
+  let suffix = 2;
+  while (usedIds.has(id)) id = "".concat(prefix, "-").concat(safeSource, "-").concat(suffix++);
+  usedIds.add(id);
+  return id;
+}
+function expandTemplateAssets(nodes, edges, templateExpansions, projectPath, pendingAssetPaths, language = "zh") {
+  if (!templateExpansions.length) return { nodes, edges, addedNodeIds: [], addedEdgeIds: [] };
+  const expandedNodes = [...nodes];
+  const expandedEdges = [...edges];
+  const usedNodeIds = new Set(nodes.map((node) => node.id));
+  const usedEdgeIds = new Set(edges.map((edge) => edge.id));
+  const addedNodeIds = [];
+  const addedEdgeIds = [];
+  for (const expansion of templateExpansions) {
+    expansion.attachments.forEach((attachment, index) => {
+      const assetNodeId = derivedGraphId("template-asset", "".concat(expansion.taskNodeId, "-").concat(index + 1), usedNodeIds);
+      const edgeId = derivedGraphId("template-asset-edge", "".concat(expansion.taskNodeId, "-").concat(index + 1), usedEdgeIds);
+      const asset = normalizeManagedGraphAsset(attachment, projectPath, "template attachment for ".concat(expansion.taskNodeId), pendingAssetPaths);
+      expandedNodes.push({
+        id: assetNodeId,
+        type: "asset",
+        position: { x: 0, y: 0 },
+        ...expansion.parentId ? { parentId: expansion.parentId } : {},
+        data: {
+          title: asset.originalName,
+          description: "",
+          role: "input",
+          asset
+        }
+      });
+      expandedEdges.push({
+        id: edgeId,
+        source: expansion.taskNodeId,
+        target: assetNodeId,
+        label: language === "en" ? "Attachment" : "附件"
+      });
+      addedNodeIds.push(assetNodeId);
+      addedEdgeIds.push(edgeId);
+    });
+  }
+  return { nodes: expandedNodes, edges: expandedEdges, addedNodeIds, addedEdgeIds };
 }
 function normalizeGraphEdge(value, index, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs) {
   if (!isObject2(value)) throw new HttpError(400, "edges[".concat(index, "] must be an object"));
@@ -19835,7 +20023,7 @@ function graphPageInputs(args) {
     }
   ];
 }
-function buildScatterPageFromGraph(value, index, args, projectPath, templates = [], reusedTemplates = [], projectGuidanceNodes = []) {
+function buildScatterPageFromGraph(value, index, args, projectPath, templates = [], reusedTemplates = [], projectGuidanceNodes = [], pendingAssetPaths = /* @__PURE__ */ new Set()) {
   const page = isObject2(value) ? value : {};
   const now = nowIso();
   const graphType = normalizeGraphType(args?.graphType);
@@ -19846,25 +20034,34 @@ function buildScatterPageFromGraph(value, index, args, projectPath, templates = 
   const guidanceNodes = softwareProductGuidanceNodes(projectPath, args, index, rawNodes);
   const rawNodeInputs = [...rawNodes, ...guidanceNodes];
   const usedNodeIds = /* @__PURE__ */ new Set();
-  const nodes = rawNodeInputs.map((node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, projectPath, templates, reusedTemplates));
+  const templateExpansions = [];
+  const baseNodes = rawNodeInputs.map(
+    (node, nodeIndex) => normalizeGraphNode(node, nodeIndex, layout, usedNodeIds, projectPath, templates, reusedTemplates, templateExpansions, pendingAssetPaths)
+  );
+  const rawEdges = Array.isArray(page.edges) ? page.edges : [];
+  const expanded = expandTemplateAssets(baseNodes, rawEdges, templateExpansions, projectPath, pendingAssetPaths, args?.language);
+  const nodes = expanded.nodes;
   const positionAxesByNodeId = new Map(
-    nodes.map((node, nodeIndex) => [
-      node.id,
-      layoutPolicy === "preserve-explicit" ? graphNodePositionAxes(rawNodeInputs[nodeIndex]) : { x: false, y: false }
-    ])
+    nodes.map((node, nodeIndex) => {
+      const rawInput = rawNodeInputs[nodeIndex];
+      return [
+        node.id,
+        layoutPolicy === "preserve-explicit" && rawInput ? graphNodePositionAxes(rawInput) : { x: false, y: false }
+      ];
+    })
   );
   const nodeIds = new Set(nodes.map((node) => node.id));
   const usedEdgeIds = /* @__PURE__ */ new Set();
   const usedTargetIds = /* @__PURE__ */ new Set();
   const usedConnectionPairs = /* @__PURE__ */ new Set();
-  const rawEdges = Array.isArray(page.edges) ? page.edges : [];
-  const autoEdgeIds = new Set(rawEdges.map((edge) => typeof edge?.id === "string" && edge.id.trim() ? edge.id.trim() : "").filter(Boolean));
+  const expandedRawEdges = expanded.edges;
+  const autoEdgeIds = new Set(expandedRawEdges.map((edge) => typeof edge?.id === "string" && edge.id.trim() ? edge.id.trim() : "").filter(Boolean));
   const autoGuidanceEdges = guidanceNodes.length && nodes.length > guidanceNodes.length ? guidanceNodes.map((node, guidanceIndex) => ({
     id: projectGuidanceEdgeId(guidanceIndex, autoEdgeIds),
     source: nodes[0].id,
     target: node.id
   })) : [];
-  const edges = [...rawEdges, ...autoGuidanceEdges].map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs));
+  const edges = [...expandedRawEdges, ...autoGuidanceEdges].map((edge, edgeIndex) => normalizeGraphEdge(edge, edgeIndex, nodeIds, usedEdgeIds, usedTargetIds, usedConnectionPairs));
   const layoutedNodes = applyGraphAutoLayout(nodes, edges, layout, positionAxesByNodeId);
   guidanceNodes.forEach((node) => {
     projectGuidanceNodes.push({
@@ -19959,6 +20156,15 @@ function mergeGraphNodeChanges(node, changes, projectPath) {
     runMode: _dataRunMode,
     ...safeDataChanges
   } = dataChanges;
+  const requestedTaskAttachments = attachments !== void 0 ? attachments : dataChanges.attachments;
+  if (node.type === "task" && requestedTaskAttachments !== void 0) {
+    if (!Array.isArray(requestedTaskAttachments)) {
+      throw new Error("Task attachments must be an array when explicitly cleared.");
+    }
+    if (requestedTaskAttachments.length > 0) {
+      throw new Error("Inline Task attachments cannot be created or replaced; use promote-attachment for legacy files or create managed Asset nodes.");
+    }
+  }
   const parentChanges = node.type === "group" || parentId === void 0 ? {} : typeof parentId === "string" && parentId.trim() ? { parentId: parentId.trim() } : { parentId: void 0 };
   const typeDataChanges = node.type === "asset" ? {
     ...typeof description === "string" ? { description } : {},
@@ -19966,7 +20172,7 @@ function mergeGraphNodeChanges(node, changes, projectPath) {
     ...asset !== void 0 ? { asset: normalizeManagedGraphAsset(asset, projectPath, "node ".concat(node.id, " asset")) } : {}
   } : node.type === "group" ? { ...typeof description === "string" ? { description } : {} } : {
     ...typeof body === "string" ? { body } : {},
-    ...Array.isArray(attachments) ? { attachments: attachments.map(normalizeAttachment) } : {},
+    ...Array.isArray(requestedTaskAttachments) ? { attachments: [] } : {},
     ...effort !== void 0 ? { effort: normalizeEffort(effort) } : {},
     ...runMode !== void 0 ? { runMode: normalizeRunMode(runMode) } : {}
   };
@@ -20021,7 +20227,7 @@ function nextMergedNodePosition(page, nodeId, addedNodeIds, explicitPositionIds,
   addedNodeIds.delete(nodeId);
   return candidate;
 }
-function applyMergeOperations(existingPage, args, projectPath, templates, reusedTemplates) {
+function applyMergeOperations(existingPage, args, projectPath, templates, reusedTemplates, pendingAssetPaths = /* @__PURE__ */ new Set()) {
   const page = cloneJson(existingPage);
   const operations = Array.isArray(args?.operations) ? args.operations : [];
   const violations = [];
@@ -20062,11 +20268,30 @@ function applyMergeOperations(existingPage, args, projectPath, templates, reused
           return;
         }
         const usedIds = new Set(page.nodes.map((node2) => node2.id));
-        const node = normalizeGraphNode(operation.node, page.nodes.length, normalizeGraphLayout(args?.layout), usedIds, projectPath, templates, reusedTemplates);
+        const templateExpansions = [];
+        const node = normalizeGraphNode(
+          operation.node,
+          page.nodes.length,
+          normalizeGraphLayout(args?.layout),
+          usedIds,
+          projectPath,
+          templates,
+          reusedTemplates,
+          templateExpansions,
+          pendingAssetPaths
+        );
         page.nodes.push(node);
         addedNodeIds.add(node.id);
         if (graphNodePositionAxes(operation.node).x && graphNodePositionAxes(operation.node).y) explicitPositionIds.add(node.id);
         summary.addedNodeIds.push(node.id);
+        if (templateExpansions.length) {
+          const expanded = expandTemplateAssets(page.nodes, page.edges, templateExpansions, projectPath, pendingAssetPaths, args?.language);
+          page.nodes = expanded.nodes;
+          page.edges = expanded.edges;
+          expanded.addedNodeIds.forEach((nodeId) => addedNodeIds.add(nodeId));
+          summary.addedNodeIds.push(...expanded.addedNodeIds);
+          summary.addedEdgeIds.push(...expanded.addedEdgeIds);
+        }
         return;
       }
       if (operation.op === "update-node") {
@@ -20088,6 +20313,64 @@ function applyMergeOperations(existingPage, args, projectPath, templates, reused
         }
         page.nodes[nodeIndex] = mergeGraphNodeChanges(page.nodes[nodeIndex], operation.changes, projectPath);
         summary.updatedNodeIds.push(page.nodes[nodeIndex].id);
+        return;
+      }
+      if (operation.op === "promote-attachment") {
+        if (typeof operation.nodeId !== "string" || nodeIndex < 0 || page.nodes[nodeIndex].type !== "task") {
+          violations.push(graphViolation("task_node_not_found", "".concat(opPath, ".nodeId"), "promote-attachment requires an existing Task node.", "Re-read graph context and use a Task node id."));
+          return;
+        }
+        const attachmentId = typeof operation.attachmentId === "string" ? operation.attachmentId.trim() : "";
+        const assetNodeId = typeof operation.assetNodeId === "string" ? operation.assetNodeId.trim() : "";
+        const promotedEdgeId = typeof operation.edgeId === "string" ? operation.edgeId.trim() : "";
+        if (!attachmentId || !assetNodeId || !promotedEdgeId) {
+          violations.push(graphViolation("promotion_ids_required", opPath, "promote-attachment requires attachmentId, assetNodeId, and edgeId.", "Provide stable unique ids from the current graph context."));
+          return;
+        }
+        if (page.nodes.some((node) => node.id === assetNodeId)) {
+          violations.push(graphViolation("duplicate_node_id", "".concat(opPath, ".assetNodeId"), "Duplicate node id: ".concat(assetNodeId), "Choose a unique Asset node id."));
+          return;
+        }
+        if (page.edges.some((edge) => edge.id === promotedEdgeId)) {
+          violations.push(graphViolation("duplicate_edge_id", "".concat(opPath, ".edgeId"), "Duplicate edge id: ".concat(promotedEdgeId), "Choose a unique Edge id."));
+          return;
+        }
+        const task = page.nodes[nodeIndex];
+        const attachment = task.data.attachments.find((item) => item.id === attachmentId);
+        if (!attachment) {
+          violations.push(graphViolation("legacy_attachment_not_found", "".concat(opPath, ".attachmentId"), "The legacy Task attachment does not exist.", "Re-read graph context and use a returned legacyAttachments id."));
+          return;
+        }
+        const asset = normalizeManagedGraphAsset(attachment, projectPath, "".concat(opPath, ".attachmentId"), pendingAssetPaths);
+        page.nodes[nodeIndex] = {
+          ...task,
+          data: {
+            ...task.data,
+            attachments: task.data.attachments.filter((item) => item.id !== attachmentId)
+          }
+        };
+        page.nodes.push({
+          id: assetNodeId,
+          type: "asset",
+          position: { x: toNumber(task.position?.x, 0), y: toNumber(task.position?.y, 0) },
+          ...task.parentId ? { parentId: task.parentId } : {},
+          data: {
+            title: asset.originalName,
+            description: "",
+            role: "input",
+            asset
+          }
+        });
+        page.edges.push({
+          id: promotedEdgeId,
+          source: task.id,
+          target: assetNodeId,
+          label: typeof operation.edgeLabel === "string" && operation.edgeLabel.trim() ? operation.edgeLabel.trim() : args?.language === "en" ? "Attachment" : "附件"
+        });
+        addedNodeIds.add(assetNodeId);
+        summary.updatedNodeIds.push(task.id);
+        summary.addedNodeIds.push(assetNodeId);
+        summary.addedEdgeIds.push(promotedEdgeId);
         return;
       }
       if (operation.op === "remove-node") {
@@ -20162,7 +20445,7 @@ function applyMergeOperations(existingPage, args, projectPath, templates, reused
         removedEdgeIds.push(removed.id);
         return;
       }
-      violations.push(graphViolation("unsupported_operation", "".concat(opPath, ".op"), "Unsupported operation: ".concat(operation.op), "Use add/update/remove node or edge operations."));
+      violations.push(graphViolation("unsupported_operation", "".concat(opPath, ".op"), "Unsupported operation: ".concat(operation.op), "Use add/update/remove node or edge operations, promote-attachment, or relayout-page."));
     } catch (error51) {
       violations.push(graphViolation("invalid_operation", opPath, error51?.message || "Invalid graph operation.", "Correct this operation using the latest graph context."));
     }
@@ -20192,7 +20475,7 @@ function mergeMutationSummaries(primary, secondary) {
     relayoutApplied: primary.relayoutApplied || secondary.relayoutApplied
   };
 }
-function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates, reusedTemplates) {
+function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates, reusedTemplates, pendingAssetPaths = /* @__PURE__ */ new Set()) {
   const guidanceNodes = softwareProductGuidanceNodes(projectPath, args, 0, page.nodes);
   if (guidanceNodes.length === 0) return { page, violations: [], summary: null, projectGuidanceNodes: [] };
   const usedEdgeIds = new Set(page.edges.map((edge) => edge.id));
@@ -20214,7 +20497,7 @@ function ensureMergedSoftwareProductGuidance(page, args, projectPath, templates,
   if (Array.isArray(args?.operations) && args.operations.some((operation) => operation?.op === "relayout-page")) {
     operations.push({ op: "relayout-page" });
   }
-  const merged = applyMergeOperations(page, { ...args, operations }, projectPath, templates, reusedTemplates);
+  const merged = applyMergeOperations(page, { ...args, operations }, projectPath, templates, reusedTemplates, pendingAssetPaths);
   return {
     ...merged,
     projectGuidanceNodes: guidanceNodes.map((node) => ({
@@ -20757,13 +21040,15 @@ async function writeScatterGraph(projectPath, args) {
     const currentRevision = revisionState.revision;
     const reusedTemplates = [];
     const projectGuidanceNodes = [];
-    const templates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
+    const availableTemplates = args?.reuseTemplates === false ? [] : await readNodeTemplates();
+    let preparedTemplateAssets = { templates: availableTemplates, pendingAssetPaths: /* @__PURE__ */ new Set(), entries: [] };
+    let templates = availableTemplates;
     const preferences = await readPreferences();
     const now = nowIso();
     let pages;
     let activePageId;
     let mutationSummary = null;
-    const validationAdvisories = deprecatedGraphLayoutAdvisories(args);
+    const validationAdvisories = [...deprecatedGraphLayoutAdvisories(args), ...deprecatedAssetRoleAdvisories(args)];
     let graphWriteStatus = "written";
     let targetPageId = null;
     let rebasedFromRevision = null;
@@ -20773,6 +21058,12 @@ async function writeScatterGraph(projectPath, args) {
     let graphClientMutationId = null;
     if (mode === "merge-active-page") {
       const hasContextContract = typeof args?.contextId === "string" && args.contextId.trim();
+      const promotesLegacyAttachment = Array.isArray(args?.operations) && args.operations.some((operation) => operation?.op === "promote-attachment");
+      if (promotesLegacyAttachment && !hasContextContract) {
+        return validationFailure(currentRevision, [
+          graphViolation("promotion_context_required", "contextId", "promote-attachment requires a context-bound merge-active-page write.", "Call get_canvasight_graph_context and pass its contextId, documentRevision, and a stable clientMutationId.")
+        ]);
+      }
       if (!hasContextContract && (typeof args?.expectedRevision !== "number" || !Number.isFinite(args.expectedRevision) || args.expectedRevision !== currentRevision)) {
         return validationFailure(currentRevision, [
           graphViolation("stale_document", "expectedRevision", "Canvasight document revision is missing or stale.", "Call get_canvasight_graph_context again and rebuild the patch against its documentRevision.")
@@ -20805,12 +21096,14 @@ async function writeScatterGraph(projectPath, args) {
           graphViolation("context_revision_mismatch", "expectedRevision", "expectedRevision does not match the bound graph context.", "Use the exact revision returned with this contextId.")
         ]);
       }
+      preparedTemplateAssets = await prepareGraphTemplateAssets(args, availableTemplates, projectPath);
+      templates = preparedTemplateAssets.templates;
       const basePage = hasContextContract ? context.page : activeScatterPage(existingDocument);
       targetPageId = basePage.id;
       rebasedFromRevision = hasContextContract ? context.documentRevision : null;
-      const merged = applyMergeOperations(basePage, args, projectPath, templates, reusedTemplates);
+      const merged = applyMergeOperations(basePage, args, projectPath, templates, reusedTemplates, preparedTemplateAssets.pendingAssetPaths);
       if (merged.violations.length > 0) return validationFailure(currentRevision, merged.violations);
-      const guided = ensureMergedSoftwareProductGuidance(merged.page, args, projectPath, templates, reusedTemplates);
+      const guided = ensureMergedSoftwareProductGuidance(merged.page, args, projectPath, templates, reusedTemplates, preparedTemplateAssets.pendingAssetPaths);
       if (guided.violations.length > 0) return validationFailure(currentRevision, guided.violations);
       projectGuidanceNodes.push(...guided.projectGuidanceNodes);
       const candidatePage = guided.page;
@@ -20851,6 +21144,16 @@ async function writeScatterGraph(projectPath, args) {
         conflictCopies = [{ sourcePageId: basePage.id, conflictPageId: copy.page.id, originalPageId: basePage.id, originalPageAvailable: false, copyKind: "recovery", source: "ai", reasons: ["page-deleted:".concat(basePage.id)], nodeIdMap: copy.nodeIdMap, edgeIdMap: copy.edgeIdMap }];
       } else if (hasContextContract && currentRevision !== context.documentRevision) {
         const rebased = mergeAiGraphCandidate({ basePage, currentPage, candidatePage, clientMutationId: graphClientMutationId });
+        if (promotesLegacyAttachment && rebased.reasons.length > 0) {
+          return validationFailure(currentRevision, [
+            graphViolation(
+              "promotion_concurrent_conflict",
+              "operations",
+              "Legacy attachment promotion conflicts with newer edits and was not written.",
+              "Call get_canvasight_graph_context again, confirm the attachment is still present, and retry with a new clientMutationId."
+            )
+          ]);
+        }
         pages = existingDocument.pages.map((page) => page.id === currentPage.id ? rebased.page : page);
         idMappings = { nodeIds: rebased.nodeIdMap, edgeIds: rebased.edgeIdMap };
         graphWriteStatus = rebased.reasons.length ? "conflict-copy" : "merged";
@@ -20883,8 +21186,10 @@ async function writeScatterGraph(projectPath, args) {
       activePageId = existingDocument.activePageId;
       mutationSummary = combinedSummary;
     } else {
+      preparedTemplateAssets = await prepareGraphTemplateAssets(args, availableTemplates, projectPath);
+      templates = preparedTemplateAssets.templates;
       const incomingPages = graphPageInputs(args).map(
-        (page, index) => buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes)
+        (page, index) => buildScatterPageFromGraph(page, index, args, projectPath, templates, reusedTemplates, projectGuidanceNodes, preparedTemplateAssets.pendingAssetPaths)
       );
       for (let index = 0; index < incomingPages.length; index += 1) {
         const generatedGuidanceNodeIds = new Set(projectGuidanceNodes.filter((node) => node.pageIndex === index).map((node) => node.nodeId));
@@ -20908,19 +21213,27 @@ async function writeScatterGraph(projectPath, args) {
     }
     const activePage = pages.find((page) => page.id === activePageId) || pages[0];
     const documentSchemaVersion = existingDocument.version === 2 || pages.some((page) => page.nodes.some((node) => node.type !== "task" || node.parentId)) ? 2 : 1;
-    const document2 = await writeScatterDocument(projectPath, {
-      version: documentSchemaVersion,
-      projectName: typeof args?.projectName === "string" && args.projectName.trim() ? args.projectName.trim() : existingDocument.projectName || projectNameFromPath(projectPath),
-      updatedAt: now,
-      activePageId: activePage.id,
-      pages: pages.map((page) => ({
-        ...page,
-        updatedAt: page.id === activePage.id ? now : page.updatedAt
-      })),
-      viewport: activePage.viewport,
-      nodes: activePage.nodes,
-      edges: activePage.edges
-    });
+    const referencedPendingAssets = referencedPreparedAssetPaths(pages, preparedTemplateAssets.pendingAssetPaths);
+    const committedGraphAssetPaths = await commitPreparedGraphAssets(preparedTemplateAssets.entries, referencedPendingAssets);
+    let document2;
+    try {
+      document2 = await writeScatterDocument(projectPath, {
+        version: documentSchemaVersion,
+        projectName: typeof args?.projectName === "string" && args.projectName.trim() ? args.projectName.trim() : existingDocument.projectName || projectNameFromPath(projectPath),
+        updatedAt: now,
+        activePageId: activePage.id,
+        pages: pages.map((page) => ({
+          ...page,
+          updatedAt: page.id === activePage.id ? now : page.updatedAt
+        })),
+        viewport: activePage.viewport,
+        nodes: activePage.nodes,
+        edges: activePage.edges
+      });
+    } catch (error51) {
+      await Promise.all(committedGraphAssetPaths.map((storedPath) => fsp.rm(storedPath, { force: true }).catch(() => void 0)));
+      throw error51;
+    }
     const documentRevision = currentRevision + 1;
     const documentVersion = documentFingerprint(document2);
     const resultSummary = {
@@ -20966,7 +21279,16 @@ async function openProject(projectPath) {
     documentVersion: revisionState.documentVersion
   };
 }
-function summarizeGraphContextNode(node) {
+function safeGraphContextAssetRelativePath(value, projectPath) {
+  const assetsRoot = path.resolve(scatterAssetsDir(projectPath));
+  const storedPath = typeof value?.storedPath === "string" && value.storedPath.trim() ? path.resolve(value.storedPath.trim()) : "";
+  if (storedPath && isPathInside(storedPath, assetsRoot)) return toRelativeProjectPath(projectPath, storedPath);
+  const relativePath = typeof value?.relativePath === "string" ? value.relativePath.trim() : "";
+  if (!relativePath || path.isAbsolute(relativePath)) return "";
+  const resolvedPath = path.resolve(projectPath, relativePath);
+  return isPathInside(resolvedPath, assetsRoot) ? toRelativeProjectPath(projectPath, resolvedPath) : "";
+}
+function summarizeGraphContextNode(node, projectPath) {
   const body = typeof node?.data?.body === "string" ? node.data.body : "";
   const summary = {
     id: node.id,
@@ -20994,7 +21316,7 @@ function summarizeGraphContextNode(node) {
         role: normalizeAssetRole(node.data?.role),
         kind: asset.kind,
         originalName: asset.originalName,
-        relativePath: asset.relativePath,
+        relativePath: safeGraphContextAssetRelativePath(asset, projectPath),
         mime: asset.mime,
         size: asset.size
       }
@@ -21002,7 +21324,18 @@ function summarizeGraphContextNode(node) {
   }
   return {
     ...summary,
-    bodyPreview: body.length > TEMPLATE_BODY_PREVIEW_CHARS ? "".concat(body.slice(0, TEMPLATE_BODY_PREVIEW_CHARS - 1), "…") : body
+    bodyPreview: body.length > TEMPLATE_BODY_PREVIEW_CHARS ? "".concat(body.slice(0, TEMPLATE_BODY_PREVIEW_CHARS - 1), "…") : body,
+    legacyAttachments: Array.isArray(node.data?.attachments) ? node.data.attachments.map((value) => {
+      const attachment = normalizeAttachment(value);
+      return {
+        id: attachment.id,
+        kind: attachment.kind,
+        originalName: attachment.originalName,
+        relativePath: safeGraphContextAssetRelativePath(attachment, projectPath),
+        mime: attachment.mime,
+        size: attachment.size
+      };
+    }) : []
   };
 }
 function graphContext(projectPath, document2, preferences = defaultPreferences(), revisionState = null) {
@@ -21012,7 +21345,7 @@ function graphContext(projectPath, document2, preferences = defaultPreferences()
     documentVersion: documentFingerprint(document2)
   };
   const context = rememberGraphContext(projectPath, document2, resolvedRevisionState);
-  const nodes = activePage.nodes.map(summarizeGraphContextNode);
+  const nodes = activePage.nodes.map((node) => summarizeGraphContextNode(node, projectPath));
   const groups = activePage.nodes.filter((node) => node.type === "group").map((group) => ({
     id: group.id,
     title: typeof group.data?.title === "string" ? group.data.title : "",
@@ -23941,6 +24274,7 @@ async function toolWriteCanvasightGraph(args) {
     {
       status: result.status,
       written: written === true,
+      replayed: result.replayed === true,
       projectPath,
       scatterPath: scatterPath(projectPath),
       mode: normalizeGraphWriteMode(args?.mode),
@@ -24500,7 +24834,7 @@ var tools = [
   },
   {
     name: "get_canvasight_graph_context",
-    description: "Read the active Canvasight page and current document revision before deciding whether to append, replace, or incrementally edit the graph. Use the returned ids and revision for merge-active-page operations.",
+    description: "Read the active Canvasight page and current document revision before deciding whether to append, replace, or incrementally edit the graph. Task summaries include lightweight legacyAttachments handles without absolute paths or file URLs; use those handles only with context-bound promote-attachment. Use the returned ids and revision for merge-active-page operations.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24519,7 +24853,7 @@ var tools = [
   },
   {
     name: "write_canvasight_graph",
-    description: "Write Pages, Task Nodes, managed Asset Nodes, single-level Groups, membership, and semantic Edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. Group membership uses parentId rather than Edges; Asset Nodes may only reuse project assets returned by Canvasight context. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Can reuse saved global Task Node templates through templateId or templateQuery.",
+    description: "Write Pages, Markdown Task Nodes, managed Asset Nodes, single-level Groups, membership, and semantic Edges into a project's .scatter/scatter.json so Codex or another AI can create an editable Canvasight graph. New inline Task attachments are forbidden. Image, SVG, video, and ordinary files share one Asset shape whose presentation is inferred from a server-validated managed file. Group membership uses parentId rather than Edges; legacy attachment promotion is a context-bound Task-to-Asset operation. Prefer this when Canvasight is active and a later user request is medium, complex, multi-step, architectural, product-planning, article-mapping, or otherwise benefits from decomposition before direct execution. Saved global Task templates may be reused through templateId or templateQuery; legacy template attachments are copied into project Assets instead of restored inline.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24591,18 +24925,21 @@ var tools = [
         },
         operations: {
           type: "array",
-          description: "Explicit incremental operations for merge-active-page: add/update/remove-node, add/update/remove-edge, and relayout-page.",
+          description: "Explicit incremental operations for merge-active-page: add/update/remove-node, add/update/remove-edge, context-bound promote-attachment, and relayout-page.",
           items: {
             type: "object",
             properties: {
               op: {
                 type: "string",
-                enum: ["add-node", "update-node", "remove-node", "add-edge", "update-edge", "remove-edge", "relayout-page"]
+                enum: ["add-node", "update-node", "remove-node", "add-edge", "update-edge", "remove-edge", "promote-attachment", "relayout-page"]
               },
               node: { type: "object", additionalProperties: true },
               nodeId: { type: "string" },
+              attachmentId: { type: "string" },
+              assetNodeId: { type: "string" },
               edge: { type: "object", additionalProperties: true },
               edgeId: { type: "string" },
+              edgeLabel: { type: "string" },
               changes: { type: "object", additionalProperties: true }
             },
             required: ["op"],
@@ -24697,7 +25034,7 @@ var tools = [
         },
         nodes: {
           type: "array",
-          description: "Single page node list. type may be task, asset, or group. Task nodes accept title, body, runMode, effort, attachments, templateId, and templateQuery. Asset nodes accept title, description, role, and one managed project asset. Task and Asset nodes may use parentId for one-level Group membership. Group nodes accept title, description, width, and height; Groups cannot nest.",
+          description: "Single page node list. type may be task, asset, or group. Task nodes accept title, Markdown body, runMode, effort, templateId, and templateQuery; new inline Task attachments are forbidden. Asset nodes accept title, description, and one managed project asset; media presentation is inferred from the managed file, while role is deprecated legacy compatibility. Task and Asset nodes may use parentId for one-level Group membership. Group nodes accept title, description, width, and height; Groups cannot nest.",
           items: { type: "object", additionalProperties: true }
         },
         edges: {

@@ -2110,6 +2110,7 @@ async function assertMultimodalGraphContracts(origin) {
   assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-group").type, "group");
   assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-reference").data.asset.id, uploaded[0].id);
   assert.equal(written.structuredContent.document.nodes.find((node) => node.id === "visual-reference").parentId, "visual-group");
+  assert.equal(written.structuredContent.validation.advisories.some((item) => item.code === "deprecated_asset_role"), true);
   assert.equal(written.structuredContent.document.pages[1].viewState.collapsedGroupIds.length, 0);
   const backupPath = path.join(projectPath, ".scatter", "scatter.v1.backup.json");
   const originalBackup = await fsp.readFile(backupPath, "utf8");
@@ -2220,6 +2221,300 @@ async function assertMultimodalGraphContracts(origin) {
   assert.equal(reusedNode.data.asset.storedPath, uploaded[0].storedPath);
   assert.deepEqual(reusedAssetWrite.structuredContent.document.pages.find((page) => page.id === reusedAssetWrite.structuredContent.document.activePageId).viewState.collapsedGroupIds, ["visual-group"], "AI merge preserves human collapse state");
   assert.equal(await fsp.readFile(backupPath, "utf8"), originalBackup, "later v2 writes never overwrite the v1 backup");
+
+  const missingManagedAttachment = {
+    ...uploaded[0],
+    id: "missing-managed-attachment",
+    originalName: "missing-managed.png",
+    storedPath: path.join(projectPath, ".scatter", "assets", "missing-managed.png"),
+    relativePath: ".scatter/assets/missing-managed.png",
+    fileUrl: ""
+  };
+  const outsideAttachmentPath = path.join(tempRoot, "outside-managed-assets.png");
+  await fsp.writeFile(outsideAttachmentPath, Buffer.from("outside-managed-image"));
+  const outsideAttachment = {
+    ...uploaded[0],
+    id: "outside-managed-attachment",
+    originalName: "outside-managed-assets.png",
+    storedPath: outsideAttachmentPath,
+    relativePath: outsideAttachmentPath,
+    fileUrl: ""
+  };
+  const symlinkAttachmentPath = path.join(projectPath, ".scatter", "assets", "symlink-attachment.png");
+  await fsp.symlink(uploaded[0].storedPath, symlinkAttachmentPath);
+  const symlinkAttachment = {
+    ...uploaded[0],
+    id: "symlink-attachment",
+    originalName: "symlink-attachment.png",
+    storedPath: symlinkAttachmentPath,
+    relativePath: ".scatter/assets/symlink-attachment.png",
+    fileUrl: ""
+  };
+  const legacyAttachments = [uploaded[0], missingManagedAttachment, outsideAttachment, symlinkAttachment];
+  const legacyAttachmentDocument = JSON.parse(JSON.stringify(reusedAssetWrite.structuredContent.document));
+  const legacyAttachmentTask = legacyAttachmentDocument.nodes.find((node) => node.id === "visual-brief");
+  legacyAttachmentTask.data.attachments = legacyAttachments;
+  const legacyAttachmentPageTask = legacyAttachmentDocument.pages
+    .find((page) => page.id === legacyAttachmentDocument.activePageId)
+    .nodes.find((node) => node.id === "visual-brief");
+  legacyAttachmentPageTask.data.attachments = legacyAttachments;
+  const legacyAttachmentSave = await fetchJson(`${origin}/api/sessions/${opened.structuredContent.sessionId}/document`, {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath,
+      document: legacyAttachmentDocument,
+      expectedRevision: reusedAssetWrite.structuredContent.documentRevision
+    })
+  });
+  const attachmentContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+  const taskSummary = attachmentContext.structuredContent.nodes.find((node) => node.id === "visual-brief");
+  assert.deepEqual(taskSummary.legacyAttachments.find((item) => item.id === uploaded[0].id), {
+    id: uploaded[0].id,
+    kind: "image",
+    originalName: "homepage-reference.png",
+    relativePath: uploaded[0].relativePath,
+    mime: "image/png",
+    size: uploaded[0].size
+  });
+  assert.equal(taskSummary.legacyAttachments.length, 4);
+  assert.equal("storedPath" in taskSummary.legacyAttachments[0], false);
+  assert.equal("fileUrl" in taskSummary.legacyAttachments[0], false);
+  assert.equal(taskSummary.legacyAttachments.find((item) => item.id === outsideAttachment.id).relativePath, "", "legacy context never leaks an absolute or unmanaged path");
+
+  const preservedAttachmentUpdate = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: attachmentContext.structuredContent.contextId,
+      expectedRevision: attachmentContext.structuredContent.documentRevision,
+      clientMutationId: "multimodal-preserve-legacy-attachments",
+      operations: [{ op: "update-node", nodeId: "visual-brief", changes: { body: "Updated without replacing legacy attachments." } }]
+    }
+  });
+  assert.equal(preservedAttachmentUpdate.structuredContent.status, "written");
+  assert.deepEqual(
+    preservedAttachmentUpdate.structuredContent.document.nodes.find((node) => node.id === "visual-brief").data.attachments.map((item) => item.id),
+    legacyAttachments.map((item) => item.id),
+    "ordinary Task updates preserve every legacy attachment"
+  );
+  let promotionContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+  const promotionScatterBeforeRejectedWrites = await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8");
+  const promotionAssetsBeforeRejectedWrites = (await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort();
+
+  const contextlessPromotion = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      expectedRevision: promotionContext.structuredContent.documentRevision,
+      operations: [{
+        op: "promote-attachment",
+        nodeId: "visual-brief",
+        attachmentId: uploaded[0].id,
+        assetNodeId: "contextless-asset",
+        edgeId: "contextless-edge"
+      }]
+    }
+  });
+  assert.equal(contextlessPromotion.structuredContent.status, "validation_failed");
+  assert.equal(contextlessPromotion.structuredContent.validation.violations.some((item) => item.code === "promotion_context_required"), true);
+
+  const expiredContextPromotion = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: "expired-promotion-context",
+      expectedRevision: promotionContext.structuredContent.documentRevision,
+      clientMutationId: "multimodal-expired-promotion-context",
+      operations: [{
+        op: "promote-attachment",
+        nodeId: "visual-brief",
+        attachmentId: uploaded[0].id,
+        assetNodeId: "expired-context-asset",
+        edgeId: "expired-context-edge"
+      }]
+    }
+  });
+  assert.equal(expiredContextPromotion.structuredContent.status, "validation_failed");
+  assert.equal(expiredContextPromotion.structuredContent.validation.violations.some((item) => item.code === "context_expired"), true);
+
+  const rejectedAttachmentReplacement = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: promotionContext.structuredContent.contextId,
+      expectedRevision: promotionContext.structuredContent.documentRevision,
+      clientMutationId: "multimodal-inline-attachment-replacement-rejected",
+      operations: [{
+        op: "update-node",
+        nodeId: "visual-brief",
+        changes: { attachments: [uploaded[0]] }
+      }]
+    }
+  });
+  assert.equal(rejectedAttachmentReplacement.structuredContent.status, "validation_failed");
+  assert.equal(rejectedAttachmentReplacement.structuredContent.validation.violations.some((item) => item.code === "invalid_operation" && /Inline Task attachments cannot be created or replaced/.test(item.message)), true);
+
+  const missingAttachmentPromotion = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: promotionContext.structuredContent.contextId,
+      expectedRevision: promotionContext.structuredContent.documentRevision,
+      clientMutationId: "multimodal-missing-attachment-rejected",
+      operations: [{
+        op: "promote-attachment",
+        nodeId: "visual-brief",
+        attachmentId: "missing-attachment",
+        assetNodeId: "missing-attachment-asset",
+        edgeId: "missing-attachment-edge"
+      }]
+    }
+  });
+  assert.equal(missingAttachmentPromotion.structuredContent.status, "validation_failed");
+  assert.equal(missingAttachmentPromotion.structuredContent.validation.violations.some((item) => item.code === "legacy_attachment_not_found"), true);
+
+  for (const [attachmentId, messagePattern] of [
+    [missingManagedAttachment.id, /available managed project asset/],
+    [outsideAttachment.id, /managed project asset/],
+    [symlinkAttachment.id, /regular managed project asset/]
+  ]) {
+    const rejectedFilePromotion = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        mode: "merge-active-page",
+        contextId: promotionContext.structuredContent.contextId,
+        expectedRevision: promotionContext.structuredContent.documentRevision,
+        clientMutationId: `multimodal-reject-${attachmentId}`,
+        operations: [{
+          op: "promote-attachment",
+          nodeId: "visual-brief",
+          attachmentId,
+          assetNodeId: `asset-for-${attachmentId}`,
+          edgeId: `edge-for-${attachmentId}`
+        }]
+      }
+    });
+    assert.equal(rejectedFilePromotion.structuredContent.status, "validation_failed");
+    assert.equal(rejectedFilePromotion.structuredContent.validation.violations.some((item) => item.code === "invalid_operation" && messagePattern.test(item.message)), true);
+  }
+
+  for (const [assetNodeId, edgeId, expectedCode] of [
+    ["visual-reference", "unique-promotion-edge", "duplicate_node_id"],
+    ["unique-promotion-asset", "reference-informs-brief", "duplicate_edge_id"]
+  ]) {
+    const rejectedIdPromotion = await request("tools/call", {
+      name: "write_canvasight_graph",
+      arguments: {
+        projectPath,
+        mode: "merge-active-page",
+        contextId: promotionContext.structuredContent.contextId,
+        expectedRevision: promotionContext.structuredContent.documentRevision,
+        clientMutationId: `multimodal-reject-${expectedCode}`,
+        operations: [{
+          op: "promote-attachment",
+          nodeId: "visual-brief",
+          attachmentId: uploaded[0].id,
+          assetNodeId,
+          edgeId
+        }]
+      }
+    });
+    assert.equal(rejectedIdPromotion.structuredContent.status, "validation_failed");
+    assert.equal(rejectedIdPromotion.structuredContent.validation.violations.some((item) => item.code === expectedCode), true);
+  }
+  assert.equal(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"), promotionScatterBeforeRejectedWrites);
+  assert.deepEqual((await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort(), promotionAssetsBeforeRejectedWrites);
+
+  const concurrentAttachmentDocument = JSON.parse(promotionScatterBeforeRejectedWrites);
+  concurrentAttachmentDocument.nodes.find((node) => node.id === "visual-brief").data.body = "A concurrent human edit wins over stale promotion intent.";
+  concurrentAttachmentDocument.pages
+    .find((page) => page.id === concurrentAttachmentDocument.activePageId)
+    .nodes.find((node) => node.id === "visual-brief").data.body = "A concurrent human edit wins over stale promotion intent.";
+  const concurrentAttachmentSave = await fetchJson(`${origin}/api/sessions/${opened.structuredContent.sessionId}/document`, {
+    method: "POST",
+    body: JSON.stringify({
+      projectPath,
+      document: concurrentAttachmentDocument,
+      expectedRevision: promotionContext.structuredContent.documentRevision
+    })
+  });
+  const promotionScatterAfterConcurrentSave = await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8");
+  const promotionAssetsAfterConcurrentSave = (await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort();
+  const conflictedPromotion = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: {
+      projectPath,
+      mode: "merge-active-page",
+      contextId: promotionContext.structuredContent.contextId,
+      expectedRevision: promotionContext.structuredContent.documentRevision,
+      clientMutationId: "multimodal-conflicted-promotion",
+      operations: [{
+        op: "promote-attachment",
+        nodeId: "visual-brief",
+        attachmentId: uploaded[0].id,
+        assetNodeId: "conflicted-promotion-asset",
+        edgeId: "conflicted-promotion-edge"
+      }]
+    }
+  });
+  assert.equal(conflictedPromotion.structuredContent.status, "validation_failed");
+  assert.equal(conflictedPromotion.structuredContent.validation.violations.some((item) => item.code === "promotion_concurrent_conflict"), true);
+  assert.equal(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"), promotionScatterAfterConcurrentSave);
+  assert.deepEqual((await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort(), promotionAssetsAfterConcurrentSave);
+  promotionContext = await request("tools/call", {
+    name: "get_canvasight_graph_context",
+    arguments: { projectPath }
+  });
+
+  const promotionArguments = {
+    projectPath,
+    mode: "merge-active-page",
+    contextId: promotionContext.structuredContent.contextId,
+    expectedRevision: promotionContext.structuredContent.documentRevision,
+    clientMutationId: "multimodal-promote-legacy-attachment",
+    operations: [{
+      op: "promote-attachment",
+      nodeId: "visual-brief",
+      attachmentId: uploaded[0].id,
+      assetNodeId: "visual-brief-attachment",
+      edgeId: "visual-brief-attachment-edge"
+    }]
+  };
+  const promoted = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: promotionArguments
+  });
+  assert.equal(promoted.structuredContent.status, "written");
+  assert.equal(promoted.structuredContent.documentRevision, concurrentAttachmentSave.documentRevision + 1);
+  const promotedTask = promoted.structuredContent.document.nodes.find((node) => node.id === "visual-brief");
+  const promotedAsset = promoted.structuredContent.document.nodes.find((node) => node.id === "visual-brief-attachment");
+  assert.deepEqual(promotedTask.data.attachments.map((item) => item.id), legacyAttachments.slice(1).map((item) => item.id));
+  assert.equal(promotedAsset.type, "asset");
+  assert.equal(promotedAsset.parentId, "visual-group");
+  assert.equal(promotedAsset.data.asset.storedPath, uploaded[0].storedPath);
+  assert.deepEqual(
+    promoted.structuredContent.document.edges.find((edge) => edge.id === "visual-brief-attachment-edge"),
+    { id: "visual-brief-attachment-edge", source: "visual-brief", target: "visual-brief-attachment", label: "附件" }
+  );
+  const replayedPromotion = await request("tools/call", {
+    name: "write_canvasight_graph",
+    arguments: promotionArguments
+  });
+  assert.equal(replayedPromotion.structuredContent.replayed, true);
+  assert.equal(replayedPromotion.structuredContent.written, false);
+  assert.equal(replayedPromotion.structuredContent.documentRevision, promoted.structuredContent.documentRevision);
 
   const replaced = await request("tools/call", {
     name: "write_canvasight_graph",
@@ -3326,6 +3621,8 @@ async function main() {
     const writeGraphTool = listed.tools.find((tool) => tool.name === "write_canvasight_graph");
     assert.match(writeGraphTool.description, /Canvasight is active/);
     assert.match(writeGraphTool.description, /before direct execution/);
+    assert.match(writeGraphTool.description, /New inline Task attachments are forbidden/);
+    assert.match(writeGraphTool.description, /legacy attachment promotion is a context-bound Task-to-Asset operation/);
     assert.deepEqual(writeGraphTool.inputSchema.properties.graphType.enum, [
       "software-product",
       "article-outline",
@@ -3341,6 +3638,10 @@ async function main() {
     assert.deepEqual(writeGraphTool.inputSchema.properties.pages.items.properties.layout.enum, ["horizontal"]);
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.required.includes("semanticRelationships"), true);
     assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.op.enum.includes("relayout-page"), true);
+    assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.op.enum.includes("promote-attachment"), true);
+    assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.attachmentId.type, "string");
+    assert.equal(writeGraphTool.inputSchema.properties.operations.items.properties.assetNodeId.type, "string");
+    assert.match(writeGraphTool.inputSchema.properties.nodes.description, /new inline Task attachments are forbidden/);
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.type, "object");
     assert.equal(writeGraphTool.inputSchema.properties.frameworkManifest.properties.semanticStructure.type, "object");
     assert.deepEqual(writeGraphTool.inputSchema.properties.frameworkManifest.properties.contentMode.enum, ["canvasight-default", "skill-led"]);
@@ -3352,6 +3653,7 @@ async function main() {
     assert.equal(listSkillsTool.inputSchema.properties.forceReload.type, "boolean");
     const graphContextTool = listed.tools.find((tool) => tool.name === "get_canvasight_graph_context");
     assert.match(graphContextTool.description, /active(?: Canvasight)? page|current page/i);
+    assert.match(graphContextTool.description, /legacyAttachments handles without absolute paths or file URLs/);
     assert.equal(graphContextTool.inputSchema.properties.projectPath.type, "string");
     assert.equal(graphContextTool.outputSchema.properties.documentRevision.type, "integer");
     assert.equal(graphContextTool.outputSchema.properties.preferences.properties.aiSkillAssignmentEnabled.type, "boolean");
@@ -4830,14 +5132,78 @@ async function main() {
       ["templateId", "templateQuery"]
     );
     const templateScatterJson = JSON.parse(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"));
-    assert.equal(templateScatterJson.nodes[0].data.title, "Figma color variable scaffold");
-    assert.equal(templateScatterJson.nodes[0].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
-    assert.equal(templateScatterJson.nodes[0].data.attachments[0].originalName, "figma-color-template.md");
-    assert.equal(templateScatterJson.nodes[0].data.templateId, graphTemplate.id);
-    assert.equal("codexMode" in templateScatterJson.nodes[0].data, false, "legacy template Goal fields are removed");
-    assert.equal("planMode" in templateScatterJson.nodes[0].data, false);
-    assert.equal(templateScatterJson.nodes[1].data.title, "Template query reuse");
-    assert.equal(templateScatterJson.nodes[1].data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
+    const templateByIdTask = templateScatterJson.nodes.find((node) => node.id === "template-by-id");
+    const templateByQueryTask = templateScatterJson.nodes.find((node) => node.id === "template-by-query");
+    assert.equal(templateByIdTask.data.title, "Figma color variable scaffold");
+    assert.equal(templateByIdTask.data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
+    assert.deepEqual(templateByIdTask.data.attachments, []);
+    assert.equal(templateByIdTask.data.templateId, graphTemplate.id);
+    assert.equal("codexMode" in templateByIdTask.data, false, "legacy template Goal fields are removed");
+    assert.equal("planMode" in templateByIdTask.data, false);
+    assert.equal(templateByQueryTask.data.title, "Template query reuse");
+    assert.equal(templateByQueryTask.data.body, "Reusable prompt for planning Figma color variables, token hierarchy, modes, and conflict handling.");
+    assert.deepEqual(templateByQueryTask.data.attachments, []);
+    const templateAssets = templateScatterJson.nodes.filter((node) => node.type === "asset");
+    assert.equal(templateAssets.length, 2, "each reused Task gets its own Asset node");
+    assert.equal(new Set(templateAssets.map((node) => node.data.asset.storedPath)).size, 1, "one project-managed copy may back multiple Asset nodes in the same write");
+    assert.equal(templateAssets.every((node) => node.data.asset.originalName === "figma-color-template.md"), true);
+    assert.equal(templateAssets.every((node) => node.data.asset.relativePath.startsWith(".scatter/assets/")), true);
+    assert.equal(templateAssets.every((node) => fs.existsSync(node.data.asset.storedPath)), true);
+    assert.equal(templateScatterJson.edges.some((edge) => edge.source === "template-by-id" && edge.target === "template-asset-template-by-id-1"), true);
+    assert.equal(templateScatterJson.edges.some((edge) => edge.source === "template-by-query" && edge.target === "template-asset-template-by-query-1"), true);
+
+    await assert.rejects(
+      () => request("tools/call", {
+        name: "write_canvasight_graph",
+        arguments: {
+          projectPath,
+          pageName: "Forbidden inline Task attachment",
+          nodes: [{
+            id: "inline-attachment-task",
+            title: "Inline attachment task",
+            body: "AI writes must use Asset nodes.",
+            attachments: [graphTemplate.attachments[0]]
+          }]
+        }
+      }),
+      /cannot create inline Task attachments/
+    );
+
+    const templatesBeforeBrokenReuse = JSON.parse(await fsp.readFile(path.join(canvasightHome, "templates.json"), "utf8"));
+    const brokenTemplate = {
+      id: "broken-template-asset",
+      title: "Broken template asset",
+      body: "This template must fail without changing the project.",
+      attachments: [{
+        ...graphTemplate.attachments[0],
+        id: "missing-template-attachment",
+        storedPath: path.join(canvasightHome, "template-assets", "missing-template-attachment.md"),
+        relativePath: "template-assets/missing-template-attachment.md"
+      }],
+      createdAt: "2026-07-05T00:00:00.000Z",
+      updatedAt: "2026-07-05T00:00:00.000Z"
+    };
+    await fsp.writeFile(
+      path.join(canvasightHome, "templates.json"),
+      `${JSON.stringify([brokenTemplate, ...templatesBeforeBrokenReuse], null, 2)}\n`,
+      "utf8"
+    );
+    const scatterBeforeBrokenReuse = await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8");
+    const projectAssetsBeforeBrokenReuse = (await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort();
+    await assert.rejects(
+      () => request("tools/call", {
+        name: "write_canvasight_graph",
+        arguments: {
+          projectPath,
+          pageName: "Broken template reuse",
+          nodes: [{ id: "broken-template-task", templateId: brokenTemplate.id }]
+        }
+      }),
+      /Template attachment is unavailable/
+    );
+    assert.equal(await fsp.readFile(path.join(projectPath, ".scatter", "scatter.json"), "utf8"), scatterBeforeBrokenReuse);
+    assert.deepEqual((await fsp.readdir(path.join(projectPath, ".scatter", "assets"))).sort(), projectAssetsBeforeBrokenReuse);
+    await fsp.writeFile(path.join(canvasightHome, "templates.json"), `${JSON.stringify(templatesBeforeBrokenReuse, null, 2)}\n`, "utf8");
 
     const fullTemplateSet = [
       graphTemplate,

@@ -149,6 +149,78 @@ const assetRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-referen
 assert.equal(assetRun.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief,outside-task", "Asset Run follows downstream edges");
 assert.equal(assetRun.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png");
 
+const svgAsset = {
+  ...groupAsset,
+  id: "vector-reference",
+  position: { x: 24, y: 168 },
+  data: {
+    ...groupAsset.data,
+    title: "Vector reference",
+    asset: {
+      ...groupAsset.data.asset,
+      id: "vector-reference-file",
+      originalName: "vector-reference.svg",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/vector-reference.svg",
+      relativePath: ".scatter/assets/vector-reference.svg",
+      mime: "image/svg+xml"
+    }
+  }
+};
+const videoAsset = {
+  ...groupAsset,
+  id: "motion-reference",
+  position: { x: 24, y: 248 },
+  data: {
+    ...groupAsset.data,
+    title: "Motion reference",
+    asset: {
+      ...groupAsset.data.asset,
+      id: "motion-reference-file",
+      kind: "video",
+      originalName: "motion-reference.mp4",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/motion-reference.mp4",
+      relativePath: ".scatter/assets/motion-reference.mp4",
+      mime: "video/mp4"
+    }
+  }
+};
+const ordinaryFileAsset = {
+  ...groupAsset,
+  id: "brief-file",
+  position: { x: 24, y: 328 },
+  data: {
+    ...groupAsset.data,
+    title: "Brief file",
+    asset: {
+      ...groupAsset.data.asset,
+      id: "brief-file-id",
+      kind: "file",
+      originalName: "brief.pdf",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/brief.pdf",
+      relativePath: ".scatter/assets/brief.pdf",
+      mime: "application/pdf"
+    }
+  }
+};
+const taskCarriesAsset = buildMarkdown(
+  [groupNode, groupAsset, svgAsset, videoAsset, ordinaryFileAsset, groupedTask],
+  [
+    { id: "brief-image", source: "visual-brief", target: "visual-reference", label: "Attachment" },
+    { id: "brief-svg", source: "visual-brief", target: "vector-reference", label: "Attachment" },
+    { id: "brief-video", source: "visual-brief", target: "motion-reference", label: "Attachment" },
+    { id: "brief-file-edge", source: "visual-brief", target: "brief-file", label: "Attachment" }
+  ],
+  "visual-brief",
+  "flow",
+  "Multimodal Project",
+  "/tmp/canvasight-smoke",
+  "en",
+  false
+);
+assert.equal(taskCarriesAsset.nodes.map((node) => node.id).join(","), "visual-brief,visual-reference,vector-reference,motion-reference,brief-file", "Task Run follows every Task-to-Asset edge");
+assert.equal(taskCarriesAsset.attachments.map((attachment) => attachment.id).join(","), "homepage-reference-file,vector-reference-file,motion-reference-file,brief-file-id");
+assert.equal(taskCarriesAsset.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png,/tmp/canvasight-smoke/.scatter/assets/vector-reference.svg", "Task Run carries raster and SVG image paths while retaining video and ordinary files as attachments");
+
 const assetOnlyGroupRun = buildMarkdown([groupNode, groupAsset], [], "visual-group", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
 assert.equal(assetOnlyGroupRun.nodes.map((node) => node.id).join(","), "visual-reference", "a Group containing only assets is runnable");
 assert.match(assetOnlyGroupRun.markdown, /Homepage reference/);

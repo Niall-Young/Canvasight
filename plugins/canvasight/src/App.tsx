@@ -1884,7 +1884,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     const attachment = task?.data.attachments.find((item) => item.id === attachmentId);
     if (!task || !attachment) return;
     const taskAbsolute = absoluteNodePosition(task, nodes);
-    const preferred = { x: taskAbsolute.x - assetNodeWidth - 96, y: taskAbsolute.y };
+    const preferred = { x: taskAbsolute.x + nodeBounds(task).width + 96, y: taskAbsolute.y };
     const groupedPosition = { x: task.position.x + taskNodeWidth + 96, y: task.position.y };
     const asset = assetNodeFromAttachment(attachment, task.parentId ? groupedPosition : preferred, task.parentId);
     const nextTask = { ...task, selected: false, data: { ...task.data, attachments: task.data.attachments.filter((item) => item.id !== attachmentId) } };
@@ -1901,7 +1901,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         }
         return { ...node, selected: false };
       }), asset],
-      edges: [...edges, { id: nanoid(), source: asset.id, target: task.id, label: language === "zh" ? "参考" : "Reference" }]
+      edges: [...edges, { id: nanoid(), source: task.id, target: asset.id, label: language === "zh" ? "附件" : "Attachment" }]
     });
     setSelectedNodeId(asset.id);
     setStatus(language === "zh" ? "附件已提升为资产节点" : "Attachment promoted to an asset node");
