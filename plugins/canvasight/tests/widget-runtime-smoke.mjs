@@ -218,10 +218,67 @@ function hostHtml(widgetData) {
     documentRevision: 1,
     documentVersion: "widget-document-v1"
   };
+  const groupEdgePage = {
+    ...page,
+    viewport: { x: 80, y: 60, zoom: 0.72 },
+    nodes: [
+      { ...page.nodes[0], position: { x: 0, y: 152 } },
+      {
+        id: "edge-group",
+        type: "group",
+        position: { x: 500, y: 80 },
+        width: 464,
+        height: 680,
+        data: { title: "Cross-boundary flow", description: "Keeps external relationships visible while collapsed." }
+      },
+      {
+        id: "edge-group-a",
+        type: "task",
+        parentId: "edge-group",
+        position: { x: 32, y: 72 },
+        data: { title: "Grouped entry", body: "Receives evidence from outside the Group.", attachments: [], effort: "xhigh", runMode: "flow" }
+      },
+      {
+        id: "edge-group-b",
+        type: "task",
+        parentId: "edge-group",
+        position: { x: 32, y: 360 },
+        data: { title: "Grouped exit", body: "Sends the Group result downstream.", attachments: [], effort: "xhigh", runMode: "flow" }
+      },
+      { ...page.nodes[1], position: { x: 1060, y: 440 } },
+      {
+        id: "drag-target",
+        type: "task",
+        position: { x: 1060, y: 80 },
+        data: { title: "Drag connection target", body: "Exercises a real browser drag-to-connect gesture.", attachments: [], effort: "xhigh", runMode: "flow" }
+      }
+    ],
+    edges: [
+      { id: "edge-group-incoming", source: "node-a", target: "edge-group-a" },
+      { id: "edge-group-internal", source: "edge-group-a", target: "edge-group-b" },
+      { id: "edge-group-outgoing", source: "edge-group-b", target: "node-b" }
+    ],
+    viewState: { collapsedGroupIds: [] }
+  };
+  const groupEdgeDocument = {
+    ...document,
+    version: 2,
+    viewport: groupEdgePage.viewport,
+    nodes: groupEdgePage.nodes,
+    edges: groupEdgePage.edges,
+    pages: [groupEdgePage, conflictPage]
+  };
+  const groupEdgeOpened = {
+    project: opened.project,
+    document: groupEdgeDocument,
+    documentRevision: 10,
+    documentVersion: "widget-document-v10"
+  };
   return `<!doctype html><html><body style="margin:0"><iframe id="widget" src="/widget" style="width:1200px;height:800px;border:0"></iframe><script>
   const widgetData = ${JSON.stringify({ ...widgetData, apiBaseUrl: "http://127.0.0.1:1" })};
   const session = ${JSON.stringify(session)};
   const opened = ${JSON.stringify(opened)};
+  const groupEdgeOpened = ${JSON.stringify(groupEdgeOpened)};
   const refreshed = JSON.parse(JSON.stringify(opened));
   refreshed.documentRevision = 3;
   refreshed.documentVersion = 'widget-document-v3';
@@ -233,6 +290,7 @@ function hostHtml(widgetData) {
   });
   refreshed.document.nodes = refreshed.document.pages[0].nodes;
   window.__HOST_REFRESH_INSTANCE__ = null;
+  window.__HOST_GROUP_EDGE_INSTANCE__ = null;
   window.__HOST_FAIL_NEXT_SAVE__ = false;
   window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
   window.__HOST_LAST_DOCUMENT__ = null;
@@ -387,13 +445,19 @@ function hostHtml(widgetData) {
       else if (args.path && args.path.endsWith('/open-project')) {
         window.__HOST_RECORDS__.openProjectCalls += 1;
         const manualRefresh = window.__HOST_REFRESH_INSTANCE__ && window.__HOST_REFRESH_INSTANCE__ === args.widgetInstanceId;
+        const groupEdgeRefresh = window.__HOST_GROUP_EDGE_INSTANCE__ && window.__HOST_GROUP_EDGE_INSTANCE__ === args.widgetInstanceId;
         if (manualRefresh && refreshed.documentRevision <= opened.documentRevision) {
           refreshed.documentRevision = opened.documentRevision + 1;
           refreshed.documentVersion = 'widget-document-v' + refreshed.documentRevision;
         }
-        data = manualRefresh ? refreshed : opened;
+        if (groupEdgeRefresh && groupEdgeOpened.documentRevision <= opened.documentRevision) {
+          groupEdgeOpened.documentRevision = opened.documentRevision + 1;
+          groupEdgeOpened.documentVersion = 'widget-document-v' + groupEdgeOpened.documentRevision;
+        }
+        data = groupEdgeRefresh ? groupEdgeOpened : manualRefresh ? refreshed : opened;
         window.__HOST_LAST_DOCUMENT__ = JSON.parse(JSON.stringify(data.document));
         if (manualRefresh) window.__HOST_REFRESH_INSTANCE__ = null;
+        if (groupEdgeRefresh) window.__HOST_GROUP_EDGE_INSTANCE__ = null;
       }
       else if (args.path && args.path.endsWith('/widget-ready')) {
         window.__HOST_RECORDS__.ready = { identity: args, body: args.body };
@@ -498,8 +562,13 @@ function createCdpClient(webSocketUrl) {
   const socket = new WebSocket(webSocketUrl);
   let nextId = 1;
   const pending = new Map();
+  const listeners = new Map();
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
+    if (!message.id && message.method) {
+      for (const listener of listeners.get(message.method) ?? []) listener(message.params);
+      return;
+    }
     const handler = pending.get(message.id);
     if (!handler) return;
     pending.delete(message.id);
@@ -518,8 +587,19 @@ function createCdpClient(webSocketUrl) {
       socket.send(JSON.stringify({ id, method, params }));
       return promise;
     },
+    on(method, listener) {
+      const methodListeners = listeners.get(method) ?? [];
+      methodListeners.push(listener);
+      listeners.set(method, methodListeners);
+    },
     close() { socket.close(); }
   };
+}
+
+async function clickAt(cdp, point) {
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y });
+  await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
 }
 
 async function waitForEvaluation(cdp, expression, label, timeoutMs = 20_000) {
@@ -656,6 +736,10 @@ try {
   const endpoint = new URL(browserWs);
   const targets = await (await fetch(`http://${endpoint.host}/json/new?${encodeURIComponent(frameworkHostUrl)}`, { method: "PUT" })).json();
   const cdp = createCdpClient(targets.webSocketDebuggerUrl);
+  const browserConsoleProblems = [];
+  cdp.on("Runtime.consoleAPICalled", (params) => {
+    if (params.type === "error" || params.type === "warning") browserConsoleProblems.push(params);
+  });
   await cdp.send("Runtime.enable");
   await cdp.send("Page.enable");
 
@@ -1306,6 +1390,266 @@ try {
   assert.equal(cleanImmediateRefresh.callsAfter, cleanImmediateRefresh.callsBefore + 1);
   assert.match(cleanImmediateRefresh.status, /Canvas is already at the latest version|画布已是最新版本/);
 
+  const runGroupEdgeRegression = async () => {
+  const consoleProblemStart = browserConsoleProblems.length;
+  await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const refreshButton = doc && doc.querySelector('.canvas-refresh-button');
+    if (!refreshButton) return false;
+    window.__HOST_GROUP_EDGE_INSTANCE__ = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
+    refreshButton.click();
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const group = doc.querySelector('.react-flow__node[data-id="edge-group"]');
+      const edges = doc.querySelectorAll('.react-flow__edge');
+      if (group && edges.length === 3) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (!doc.querySelector('.react-flow__node[data-id="edge-group"]') || doc.querySelectorAll('.react-flow__edge').length !== 3) return false;
+    const zoomTrigger = doc.querySelector('.canvas-zoom-trigger');
+    if (!zoomTrigger) return false;
+    zoomTrigger.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 1,
+      pointerType: 'mouse'
+    }));
+    await new Promise((resolve) => frame.contentWindow.requestAnimationFrame(resolve));
+    await new Promise((resolve) => frame.contentWindow.requestAnimationFrame(resolve));
+    const zoomItem = Array.from(doc.querySelectorAll('[role="menuitemradio"]')).find((candidate) => candidate.textContent.trim() === '75%');
+    if (!zoomItem) return false;
+    zoomItem.click();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const viewport = doc.querySelector('.react-flow__viewport');
+    const zoom = viewport ? new frame.contentWindow.DOMMatrixReadOnly(getComputedStyle(viewport).transform).a : 0;
+    return Math.abs(zoom - 0.75) <= 0.02;
+  })()`, "dedicated Group Edge fixture loaded");
+  const expandedGroupEdges = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const viewport = doc && doc.querySelector('.react-flow__viewport');
+    const group = doc && doc.querySelector('.react-flow__node[data-id="edge-group"]');
+    const edgeIds = ['edge-group-incoming', 'edge-group-internal', 'edge-group-outgoing'];
+    if (!viewport || !group || group.querySelector('.group-node.is-collapsed') || !edgeIds.every((id) => doc.querySelector('.react-flow__edge[data-id="' + id + '"]'))) return false;
+    const frameRect = frame.getBoundingClientRect();
+    const pathPoint = (edgeId, end) => {
+      const path = doc.querySelector('.react-flow__edge[data-id="' + edgeId + '"] .scatter-edge-path');
+      const local = path.getPointAtLength(end ? path.getTotalLength() : 0);
+      const point = path.ownerSVGElement.createSVGPoint();
+      point.x = local.x;
+      point.y = local.y;
+      const screen = point.matrixTransform(path.getScreenCTM());
+      return { x: screen.x, y: screen.y, rootX: frameRect.left + screen.x, rootY: frameRect.top + screen.y };
+    };
+    const nodeRect = (id) => doc.querySelector('.react-flow__node[data-id="' + id + '"]').getBoundingClientRect();
+    const incomingStart = pathPoint('edge-group-incoming', false);
+    const incomingEnd = pathPoint('edge-group-incoming', true);
+    const internalStart = pathPoint('edge-group-internal', false);
+    const internalEnd = pathPoint('edge-group-internal', true);
+    const outgoingStart = pathPoint('edge-group-outgoing', false);
+    const outgoingEnd = pathPoint('edge-group-outgoing', true);
+    const nodeA = nodeRect('node-a');
+    const memberA = nodeRect('edge-group-a');
+    const memberB = nodeRect('edge-group-b');
+    const nodeB = nodeRect('node-b');
+    return {
+      edgeCount: doc.querySelectorAll('.react-flow__edge').length,
+      internalVisible: Boolean(doc.querySelector('.react-flow__edge[data-id="edge-group-internal"]')),
+      persistentSelectable: edgeIds.every((id) => doc.querySelector('.react-flow__edge[data-id="' + id + '"]').classList.contains('selectable')),
+      proxyHandleCount: group.querySelectorAll('.group-summary-handle').length,
+      zoom: new frame.contentWindow.DOMMatrixReadOnly(getComputedStyle(viewport).transform).a,
+      gaps: [
+        Math.abs(incomingStart.x - nodeA.right),
+        Math.abs(incomingEnd.x - memberA.left),
+        Math.abs(internalStart.x - memberA.right),
+        Math.abs(internalEnd.x - memberB.left),
+        Math.abs(outgoingStart.x - memberB.right),
+        Math.abs(outgoingEnd.x - nodeB.left)
+      ]
+    };
+  })()`, "expanded Group cross-boundary geometry");
+  assert.equal(expandedGroupEdges.edgeCount, 3);
+  assert.equal(expandedGroupEdges.internalVisible, true);
+  assert.equal(expandedGroupEdges.persistentSelectable, true);
+  assert.equal(expandedGroupEdges.proxyHandleCount, 0, "expanded Groups must not retain proxy Edge handles");
+  assert.ok(Math.abs(expandedGroupEdges.zoom - 0.75) <= 0.02, JSON.stringify(expandedGroupEdges));
+  assert.equal(expandedGroupEdges.gaps.every((gap) => gap <= 0.5), true, `expanded Edge endpoints must touch visible node boundaries: ${JSON.stringify(expandedGroupEdges)}`);
+
+  const sourceButtonPoint = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const button = doc && doc.querySelector('.react-flow__node[data-id="edge-group-b"] .react-flow__handle-right .node-connect-button');
+    if (!button) return false;
+    const frameRect = frame.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    return { x: frameRect.left + rect.left + rect.width / 2, y: frameRect.top + rect.top + rect.height / 2, innerX: rect.left + rect.width / 2, innerY: rect.top + rect.height / 2 };
+  })()`, "connected source button position");
+  const sourceButtonStack = await waitForEvaluation(cdp, `(() => {
+    const doc = document.getElementById('widget').contentDocument;
+    const button = doc.querySelector('.react-flow__node[data-id="edge-group-b"] .react-flow__handle-right .node-connect-button');
+    button.focus();
+    const actualStack = doc.elementsFromPoint(${sourceButtonPoint.innerX}, ${sourceButtonPoint.innerY});
+    return Number.parseFloat(getComputedStyle(button).opacity) === 1
+      ? { topIsButton: Boolean(actualStack[0] && actualStack[0].closest('.node-connect-button')) }
+      : false;
+  })()`, "connect button covers persistent Edge endpoint");
+  assert.equal(sourceButtonStack.topIsButton, true, "elementsFromPoint must resolve the visible connect button above the Edge endpoint");
+
+  await waitForEvaluation(cdp, `(() => {
+    const button = document.getElementById('widget').contentDocument.querySelector('.react-flow__node[data-id="edge-group"] button[aria-expanded="true"]');
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`, "Group collapse action");
+  await waitForEvaluation(cdp, `Boolean(document.getElementById('widget').contentDocument.querySelector('.react-flow__node[data-id="edge-group"] .group-node.is-collapsed'))`, "Group collapsed");
+
+  const collapsedGroupEdges = await waitForEvaluation(cdp, `(() => {
+    const frame = document.getElementById('widget');
+    const doc = frame && frame.contentDocument;
+    const group = doc && doc.querySelector('.react-flow__node[data-id="edge-group"]');
+    if (!group) return false;
+    const frameRect = frame.getBoundingClientRect();
+    const incomingId = '__canvasight-group-aggregate__:node-a:edge-group';
+    const outgoingId = '__canvasight-group-aggregate__:edge-group:node-b';
+    const incomingEdge = doc.querySelector('.react-flow__edge[data-id="' + incomingId + '"]');
+    const outgoingEdge = doc.querySelector('.react-flow__edge[data-id="' + outgoingId + '"]');
+    const endpoint = (edge, end) => {
+      if (!edge) return null;
+      const path = edge.querySelector('.scatter-edge-path');
+      const local = path.getPointAtLength(end ? path.getTotalLength() : 0);
+      const point = path.ownerSVGElement.createSVGPoint();
+      point.x = local.x;
+      point.y = local.y;
+      const screen = point.matrixTransform(path.getScreenCTM());
+      return { x: screen.x, y: screen.y };
+    };
+    const interactionPoint = (edge) => {
+      if (!edge) return null;
+      const path = edge.querySelector('.react-flow__edge-interaction');
+      const local = path.getPointAtLength(path.getTotalLength() / 2);
+      const point = path.ownerSVGElement.createSVGPoint();
+      point.x = local.x;
+      point.y = local.y;
+      const screen = point.matrixTransform(path.getScreenCTM());
+      return { x: frameRect.left + screen.x, y: frameRect.top + screen.y };
+    };
+    const groupRect = group.getBoundingClientRect();
+    const incomingEnd = endpoint(incomingEdge, true);
+    const outgoingStart = endpoint(outgoingEdge, false);
+    const handles = Array.from(group.querySelectorAll('.group-summary-handle'));
+    return {
+      edgeCount: doc.querySelectorAll('.react-flow__edge').length,
+      internalVisible: Boolean(doc.querySelector('.react-flow__edge[data-id="edge-group-internal"]')),
+      incomingVisible: Boolean(incomingEdge),
+      outgoingVisible: Boolean(outgoingEdge),
+      aggregatePaths: [incomingEdge, outgoingEdge].filter(Boolean).every((edge) => edge.querySelector('.scatter-edge-path.is-aggregate')),
+      selectable: [incomingEdge, outgoingEdge].filter(Boolean).some((edge) => edge.classList.contains('selectable')),
+      proxyHandleCount: handles.length,
+      proxyHandlesPassive: handles.every((handle) => getComputedStyle(handle).pointerEvents === 'none' && !handle.classList.contains('connectable') && !handle.classList.contains('connectablestart') && !handle.classList.contains('connectableend')),
+      leftGap: incomingEnd ? Math.abs(incomingEnd.x - groupRect.left) : null,
+      rightGap: outgoingStart ? Math.abs(outgoingStart.x - groupRect.right) : null,
+      incomingClickPoint: interactionPoint(incomingEdge)
+    };
+  })()`, "collapsed Group aggregate Edge geometry");
+  assert.equal(collapsedGroupEdges.edgeCount, 2, JSON.stringify(collapsedGroupEdges));
+  assert.equal(collapsedGroupEdges.internalVisible, false);
+  assert.equal(collapsedGroupEdges.incomingVisible, true);
+  assert.equal(collapsedGroupEdges.outgoingVisible, true);
+  assert.equal(collapsedGroupEdges.aggregatePaths, true);
+  assert.equal(collapsedGroupEdges.selectable, false);
+  assert.equal(collapsedGroupEdges.proxyHandleCount, 2);
+  assert.equal(collapsedGroupEdges.proxyHandlesPassive, true);
+  assert.ok(collapsedGroupEdges.leftGap <= 0.5, JSON.stringify(collapsedGroupEdges));
+  assert.ok(collapsedGroupEdges.rightGap <= 0.5, JSON.stringify(collapsedGroupEdges));
+
+  const proxyHandleDrag = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const proxy = doc.querySelector('.react-flow__node[data-id="edge-group"] .group-summary-handle.react-flow__handle-right');
+    const target = doc.querySelector('.react-flow__node[data-id="drag-target"] .react-flow__handle-left');
+    if (!proxy || !target) return false;
+    const center = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
+    const from = center(proxy);
+    const to = center(target);
+    proxy.dispatchEvent(new win.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: from.x, clientY: from.y }));
+    target.dispatchEvent(new win.MouseEvent('mousemove', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: to.x, clientY: to.y }));
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const enteredConnectionMode = Boolean(doc.querySelector('.canvas-shell.is-connecting') || doc.querySelector('.react-flow__connectionline'));
+    target.dispatchEvent(new win.MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, buttons: 0, clientX: to.x, clientY: to.y }));
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    return { enteredConnectionMode, edgeCount: doc.querySelectorAll('.react-flow__edge').length };
+  })()`, "collapsed Group proxy Handle rejects drag connection");
+  assert.equal(proxyHandleDrag.enteredConnectionMode, false, JSON.stringify(proxyHandleDrag));
+  assert.equal(proxyHandleDrag.edgeCount, 2, JSON.stringify(proxyHandleDrag));
+
+  await clickAt(cdp, collapsedGroupEdges.incomingClickPoint);
+  const aggregateSelection = await waitForEvaluation(cdp, `(() => ({ selectedEdges: document.getElementById('widget').contentDocument.querySelectorAll('.react-flow__edge.selected').length }))()`, "aggregate Edge remains non-selectable");
+  assert.equal(aggregateSelection.selectedEdges, 0);
+
+  await waitForEvaluation(cdp, `(() => {
+    const button = document.getElementById('widget').contentDocument.querySelector('.react-flow__node[data-id="edge-group"] button[aria-expanded="false"]');
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`, "Group expand action");
+  await waitForEvaluation(cdp, `(() => {
+    const doc = document.getElementById('widget').contentDocument;
+    return !doc.querySelector('.react-flow__node[data-id="edge-group"] .group-node.is-collapsed')
+      && doc.querySelectorAll('.react-flow__edge').length === 3
+      && ['edge-group-incoming', 'edge-group-internal', 'edge-group-outgoing'].every((id) => doc.querySelector('.react-flow__edge[data-id="' + id + '"]'));
+  })()`, "expanded Group restores persistent Edges");
+
+  const dragConnection = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame && frame.contentDocument;
+    const source = doc && doc.querySelector('.react-flow__node[data-id="node-b"] .react-flow__handle-right');
+    const target = doc && doc.querySelector('.react-flow__node[data-id="drag-target"] .react-flow__handle-left');
+    if (!source || !target) return false;
+    const center = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    };
+    const from = center(source);
+    const to = center(target);
+    source.dispatchEvent(new win.MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: from.x, clientY: from.y }));
+    let enteredConnectionMode = false;
+    for (let step = 1; step <= 12; step += 1) {
+      const progress = step / 12;
+      const clientX = from.x + (to.x - from.x) * progress;
+      const clientY = from.y + (to.y - from.y) * progress;
+      const eventTarget = doc.elementFromPoint(clientX, clientY) || doc;
+      eventTarget.dispatchEvent(new win.MouseEvent('mousemove', { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX, clientY }));
+      await new Promise((resolve) => win.requestAnimationFrame(resolve));
+      enteredConnectionMode ||= Boolean(doc.querySelector('.canvas-shell.is-connecting') || doc.querySelector('.react-flow__connectionline'));
+    }
+    target.dispatchEvent(new win.MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, buttons: 0, clientX: to.x, clientY: to.y }));
+    const deadline = Date.now() + 2500;
+    while (Date.now() < deadline) {
+      const saved = window.__HOST_LAST_DOCUMENT__;
+      if (doc.querySelectorAll('.react-flow__edge').length === 4 && saved?.edges.some((edge) => edge.source === 'node-b' && edge.target === 'drag-target')) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const saved = window.__HOST_LAST_DOCUMENT__;
+    return {
+      enteredConnectionMode,
+      edgeCount: doc.querySelectorAll('.react-flow__edge').length,
+      persisted: Boolean(saved?.edges.some((edge) => edge.source === 'node-b' && edge.target === 'drag-target'))
+    };
+  })()`, "browser drag-to-connect persisted");
+  assert.equal(dragConnection.enteredConnectionMode, true, JSON.stringify(dragConnection));
+  assert.equal(dragConnection.edgeCount, 4, JSON.stringify(dragConnection));
+  assert.equal(dragConnection.persisted, true, JSON.stringify(dragConnection));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.deepEqual(browserConsoleProblems.slice(consoleProblemStart), [], "Group collapse and Edge interactions must not emit browser warnings or errors");
+  };
+
   const failedSaveRetry = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
     const win = frame.contentWindow;
@@ -1483,9 +1827,21 @@ try {
 
   const restored = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    const documentSaveCount = () => window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
+    let stableSaveCount = documentSaveCount();
+    let stableSince = Date.now();
+    const settleDeadline = Date.now() + 4000;
+    while (Date.now() < settleDeadline && Date.now() - stableSince < 800) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const nextSaveCount = documentSaveCount();
+      if (nextSaveCount !== stableSaveCount) {
+        stableSaveCount = nextSaveCount;
+        stableSince = Date.now();
+      }
+    }
     const beforeCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/open-project')).length;
-    const beforeSaveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
+    const beforeSaveCalls = documentSaveCount();
+    const beforeViewport = window.__HOST_LAST_DOCUMENT__.pages.find((page) => page.id === 'page-composed')?.viewport;
     frame.style.display = 'none';
     await new Promise((resolve) => setTimeout(resolve, 80));
     frame.style.display = 'block';
@@ -1502,11 +1858,15 @@ try {
     });
     const transform = viewport && getComputedStyle(viewport).transform;
     const afterCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/open-project')).length;
-    const afterSaveCalls = window.__HOST_RECORDS__.toolCalls.filter((call) => call.path && call.path.endsWith('/document')).length;
+    const afterSaveCalls = documentSaveCount();
+    const recoverySaves = window.__HOST_RECORDS__.toolCalls
+      .filter((call) => call.path && call.path.endsWith('/document'))
+      .slice(beforeSaveCalls)
+      .map((call) => ({ viewport: call.body.document.pages.find((page) => page.id === 'page-composed')?.viewport }));
     const bridgeStage = frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__ && frame.contentWindow.__CANVASIGHT_BRIDGE_STATE__.startupStage;
     const overlay = Boolean(doc.querySelector('.canvasight-startup-overlay'));
     return canvasRect && canvasRect.width > 0 && canvasRect.height > 0 && nodeEls.length >= 2 && edgeEls.length === 1 && visibleNodes.length > 0 && transform && transform !== 'none'
-      ? { nodeCount: nodeEls.length, edgeCount: edgeEls.length, visibleNodeCount: visibleNodes.length, transform, beforeCalls, afterCalls, beforeSaveCalls, afterSaveCalls, bridgeStage, overlay }
+      ? { nodeCount: nodeEls.length, edgeCount: edgeEls.length, visibleNodeCount: visibleNodes.length, transform, beforeCalls, afterCalls, beforeSaveCalls, afterSaveCalls, beforeViewport, recoverySaves, bridgeStage, overlay }
       : false;
   })()`, "same-binding canvas after host hide and restore");
   assert.ok(restored.nodeCount >= 2);
@@ -1514,9 +1874,15 @@ try {
   assert.ok(restored.visibleNodeCount > 0);
   assert.match(restored.transform, /matrix|translate/);
   assert.equal(restored.afterCalls, restored.beforeCalls, "same binding recovery must not rehydrate the project");
-  assert.equal(restored.afterSaveCalls, restored.beforeSaveCalls, "programmatic viewport recovery must not overwrite the saved Page viewport");
+  assert.equal(
+    restored.recoverySaves.every(({ viewport }) => JSON.stringify(viewport) === JSON.stringify(restored.beforeViewport)),
+    true,
+    `programmatic viewport recovery must not overwrite the saved Page viewport: ${JSON.stringify(restored)}`
+  );
   assert.equal(restored.bridgeStage, "ready");
   assert.equal(restored.overlay, false);
+
+  await runGroupEdgeRegression();
 
   const zoomRegression = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');

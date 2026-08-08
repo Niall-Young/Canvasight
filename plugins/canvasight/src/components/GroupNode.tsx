@@ -1,6 +1,6 @@
-import { memo, useEffect, useState, type ReactElement } from "react";
+import { memo, useEffect, useRef, useState, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
-import { type Node, type NodeProps } from "@xyflow/react";
+import { Handle, Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react";
 import type { ScatterGroupNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { useScatterStore } from "../store/scatterStore";
@@ -12,14 +12,21 @@ import { TooltipAnchor } from "./ui/tooltip";
 function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupNodeData, "group">>): ReactElement {
   const actions = useCanvasActions();
   const { t } = useI18n();
+  const updateNodeInternals = useUpdateNodeInternals();
   const [title, setTitle] = useState(data.title);
   const [description, setDescription] = useState(data.description);
   const memberCount = useScatterStore((state) => state.nodes.reduce((count, node) => count + Number(node.type !== "group" && node.parentId === id), 0));
   const assetCount = useScatterStore((state) => state.nodes.reduce((count, node) => count + Number(node.type === "asset" && node.parentId === id), 0));
   const collapsed = useScatterStore((state) => state.collapsedGroupIds.includes(id));
+  const previousCollapsed = useRef(collapsed);
 
   useEffect(() => setTitle(data.title), [data.title]);
   useEffect(() => setDescription(data.description), [data.description]);
+  useEffect(() => {
+    if (previousCollapsed.current === collapsed) return;
+    previousCollapsed.current = collapsed;
+    updateNodeInternals(id);
+  }, [collapsed, id, updateNodeInternals]);
 
   const commit = (): void => {
     const nextTitle = title.trim() || t("group.untitled");
@@ -34,6 +41,26 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
       className={`group-node ${collapsed ? "is-collapsed" : "is-expanded"} ${selected ? "is-selected" : ""}`}
       aria-label={t("group.ariaLabel", { title: title || t("group.untitled"), count: memberCount, assets: assetCount })}
     >
+      {collapsed ? (
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="node-handle group-summary-handle"
+            isConnectable={false}
+            isConnectableStart={false}
+            isConnectableEnd={false}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="node-handle group-summary-handle"
+            isConnectable={false}
+            isConnectableStart={false}
+            isConnectableEnd={false}
+          />
+        </>
+      ) : null}
       <header className="group-node-header">
         <div className="group-node-copy">
           <input

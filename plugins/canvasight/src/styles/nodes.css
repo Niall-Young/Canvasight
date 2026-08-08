@@ -844,6 +844,18 @@
   right: 0;
 }
 
+.react-flow__handle.group-summary-handle {
+  pointer-events: none;
+}
+
+.react-flow__handle-left.group-summary-handle {
+  left: -1px;
+}
+
+.react-flow__handle-right.group-summary-handle {
+  right: -1px;
+}
+
 .node-connect-button {
   appearance: none;
   position: absolute;
