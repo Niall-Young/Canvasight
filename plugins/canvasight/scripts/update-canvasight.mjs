@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 const PLUGIN_ID = "canvasight@canvasight-local";
 const MARKETPLACE_NAME = "canvasight-local";
 const OFFICIAL_REPOSITORY = "https://github.com/Niall-Young/Canvasight.git";
-const OFFICIAL_RELEASE_API = "https://api.github.com/repos/Niall-Young/Canvasight/releases/latest";
+const OFFICIAL_RELEASE_URL = "https://github.com/Niall-Young/Canvasight/releases/latest";
 const STABLE_REF = "stable";
 
 function normalizeRepository(source) {
@@ -112,10 +112,31 @@ function parseJsonOutput(result, label) {
 }
 
 function makeRunner({ command = resolveCodexCommand(), env = process.env } = {}) {
-  return async (...args) => parseJsonOutput(
+  const runner = async (...args) => parseJsonOutput(
     await runProcess(command, args, { env }),
     `codex ${args.join(" ")}`,
   );
+  runner.raw = (...args) => runProcess(command, args, { env });
+  return runner;
+}
+
+function parseMarketplaceTable(value) {
+  const marketplaces = [];
+  for (const line of String(value || "").split(/\r?\n/).slice(1)) {
+    const match = line.match(/^\s*(\S+)\s+(.+?)\s*$/);
+    if (match) marketplaces.push({ name: match[1], root: match[2] });
+  }
+  return { marketplaces };
+}
+
+async function readMarketplaces(runner) {
+  try {
+    return await runner("plugin", "marketplace", "list", "--json");
+  } catch (error) {
+    if (typeof runner.raw !== "function") throw error;
+    const result = await runner.raw("plugin", "marketplace", "list");
+    return parseMarketplaceTable(result.stdout);
+  }
 }
 
 async function readGitMetadata(root, env = process.env) {
@@ -144,7 +165,7 @@ async function readGitMetadata(root, env = process.env) {
 async function readInstallation(runner, env = process.env) {
   const [pluginList, marketplaceList] = await Promise.all([
     runner("plugin", "list", "--available", "--json"),
-    runner("plugin", "marketplace", "list", "--json"),
+    readMarketplaces(runner),
   ]);
   const installed = Array.isArray(pluginList.installed)
     ? pluginList.installed.find((item) => item.pluginId === PLUGIN_ID)
@@ -171,15 +192,63 @@ async function readInstallation(runner, env = process.env) {
   };
 }
 
-async function readLatestRelease({ fetchImpl = fetch, env = process.env } = {}) {
-  const url = env.CANVASIGHT_RELEASE_API_URL || OFFICIAL_RELEASE_API;
+function releaseTagFromUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.origin !== "https://github.com") return null;
+  const match = url.pathname.match(/^\/Niall-Young\/Canvasight\/releases\/tag\/(v[^/]+)\/?$/i);
+  if (!match) return null;
+  const version = match[1].replace(/^v/i, "");
+  return parseVersion(version) ? { tag: `v${version}`, version } : null;
+}
+
+async function readOfficialReleaseRefs(tag, {
+  env = process.env,
+  runProcessImpl = runProcess,
+} = {}) {
+  const repository = env.CANVASIGHT_REPOSITORY_URL || OFFICIAL_REPOSITORY;
+  let result;
+  try {
+    result = await runProcessImpl("git", [
+      "ls-remote",
+      repository,
+      `refs/heads/${STABLE_REF}`,
+      `refs/tags/${tag}`,
+      `refs/tags/${tag}^{}`,
+    ], { env });
+  } catch (error) {
+    throw new Error(`Unable to verify the official Canvasight release refs: ${error.message}`);
+  }
+  const refs = new Map();
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const match = line.trim().match(/^([0-9a-f]{40})\s+(\S+)$/i);
+    if (match) refs.set(match[2], match[1].toLowerCase());
+  }
+  const tagCommit = refs.get(`refs/tags/${tag}^{}`) || refs.get(`refs/tags/${tag}`);
+  const stableCommit = refs.get(`refs/heads/${STABLE_REF}`);
+  if (!tagCommit || !stableCommit) {
+    throw new Error(`The official Canvasight ${tag} or ${STABLE_REF} ref could not be identified`);
+  }
+  return { tagCommit, stableCommit };
+}
+
+async function readLatestRelease({
+  fetchImpl = fetch,
+  env = process.env,
+  refResolver,
+} = {}) {
+  const url = env.CANVASIGHT_RELEASE_URL || OFFICIAL_RELEASE_URL;
   let response;
   try {
     response = await fetchImpl(url, {
+      redirect: "follow",
       headers: {
-        Accept: "application/vnd.github+json",
+        Accept: "text/html,application/xhtml+xml",
         "User-Agent": "canvasight-updater",
-        "X-GitHub-Api-Version": "2022-11-28",
       },
     });
   } catch (error) {
@@ -188,52 +257,22 @@ async function readLatestRelease({ fetchImpl = fetch, env = process.env } = {}) 
   if (!response.ok) {
     throw new Error(`Unable to query the official Canvasight release: HTTP ${response.status}`);
   }
-  const release = await response.json();
-  const version = typeof release.tag_name === "string"
-    ? release.tag_name.replace(/^v/i, "")
-    : "";
-  if (release.draft || release.prerelease || !parseVersion(version)) {
-    throw new Error("The official latest release does not contain a valid stable version");
-  }
-  const apiBase = env.CANVASIGHT_REPOSITORY_API_URL
-    || url.replace(/\/releases\/latest(?:\?.*)?$/, "");
-  const readCommit = async (ref) => {
-    let commitResponse;
-    try {
-      commitResponse = await fetchImpl(`${apiBase}/commits/${encodeURIComponent(ref)}`, {
-        headers: {
-          Accept: "application/vnd.github+json",
-          "User-Agent": "canvasight-updater",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      });
-    } catch (error) {
-      throw new Error(`Unable to verify the official Canvasight ${ref} commit: ${error.message}`);
-    }
-    if (!commitResponse.ok) {
-      throw new Error(`Unable to verify the official Canvasight ${ref} commit: HTTP ${commitResponse.status}`);
-    }
-    const commit = await commitResponse.json();
-    if (typeof commit.sha !== "string" || !/^[0-9a-f]{40}$/i.test(commit.sha)) {
-      throw new Error(`The official Canvasight ${ref} commit could not be identified`);
-    }
-    return commit.sha.toLowerCase();
-  };
-  const [tagCommit, stableCommit] = await Promise.all([
-    readCommit(release.tag_name),
-    readCommit(STABLE_REF),
-  ]);
+  const release = releaseTagFromUrl(response.url);
+  if (!release) throw new Error("The official latest release redirect did not identify a valid stable version");
+  const { tagCommit, stableCommit } = refResolver
+    ? await refResolver(release.tag)
+    : await readOfficialReleaseRefs(release.tag, { env });
   if (tagCommit !== stableCommit) {
     const error = new Error(
-      `the official ${release.tag_name} release and ${STABLE_REF} branch do not point to the same commit`,
+      `the official ${release.tag} release and ${STABLE_REF} branch do not point to the same commit`,
     );
     error.code = "release_mismatch";
     throw error;
   }
   return {
-    version,
-    tag: release.tag_name,
-    url: release.html_url || `https://github.com/Niall-Young/Canvasight/releases/tag/${release.tag_name}`,
+    version: release.version,
+    tag: release.tag,
+    url: response.url,
     commit: tagCommit,
   };
 }
@@ -306,9 +345,9 @@ async function restoreInstallation({ runner, previous, failure }) {
   }
 }
 
-async function inspect({ runner, fetchImpl, env }) {
+async function inspect({ runner, fetchImpl, env, refResolver }) {
   const [release, state] = await Promise.all([
-    readLatestRelease({ fetchImpl, env }),
+    readLatestRelease({ fetchImpl, env, refResolver }),
     readInstallation(runner, env),
   ]);
   const currentVersion = state.installed?.version;
@@ -368,8 +407,8 @@ async function inspect({ runner, fetchImpl, env }) {
   };
 }
 
-async function update({ runner, fetchImpl, env }) {
-  const inspection = await inspect({ runner, fetchImpl, env });
+async function update({ runner, fetchImpl, env, refResolver }) {
+  const inspection = await inspect({ runner, fetchImpl, env, refResolver });
   if (inspection.comparison !== -1) return inspection.result;
 
   const { state: previous, release } = inspection;
@@ -490,9 +529,9 @@ async function main(argv = process.argv.slice(2), dependencies = {}) {
   const runner = dependencies.runner || makeRunner({ env });
   try {
     if (mode === "--check") {
-      return (await inspect({ runner, fetchImpl: dependencies.fetchImpl, env })).result;
+      return (await inspect({ runner, fetchImpl: dependencies.fetchImpl, env, refResolver: dependencies.refResolver })).result;
     }
-    return await update({ runner, fetchImpl: dependencies.fetchImpl, env });
+    return await update({ runner, fetchImpl: dependencies.fetchImpl, env, refResolver: dependencies.refResolver });
   } catch (error) {
     if (error.code === "release_mismatch") {
       return {
@@ -526,7 +565,7 @@ const isEntrypoint = process.argv[1]
 if (isEntrypoint) await cli();
 
 export {
-  OFFICIAL_RELEASE_API,
+  OFFICIAL_RELEASE_URL,
   OFFICIAL_REPOSITORY,
   compareVersions,
   inspect,
@@ -534,6 +573,7 @@ export {
   main,
   needsCommandShell,
   parseVersion,
+  readOfficialReleaseRefs,
   readLatestRelease,
   resolveCodexCommand,
   update,

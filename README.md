@@ -193,6 +193,8 @@ codex plugin list
 
 从 `0.4.11` 开始，可以直接对 Codex 说“检查 Canvasight 更新”或“更新 Canvasight”。检查只比较当前已安装版本和官方最新正式 Release，不会安装或改动任何内容。更新会安装 Release 中的完整插件快照，包括网页界面、MCP server 与 tools、Skills、manifest、图标、静态资源和插件文档；它不是只替换更新 Skill。
 
+从 `0.5.9` 开始，检查最新版不再调用有匿名 API 配额的 `api.github.com`，也不要求用户登录 GitHub、使用仓库所有者账号或提供访问令牌。更新器读取公开的 Latest Release 跳转，再用公开 Git refs 验证 Release tag 与 `stable` 指向同一提交。`0.5.8` 的旧更新器仍可能在共享公网 IP 耗尽 GitHub 匿名额度时返回 HTTP 403；遇到这种情况，可在额度恢复后重试，或手动执行一次下面的 marketplace upgrade / plugin add 命令升级到 `0.5.9` 及以后版本。
+
 检查或更新只运行一次 Canvasight 内置更新器，不会夹带额外的安装、构建、Release、Git、清理或“重复文件修复”命令，避免文件提供器产生编号副本。
 
 已经是最新版时，Canvasight 不刷新 marketplace、不重新安装，也不提示重启。当前版本高于正式 Release、版本无法识别、来源是本地 checkout 或自定义 fork 时，更新器会安全停止，不降级、不覆盖开发目录。只有确认官方 `Niall-Young/Canvasight` 的 `stable` 来源、Release 与插件版本一致并安装验证成功后，才会报告更新完成。
@@ -604,6 +606,8 @@ After installing, reinstalling, or upgrading while Codex Desktop is running, rel
 ### Checking and Updating
 
 Starting with `0.4.11`, you can tell Codex “Check for Canvasight updates” or “Update Canvasight.” A check only compares the installed version with the latest official GitHub Release; it installs and changes nothing. An update installs the complete plugin snapshot from the Release, including the web UI, MCP server and tools, Skills, manifest, icons, static assets, and plugin documentation. It does not replace only the updater Skill.
+
+Starting with `0.5.9`, latest-version checks no longer call the anonymously rate-limited `api.github.com` API and do not require users to sign in to GitHub, use the repository owner's account, or provide an access token. The updater follows the public Latest Release redirect and then verifies through public Git refs that the Release tag and `stable` point to the same commit. The old `0.5.8` updater can still return HTTP 403 when a shared public IP exhausts GitHub's anonymous quota; affected users can retry after the quota resets or run the marketplace upgrade / plugin add commands below once to reach `0.5.9` or later.
 
 When the installed version is already current, Canvasight does not refresh the marketplace, reinstall, or show a restart prompt. If the installed version is newer than the Release, unrecognizable, from a local checkout, or from a custom fork, the updater stops safely without downgrading or overwriting the development source. It reports success only after verifying the official `Niall-Young/Canvasight` `stable` source, Release/plugin version agreement, installation, and resulting version.
 

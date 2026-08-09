@@ -6,9 +6,12 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  OFFICIAL_RELEASE_URL,
   compareVersions,
   main,
   needsCommandShell,
+  readLatestRelease,
+  readOfficialReleaseRefs,
   resolveCodexCommand,
 } from "../scripts/update-canvasight.mjs";
 
@@ -16,23 +19,17 @@ const OLD_SHA = "1".repeat(40);
 const NEW_SHA = "2".repeat(40);
 const OFFICIAL = "https://github.com/Niall-Young/Canvasight.git";
 
-function releaseFetch({ version = "0.4.11", stableSha = NEW_SHA, tagSha = NEW_SHA } = {}) {
-  return async (url) => {
-    if (url.endsWith("/releases/latest")) {
-      return new Response(JSON.stringify({
-        tag_name: `v${version}`,
-        draft: false,
-        prerelease: false,
-        html_url: `https://github.com/Niall-Young/Canvasight/releases/tag/v${version}`,
-      }), { status: 200 });
-    }
-    if (url.endsWith("/commits/stable")) {
-      return new Response(JSON.stringify({ sha: stableSha }), { status: 200 });
-    }
-    if (url.endsWith(`/commits/${encodeURIComponent(`v${version}`)}`)) {
-      return new Response(JSON.stringify({ sha: tagSha }), { status: 200 });
-    }
-    return new Response("not found", { status: 404 });
+function releaseDependencies({ version = "0.4.11", stableSha = NEW_SHA, tagSha = NEW_SHA } = {}) {
+  return {
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      url: `https://github.com/Niall-Young/Canvasight/releases/tag/v${version}`,
+    }),
+    refResolver: async (tag) => {
+      assert.equal(tag, `v${version}`);
+      return { stableCommit: stableSha, tagCommit: tagSha };
+    },
   };
 }
 
@@ -148,7 +145,90 @@ async function digestTree(root) {
   return hash.digest("hex");
 }
 
-const env = { CANVASIGHT_RELEASE_API_URL: "https://example.test/releases/latest" };
+const env = { CANVASIGHT_RELEASE_URL: "https://example.test/releases/latest" };
+
+test("public release discovery needs no GitHub account or API quota", async () => {
+  let request = null;
+  const release = await readLatestRelease({
+    env: {},
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return {
+        ok: true,
+        status: 200,
+        url: "https://github.com/Niall-Young/Canvasight/releases/tag/v0.5.8",
+      };
+    },
+    refResolver: async (tag) => {
+      assert.equal(tag, "v0.5.8");
+      return { stableCommit: NEW_SHA, tagCommit: NEW_SHA };
+    },
+  });
+  assert.equal(request.url, OFFICIAL_RELEASE_URL);
+  assert.equal(request.options.redirect, "follow");
+  assert.equal(request.options.headers.Authorization, undefined);
+  assert.doesNotMatch(request.url, /api\.github\.com/);
+  assert.equal(release.version, "0.5.8");
+  assert.equal(release.commit, NEW_SHA);
+});
+
+test("public release discovery rejects redirects outside the official repository", async () => {
+  await assert.rejects(
+    readLatestRelease({
+      env: {},
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        url: "https://example.com/Niall-Young/Canvasight/releases/tag/v0.5.8",
+      }),
+      refResolver: async () => ({ stableCommit: NEW_SHA, tagCommit: NEW_SHA }),
+    }),
+    /did not identify a valid stable version/,
+  );
+});
+
+test("public Git refs prefer an annotated tag's peeled commit and verify stable", async () => {
+  let invocation = null;
+  const refs = await readOfficialReleaseRefs("v0.5.8", {
+    env: {},
+    runProcessImpl: async (command, args) => {
+      invocation = { command, args };
+      return {
+        stdout: [
+          `${NEW_SHA}\trefs/heads/stable`,
+          `${OLD_SHA}\trefs/tags/v0.5.8`,
+          `${NEW_SHA}\trefs/tags/v0.5.8^{}`,
+          "",
+        ].join("\n"),
+        stderr: "",
+      };
+    },
+  });
+  assert.equal(invocation.command, "git");
+  assert.equal(invocation.args[0], "ls-remote");
+  assert.equal(invocation.args[1], OFFICIAL);
+  assert.deepEqual(refs, { stableCommit: NEW_SHA, tagCommit: NEW_SHA });
+});
+
+test("update checks fall back when the active Codex CLI lacks marketplace JSON output", async () => {
+  const codex = createCodex({ version: "0.4.11", candidateVersion: "0.4.11" });
+  const runner = async (...args) => {
+    if (args.join(" ") === "plugin marketplace list --json") {
+      throw new Error("unexpected argument '--json'");
+    }
+    return codex.runner(...args);
+  };
+  runner.raw = async (...args) => {
+    assert.deepEqual(args, ["plugin", "marketplace", "list"]);
+    return {
+      stdout: "MARKETPLACE       ROOT\ncanvasight-local  /does/not/matter\n",
+      stderr: "",
+    };
+  };
+  const result = await main(["--check"], { runner, ...releaseDependencies(), env });
+  assert.equal(result.status, "up_to_date");
+  assert.deepEqual(codex.commands, []);
+});
 
 test("semver comparison ignores build metadata and never treats it as an upgrade", () => {
   assert.equal(compareVersions("0.4.11+codex.123", "0.4.11"), 0);
@@ -163,7 +243,7 @@ test("already latest performs zero mutating Codex commands and has no restart pr
     sourceType: "local",
     ref: "main",
   });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "up_to_date");
   assert.equal(result.restartRequired, undefined);
   assert.doesNotMatch(result.message, /restart|reload|重启|重新加载|新建任务|@Canvasight/i);
@@ -172,7 +252,7 @@ test("already latest performs zero mutating Codex commands and has no restart pr
 
 test("check reports an update but never mutates even for a local checkout", async () => {
   const codex = createCodex({ sourceType: "local", source: "/workspace/Canvasight" });
-  const result = await main(["--check"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--check"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "update_available");
   assert.equal(result.canUpdate, false);
   assert.deepEqual(codex.commands, []);
@@ -180,26 +260,26 @@ test("check reports an update but never mutates even for a local checkout", asyn
 
 test("update refuses a local checkout without touching it", async () => {
   const codex = createCodex({ sourceType: "local", source: "/workspace/Canvasight" });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "local_source");
   assert.deepEqual(codex.commands, []);
 });
 
 test("update refuses custom repositories and development refs", async () => {
   const fork = createCodex({ source: "https://github.com/example/Canvasight.git" });
-  const forkResult = await main(["--update"], { runner: fork.runner, fetchImpl: releaseFetch(), env });
+  const forkResult = await main(["--update"], { runner: fork.runner, ...releaseDependencies(), env });
   assert.equal(forkResult.status, "unsupported_source");
   assert.deepEqual(fork.commands, []);
 
   const branch = createCodex({ ref: "feature/custom" });
-  const branchResult = await main(["--update"], { runner: branch.runner, fetchImpl: releaseFetch(), env });
+  const branchResult = await main(["--update"], { runner: branch.runner, ...releaseDependencies(), env });
   assert.equal(branchResult.status, "unsupported_source");
   assert.deepEqual(branch.commands, []);
 });
 
 test("versions ahead of the release are not downgraded", async () => {
   const codex = createCodex({ version: "0.5.0" });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "ahead_of_release");
   assert.doesNotMatch(result.message, /restart|reload|重启|重新加载|新建任务|@Canvasight/i);
   assert.deepEqual(codex.commands, []);
@@ -207,7 +287,7 @@ test("versions ahead of the release are not downgraded", async () => {
 
 test("official stable update refreshes, verifies, installs the whole plugin, then requests restart", async () => {
   const codex = createCodex();
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "updated");
   assert.equal(result.currentVersion, "0.4.11");
   assert.equal(result.restartRequired, true);
@@ -253,7 +333,7 @@ test("a successful add replaces Skill, MCP, and web sentinels while user data re
         if (!isRollback) await cp(releaseRoot, installedRoot, { recursive: true, force: true });
       },
     });
-    const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+    const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
     assert.equal(result.status, "updated");
     for (const relative of sentinels) {
       assert.equal(await readFile(path.join(installedRoot, relative), "utf8"), `new:${relative}`);
@@ -266,7 +346,7 @@ test("a successful add replaces Skill, MCP, and web sentinels while user data re
 
 test("main source migrates to stable only when an update actually exists", async () => {
   const codex = createCodex({ ref: "main" });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "updated");
   assert.deepEqual(codex.commands.slice(0, 2).map((args) => args.slice(0, 3).join(" ")), [
     "plugin marketplace remove",
@@ -279,7 +359,7 @@ test("release and stable must resolve to the same Git commit before mutation", a
   const codex = createCodex();
   const result = await main(["--update"], {
     runner: codex.runner,
-    fetchImpl: releaseFetch({ stableSha: OLD_SHA }),
+    ...releaseDependencies({ stableSha: OLD_SHA }),
     env,
   });
   assert.equal(result.status, "release_mismatch");
@@ -291,7 +371,7 @@ test("release and stable must resolve to the same Git commit before mutation", a
 
 test("an unrecognized installed version fails closed before mutation", async () => {
   const codex = createCodex({ version: "development-build" });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "version_unknown");
   assert.deepEqual(codex.commands, []);
   assert.doesNotMatch(result.message, /restart|reload|重启|重新加载|新建任务|@Canvasight/i);
@@ -299,7 +379,7 @@ test("an unrecognized installed version fails closed before mutation", async () 
 
 test("stable manifest mismatch rolls the marketplace and plugin back to the previous SHA", async () => {
   const codex = createCodex({ candidateVersion: "0.4.12" });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "release_mismatch");
   assert.equal(result.recovered, true);
   assert.ok(result.recovery.includes(`restored_snapshot:${OLD_SHA}`));
@@ -310,7 +390,7 @@ test("stable manifest mismatch rolls the marketplace and plugin back to the prev
 test("install failure and post-install verification failure both restore the old version", async () => {
   for (const options of [{ failInstall: true }, { failPostVerify: true }]) {
     const codex = createCodex(options);
-    const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+    const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
     assert.equal(result.status, "update_failed");
     assert.equal(result.recovered, true);
     assert.equal(codex.state().currentVersion, "0.4.10+codex.20260713151335");
@@ -319,7 +399,7 @@ test("install failure and post-install verification failure both restore the old
 
 test("rollback failures are explicit and never claim success", async () => {
   const codex = createCodex({ failInstall: true, failRollback: true });
-  const result = await main(["--update"], { runner: codex.runner, fetchImpl: releaseFetch(), env });
+  const result = await main(["--update"], { runner: codex.runner, ...releaseDependencies(), env });
   assert.equal(result.status, "rollback_failed");
   assert.equal(result.recovered, false);
   assert.match(result.rollbackError, /simulated rollback failure/);
