@@ -47,6 +47,7 @@ import {
 import {
   emptyDocument,
   emptyPage,
+  documentsPersistentlyEqual,
   normalizeDocument,
   persistentDocumentValue,
   persistentNodeValue,
@@ -1246,8 +1247,14 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           saveMutationIdsRef.current.delete(mutationGeneration);
           documentRevisionRef.current = Math.max(documentRevisionRef.current ?? 0, result.documentRevision);
           documentVersionRef.current = result.documentVersion;
-          const hasNewerLocalChanges = localMutationGenerationRef.current !== mutationGeneration;
           const normalizedResult = normalizeDocument(project.path, result.document);
+          const latestState = useScatterStore.getState();
+          const latestLocalDocument = latestState.project?.path === project.path
+            ? toDocument(latestState.project, latestState.pages, latestState.activePageId, latestState.nodes, latestState.edges, result.document.version === 2 ? 2 : 1)
+            : null;
+          const hasNewerLocalChanges = localMutationGenerationRef.current !== mutationGeneration || Boolean(
+            latestLocalDocument && !documentsPersistentlyEqual(latestLocalDocument, document)
+          );
           const conflict = result.merge?.conflictCopies.find((item) => item.conflictPageId === result.merge?.localActivePageId) ?? result.merge?.conflictCopies[0];
           baseDocumentRef.current = {
             revision: result.documentRevision,
@@ -1258,9 +1265,12 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           };
           if (!hasNewerLocalChanges) {
             acknowledgedMutationGenerationRef.current = mutationGeneration;
-            if (result.status === "merged" || result.status === "conflict-copy") {
-              const previousActivePage = useScatterStore.getState().activePageId;
-              const previousSelectedNodeId = useScatterStore.getState().selectedNodeId;
+            const responseDiffersFromStore = Boolean(
+              latestLocalDocument && !documentsPersistentlyEqual(normalizedResult, latestLocalDocument)
+            );
+            if (responseDiffersFromStore) {
+              const previousActivePage = latestState.activePageId;
+              const previousSelectedNodeId = latestState.selectedNodeId;
               const targetPageId = result.status === "conflict-copy" && conflict?.source !== "ai"
                 ? result.merge?.localActivePageId
                 : previousActivePage;
@@ -1276,16 +1286,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
               }
             }
           } else {
-            const latestState = useScatterStore.getState();
-            if (latestState.project?.path === project.path) {
-              const latestLocalDocument = toDocument(
-                latestState.project,
-                latestState.pages,
-                latestState.activePageId,
-                latestState.nodes,
-                latestState.edges,
-                baseDocumentRef.current?.document.version === 2 ? 2 : 1
-              );
+            if (latestLocalDocument) {
               const rebasedDocument = rebaseLocalChangesAfterSave(project.path, document, latestLocalDocument, normalizedResult, result.merge);
               const previousSelectedNodeId = latestState.selectedNodeId;
               observedPersistentDocumentRef.current = persistentDocumentValue(rebasedDocument);

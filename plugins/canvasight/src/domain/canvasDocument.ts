@@ -225,6 +225,10 @@ export function persistentDocumentValue(document: ScatterDocument): string {
   });
 }
 
+export function documentsPersistentlyEqual(left: ScatterDocument, right: ScatterDocument): boolean {
+  return persistentDocumentValue(left) === persistentDocumentValue(right);
+}
+
 function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }

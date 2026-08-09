@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScatterDocument, ScatterPage, ScatterProjectInfo, ScatterTaskNode } from "../../shared/types";
-import { normalizeDocument, persistentDocumentValue, toDocument } from "./canvasDocument";
+import { documentsPersistentlyEqual, normalizeDocument, persistentDocumentValue, toDocument } from "./canvasDocument";
 
 const task = (id: string, title = id): ScatterTaskNode => ({
   id,
@@ -69,5 +69,9 @@ describe("canvas document", () => {
     changed.pages[0].nodes[0].selected = false;
 
     expect(persistentDocumentValue(changed)).toBe(persistentDocumentValue(first));
+    expect(documentsPersistentlyEqual(changed, first)).toBe(true);
+    changed.pages[0].nodes[0].data.title = "Persisted title change";
+    changed.nodes[0].data.title = "Persisted title change";
+    expect(documentsPersistentlyEqual(changed, first)).toBe(false);
   });
 });

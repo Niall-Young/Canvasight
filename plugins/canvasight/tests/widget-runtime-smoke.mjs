@@ -293,8 +293,9 @@ function hostHtml(widgetData) {
   window.__HOST_GROUP_EDGE_INSTANCE__ = null;
   window.__HOST_FAIL_NEXT_SAVE__ = false;
   window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
+  window.__HOST_EXTERNAL_AI_ON_NEXT_SAVE__ = null;
   window.__HOST_LAST_DOCUMENT__ = null;
-  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], displayRequests: [], documentSaveCalls: 0, documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], presentationRecoveryCalls: [], presentationRecoveryOwner: null, revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
+  window.__HOST_RECORDS__ = { messages: [], toolCalls: [], displayRequests: [], documentSaveCalls: 0, documentSaveResults: [], documentBaseValidationFailures: [], openProjectCalls: 0, ready: null, readyInstances: [], errors: [], presentationRecoveryCalls: [], presentationRecoveryOwner: null, revisionPolls: [], revisionOwner: null, revisionInFlight: 0, revisionMaxInFlight: 0, teardownResponses: [] };
   const frame = document.getElementById('widget');
   function send(message, target = frame.contentWindow) { target.postMessage(message, '*'); }
   function result(target, id, value) { send({ jsonrpc: '2.0', id, result: value }, target); }
@@ -424,6 +425,49 @@ function hostHtml(widgetData) {
           result(event.source, message.id, { content: [], isError: true, structuredContent: { ok: false, status: 503, data: null, error: 'Simulated save transport failure.', code: 'simulated_save_failure' } });
           return;
         }
+        const externalAi = window.__HOST_EXTERNAL_AI_ON_NEXT_SAVE__;
+        if (externalAi) {
+          window.__HOST_EXTERNAL_AI_ON_NEXT_SAVE__ = null;
+          const externalDocument = JSON.parse(JSON.stringify(args.body.document));
+          const externalPage = externalDocument.pages.find((page) => page.id === externalDocument.activePageId) || externalDocument.pages[0];
+          externalPage.nodes.push({
+            id: externalAi.nodeId,
+            type: 'task',
+            position: { x: 940, y: 480 },
+            data: { title: externalAi.title, body: 'Added by an external AI graph write.', attachments: [], effort: 'xhigh', runMode: 'flow' }
+          });
+          externalDocument.nodes = externalPage.nodes;
+          externalDocument.edges = externalPage.edges;
+          externalDocument.viewport = externalPage.viewport;
+          const externalRevision = Number(args.body.expectedRevision || 0) + 1;
+          data = {
+            status: 'unchanged',
+            documentRevision: externalRevision,
+            documentVersion: 'widget-document-v' + externalRevision + '-external-ai',
+            document: externalDocument,
+            merge: {
+              baseRevision: args.body.base.revision,
+              priorRevision: externalRevision,
+              mergedPageIds: [],
+              conflictCopies: [],
+              localActivePageId: externalDocument.activePageId,
+              clientMutationId: args.body.clientMutationId
+            }
+          };
+          opened.document = externalDocument;
+          opened.documentRevision = externalRevision;
+          opened.documentVersion = data.documentVersion;
+          window.__HOST_LAST_DOCUMENT__ = JSON.parse(JSON.stringify(externalDocument));
+          window.__HOST_RECORDS__.documentSaveResults.push({
+            status: data.status,
+            documentRevision: data.documentRevision,
+            nodeIds: externalDocument.nodes.map((node) => node.id)
+          });
+          if (externalAi.delayMs > 0) {
+            setTimeout(() => result(event.source, message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } }), externalAi.delayMs);
+            return;
+          }
+        } else {
         const savedRevision = Math.max(2, Number(args.body.expectedRevision || 0) + 1);
         data = {
           status: 'written',
@@ -435,11 +479,17 @@ function hostHtml(widgetData) {
         opened.documentRevision = savedRevision;
         opened.documentVersion = 'widget-document-v' + savedRevision;
         window.__HOST_LAST_DOCUMENT__ = JSON.parse(JSON.stringify(args.body.document));
+        window.__HOST_RECORDS__.documentSaveResults.push({
+          status: data.status,
+          documentRevision: data.documentRevision,
+          nodeIds: data.document.nodes.map((node) => node.id)
+        });
         const delayMs = window.__HOST_DELAY_NEXT_SAVE_MS__;
         window.__HOST_DELAY_NEXT_SAVE_MS__ = 0;
         if (delayMs > 0) {
           setTimeout(() => result(event.source, message.id, { content: [], structuredContent: { ok: true, status: 200, data, error: null, code: null } }), delayMs);
           return;
+        }
         }
       }
       else if (args.path && args.path.endsWith('/open-project')) {
@@ -1703,6 +1753,117 @@ try {
     failedSaveRetry.opensAfterFailure + 1,
     JSON.stringify(failedSaveRetry)
   );
+
+  const externalAiSaveResponse = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const valueSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+    const savesBefore = window.__HOST_RECORDS__.documentSaveCalls;
+    const resultsBefore = window.__HOST_RECORDS__.documentSaveResults.length;
+    window.__HOST_EXTERNAL_AI_ON_NEXT_SAVE__ = {
+      nodeId: 'node-ai-save-response',
+      title: 'External AI node returned by unchanged save',
+      delayMs: 0
+    };
+    let title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    title.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    title.click();
+    valueSetter.call(title, 'Widget save based on stale revision');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    let deadline = Date.now() + 3000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.documentSaveCalls < savesBefore + 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const visibleAfterUnchangedResponse = Boolean(doc.querySelector('.react-flow__node[data-id="node-ai-save-response"]'));
+    title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    title.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    title.click();
+    valueSetter.call(title, 'Ordinary local edit after unchanged response');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    deadline = Date.now() + 3000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.documentSaveCalls < savesBefore + 2) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const saveCalls = window.__HOST_RECORDS__.toolCalls
+      .filter((call) => call.path && call.path.endsWith('/document'))
+      .slice(savesBefore);
+    const saveResults = window.__HOST_RECORDS__.documentSaveResults.slice(resultsBefore);
+    return {
+      visibleAfterUnchangedResponse,
+      requestRevisions: saveCalls.map((call) => ({
+        expectedRevision: call.body.expectedRevision,
+        baseRevision: call.body.base.revision,
+        nodeIds: call.body.document.nodes.map((node) => node.id)
+      })),
+      saveResults,
+      finalNodeIds: window.__HOST_LAST_DOCUMENT__.nodes.map((node) => node.id),
+      finalRevision: opened.documentRevision,
+      finalTitle: window.__HOST_LAST_DOCUMENT__.nodes.find((node) => node.id === 'node-a').data.title
+    };
+  })()`, "unchanged save response hydrates external AI graph before the next local save");
+  assert.equal(externalAiSaveResponse.visibleAfterUnchangedResponse, true, JSON.stringify(externalAiSaveResponse));
+  assert.equal(externalAiSaveResponse.saveResults[0].status, 'unchanged');
+  assert.equal(externalAiSaveResponse.requestRevisions[1].baseRevision, externalAiSaveResponse.saveResults[0].documentRevision);
+  assert.equal(externalAiSaveResponse.requestRevisions[1].expectedRevision, externalAiSaveResponse.saveResults[0].documentRevision);
+  assert.equal(externalAiSaveResponse.requestRevisions[1].nodeIds.includes('node-ai-save-response'), true, JSON.stringify(externalAiSaveResponse));
+  assert.equal(externalAiSaveResponse.finalNodeIds.includes('node-ai-save-response'), true, JSON.stringify(externalAiSaveResponse));
+  assert.equal(externalAiSaveResponse.finalRevision, externalAiSaveResponse.saveResults[0].documentRevision + 1);
+  assert.equal(externalAiSaveResponse.finalTitle, 'Ordinary local edit after unchanged response');
+
+  const externalAiDuringInFlightEdit = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const valueSetter = Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype, 'value').set;
+    const savesBefore = window.__HOST_RECORDS__.documentSaveCalls;
+    const resultsBefore = window.__HOST_RECORDS__.documentSaveResults.length;
+    window.__HOST_EXTERNAL_AI_ON_NEXT_SAVE__ = {
+      nodeId: 'node-ai-in-flight-response',
+      title: 'External AI node returned during local edit',
+      delayMs: 300
+    };
+    let title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    title.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    title.click();
+    valueSetter.call(title, 'First in-flight external save title');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    let deadline = Date.now() + 3000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.documentSaveCalls < savesBefore + 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    title = doc.querySelector('.react-flow__node[data-id="node-a"] .task-title');
+    valueSetter.call(title, 'Newer local edit preserved across external response');
+    title.dispatchEvent(new win.Event('input', { bubbles: true }));
+    deadline = Date.now() + 5000;
+    while (Date.now() < deadline && window.__HOST_RECORDS__.documentSaveCalls < savesBefore + 2) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const saveCalls = window.__HOST_RECORDS__.toolCalls
+      .filter((call) => call.path && call.path.endsWith('/document'))
+      .slice(savesBefore);
+    const saveResults = window.__HOST_RECORDS__.documentSaveResults.slice(resultsBefore);
+    return {
+      saveTitles: saveCalls.map((call) => call.body.document.nodes.find((node) => node.id === 'node-a').data.title),
+      secondSaveNodeIds: saveCalls[1].body.document.nodes.map((node) => node.id),
+      saveResults,
+      visibleTitle: doc.querySelector('.react-flow__node[data-id="node-a"] .task-title').value,
+      visibleExternalNode: Boolean(doc.querySelector('.react-flow__node[data-id="node-ai-in-flight-response"]')),
+      finalNodeIds: window.__HOST_LAST_DOCUMENT__.nodes.map((node) => node.id)
+    };
+  })()`, "new local edit rebases over unchanged response carrying external AI graph");
+  assert.deepEqual(externalAiDuringInFlightEdit.saveTitles, [
+    'First in-flight external save title',
+    'Newer local edit preserved across external response'
+  ]);
+  assert.equal(externalAiDuringInFlightEdit.saveResults[0].status, 'unchanged');
+  assert.equal(externalAiDuringInFlightEdit.secondSaveNodeIds.includes('node-ai-in-flight-response'), true, JSON.stringify(externalAiDuringInFlightEdit));
+  assert.equal(externalAiDuringInFlightEdit.visibleTitle, 'Newer local edit preserved across external response');
+  assert.equal(externalAiDuringInFlightEdit.visibleExternalNode, true, JSON.stringify(externalAiDuringInFlightEdit));
+  assert.equal(externalAiDuringInFlightEdit.finalNodeIds.includes('node-ai-in-flight-response'), true, JSON.stringify(externalAiDuringInFlightEdit));
 
   const editDuringSave = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
