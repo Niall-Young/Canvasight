@@ -2734,5 +2734,5 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.equal(processIsAlive(daemonPid), false, `isolated widget daemon must exit before cleanup: ${daemonPid}`);
-  await fsp.rm(tempRoot, { recursive: true, force: true });
+  await fsp.rm(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
