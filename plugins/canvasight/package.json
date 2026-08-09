@@ -37,7 +37,7 @@
     "test:update": "node --test tests/update-canvasight-smoke.mjs",
     "test:plugin-distribution": "node tests/plugin-distribution-smoke.mjs",
     "diagnose:mcp": "node tests/mcp-registration-probe.mjs",
-    "test:widget-runtime": "node tests/widget-runtime-smoke.mjs"
+    "test:widget-runtime": "node --experimental-websocket tests/widget-runtime-smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.4",
