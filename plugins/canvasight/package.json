@@ -95,6 +95,7 @@
     "@tiptap/core": "$@tiptap/core",
     "@tiptap/extension-list": "$@tiptap/extension-list",
     "@tiptap/extensions": "$@tiptap/extensions",
-    "@tiptap/pm": "$@tiptap/pm"
+    "@tiptap/pm": "$@tiptap/pm",
+    "ip-address": "10.3.1"
   }
 }
