@@ -2647,6 +2647,10 @@ try {
     window.__HOST_RECORDS__.revisionMaxInFlight = window.__HOST_RECORDS__.revisionInFlight;
     const startedAt = Date.now();
     await new Promise((resolve) => setTimeout(resolve, 30500));
+    const settleDeadline = Date.now() + 3000;
+    while (Date.now() < settleDeadline && window.__HOST_RECORDS__.revisionInFlight > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const calls = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.at >= startedAt);
     const posts = calls.filter((call) => call.method === 'POST');
     return {
@@ -2730,5 +2734,5 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.equal(processIsAlive(daemonPid), false, `isolated widget daemon must exit before cleanup: ${daemonPid}`);
-  await fsp.rm(tempRoot, { recursive: true, force: true });
+  await fsp.rm(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
