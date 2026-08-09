@@ -26,8 +26,8 @@ When the request is to explore a product or UI design before frontend implementa
 
 1. Resolve the target surface, intended user, outcome, viewport, and hard constraints before generation.
 2. Unless the user specifies another count, generate exactly three independent UI images. Each image is one distinct direction with a meaningfully different hierarchy, layout, or interaction model; never combine multiple directions into one image.
-3. Import all accepted options as separate Asset Nodes in their visible result order, then stop for the user's selection. Do not choose a direction or start implementation on the user's behalf.
-4. Tell the user to connect the chosen Asset to the implementation Task and Run from that Asset. Canvasight will treat the starting Asset as the selected primary reference, attach only its image path plus its downstream scope, and ask the receiving AI to reproduce that visual faithfully.
+3. Import all accepted options as separate Asset Nodes in their visible result order, then stop so the user can connect the preferred image into the ordinary canvas flow. Do not choose a direction or start implementation on the user's behalf.
+4. Run continues to start only from executable Task or Group surfaces. For this option flow, run the ordinary Task flow: connected image Assets travel with that Task exactly like node attachments did, while generated images outside its reachable flow are unrelated. An Asset never runs independently, and no separate selection marker or persisted role is needed.
 5. If the project exposes a matching product-design or image-to-code Skill, it may be named visibly in the downstream Task body. Do not persist a hidden Skill assignment or assume that an unavailable external Skill is installed.
 
 ## Boundaries

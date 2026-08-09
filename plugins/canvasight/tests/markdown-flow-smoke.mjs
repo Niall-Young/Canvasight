@@ -145,11 +145,52 @@ assert.doesNotMatch(groupRun.markdown, /Asset role:/, "persisted Asset roles mus
 assert.equal(groupRun.nodes.find((node) => node.id === "visual-reference")?.data.role, "reference", "legacy Asset roles remain readable in the v2 data model");
 assert.doesNotMatch(groupRun.markdown, /Outside task/);
 
-const assetRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-reference", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
-assert.equal(assetRun.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief,outside-task", "Asset Run follows downstream edges");
-assert.equal(assetRun.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png");
-assert.match(assetRun.markdown, /selected primary reference/);
-assert.match(assetRun.markdown, /reproduce this reference faithfully/);
+const connectedReference = {
+  ...groupAsset,
+  id: "connected-reference",
+  parentId: undefined,
+  data: {
+    ...groupAsset.data,
+    title: "Connected UI reference",
+    asset: {
+      ...groupAsset.data.asset,
+      id: "connected-reference-file",
+      originalName: "connected-reference.png",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/connected-reference.png",
+      relativePath: ".scatter/assets/connected-reference.png"
+    }
+  }
+};
+const unconnectedReference = {
+  ...connectedReference,
+  id: "unconnected-reference",
+  data: {
+    ...connectedReference.data,
+    title: "Unconnected UI reference",
+    asset: {
+      ...connectedReference.data.asset,
+      id: "unconnected-reference-file",
+      originalName: "unconnected-reference.png",
+      storedPath: "/tmp/canvasight-smoke/.scatter/assets/unconnected-reference.png",
+      relativePath: ".scatter/assets/unconnected-reference.png"
+    }
+  }
+};
+const implementationTask = taskNode("implement-ui", "Implement UI", "Build the frontend from the connected references.", { x: 0, y: 0 });
+const taskRunWithNodeAttachment = buildMarkdown(
+  [implementationTask, connectedReference, unconnectedReference],
+  [{ id: "task-connected-reference", source: "implement-ui", target: "connected-reference", label: "Attachment" }],
+  "implement-ui",
+  "flow",
+  "Product Design Project",
+  "/tmp/canvasight-smoke",
+  "en",
+  false
+);
+assert.equal(taskRunWithNodeAttachment.nodes.map((node) => node.id).join(","), "implement-ui,connected-reference", "Task Run includes the connected Asset node like an attachment");
+assert.equal(taskRunWithNodeAttachment.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/connected-reference.png");
+assert.doesNotMatch(taskRunWithNodeAttachment.markdown, /Unconnected UI reference/);
+assert.doesNotMatch(taskRunWithNodeAttachment.markdown, /unconnected-reference\.png/);
 
 const svgAsset = {
   ...groupAsset,

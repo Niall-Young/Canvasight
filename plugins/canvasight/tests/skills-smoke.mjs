@@ -48,6 +48,11 @@ assert.match(imagegenSkill, /get_canvasight_graph_context/);
 assert.match(imagegenSkill, /add_canvasight_generated_images/);
 assert.match(imagegenSkill, /one stable unique `clientMutationId`/);
 assert.match(imagegenSkill, /Do not generate anything when native Canvasight opening or ready verification fails/);
+assert.match(imagegenSkill, /exactly three independent UI images/);
+assert.match(imagegenSkill, /connect the preferred image into the ordinary canvas flow/);
+assert.match(imagegenSkill, /connected image Assets travel with that Task exactly like node attachments did/);
+assert.match(imagegenSkill, /An Asset never runs independently/);
+assert.doesNotMatch(imagegenSkill, /Run from that Asset/);
 
 assert.match(updateSkill, /Run exactly that one bundled-updater command and no other shell command/);
 assert.match(updateSkill, /Do not run `npm install`, `npm ci`, another package manager, builds, tests, release preparation or verification/);
@@ -79,6 +84,9 @@ assert.match(graphWriterSkill, /exactly one incoming Edge.*fan out to multiple d
 assert.match(graphWriterSkill, /`promote-attachment`.*context-bound `merge-active-page`/s);
 assert.match(graphWriterNodeTypes, /Image, managed SVG, video, and ordinary files all use this same node shape/);
 assert.match(graphWriterNodeTypes, /persisted `role` field remains readable only for legacy schema compatibility/);
+assert.match(graphWriterNodeTypes, /do not receive node-level Skills, satisfy Task responsibility coverage, or run independently/);
+assert.match(graphWriterNodeTypes, /node-shaped attachments/);
+assert.match(graphWriterNodeTypes, /leave it outside the Task's reachable flow and it is unrelated/);
 assert.match(graphWriterNodeTypes, /adds `Task -> Asset` atomically/);
 assert.match(graphWriterMarkdown, /Task `body` is always one Markdown string/);
 assert.match(graphWriterMarkdown, /Never persist HTML, editor JSON/);

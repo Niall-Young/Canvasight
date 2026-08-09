@@ -12,7 +12,6 @@ import { ActionMenuItem } from "./ui/action-menu-item";
 import { ConnectButton } from "./ConnectButton";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
-import { TooltipAnchor } from "./ui/tooltip";
 
 function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetNodeData, "asset">>): ReactElement {
   const actions = useCanvasActions();
@@ -79,16 +78,6 @@ function AssetNodeComponent({ id, data, selected }: NodeProps<Node<ScatterAssetN
         ) : null}
       </Handle>
       <div className="asset-node-controls">
-        <TooltipAnchor className="asset-node-run nodrag" label={t("asset.run")}>
-          <IconButton
-            className="nodrag"
-            filled={false}
-            icon="play-1"
-            size="lg"
-            aria-label={t("asset.run")}
-            onClick={() => actions.runNode(id, "flow")}
-          />
-        </TooltipAnchor>
         <div className="asset-node-menu">
           <RadixDropdownMenu.Root>
             <RadixDropdownMenu.Trigger asChild>

@@ -440,7 +440,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       ? selectedNode.data.body.trim().length > 0 || selectedNode.data.attachments.length > 0
       : selectedNode.type === "group"
         ? nodes.some((node) => node.type !== "group" && node.parentId === selectedNode.id)
-        : true
+        : false
   ));
   const canDeletePage = pages.length > 1;
   const canGroup = selectedNodes.filter((node) => node.type !== "group").length >= 2;
@@ -2216,7 +2216,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     async (nodeId: string, _mode: RunMode = "flow") => {
       if (!project) return;
       const node = nodes.find((item) => item.id === nodeId);
-      if (!node) return;
+      if (!node || node.type === "asset") return;
       const mode: RunMode = "flow";
       const result = buildMarkdown(nodes, edges, nodeId, mode, project.name, project.path, language, agentTeamEnabled);
       const hasRunnableInput = result.nodes.some((item) =>
@@ -2539,7 +2539,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   );
 
   const runActiveNode = useCallback(() => {
-    if (!selectedNode) return;
+    if (!selectedNode || selectedNode.type === "asset") return;
     void runNode(selectedNode.id, "flow");
   }, [runNode, selectedNode]);
 
