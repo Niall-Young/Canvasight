@@ -228,9 +228,10 @@ jobs:
               if (
                 diagnostic.ok !== true ||
                 initialized?.serverInfo?.version !== expectedVersion ||
-                tools?.toolCount !== 16 ||
+                tools?.toolCount !== 17 ||
                 tools?.requiredToolsPresent !== true ||
-                tools?.frameworkQuestionsToolPresent !== true
+                tools?.frameworkQuestionsToolPresent !== true ||
+                tools?.generatedImagesToolPresent !== true
               ) {
                 process.exit(1);
               }
