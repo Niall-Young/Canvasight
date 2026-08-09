@@ -28,7 +28,7 @@ import { createToolCatalog } from "./domain/tool-catalog.mjs";
 import { createGeneratedImageWriter } from "./infrastructure/generated-images.mjs";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.7";
+const SERVER_VERSION = "0.5.8";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -6381,6 +6381,11 @@ function isRetryableThreadResumeError(error) {
   return /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
 }
 
+function isExistingThreadWriterError(error) {
+  if (error?.canvasightAppServerMethod !== "thread/resume") return false;
+  return /already has an active writer/i.test(String(error?.message || ""));
+}
+
 async function retryThreadResumeSequence(operation, attempts = 4) {
   let lastError = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -6444,12 +6449,15 @@ function codexNativeFailureDiagnostics(error) {
     isDesktop: error?.canvasightCodexRuntimeIsDesktop === true
   };
   const threadStoreIncompatible = /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
+  const threadWriterAlreadyBound = isExistingThreadWriterError(error);
   const desktopUnavailable = runtime.isDesktop && error?.canvasightAppServerPhase === "initialize";
-  const errorCode = threadStoreIncompatible
-    ? "thread_archive_incompatible"
-    : desktopUnavailable
-      ? "desktop_runtime_unavailable"
-      : "codex_native_mode_request_failed";
+  const errorCode = threadWriterAlreadyBound
+    ? "thread_writer_already_bound"
+    : threadStoreIncompatible
+      ? "thread_archive_incompatible"
+      : desktopUnavailable
+        ? "desktop_runtime_unavailable"
+        : "codex_native_mode_request_failed";
   const userMessage =
     errorCode === "thread_archive_incompatible"
       ? `Canvasight could not read the current Desktop task archive with the selected runtime. Reload or restart Codex Desktop, create a new task, then reopen Canvasight. Diagnostic: ${message}`
@@ -6509,6 +6517,13 @@ function codexNativeModeApplied(status) {
 async function applyWidgetCodexMode(session, payload) {
   const codexNative = await applyCodexNativeMode(session, payload);
   if (codexNative.status !== "applied") {
+    if (codexNative.errorCode === "thread_writer_already_bound") {
+      return {
+        ...codexNative,
+        status: "preflight_degraded_chat",
+        reason: "thread_writer_preflight_deferred_to_widget_bridge"
+      };
+    }
     if (isRetryableThreadResumeError({
       canvasightAppServerMethod: "thread/resume",
       message: codexNative.error

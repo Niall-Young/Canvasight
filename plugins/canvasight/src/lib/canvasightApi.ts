@@ -69,6 +69,7 @@ export interface RunResponse {
     errorCode?:
       | "desktop_runtime_unavailable"
       | "thread_archive_incompatible"
+      | "thread_writer_already_bound"
       | "codex_native_mode_request_failed";
     reason?: string;
     path?: "direct" | "resume_retry";

@@ -86,6 +86,7 @@ const canvasightHome = path.join(tempRoot, "canvasight-home");
 const exportDirectory = path.join(tempRoot, "exports");
 const nativeLogPath = path.join(tempRoot, "native-codex.jsonl");
 const resumeFailPath = path.join(tempRoot, "resume-fail-threads.txt");
+const activeWriterPath = path.join(tempRoot, "active-writer-threads.txt");
 const transientResumeFailCountPath = path.join(tempRoot, "transient-resume-fail-count.json");
 const directModeNotLoadedPath = path.join(tempRoot, "direct-mode-not-loaded-threads.txt");
 const directModeThreadReadFailPath = path.join(tempRoot, "direct-mode-thread-read-fail-threads.txt");
@@ -101,6 +102,7 @@ import fs from "node:fs";
 
 const logPath = process.env.CANVASIGHT_NATIVE_LOG;
 const resumeFailPath = process.env.CANVASIGHT_FAKE_RESUME_FAIL_PATH;
+const activeWriterPath = process.env.CANVASIGHT_FAKE_ACTIVE_WRITER_PATH;
 const transientResumeFailCountPath = process.env.CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH;
 const directModeNotLoadedPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH;
 const directModeThreadReadFailPath = process.env.CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH;
@@ -129,6 +131,15 @@ function shouldFailResume(threadId) {
   if (!resumeFailPath) return false;
   try {
     return fs.readFileSync(resumeFailPath, "utf8").split(/\\s+/).filter(Boolean).includes(threadId);
+  } catch {
+    return false;
+  }
+}
+
+function shouldReportActiveWriter(threadId) {
+  if (!activeWriterPath) return false;
+  try {
+    return fs.readFileSync(activeWriterPath, "utf8").split(/\\s+/).filter(Boolean).includes(threadId);
   } catch {
     return false;
   }
@@ -182,6 +193,10 @@ function handle(message) {
     return;
   }
   if (message.method === "thread/resume") {
+    if (shouldReportActiveWriter(message.params.threadId)) {
+      write({ id: message.id, error: { code: -32603, message: "thread " + message.params.threadId + " already has an active writer" } });
+      return;
+    }
     if (shouldTransientlyFailResume(message.params.threadId)) {
       write({ id: message.id, error: { code: -32603, message: "failed to read thread rollout: rollout does not start with session metadata" } });
       return;
@@ -336,6 +351,7 @@ const child = spawn(process.execPath, [serverPath], {
     CANVASIGHT_CODEX_NATIVE: "1",
     CANVASIGHT_NATIVE_LOG: nativeLogPath,
     CANVASIGHT_FAKE_RESUME_FAIL_PATH: resumeFailPath,
+    CANVASIGHT_FAKE_ACTIVE_WRITER_PATH: activeWriterPath,
     CANVASIGHT_FAKE_TRANSIENT_RESUME_FAIL_COUNT_PATH: transientResumeFailCountPath,
     CANVASIGHT_FAKE_DIRECT_MODE_NOT_LOADED_PATH: directModeNotLoadedPath,
     CANVASIGHT_FAKE_DIRECT_MODE_THREAD_READ_FAIL_PATH: directModeThreadReadFailPath,
@@ -497,6 +513,8 @@ async function assertDynamicWidgetRuntimeApi() {
   const requests = [];
   const serverToolRequests = [];
   const bridgeMessages = [];
+  let preparedNativeStatus = "preflight_degraded_chat";
+  let bridgeFailure = null;
   const windowListeners = new Map();
   const readyEvents = [];
   const mockBridgeState = {
@@ -538,7 +556,14 @@ async function assertDynamicWidgetRuntimeApi() {
               status: 200,
               data: {
                 status: "prepared",
-                codexNative: { status: "applied_chat" },
+                codexNative: {
+                  status: preparedNativeStatus,
+                  ...(preparedNativeStatus === "preflight_degraded_chat"
+                    ? { errorCode: "thread_writer_already_bound", reason: "thread_writer_preflight_deferred_to_widget_bridge" }
+                    : preparedNativeStatus === "failed"
+                      ? { error: "fake transport failure", errorCode: "codex_native_mode_request_failed" }
+                      : {})
+                },
                 delivery: { status: "prepared", via: "widget_bridge" }
               },
               error: null,
@@ -558,6 +583,7 @@ async function assertDynamicWidgetRuntimeApi() {
       },
       async sendFollowUpMessage(message) {
         bridgeMessages.push(message);
+        if (bridgeFailure) throw bridgeFailure;
       }
     },
     location: { search: "", href: "https://canvasight-widget.test/" },
@@ -685,8 +711,24 @@ async function assertDynamicWidgetRuntimeApi() {
     };
     const chatRun = await api.runCanvasightNode(widgetRunPayload);
     assert.equal(chatRun.status, "sent");
-    assert.equal(bridgeMessages.length, 1, "legacy mode payloads normalize and retain bridge delivery");
+    assert.equal(chatRun.codexNative.status, "preflight_degraded_chat");
+    assert.equal(bridgeMessages.length, 1, "an active-writer preflight degradation still sends exactly once through the native bridge");
     assert.equal(bridgeMessages[0].prompt, "# Mode control smoke");
+
+    bridgeFailure = new Error("Host rejected active-writer Canvasight Run");
+    await assert.rejects(
+      () => api.runCanvasightNode({ ...widgetRunPayload, markdown: "# Rejected active-writer Run" }),
+      /Host rejected active-writer Canvasight Run/
+    );
+    assert.equal(bridgeMessages.length, 2, "a rejected bridge Promise is attempted once and must not be retried or reported sent");
+
+    bridgeFailure = null;
+    preparedNativeStatus = "failed";
+    await assert.rejects(
+      () => api.runCanvasightNode({ ...widgetRunPayload, markdown: "# Blocked transport failure" }),
+      /blocked before sendMessage.*fake transport failure/i
+    );
+    assert.equal(bridgeMessages.length, 2, "non-degraded preflight failures must still block before native bridge delivery");
   } finally {
     await viteServer.close();
     if (originalWindow === undefined) delete globalThis.window;
@@ -706,13 +748,14 @@ async function waitForCondition(predicate, label, timeoutMs = 1500) {
   assert.fail(`Timed out waiting for ${label}`);
 }
 
-function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40, initializeError = false } = {}) {
+function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40, initializeError = false, messageResult = {} } = {}) {
   const records = {
     appMessages: [],
     compatPrompts: [],
     openaiGlobalEvents: []
   };
   const listeners = new Map();
+  let currentMessageResult = messageResult;
   const statusEl = { dataset: {}, textContent: "Starting Canvasight..." };
   const documentElement = {
     classList: { contains: () => false },
@@ -827,7 +870,7 @@ function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40, initializeErro
       } else if (message.method === "ui/request-display-mode") {
         result = { mode: message.params?.mode || "fullscreen" };
       } else if (message.method === "ui/message") {
-        result = {};
+        result = currentMessageResult;
       } else if (message.method === "tools/call") {
         result = { content: [] };
       }
@@ -842,6 +885,9 @@ function createWidgetBridgeEnvironment({ bootstrapTimeoutMs = 40, initializeErro
     records,
     statusEl,
     window,
+    setMessageResult(result) {
+      currentMessageResult = result;
+    },
     dispatchOpenAiGlobals(globals) {
       records.openaiGlobalEvents.push(globals);
       window.dispatchEvent(new TestCustomEvent("openai:set_globals", { detail: { globals } }));
@@ -1024,6 +1070,28 @@ async function assertWidgetBootstrapContracts(widgetHtml) {
       detail: { bindingKey: "session-rebound:open-rebound:2000" }
     }));
     assert.equal(standard.window.canvasightMcp.getBridgeState().startupStage, "ready", "the active binding can complete startup");
+    await standard.window.canvasightMcp.sendFollowUpMessage({
+      prompt: "# Active writer native bridge acceptance",
+      content: [{ type: "text", text: "# Active writer native bridge acceptance" }]
+    });
+    assert.equal(
+      standard.records.appMessages.filter((message) => message.method === "ui/message").length,
+      1,
+      "a resolved native bridge Promise sends exactly one ui/message"
+    );
+    standard.setMessageResult({ isError: true });
+    await assert.rejects(
+      () => standard.window.canvasightMcp.sendFollowUpMessage({
+        prompt: "# Rejected active writer native bridge",
+        content: [{ type: "text", text: "# Rejected active writer native bridge" }]
+      }),
+      /Host rejected the Canvasight message/
+    );
+    assert.equal(
+      standard.records.appMessages.filter((message) => message.method === "ui/message").length,
+      2,
+      "a rejected native bridge Promise is not retried or reported as sent"
+    );
     await closeWidgetBridgeEnvironment(standard);
     restore();
 
@@ -3655,7 +3723,7 @@ async function main() {
   const killTimer = setTimeout(() => {
     child.kill("SIGTERM");
     rejectPending(new Error(`MCP smoke test timed out. stderr=${stderrBuffer}`));
-  }, 60000);
+  }, 75000);
 
   try {
     const inlineOnlyHome = path.join(tempRoot, "inline-framework-questions-home");
@@ -5924,6 +5992,49 @@ async function main() {
     const degradedChatLog = (await readNativeLog()).slice(degradedChatLogOffset);
     assert.equal(degradedChatLog.filter((entry) => entry.method === "thread/resume").length, 4);
     assert.equal(degradedChatLog.some((entry) => entry.method === "thread/settings/update"), false);
+
+    const activeWriterLogOffset = (await readNativeLog()).length;
+    await fsp.writeFile(activeWriterPath, "thread-smoke\n", "utf8");
+    const activeWriterPrepared = await fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+      method: "POST",
+      headers: openedIdentityHeaders,
+      body: JSON.stringify({
+        ...runPayload,
+        threadName: "Widget Chat Prepared With Existing Desktop Writer",
+        markdown: "# Widget Chat Prepared With Existing Desktop Writer",
+        codexMode: "chat",
+        planMode: false,
+        deliveryMode: "widget_bridge_prepare"
+      })
+    });
+    await fsp.writeFile(activeWriterPath, "", "utf8");
+    assert.equal(activeWriterPrepared.status, "prepared");
+    assert.equal(activeWriterPrepared.codexNative.status, "preflight_degraded_chat");
+    assert.equal(activeWriterPrepared.codexNative.errorCode, "thread_writer_already_bound");
+    assert.equal(activeWriterPrepared.codexNative.reason, "thread_writer_preflight_deferred_to_widget_bridge");
+    assert.match(activeWriterPrepared.codexNative.rawError, /already has an active writer/);
+    const activeWriterLog = (await readNativeLog()).slice(activeWriterLogOffset);
+    assert.equal(activeWriterLog.filter((entry) => entry.method === "thread/resume").length, 1, "an existing Desktop writer is not a retryable archive failure");
+    assert.equal(activeWriterLog.some((entry) => entry.method === "thread/settings/update"), false);
+    assert.equal(activeWriterLog.some((entry) => entry.method === "turn/start"), false);
+
+    await fsp.writeFile(resumeFailPath, "thread-smoke\n", "utf8");
+    await assert.rejects(
+      () => fetchJson(`${origin}/api/sessions/${sessionId}/run`, {
+        method: "POST",
+        headers: openedIdentityHeaders,
+        body: JSON.stringify({
+          ...runPayload,
+          threadName: "Widget Chat Blocked On Other Resume Failure",
+          markdown: "# Widget Chat Blocked On Other Resume Failure",
+          codexMode: "chat",
+          planMode: false,
+          deliveryMode: "widget_bridge_prepare"
+        })
+      }),
+      /blocked before sendMessage.*fake thread\/resume failure/i
+    );
+    await fsp.writeFile(resumeFailPath, "", "utf8");
 
     const awaitedRunLogOffset = (await readNativeLog()).length;
     const waitForRun = request("tools/call", {

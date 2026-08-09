@@ -112,6 +112,8 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 
 同一项目可以在多个 Codex 任务中同时打开和编辑。同一 Page 上的保存会以各任务最后确认的版本为基础进行比较：不同节点或连线的修改会自动合并，不需要锁住整个 Page。
 
+每次 widget 保存响应都会同时确认 revision 和响应文档：如果响应包含外部 AI 或其他任务新增的内容，画布会立即同步；如果保存期间又发生了本地编辑，Canvasight 会把这些编辑重基到响应文档之上。客户端不会只推进 base revision 而继续保留旧画布正文，因此后续视口或普通编辑保存不会把较新的 AI 节点覆盖掉。
+
 如果两个任务修改了同一对象且结果不同，原 Page 保留先保存的结果；后保存任务的完整 Page 会保存为一个新的“冲突副本” Page。删除与修改发生冲突时也会创建冲突副本，不会把任一方的内容静默丢弃。后保存的任务会在本地切换到这个冲突副本并显示提示，其他任务不会被强制切换 Page。冲突副本之后就是普通 Page，可以继续编辑、重命名或删除。
 
 AI 开始修改当前 Page 时，Canvasight 会把这次写入绑定到当时的 Page 和上下文。你可以在 AI 工作期间继续拖动节点、编辑其他内容或切换 Page；不同对象的修改会自动合并，切换 Page 也不会让 AI 写到错误的页面。已有节点保留你最新的手动位置，AI 只为新增节点安排位置。
@@ -127,7 +129,7 @@ AI 开始修改当前 Page 时，Canvasight 会把这次写入绑定到当时的
 - widget 通过 app-only `canvasight_widget_api` 访问 daemon，并在请求中携带 attempt、instance 和当前 startup stage。原生 widget 不直接 fetch localhost。
 - Codex 复用已打开的 widget 容器时，新的 open binding 会在同一容器中重新启动 React 应用、停用旧任务画布并绑定新的 attempt/session/thread。当前 binding 的重复元数据可以合并；更旧 binding 的迟到元数据必须忽略，不能让 Ready 回退到 Connecting。
 - 启动失败、阶段超时或 React render error 会进入持久失败面板，显示失败阶段和可读原因，并提供重新连接、在新任务中重开和复制脱敏诊断；不能永久停在 “Opening”、“Starting” 或 “Connecting”。
-- native Run 只允许由已验证的 fullscreen instance 以 Chat 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。
+- native Run 只允许由已验证的 fullscreen instance 以 Chat 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。Codex Desktop 正常持有当前任务的 thread writer 时，独立 preflight 的 `already has an active writer` 不会阻断 Run，而是交由已绑定 host 的消息 Promise 决定接受或拒绝；其他 preflight 错误仍会在发送前安全停止。
 - daemon URL 和 token 只存在于 widget 内部元数据，不出现在 native open 的公开结果中。
 
 浏览器 URL 和裸 dev 页面是诊断 fallback，不是原生打开路径。它们没有 native widget host bridge：claim 当前任务后，Run 只进入 `await_canvasight_run` 队列，不能显示为 native sent。
@@ -522,6 +524,8 @@ Existing `.scatter` v1 canvases keep their content and layout and are not rewrit
 
 The same project can be open and edited in multiple Codex tasks at once. Saves to the same Page are compared from the last version confirmed by each task. Changes to different nodes or edges merge automatically, so Canvasight does not need to lock the entire Page.
 
+Every widget save response confirms both its revision and response document. When that response contains content added by an external AI write or another task, the canvas synchronizes it immediately. When newer local edits occur while the save is in flight, Canvasight rebases them onto the response document. The client never advances only its base revision while retaining an older canvas body, so a later viewport or ordinary edit cannot overwrite newer AI nodes.
+
 If two tasks change the same object to different results, the original Page keeps the first saved result and the later task's complete Page is saved as a new conflict-copy Page. A delete-versus-edit conflict also creates a conflict copy instead of silently discarding either side. The later task switches locally to its conflict copy and shows a notice; other tasks are not forced to switch Pages. A conflict copy is an ordinary Page after creation and can be edited, renamed, or deleted.
 
 When AI starts changing the current Page, Canvasight binds that write to the Page and context captured at the start. You can keep dragging nodes, editing other content, or switching Pages while AI works. Changes to different objects merge automatically, and switching Pages never redirects the AI result to the wrong Page. Existing nodes keep their latest manual positions; AI places only newly added nodes.
@@ -537,7 +541,7 @@ Graph-structure and framework validation is always completed before automatic re
 - The widget reaches the daemon through the app-only `canvasight_widget_api`, carrying its attempt, instance, and startup stage on every request. The native widget does not fetch localhost directly.
 - When Codex reuses an open widget container, the newer open binding restarts the React app in that container, disables the old task's canvas, and binds the new attempt/session/thread. Duplicate metadata for the current binding may be merged; late metadata from an older binding must be ignored and cannot move Ready back to Connecting.
 - Startup failures, stage timeouts, and React render errors enter a persistent failure panel with the failed stage, a readable reason, Reconnect, Reopen in a new task, and Copy redacted diagnostics. The UI must not remain on “Opening”, “Starting”, or “Connecting” forever.
-- A native Run is allowed only from the verified fullscreen instance to its bound task through Chat and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully.
+- A native Run is allowed only from the verified fullscreen instance to its bound task through Chat and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully. When Codex Desktop normally holds the current task's thread writer, an independent preflight error saying `already has an active writer` does not block Run; the bound host's message Promise decides whether to accept or reject it. Other preflight failures still stop safely before delivery.
 - Daemon URLs and tokens remain in widget-only metadata and are not exposed in public native-open output.
 
 Browser URLs and bare dev pages are diagnostic fallbacks, not native-open paths. They have no native widget host bridge. After claiming the current task, their Runs only enter the `await_canvasight_run` queue and cannot be labelled as native sent.

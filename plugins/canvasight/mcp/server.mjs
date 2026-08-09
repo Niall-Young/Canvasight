@@ -18542,7 +18542,7 @@ function createGeneratedImageWriter(dependencies) {
 
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.7";
+var SERVER_VERSION = "0.5.8";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -24073,6 +24073,10 @@ function isRetryableThreadResumeError(error51) {
   const message = String(error51?.message || "");
   return /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
 }
+function isExistingThreadWriterError(error51) {
+  if (error51?.canvasightAppServerMethod !== "thread/resume") return false;
+  return /already has an active writer/i.test(String(error51?.message || ""));
+}
 async function retryThreadResumeSequence(operation, attempts = 4) {
   let lastError = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -24132,8 +24136,9 @@ function codexNativeFailureDiagnostics(error51) {
     isDesktop: error51?.canvasightCodexRuntimeIsDesktop === true
   };
   const threadStoreIncompatible = /failed to read thread|rollout does not start with session metadata|thread-store internal error/i.test(message);
+  const threadWriterAlreadyBound = isExistingThreadWriterError(error51);
   const desktopUnavailable = runtime.isDesktop && error51?.canvasightAppServerPhase === "initialize";
-  const errorCode = threadStoreIncompatible ? "thread_archive_incompatible" : desktopUnavailable ? "desktop_runtime_unavailable" : "codex_native_mode_request_failed";
+  const errorCode = threadWriterAlreadyBound ? "thread_writer_already_bound" : threadStoreIncompatible ? "thread_archive_incompatible" : desktopUnavailable ? "desktop_runtime_unavailable" : "codex_native_mode_request_failed";
   const userMessage = errorCode === "thread_archive_incompatible" ? "Canvasight could not read the current Desktop task archive with the selected runtime. Reload or restart Codex Desktop, create a new task, then reopen Canvasight. Diagnostic: ".concat(message) : errorCode === "desktop_runtime_unavailable" ? "Canvasight could not start the selected Desktop runtime. Reload or restart Codex Desktop, then reopen Canvasight. Diagnostic: ".concat(message) : message;
   return { error: userMessage, rawError: message, errorCode, ...codexRuntimeDiagnostics(runtime) };
 }
@@ -24183,6 +24188,13 @@ function codexNativeModeApplied(status) {
 async function applyWidgetCodexMode(session, payload) {
   const codexNative = await applyCodexNativeMode(session, payload);
   if (codexNative.status !== "applied") {
+    if (codexNative.errorCode === "thread_writer_already_bound") {
+      return {
+        ...codexNative,
+        status: "preflight_degraded_chat",
+        reason: "thread_writer_preflight_deferred_to_widget_bridge"
+      };
+    }
     if (isRetryableThreadResumeError({
       canvasightAppServerMethod: "thread/resume",
       message: codexNative.error
