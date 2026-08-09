@@ -48,7 +48,6 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   return nodes.flatMap((node) => {
-    if (node.type === "asset") return [];
     const entries: TaskListEntry[] = [];
     const isFlowStart = outgoingNodeIds.has(node.id) && !incomingNodeIds.has(node.id);
     const hasPrompt = node.type === "task"
@@ -85,10 +84,10 @@ function taskListEntries(nodes: ScatterNode[], edges: ScatterEdge[], t: Translat
     if (isFlowStart) return entries;
 
     entries.push({
-      canRun: hasPrompt,
+      canRun: node.type === "asset" || hasPrompt,
       flow: false,
       id: `node-${node.id}`,
-      meta: hasPrompt ? t("drawer.canSend") : t("drawer.notEdited"),
+      meta: node.type === "asset" || hasPrompt ? t("drawer.canSend") : t("drawer.notEdited"),
       mode: "flow",
       node,
       nodeCount: 1
@@ -274,7 +273,7 @@ export function RightDrawer({
     const searchable = entry.node.type === "task"
       ? `${entry.node.data.title} ${entry.node.data.body} ${entry.node.data.attachments.map((attachment) => attachment.originalName).join(" ")}`
       : entry.node.type === "asset"
-        ? `${entry.node.data.title} ${entry.node.data.description} ${entry.node.data.asset.originalName} ${entry.node.data.role}`
+        ? `${entry.node.data.title} ${entry.node.data.description} ${entry.node.data.asset.originalName}`
         : `${entry.node.data.title} ${entry.node.data.description}`;
     return searchable.toLowerCase().includes(normalizedTaskSearch);
   });

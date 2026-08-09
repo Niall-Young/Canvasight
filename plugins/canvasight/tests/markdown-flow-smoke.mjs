@@ -148,6 +148,8 @@ assert.doesNotMatch(groupRun.markdown, /Outside task/);
 const assetRun = buildMarkdown(multimodalNodes, multimodalEdges, "visual-reference", "flow", "Multimodal Project", "/tmp/canvasight-smoke", "en", false);
 assert.equal(assetRun.nodes.map((node) => node.id).join(","), "visual-reference,visual-brief,outside-task", "Asset Run follows downstream edges");
 assert.equal(assetRun.imagePaths.join(","), "/tmp/canvasight-smoke/.scatter/assets/homepage-reference.png");
+assert.match(assetRun.markdown, /selected primary reference/);
+assert.match(assetRun.markdown, /reproduce this reference faithfully/);
 
 const svgAsset = {
   ...groupAsset,

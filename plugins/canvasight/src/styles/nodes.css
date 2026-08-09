@@ -90,6 +90,7 @@
   pointer-events: auto;
 }
 
+.asset-node-run,
 .asset-node-menu {
   opacity: 0;
   pointer-events: none;
@@ -97,6 +98,9 @@
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
+.asset-node:hover .asset-node-run,
+.asset-node:focus-within .asset-node-run,
+.asset-node.is-selected .asset-node-run,
 .asset-node:hover .asset-node-menu,
 .asset-node:focus-within .asset-node-menu,
 .asset-node.is-selected .asset-node-menu,
@@ -106,6 +110,9 @@
   transform: translateY(0);
 }
 
+.asset-node-run .kit-icon-button,
+.asset-node-run .kit-icon-button.is-plain:hover,
+.asset-node-run .kit-icon-button.is-plain:focus-visible,
 .asset-node-menu .kit-icon-button,
 .asset-node-menu .kit-icon-button.is-plain:hover,
 .asset-node-menu .kit-icon-button.is-plain:focus-visible,

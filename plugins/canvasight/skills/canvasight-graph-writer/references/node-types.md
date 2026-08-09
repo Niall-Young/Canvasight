@@ -36,7 +36,7 @@ Task `body` is persisted Markdown. Read [task-body-markdown.md](task-body-markdo
 
 An Asset Node references exactly one file already managed under the current project's `.scatter/assets` directory. Reuse the `id` and `relativePath` returned by `get_canvasight_graph_context`; the server resolves and validates the stored path. Never invent an absolute path, MIME, `kind`, or external file reference. Image, managed SVG, video, and ordinary files all use this same node shape; Canvasight infers their presentation from the validated file.
 
-Asset Nodes do not receive node-level Skills, satisfy Task responsibility coverage, or run independently. The persisted `role` field remains readable only for legacy schema compatibility. Do not author it as current intent; express evidence, dependency, output, or other meaning with the `Task -> Asset` Edge direction, its label, and surrounding context.
+Asset Nodes do not receive node-level Skills or satisfy Task responsibility coverage. They may start a downstream Run: the starting file becomes the user's selected primary reference and only that Asset's reachable flow is included. This supports choosing one generated UI direction before a downstream implementation Task. The persisted `role` field remains readable only for legacy schema compatibility. Do not author it as current intent; express evidence, dependency, output, or other meaning with Edge direction, labels, and surrounding context.
 
 To promote a legacy Task attachment, first read its lightweight handle from the Task's `legacyAttachments`, then use a modern context-bound merge:
 

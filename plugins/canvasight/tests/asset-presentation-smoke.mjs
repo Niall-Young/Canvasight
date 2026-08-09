@@ -10,6 +10,7 @@ const presentationPath = path.join(pluginRoot, "src", "lib", "assetPresentation.
 const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx");
 const connectButtonPath = path.join(pluginRoot, "src", "components", "ConnectButton.tsx");
 const groupNodePath = path.join(pluginRoot, "src", "components", "GroupNode.tsx");
+const rightDrawerPath = path.join(pluginRoot, "src", "components", "RightDrawer.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 
@@ -68,6 +69,7 @@ for (const [, , icon] of expectedMappings) {
 const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
 const connectButtonSource = fs.readFileSync(connectButtonPath, "utf8");
 const groupNodeSource = fs.readFileSync(groupNodePath, "utf8");
+const rightDrawerSource = fs.readFileSync(rightDrawerPath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
 const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
@@ -90,7 +92,10 @@ assert.match(
   "Group hover and selection must suppress XYFlow's default outer focus frame"
 );
 assert.match(assetNodeSource, /className="asset-node-menu"/, "More must remain a distinct hover control");
-assert.match(appCssSource, /\.asset-node-controls\s*\{[^}]*right:\s*12px;[^}]*left:\s*auto;[^}]*justify-content:\s*flex-end;/s, "Asset controls must remain right-aligned after classification removal");
+assert.match(assetNodeSource, /className="asset-node-run nodrag"[\s\S]*?label=\{t\("asset\.run"\)\}[\s\S]*?icon="play-1"[\s\S]*?actions\.runNode\(id, "flow"\)/s, "Assets must expose a compact downstream Run action");
+assert.match(appCssSource, /\.asset-node-controls\s*\{[^}]*right:\s*12px;[^}]*left:\s*auto;[^}]*justify-content:\s*flex-end;/s, "Asset Run and More controls must remain right-aligned");
+assert.match(appCssSource, /\.asset-node-run,\s*\.asset-node-menu\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s, "Asset controls must be hidden and non-interactive at rest");
+assert.match(appCssSource, /\.asset-node:hover \.asset-node-run,[\s\S]*?\.asset-node\.is-selected \.asset-node-run,[\s\S]*?opacity:\s*1;[^}]*pointer-events:\s*auto;/s, "Asset Run must appear on hover, focus, or selection");
 assert.match(appCssSource, /\.asset-node-menu:has\(\.kit-icon-button\[data-state="open"\]\)/, "an open Portal menu must keep More visible");
 assert.match(appCssSource, /\.asset-node-menu\s*\{[^}]*opacity:\s*0/s, "More must be hidden at rest");
 assert.match(appCssSource, /\.asset-node-menu \.kit-icon-button,[\s\S]*?\.asset-node-menu \.kit-icon-button\[data-state="open"\][\s\S]*?background:\s*var\(--color-background-surface\);/s, "More must keep one opaque surface across visible states");
@@ -113,6 +118,11 @@ assert.match(appSource, /function handleKeyDown\(event: KeyboardEvent\): void \{
 assert.match(appSource, /function handleKeyUp\(event: KeyboardEvent\): void \{\s*if \(!isSpaceKey\(event\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keyup on native media controls must not be prevented by canvas pan handling");
 assert.match(assetNodeSource, /onDoubleClick=\{openFile\}/, "media Assets must retain double-click file opening");
 assert.match(assetNodeSource, /<ConnectButton nodeId=\{id\} side="left" \/>[\s\S]*?className="asset-node-menu"[\s\S]*?<ConnectButton nodeId=\{id\} side="right" \/>/s, "video controls must not replace More or the left and right connection controls");
+assert.doesNotMatch(appSource, /if \(!node \|\| node\.type === "asset"\) return;/, "the Run dispatcher must not reject Asset starts");
+assert.doesNotMatch(appSource, /if \(!selectedNode \|\| selectedNode\.type === "asset"\) return;/, "the selected-node Run shortcut must support Assets");
+assert.doesNotMatch(rightDrawerSource, /if \(node\.type === "asset"\) return \[\];/, "the task drawer must list Asset run sources");
+assert.match(rightDrawerSource, /canRun:\s*node\.type === "asset" \|\| hasPrompt/, "standalone Assets must remain runnable from the drawer");
+assert.match(rightDrawerSource, /meta:\s*node\.type === "asset" \|\| hasPrompt \? t\("drawer\.canSend"\)/, "standalone Assets must be described as runnable in the drawer");
 assert.match(connectButtonSource, /className="node-connect-button"/, "the shared connection control must retain the geometry-critical button class");
 assert.match(appCssSource, /\.asset-video-stage\s*\{[^}]*position:\s*relative;[^}]*width:\s*100%;/s, "the video selection layer must anchor within the media geometry");
 assert.match(appCssSource, /\.asset-video-selection-layer\s*\{[^}]*position:\s*absolute;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*48px;[^}]*left:\s*0;[^}]*z-index:\s*1;[^}]*cursor:\s*pointer;/s, "the transparent selection layer must cover only the picture and leave native bottom controls unobstructed");

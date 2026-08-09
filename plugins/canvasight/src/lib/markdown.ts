@@ -116,6 +116,7 @@ interface MarkdownText {
   connectionMap: string;
   executionRequest: string;
   executionRequestBody: string;
+  selectedAssetExecutionRequestBody: string;
   skillExecutionScope: string;
   skillMap: string;
   includedNodes: string;
@@ -155,6 +156,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     connectionMap: "连接关系",
     executionRequest: "执行请求",
     executionRequestBody: "请把以下 Canvasight 画布上下文作为事实来源。需要时检查引用文件，并在这个项目中执行请求的工作。",
+    selectedAssetExecutionRequestBody: "把起始 Asset 视为用户选中的主要参考，直接检查该文件，并执行其下游任务。若下游要求实现界面，请忠实还原这张参考图，而不是自行改换视觉方向。",
     skillExecutionScope: "流程包含节点级 Skill。每个 Skill 只应用于下方映射的节点职责；不要把某个节点的 Skill 扩展到其他节点。",
     skillMap: "节点—Skill 映射",
     includedNodes: "包含的节点",
@@ -192,6 +194,7 @@ const markdownTexts: Record<ResolvedLanguage, MarkdownText> = {
     connectionMap: "Connection Map",
     executionRequest: "Execution Request",
     executionRequestBody: "Use the following Canvasight canvas context as the source of truth. Analyze the task structure, inspect referenced files when needed, and execute the requested work in this project.",
+    selectedAssetExecutionRequestBody: "Treat the starting Asset as the user's selected primary reference, inspect that file directly, and execute its downstream tasks. If the downstream work asks for UI implementation, reproduce this reference faithfully instead of choosing a different visual direction.",
     skillExecutionScope: "This flow contains node-scoped Skills. Apply each Skill only to the mapped node responsibility; do not extend one node's Skill to other nodes.",
     skillMap: "Node–Skill Map",
     includedNodes: "Included Nodes",
@@ -464,6 +467,9 @@ export function buildMarkdown(
   const text = markdownText(language);
   const startNode = startNodeId ? allNodes.find((node) => node.id === startNodeId) : null;
   const startGroup = startNode?.type === "group" ? startNode : null;
+  const executionRequestBody = startNode?.type === "asset"
+    ? text.selectedAssetExecutionRequestBody
+    : text.executionRequestBody;
   const executableNodes = allNodes.filter((node): node is ScatterTaskNode | ScatterAssetNode => node.type !== "group");
   const groupMembers = startGroup ? executableNodes.filter((node) => node.parentId === startGroup.id) : [];
   const groupMemberIds = new Set(groupMembers.map((node) => node.id));
@@ -530,7 +536,7 @@ ${text.projectPath}: \`${projectPath}\`
 ${text.runMode}: ${modeLabel}
 ${nodeIds.hasCycle ? text.warningCycle : ""}${agentTeamSection(agentTeam, text)}
 ## ${text.executionRequest}
-${text.executionRequestBody}${skillMap.length ? `\n\n${text.skillExecutionScope}` : ""}${skillMapSection}
+${executionRequestBody}${skillMap.length ? `\n\n${text.skillExecutionScope}` : ""}${skillMapSection}
 ${includedNodeSections}
 
 ## ${text.connectionMap}
