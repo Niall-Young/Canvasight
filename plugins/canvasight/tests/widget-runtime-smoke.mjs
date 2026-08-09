@@ -11,9 +11,23 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(__dirname, "..");
 const serverPath = path.join(pluginRoot, "mcp", "server.mjs");
-const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const chromeCandidates = [
+  process.env.CHROME_PATH,
+  process.env.CHROME_BIN,
+  process.env.GOOGLE_CHROME_BIN,
+  ...(process.platform === "darwin"
+    ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+    : process.platform === "win32"
+      ? [
+          process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google", "Chrome", "Application", "chrome.exe"),
+          process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Google", "Chrome", "Application", "chrome.exe"),
+          process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe")
+        ]
+      : ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser"])
+].filter(Boolean);
+const chromePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
 
-assert.equal(fs.existsSync(chromePath), true, `Chrome is required for the composed widget smoke: ${chromePath}`);
+assert.equal(typeof chromePath, "string", `Chrome is required for the composed widget smoke; checked: ${chromeCandidates.join(", ")}`);
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-widget-runtime-"));
 const canvasightHome = path.join(tempRoot, "home");
@@ -1565,6 +1579,7 @@ try {
     const outgoingId = '__canvasight-group-aggregate__:edge-group:node-b';
     const incomingEdge = doc.querySelector('.react-flow__edge[data-id="' + incomingId + '"]');
     const outgoingEdge = doc.querySelector('.react-flow__edge[data-id="' + outgoingId + '"]');
+    if (doc.querySelectorAll('.react-flow__edge').length !== 2 || !incomingEdge || !outgoingEdge) return false;
     const endpoint = (edge, end) => {
       if (!edge) return null;
       const path = edge.querySelector('.scatter-edge-path');
@@ -2655,6 +2670,7 @@ try {
     const active = document.getElementById(${JSON.stringify("widget-history-3")});
     const activeWidgetInstanceId = active.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
     const beforePosts = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'POST').length;
+    const beforeDeletes = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'DELETE' && call.widgetInstanceId === activeWidgetInstanceId).length;
     const responseCountBefore = window.__HOST_RECORDS__.teardownResponses.length;
     window.__HOST_TEARDOWN__(active.contentWindow);
     window.__HOST_TEARDOWN__(active.contentWindow);
@@ -2664,7 +2680,7 @@ try {
     }
     await new Promise((resolve) => setTimeout(resolve, 5500));
     const afterPosts = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'POST').length;
-    const deletes = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'DELETE' && call.widgetInstanceId === activeWidgetInstanceId).length;
+    const deletes = window.__HOST_RECORDS__.revisionPolls.filter((call) => call.method === 'DELETE' && call.widgetInstanceId === activeWidgetInstanceId).length - beforeDeletes;
     const next = document.getElementById('widget-history-2');
     const nextWidgetInstanceId = next.contentWindow.__CANVASIGHT_BRIDGE_STATE__.widgetInstanceId;
     next.focus();
