@@ -84,6 +84,7 @@ import {
 } from "./domain/canvasGraph";
 import { assetNodeFromAttachment, emptyNode, nodeFromTemplate } from "./domain/canvasNodes";
 import { buildConnectedNodeCandidate } from "./domain/connectedNodeCreation";
+import { shouldDeleteCanvasSelection } from "./domain/canvasKeyboard";
 import { clipboardImageFiles, filesToInputs } from "./infrastructure/fileInputs";
 import { openConnectedNodeFilePicker } from "./application/connectedNodeFilePicker";
 import {
@@ -102,6 +103,7 @@ import {
 } from "./lib/canvasightApi";
 import { buildMarkdown } from "./lib/markdown";
 import { I18nProvider, useI18n } from "./lib/i18n";
+import { isEditableTarget, isKeyboardInteractiveTarget } from "./lib/keyboardTargets";
 import { shortcuts } from "./lib/shortcuts";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectedNodeMenu } from "./components/ConnectedNodeMenu";
@@ -223,21 +225,6 @@ function nodeIdFromConnectionEvent(event: MouseEvent | TouchEvent): string | nul
 function nodeIdFromElementTarget(target: EventTarget | null): string | null {
   if (!(target instanceof Element)) return null;
   return target.closest(".react-flow__node[data-id]")?.getAttribute("data-id") ?? null;
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  );
-}
-
-function isKeyboardInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest("button, a[href], input, textarea, select, summary, video[controls], audio[controls], [contenteditable='true'], [role='button'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider'], [role='menuitem'], [role='option'], [role='tab']")
-  );
 }
 
 function normalizeAppSettings(value: Partial<AppSettings> | null | undefined): AppSettings {
@@ -2572,7 +2559,26 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
-      if (isEditableTarget(event.target) || isKeyboardInteractiveTarget(event.target)) return;
+      const targetIsEditable = isEditableTarget(event.target);
+      const targetIsKeyboardInteractive = isKeyboardInteractiveTarget(event.target);
+      const targetNodeId = nodeIdFromElementTarget(event.target);
+      const targetNodeIsSelected = targetNodeId !== null && selectedNodes.some((node) => node.id === targetNodeId);
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+
+      if (project && shouldDeleteCanvasSelection({
+        key: event.key,
+        hasPrimaryModifier,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        targetIsEditable,
+        targetIsKeyboardInteractive,
+        targetNodeIsSelected
+      }) && deleteSelectedNodes()) {
+        event.preventDefault();
+        return;
+      }
+
+      if (targetIsEditable || targetIsKeyboardInteractive) return;
 
       if (isSpaceKey(event)) {
         event.preventDefault();
@@ -2581,13 +2587,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       }
 
       const key = event.key.toLowerCase();
-      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
-      if (project && !hasPrimaryModifier && !event.altKey && !event.shiftKey && (event.key === "Backspace" || event.key === "Delete")) {
-        if (deleteSelectedNodes()) {
-          event.preventDefault();
-          return;
-        }
-      }
 
       if (hasPrimaryModifier && !event.altKey) {
         if (project && key === "g") {
@@ -2680,7 +2679,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", resetSpacePan);
     };
-  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, groupSelectedNodes, project, redo, runActiveNode, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo, ungroupSelection]);
+  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, groupSelectedNodes, project, redo, runActiveNode, selectedNodes, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo, ungroupSelection]);
 
   return (
     <CanvasActionsProvider actions={canvasActions}>

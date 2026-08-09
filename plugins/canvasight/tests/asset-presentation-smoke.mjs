@@ -12,6 +12,7 @@ const connectButtonPath = path.join(pluginRoot, "src", "components", "ConnectBut
 const groupNodePath = path.join(pluginRoot, "src", "components", "GroupNode.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
+const keyboardTargetsPath = path.join(pluginRoot, "src", "lib", "keyboardTargets.ts");
 
 const compiled = ts.transpileModule(fs.readFileSync(presentationPath, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -70,6 +71,7 @@ const connectButtonSource = fs.readFileSync(connectButtonPath, "utf8");
 const groupNodeSource = fs.readFileSync(groupNodePath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
+const keyboardTargetsSource = fs.readFileSync(keyboardTargetsPath, "utf8");
 const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
   .filter((name) => name.endsWith(".css"))
   .sort()
@@ -108,8 +110,13 @@ assert.match(assetNodeSource, /<video[^>]*className="asset-video"[^>]*src=\{vide
 assert.doesNotMatch(assetNodeSource, /controlsList|disablePictureInPicture|disableRemotePlayback/, "native video controls must not suppress progress, volume, fullscreen, or other browser controls");
 assert.doesNotMatch(assetNodeSource, /videoPlaying|videoRef|toggleVideoPlayback|handleVideoSurfaceClick|asset-video-toolbar|asset-video-playback|asset\.playVideo|asset\.pauseVideo|asset\.videoControls/, "custom playback state, commands, toolbar, and labels must be removed");
 assert.match(assetNodeSource, /<video[^>]*controls[^>]*\/>\s*<div className="asset-video-selection-layer" aria-hidden="true"\s*\/>/s, "a transparent sibling layer must own picture clicks without invoking native playback");
-assert.match(appSource, /function isKeyboardInteractiveTarget\([\s\S]*?closest\("button, a\[href\], input, textarea, select, summary, video\[controls\], audio\[controls\],[\s\S]*?\[role='button'\][\s\S]*?\);\s*\}/s, "canvas Space-pan shortcuts must recognize native controls, including controlled media");
-assert.match(appSource, /function handleKeyDown\(event: KeyboardEvent\): void \{\s*if \(isEditableTarget\(event\.target\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keydown on native media controls must keep browser keyboard behavior");
+assert.match(keyboardTargetsSource, /function isKeyboardInteractiveTarget\([\s\S]*?closest\("button, a\[href\], input, textarea, select, summary, video\[controls\], audio\[controls\],[\s\S]*?\[role='button'\][\s\S]*?\);\s*\}/s, "canvas Space-pan shortcuts must recognize native controls, including controlled media");
+const keyboardHandlerStart = appSource.indexOf("function handleKeyDown(event: KeyboardEvent): void {");
+const deleteDecisionIndex = appSource.indexOf("shouldDeleteCanvasSelection({", keyboardHandlerStart);
+const interactiveReturnIndex = appSource.indexOf("if (targetIsEditable || targetIsKeyboardInteractive) return;", keyboardHandlerStart);
+const spaceKeyIndex = appSource.indexOf("if (isSpaceKey(event))", keyboardHandlerStart);
+assert.ok(deleteDecisionIndex > keyboardHandlerStart && deleteDecisionIndex < interactiveReturnIndex, "selected-node deletion must be decided before non-editing Asset controls return from keydown");
+assert.ok(interactiveReturnIndex > deleteDecisionIndex && interactiveReturnIndex < spaceKeyIndex, "Space keydown on native media controls must keep browser keyboard behavior");
 assert.match(appSource, /function handleKeyUp\(event: KeyboardEvent\): void \{\s*if \(!isSpaceKey\(event\) \|\| isKeyboardInteractiveTarget\(event\.target\)\) return;/s, "Space keyup on native media controls must not be prevented by canvas pan handling");
 assert.match(assetNodeSource, /onDoubleClick=\{openFile\}/, "media Assets must retain double-click file opening");
 assert.match(assetNodeSource, /<ConnectButton nodeId=\{id\} side="left" \/>[\s\S]*?className="asset-node-menu"[\s\S]*?<ConnectButton nodeId=\{id\} side="right" \/>/s, "video controls must not replace More or the left and right connection controls");
