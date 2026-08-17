@@ -25,6 +25,7 @@ for (const name of fs.readdirSync(path.join(pluginRoot, "mcp", "domain")).filter
 const appSource = read("src", "App.tsx");
 assert.doesNotMatch(appSource, /function (?:normalizeDocument|rebaseLocalChangesAfterSave|isConnectionAllowed|assetPositionNextToTask)\b/, "App must consume domain interfaces instead of re-implementing rules");
 assert.doesNotMatch(appSource, /setTaskNodeActions|taskNodeActions/, "workspace actions must be instance-bound through Context");
+assert.doesNotMatch(appSource, /useScatterStore\(\s*\)/, "workspace React consumers must select the Store fields they render");
 assert.ok(lines("src", "App.tsx") <= 3250, "App.tsx exceeded its post-refactor size ratchet; deepen an existing module before adding more orchestration");
 assert.ok(lines("mcp", "server.source.mjs") <= 8750, "MCP composition root exceeded its post-refactor size ratchet; move logic behind a domain or infrastructure seam");
 assert.ok(lines("src", "styles", "app.css") <= 10, "app.css must remain an ordered style entrypoint rather than collecting implementation rules");

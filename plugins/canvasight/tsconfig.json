@@ -16,5 +16,5 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "shared", "vite.config.ts"]
+  "include": ["src", "shared", "tests/render-performance-harness.tsx", "vite.config.ts"]
 }

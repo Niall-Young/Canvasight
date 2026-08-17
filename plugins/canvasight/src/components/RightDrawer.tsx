@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useState, type DragEvent, type ReactElement, type ReactNode } from "react";
 import { nodeTemplateLimit, type Attachment, type NodeTemplate, type RunMode, type ScatterEdge, type ScatterNode } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { canvasightApi } from "../lib/canvasightApi";
 import { childCount } from "../lib/markdown";
+import { useRenderCommitMetric } from "../lib/renderMetrics";
 import type { Translate } from "../lib/translations";
 import { Icon } from "./ui/icon";
 import { IconButton } from "./ui/icon-button";
@@ -233,7 +234,7 @@ function templatePreview(template: NodeTemplate): string {
   return template.body.replace(/\s+/g, " ").trim();
 }
 
-export function RightDrawer({
+function RightDrawerComponent({
   drawer,
   nodes,
   edges,
@@ -252,6 +253,7 @@ export function RightDrawer({
   onTemplateDragStart,
   onTemplateDragEnd
 }: RightDrawerProps): ReactElement {
+  useRenderCommitMetric("rightDrawer");
   const { t } = useI18n();
   const [downloadStatus, setDownloadStatus] = useState<"idle" | "preparing">("idle");
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -462,3 +464,6 @@ export function RightDrawer({
     </aside>
   );
 }
+
+export const RightDrawer = memo(RightDrawerComponent);
+RightDrawer.displayName = "RightDrawer";

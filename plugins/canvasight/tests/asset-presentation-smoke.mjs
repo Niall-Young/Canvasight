@@ -11,6 +11,7 @@ const assetNodePath = path.join(pluginRoot, "src", "components", "AssetNode.tsx"
 const connectButtonPath = path.join(pluginRoot, "src", "components", "ConnectButton.tsx");
 const groupNodePath = path.join(pluginRoot, "src", "components", "GroupNode.tsx");
 const scatterEdgePath = path.join(pluginRoot, "src", "components", "ScatterEdge.tsx");
+const canvasFlowSurfacePath = path.join(pluginRoot, "src", "components", "CanvasFlowSurface.tsx");
 const appPath = path.join(pluginRoot, "src", "App.tsx");
 const keyboardTargetsPath = path.join(pluginRoot, "src", "lib", "keyboardTargets.ts");
 
@@ -70,6 +71,7 @@ const assetNodeSource = fs.readFileSync(assetNodePath, "utf8");
 const connectButtonSource = fs.readFileSync(connectButtonPath, "utf8");
 const groupNodeSource = fs.readFileSync(groupNodePath, "utf8");
 const scatterEdgeSource = fs.readFileSync(scatterEdgePath, "utf8");
+const canvasFlowSurfaceSource = fs.readFileSync(canvasFlowSurfacePath, "utf8");
 const appSource = fs.readFileSync(appPath, "utf8");
 const keyboardTargetsSource = fs.readFileSync(keyboardTargetsPath, "utf8");
 const appCssSource = fs.readdirSync(path.join(pluginRoot, "src", "styles"))
@@ -150,7 +152,7 @@ assert.doesNotMatch(scatterEdgeSource, /return capSide\(position\) === "left" \?
 assert.match(scatterEdgeSource, /getBezierPath\(\{\s*sourceX:\s*sourceEdgeX,[\s\S]*?targetX:\s*targetEdgeX,/s, "persistent Edge paths must use the node-boundary coordinates");
 assert.match(scatterEdgeSource, /<EdgeCap[^>]*x=\{sourceEdgeX\}[^>]*\/>[\s\S]*?<EdgeCap[^>]*x=\{targetEdgeX\}[^>]*\/>/s, "persistent Edge caps must use the node-boundary coordinates");
 assert.match(scatterEdgeSource, /interactionWidth=\{20\}/, "Edge click targets must retain their interaction width");
-assert.match(appSource, /if \(position === Position\.Left\) return x - offset;[\s\S]*?if \(position === Position\.Right\) return x \+ offset;/, "the live connection line must also start outside the connect button");
+assert.match(canvasFlowSurfaceSource, /if \(position === Position\.Left\) return x - offset;[\s\S]*?if \(position === Position\.Right\) return x \+ offset;/, "the live connection line must also start outside the connect button");
 assert.match(appCssSource, /\.react-flow__edge\.selected \.scatter-edge-path,[\s\S]*?\.scatter-edge-path\.is-selected\s*\{[^}]*stroke:\s*var\(--color-primary\);/s, "selected Edge highlighting must remain intact");
 assert.match(appCssSource, /\.canvas-shell\.has-connection-preview \.scatter-connection-path\s*\{[^}]*display:\s*none;/s, "the connection preview handoff must remain intact");
 

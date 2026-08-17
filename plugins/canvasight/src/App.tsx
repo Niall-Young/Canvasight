@@ -1,22 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useShallow } from "zustand/react/shallow";
 import {
-  Background,
-  PanOnScrollMode,
-  ReactFlow,
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
-  getBezierPath,
-  Position,
   type Connection,
-  type ConnectionLineComponentProps,
   type Edge,
   type EdgeChange,
-  type EdgeTypes,
   type Node,
   type NodeChange,
-  type NodeTypes,
   type OnConnectEnd,
   type OnConnectStart,
   type OnMove,
@@ -109,14 +102,18 @@ import { shortcuts } from "./lib/shortcuts";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ConnectedNodeMenu } from "./components/ConnectedNodeMenu";
 import { CanvasightErrorBoundary } from "./components/CanvasightErrorBoundary";
-import { ScatterEdge as ScatterFlowEdge } from "./components/ScatterEdge";
+import { CanvasFlowSurface } from "./components/CanvasFlowSurface";
+import {
+  CanvasActionsToolbar,
+  CanvasCreationToolbar,
+  CanvasRunToolbar,
+  type CanvasTool
+} from "./components/CanvasToolbars";
 import { RightDrawer } from "./components/RightDrawer";
 import { SettingsDialog } from "./components/SettingsDialog";
-import { TaskNode } from "./components/TaskNode";
-import { AssetNode } from "./components/AssetNode";
-import { GroupNode } from "./components/GroupNode";
 import { StartupFailurePanel } from "./components/StartupFailurePanel";
 import { WorkspaceStartupSkeleton } from "./components/WorkspaceStartupSkeleton";
+import { WidgetLifecycleController } from "./components/WidgetLifecycleController";
 import { DropdownMenu, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { Icon } from "./components/ui/icon";
 import { IconButton } from "./components/ui/icon-button";
@@ -133,14 +130,9 @@ import {
 } from "./application/CanvasActionsContext";
 import "@xyflow/react/dist/style.css";
 import "./styles/app.css";
-const nodeTypes = { task: TaskNode, asset: AssetNode, group: GroupNode } as NodeTypes;
-const edgeTypes = { scatter: ScatterFlowEdge } satisfies EdgeTypes;
-const defaultEdgeOptions = { type: "scatter" };
-const proOptions = { hideAttribution: true };
 const saveDebounceMs = 450;
 const canvasMinZoom = 0.2;
 const canvasMaxZoom = 2;
-const nodeConnectButtonSize = 20;
 const canvasClipboardMime = "application/x-canvasight-nodes";
 const templateDragMime = "application/x-canvasight-template";
 const appSettingsStorageKey = "canvasight.settings";
@@ -148,14 +140,6 @@ const webDefaultAppSettings = {
   ...defaultAppSettings,
   translucentBackground: false
 } satisfies AppSettings;
-const zoomOptions = [
-  { label: "50%", value: 0.5 },
-  { label: "75%", value: 0.75 },
-  { label: "100%", value: 1 },
-  { label: "150%", value: 1.5 },
-  { label: "200%", value: 2 }
-];
-type CanvasTool = "select" | "pan";
 function isThreadStoreModePreflightFailure(message: string): boolean {
   return (
     /Canvasight Run blocked before sendMessage/i.test(message) &&
@@ -167,37 +151,21 @@ type CanvasightWorkspaceProps = {
   onOpenSettings: () => void;
 };
 
-function connectionLineStartX(x: number, position: Position): number {
-  const offset = nodeConnectButtonSize / 2;
-  if (position === Position.Left) return x - offset;
-  if (position === Position.Right) return x + offset;
-  return x;
-}
-
-function ScatterConnectionLine({
-  connectionLineStyle,
-  fromPosition,
-  fromX,
-  fromY,
-  toPosition,
-  toX,
-  toY
-}: ConnectionLineComponentProps): ReactElement {
-  const [path] = getBezierPath({
-    sourceX: connectionLineStartX(fromX, fromPosition),
-    sourceY: fromY,
-    sourcePosition: fromPosition,
-    targetX: toX,
-    targetY: toY,
-    targetPosition: toPosition,
-    curvature: 0.45
-  });
-
-  return <path className="scatter-connection-path" d={path} style={connectionLineStyle} />;
-}
-
 function defaultProjectPathFromBrowser(): string {
   return import.meta.env.VITE_CANVASIGHT_DEFAULT_PROJECT_PATH?.trim() || "";
+}
+
+function useSemanticNodeSnapshot(nodes: ScatterNode[]): ScatterNode[] {
+  const snapshotRef = useRef(nodes);
+  const previous = snapshotRef.current;
+  const unchanged = previous.length === nodes.length && previous.every((node, index) => {
+    const next = nodes[index];
+    const parentId = node.type === "group" ? undefined : node.parentId;
+    const nextParentId = next?.type === "group" ? undefined : next?.parentId;
+    return Boolean(next && node.id === next.id && node.type === next.type && parentId === nextParentId && node.data === next.data);
+  });
+  if (!unchanged) snapshotRef.current = nodes;
+  return snapshotRef.current;
 }
 
 function eventClientPosition(event: MouseEvent | TouchEvent): FlowPosition | null {
@@ -313,12 +281,45 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     setSaving,
     setSelectedNodeId,
     setStatus,
+    status,
     updateNodeData,
     drawer,
     removeAttachment,
     redo,
     undo
-  } = useScatterStore();
+  } = useScatterStore(useShallow((state) => ({
+    canRedo: state.canRedo,
+    canUndo: state.canUndo,
+    beginHistoryTransaction: state.beginHistoryTransaction,
+    commitCanvasChange: state.commitCanvasChange,
+    commitHistoryTransaction: state.commitHistoryTransaction,
+    createPage: state.createPage,
+    deleteActivePage: state.deleteActivePage,
+    edges: state.edges,
+    collapsedGroupIds: state.collapsedGroupIds,
+    markNodeRun: state.markNodeRun,
+    nodes: state.nodes,
+    activePageId: state.activePageId,
+    pages: state.pages,
+    project: state.project,
+    replaceCanvasLive: state.replaceCanvasLive,
+    renameActivePage: state.renameActivePage,
+    selectedNodeId: state.selectedNodeId,
+    setActivePageId: state.setActivePageId,
+    setActivePageViewport: state.setActivePageViewport,
+    setCollapsedGroupIds: state.setCollapsedGroupIds,
+    setDrawer: state.setDrawer,
+    setProjectDocument: state.setProjectDocument,
+    setSaving: state.setSaving,
+    setSelectedNodeId: state.setSelectedNodeId,
+    setStatus: state.setStatus,
+    status: state.status,
+    updateNodeData: state.updateNodeData,
+    drawer: state.drawer,
+    removeAttachment: state.removeAttachment,
+    redo: state.redo,
+    undo: state.undo
+  })));
   const [loadingProject, setLoadingProject] = useState(true);
   const [refreshingDocument, setRefreshingDocument] = useState(false);
   const nativeWidget = isNativeWidgetShell();
@@ -419,7 +420,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
   const selectedNodes = useMemo(() => nodes.filter((node) => node.selected), [nodes]);
-  const markdownNode = useMemo(() => nodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, nodes]);
+  const semanticNodes = useSemanticNodeSnapshot(nodes);
+  const markdownNode = useMemo(() => semanticNodes.find((node) => node.id === markdownNodeId) ?? null, [markdownNodeId, semanticNodes]);
   const activePage = useMemo(() => pages.find((page) => page.id === activePageId) ?? pages[0] ?? null, [activePageId, pages]);
   const activePageName = activePage?.name ?? t("page.untitled");
   const canToggleMarkdown = Boolean(project && (selectedNode || markdownNode || drawer === "markdown"));
@@ -434,11 +436,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   const canGroup = selectedNodes.filter((node) => node.type !== "group").length >= 2;
   const canUngroup = selectedNodes.some((node) => node.type === "group" || node.parentId);
   const panModeActive = canvasTool === "pan" || spacePanActive;
-  const zoomPercent = Math.round(viewportZoom * 100);
   const markdownResult = useMemo(
     () =>
       project && markdownNode
-        ? buildMarkdown(nodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language, agentTeamEnabled)
+        ? buildMarkdown(semanticNodes, edges, markdownNode.id, selectedRunMode, project.name, project.path, language, agentTeamEnabled)
         : {
             markdown: "",
             nodes: [],
@@ -457,7 +458,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
             },
             hasCycle: false
           },
-    [agentTeamEnabled, edges, language, markdownNode, nodes, project, selectedRunMode]
+    [agentTeamEnabled, edges, language, markdownNode, project, selectedRunMode, semanticNodes]
   );
   const renderedNodes = useMemo(() => orderedFlowNodes(nodes, collapsedGroupIds), [collapsedGroupIds, nodes]);
   const renderedEdges = useMemo(
@@ -665,7 +666,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const locateNode = useCallback(
     (nodeId: string, mode: RunMode = "flow") => {
-      const node = nodes.find((item) => item.id === nodeId);
+      const node = useScatterStore.getState().nodes.find((item) => item.id === nodeId);
       if (!node) return;
       selectNode(nodeId, mode);
       const bounds = nodeBounds(node);
@@ -674,7 +675,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         zoom: Math.max(0.5, Math.min(1, viewportZoom))
       });
     },
-    [nodes, selectNode, viewportZoom]
+    [selectNode, viewportZoom]
   );
 
   const claimUrlThreadForProject = useCallback(
@@ -1363,170 +1364,26 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     };
   }, [activePageId, edges, hasPendingLocalSave, language, nodes, openProjectPath, pages, project, saveFlushNonce, setProjectDocument, setSaving, setSelectedNodeId, setStatus, settleSaveFlushWaiters, t]);
 
-  useEffect(() => {
-    if (!hydratedRef.current || !project) return;
-    let cancelled = false;
-    let timer: number | null = null;
-    let ownsLease = false;
-    let requestInFlight = false;
-    let standbyRetryUsed = false;
-    let previouslyEligible = false;
-
-    const clearTimer = () => {
-      if (timer !== null) window.clearTimeout(timer);
-      timer = null;
-    };
-
-    const schedule = (delayMs: number) => {
-      if (cancelled) return;
-      clearTimer();
-      timer = window.setTimeout(() => {
-        timer = null;
-        void pollForExternalDocument();
-      }, Math.max(0, delayMs));
-    };
-
-    const evidence = () => {
-      const rect = canvasShellRef.current?.getBoundingClientRect();
-      return {
-        visible: document.visibilityState === "visible",
-        focused: document.hasFocus(),
-        canvasWidth: rect?.width ?? 0,
-        canvasHeight: rect?.height ?? 0
-      };
-    };
-
-    const isEligible = () => {
-      if (!nativeWidget) return true;
-      const identity = getCanvasightStartupIdentity();
-      const current = evidence();
-      return Boolean(
-        startupStage === "ready" &&
-          identity.stage === "ready" &&
-          identity.displayMode === "fullscreen" &&
-          current.visible &&
-          current.focused &&
-          current.canvasWidth > 0 &&
-          current.canvasHeight > 0
-      );
-    };
-
-    const releaseLease = async () => {
-      clearTimer();
-      if (!nativeWidget || !ownsLease) return;
-      ownsLease = false;
+  const reloadIfExternalDocumentChanged = useCallback(async (serverRevision: number): Promise<void> => {
+    if (!project || reloadingExternalDocumentRef.current) return;
+    try {
+      const currentRevision = documentRevisionRef.current;
+      if (currentRevision === null || serverRevision <= currentRevision) return;
+      if (localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current || saveRequestCountRef.current > 0) return;
+      reloadingExternalDocumentRef.current = true;
       try {
-        await canvasightApi.releaseRevisionPoll();
-      } catch {
-        // The daemon's bounded lease is the fallback for abrupt widget loss.
-      }
-    };
-
-    const reloadIfExternalDocumentChanged = async (serverRevision: number): Promise<void> => {
-      if (reloadingExternalDocumentRef.current || cancelled) return;
-      try {
-        const currentRevision = documentRevisionRef.current;
-        if (currentRevision === null || serverRevision <= currentRevision) return;
-        if (localMutationGenerationRef.current > acknowledgedMutationGenerationRef.current || saveRequestCountRef.current > 0) return;
-        reloadingExternalDocumentRef.current = true;
-        try {
-          await openProjectPath(project.path, {
-            silent: true,
-            status: t("status.externalDocumentReloaded"),
-            preserveLocalNavigation: true
-          });
-        } finally {
-          reloadingExternalDocumentRef.current = false;
-        }
-      } catch {
-        // Background revision checks should not interrupt editing.
-      }
-    };
-
-    const pollForExternalDocument = async (): Promise<void> => {
-      if (cancelled || requestInFlight) return;
-      if (!isEligible()) {
-        await releaseLease();
-        return;
-      }
-      requestInFlight = true;
-      try {
-        if (nativeWidget) {
-          const lease = await canvasightApi.claimRevisionPoll(evidence());
-          ownsLease = lease.owner;
-          if (cancelled) {
-            await releaseLease();
-            return;
-          }
-          if (!isEligible()) {
-            await releaseLease();
-            return;
-          }
-          if (lease.owner && typeof lease.documentRevision === "number") {
-            standbyRetryUsed = false;
-            await reloadIfExternalDocumentChanged(lease.documentRevision);
-            schedule(lease.pollIntervalMs);
-          } else if (lease.status === "standby" && !standbyRetryUsed) {
-            standbyRetryUsed = true;
-            schedule(lease.retryAfterMs ?? 10_000);
-          }
-          return;
-        }
-        const session = await canvasightApi.getSession();
-        if (!cancelled && session.projectPath === project.path) await reloadIfExternalDocumentChanged(session.documentRevision);
-        schedule(5_000);
-      } catch {
-        if (!cancelled && isEligible()) schedule(5_000);
+        await openProjectPath(project.path, {
+          silent: true,
+          status: t("status.externalDocumentReloaded"),
+          preserveLocalNavigation: true
+        });
       } finally {
-        requestInFlight = false;
+        reloadingExternalDocumentRef.current = false;
       }
-    };
-
-    const handleActivityChange = () => {
-      const eligible = isEligible();
-      const becameEligible = eligible && !previouslyEligible;
-      previouslyEligible = eligible;
-      if (becameEligible) {
-        standbyRetryUsed = false;
-        schedule(0);
-      } else if (!eligible) {
-        void releaseLease();
-      }
-    };
-    const handlePageHide = () => {
-      cancelled = true;
-      void releaseLease();
-    };
-    const handleResourceTeardown = (event: Event) => {
-      cancelled = true;
-      clearTimer();
-      const release = releaseLease();
-      (event as CustomEvent<{ waitUntil?: (promise: Promise<unknown>) => void }>).detail?.waitUntil?.(release);
-    };
-    const observer = new ResizeObserver(handleActivityChange);
-    if (canvasShellRef.current) observer.observe(canvasShellRef.current);
-    document.addEventListener("visibilitychange", handleActivityChange);
-    window.addEventListener("focus", handleActivityChange);
-    window.addEventListener("blur", handleActivityChange);
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("canvasight:host-context-changed", handleActivityChange);
-    window.addEventListener("canvasight:resource-teardown", handleResourceTeardown);
-    previouslyEligible = isEligible();
-    if (previouslyEligible) schedule(0);
-
-    return () => {
-      cancelled = true;
-      clearTimer();
-      observer.disconnect();
-      document.removeEventListener("visibilitychange", handleActivityChange);
-      window.removeEventListener("focus", handleActivityChange);
-      window.removeEventListener("blur", handleActivityChange);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("canvasight:host-context-changed", handleActivityChange);
-      window.removeEventListener("canvasight:resource-teardown", handleResourceTeardown);
-      void releaseLease();
-    };
-  }, [nativeWidget, openProjectPath, project, startupStage, t]);
+    } catch {
+      // Background revision checks should not interrupt editing.
+    }
+  }, [openProjectPath, project, t]);
 
   const beginRenamePage = useCallback(() => {
     if (!activePage) return;
@@ -1627,10 +1484,11 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   }, [commitCanvasChange, getVisibleCanvasCenterPosition, nodes, project, selectedNode, setSelectedNodeId, setStatus]);
 
   const requestConnectedNodeMenu = useCallback((nodeId: string, side: ConnectedNodeSide, anchor: ConnectedNodeMenuAnchor) => {
-    if (!project || !nodes.some((node) => node.id === nodeId && node.type !== "group")) return;
+    const current = useScatterStore.getState();
+    if (!current.project || !current.nodes.some((node) => node.id === nodeId && node.type !== "group")) return;
     clearConnectionHoverTarget();
-    setConnectedNodeMenuRequest({ id: nanoid(), nodeId, side, anchor, projectPath: project.path });
-  }, [clearConnectionHoverTarget, nodes, project]);
+    setConnectedNodeMenuRequest({ id: nanoid(), nodeId, side, anchor, projectPath: current.project.path });
+  }, [clearConnectionHoverTarget]);
 
   const commitConnectedNode = useCallback((request: ConnectedNodeMenuRequest, kind: ConnectedNodeKind, attachment?: Awaited<ReturnType<typeof canvasightApi.saveAttachments>>[number]) => {
     const current = useScatterStore.getState();
@@ -1672,6 +1530,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
+      const { edges, nodes } = useScatterStore.getState();
       const source = nodes.find((node) => node.id === nodeId);
       if (!source) return;
       if (source.type === "group") {
@@ -1700,7 +1559,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       });
       setSelectedNodeId(node.id);
     },
-    [commitCanvasChange, edges, nodes, setSelectedNodeId]
+    [commitCanvasChange, setSelectedNodeId]
   );
 
   const deleteNode = useCallback(
@@ -1859,7 +1718,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   }, [createAssetNodes, getVisibleCanvasCenterPosition]);
 
   const replaceAsset = useCallback((nodeId: string) => {
-    if (!project || nodes.find((node) => node.id === nodeId)?.type !== "asset") return;
+    const current = useScatterStore.getState();
+    if (!current.project || current.nodes.find((node) => node.id === nodeId)?.type !== "asset") return;
+    const projectPath = current.project.path;
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = false;
@@ -1868,7 +1729,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       if (!file) return;
       void (async () => {
         try {
-          const [attachment] = await canvasightApi.saveAttachments(project.path, await filesToInputs([file], "upload"));
+          const [attachment] = await canvasightApi.saveAttachments(projectPath, await filesToInputs([file], "upload"));
           if (!attachment) throw new Error(t("status.replaceAssetFailed"));
           updateNodeData(nodeId, { asset: attachment, title: attachment.originalName });
           setStatus(t("status.assetReplaced"));
@@ -1878,9 +1739,10 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       })();
     };
     input.click();
-  }, [nodes, project, setStatus, t, updateNodeData]);
+  }, [setStatus, t, updateNodeData]);
 
   const promoteAttachment = useCallback((nodeId: string, attachmentId: string) => {
+    const { edges, nodes } = useScatterStore.getState();
     const task = nodes.find((node): node is ScatterTaskNode => node.id === nodeId && node.type === "task");
     const attachment = task?.data.attachments.find((item) => item.id === attachmentId);
     if (!task || !attachment) return;
@@ -1906,7 +1768,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     });
     setSelectedNodeId(asset.id);
     setStatus(language === "zh" ? "附件已提升为资产节点" : "Attachment promoted to an asset node");
-  }, [commitCanvasChange, edges, language, nodes, setSelectedNodeId, setStatus]);
+  }, [commitCanvasChange, language, setSelectedNodeId, setStatus]);
 
   const groupSelectedNodes = useCallback(() => {
     const members = selectedNodes.filter((node) => node.type !== "group");
@@ -1970,15 +1832,18 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
   }, [applyUngroup]);
 
   const fitGroup = useCallback((groupId: string) => {
+    const { nodes } = useScatterStore.getState();
     const group = nodes.find((node): node is ScatterGroupNode => node.id === groupId && node.type === "group");
     const members = nodes.filter((node) => node.type !== "group" && node.parentId === groupId);
     if (!group || !members.length) return;
     const width = Math.max(groupMinWidth, ...members.map((node) => node.position.x + nodeBounds(node).width + groupPadding));
     const height = Math.max(groupMinHeight, ...members.map((node) => node.position.y + nodeBounds(node).height + groupPadding));
     commitCanvasChange({ nodes: nodes.map((node) => node.id === groupId ? { ...group, width, height } : node) });
-  }, [commitCanvasChange, nodes]);
+  }, [commitCanvasChange]);
 
   const toggleGroup = useCallback((groupId: string) => {
+    const current = useScatterStore.getState();
+    const { collapsedGroupIds, nodes } = current;
     const collapsing = !collapsedGroupIds.includes(groupId);
     setCollapsedGroupIds(collapsing ? [...collapsedGroupIds, groupId] : collapsedGroupIds.filter((id) => id !== groupId));
     if (collapsing) {
@@ -1986,7 +1851,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       setSelectedNodeId(groupId);
     }
     setStatus(language === "zh" ? (collapsing ? "分组已折叠" : "分组已展开") : (collapsing ? "Group collapsed" : "Group expanded"));
-  }, [collapsedGroupIds, language, nodes, replaceCanvasLive, setCollapsedGroupIds, setSelectedNodeId, setStatus]);
+  }, [language, replaceCanvasLive, setCollapsedGroupIds, setSelectedNodeId, setStatus]);
 
   const persistTemplate = useCallback(
     async (input: NodeTemplateInput, options: { replaceOldest?: boolean } = {}) => {
@@ -2202,6 +2067,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   const runNode = useCallback(
     async (nodeId: string, _mode: RunMode = "flow") => {
+      const { edges, nodes, project } = useScatterStore.getState();
       if (!project) return;
       const node = nodes.find((item) => item.id === nodeId);
       if (!node || node.type === "asset") return;
@@ -2242,7 +2108,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
         setRunStatus(actionableMessage, "negative");
       }
     },
-    [agentTeamEnabled, edges, language, markNodeRun, nodes, project, setRunStatus, t]
+    [agentTeamEnabled, language, markNodeRun, setRunStatus, t]
   );
 
   const canvasActions = useMemo<CanvasActions>(() => ({
@@ -2254,8 +2120,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       deleteNode,
       duplicateNode,
       listSkills: async (forceReload = false) => {
-        if (!project?.path) throw new Error("Canvasight project is not ready for Skill discovery.");
-        const response = await canvasightApi.listSkills(project.path, forceReload);
+        const projectPath = useScatterStore.getState().project?.path;
+        if (!projectPath) throw new Error("Canvasight project is not ready for Skill discovery.");
+        const response = await canvasightApi.listSkills(projectPath, forceReload);
         return response.skills;
       },
       fitGroup,
@@ -2269,7 +2136,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       toggleGroup,
       ungroupNode,
       updateNodeData: (nodeId: string, patch: Partial<ScatterNodeData>) => updateNodeData(nodeId, patch)
-    }), [connectedNodeMenuRequest, deleteNode, duplicateNode, fitGroup, project?.path, promoteAttachment, removeAttachment, replaceAsset, requestConnectedNodeMenu, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
+    }), [connectedNodeMenuRequest, deleteNode, duplicateNode, fitGroup, promoteAttachment, removeAttachment, replaceAsset, requestConnectedNodeMenu, runNode, saveNodeAsTemplate, toggleGroup, ungroupNode, updateNodeData]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -2526,6 +2393,34 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     [setActivePageViewport]
   );
 
+  const handleFlowInit = useCallback((instance: ReactFlowInstance) => {
+    flowInstanceRef.current = instance;
+  }, []);
+
+  const handleEdgeClick = useCallback((_event: ReactMouseEvent, edge: Edge) => {
+    setSelectedEdgeId(edge.id);
+  }, []);
+
+  const handleNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
+    selectNode(node.id, selectedRunMode);
+  }, [selectNode, selectedRunMode]);
+
+  const handlePaneClick = useCallback(() => {
+    setSelectedEdgeId(null);
+    selectNode(null);
+  }, [selectNode]);
+
+  const selectCanvasTool = useCallback((tool: CanvasTool) => {
+    setCanvasTool(tool);
+  }, []);
+
+  const selectCanvasZoom = useCallback((zoom: number) => {
+    viewportInteractionGenerationRef.current += 1;
+    pendingViewportRecoveryMovesRef.current = 0;
+    setViewportZoom(zoom);
+    void flowInstanceRef.current?.zoomTo(zoom);
+  }, []);
+
   const runActiveNode = useCallback(() => {
     if (!selectedNode || selectedNode.type === "asset") return;
     void runNode(selectedNode.id, "flow");
@@ -2684,6 +2579,13 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
   return (
     <CanvasActionsProvider actions={canvasActions}>
+    <WidgetLifecycleController
+      canvasRef={canvasShellRef}
+      nativeWidget={nativeWidget}
+      onExternalRevision={reloadIfExternalDocumentChanged}
+      projectPath={project?.path ?? ""}
+      startupStage={startupStage}
+    />
     <div
       className="canvasight-app app-shell is-sidebar-collapsed"
       onMouseMove={(event) => {
@@ -2835,197 +2737,64 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                   </RadixDropdownMenu.Portal>
                 </RadixDropdownMenu.Root>
               </div>
-              <ReactFlow
+              <CanvasFlowSurface
                 nodes={renderedNodes}
                 edges={renderedEdges}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                connectionLineComponent={ScatterConnectionLine}
-                defaultEdgeOptions={defaultEdgeOptions}
-                proOptions={proOptions}
                 defaultViewport={activePage?.viewport}
-                minZoom={canvasMinZoom}
-                maxZoom={canvasMaxZoom}
-                connectOnClick={false}
-                deleteKeyCode={null}
-                disableKeyboardA11y
+                panModeActive={panModeActive}
                 isValidConnection={isValidConnection}
-                nodesDraggable={!panModeActive}
-                panActivationKeyCode={null}
-                panOnDrag={panModeActive}
-                panOnScroll
-                panOnScrollMode={PanOnScrollMode.Free}
-                selectionKeyCode={null}
-                selectionOnDrag={!panModeActive}
-                zoomActivationKeyCode="Meta"
-                zoomOnDoubleClick={false}
-                zoomOnPinch
-                zoomOnScroll={false}
                 onConnect={onConnect}
                 onConnectEnd={handleConnectEnd}
                 onConnectStart={handleConnectStart}
-                onEdgeClick={(_event, edge) => setSelectedEdgeId(edge.id)}
+                onEdgeClick={handleEdgeClick}
                 onEdgesChange={onEdgesChange}
-                onInit={(instance) => {
-                  flowInstanceRef.current = instance;
-                }}
+                onInit={handleFlowInit}
                 onMove={handleMove}
                 onMoveEnd={handleMoveEnd}
                 onMoveStart={handleMoveStart}
-                onNodeClick={(_event, node) => selectNode(node.id, selectedRunMode)}
+                onNodeClick={handleNodeClick}
                 onNodeDragStart={handleNodeDragStart}
                 onNodeMouseEnter={handleNodeMouseEnter}
                 onNodeMouseLeave={handleNodeMouseLeave}
                 onNodeDragStop={handleNodeDragStop}
                 onNodesChange={onNodesChange}
-                onPaneClick={() => { setSelectedEdgeId(null); selectNode(null); }}
-              >
-                <Background gap={28} size={1} color="rgba(125, 125, 125, 0.22)" />
-              </ReactFlow>
-              <div className="canvas-run-toolbar" aria-label={t("topbar.windowActions")}>
-                <TooltipAnchor label={refreshingDocument ? t("canvas.refreshing") : t("canvas.refreshLatest")} side="bottom" align="end">
-                  <IconButton
-                    className={`canvas-toolbar-button canvas-refresh-button ${refreshingDocument ? "is-refreshing" : ""}`}
-                    filled={false}
-                    icon="arrow-rotate-cw"
-                    size="lg"
-                    aria-label={refreshingDocument ? t("canvas.refreshing") : t("canvas.refreshLatest")}
-                    aria-busy={refreshingDocument}
-                    disabled={refreshingDocument}
-                    onClick={refreshLatestDocument}
-                  />
-                </TooltipAnchor>
-                <span className="canvas-toolbar-divider" aria-hidden />
-                <TooltipAnchor label={t("topbar.runCurrentTask")} shortcut={shortcuts.runCurrentTask} side="bottom" align="end">
-                  <IconButton
-                    className="canvas-toolbar-button"
-                    filled={false}
-                    icon="topbar-play"
-                    size="lg"
-                    aria-label={t("topbar.runCurrentTask")}
-                    disabled={!canRun}
-                    onClick={runActiveNode}
-                  />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("topbar.taskList")} shortcut={shortcuts.taskList} side="bottom" align="end">
-                  <IconButton
-                    className={`canvas-toolbar-button ${drawer === "tasks" ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="topbar-list"
-                    size="lg"
-                    aria-label={t("topbar.taskList")}
-                    aria-pressed={drawer === "tasks"}
-                    onClick={toggleTasksDrawer}
-                  />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("topbar.templates")} shortcut={shortcuts.openTemplates} side="bottom" align="end">
-                  <IconButton
-                    className={`canvas-toolbar-button ${drawer === "templates" ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="book-bookmark"
-                    size="lg"
-                    aria-label={t("topbar.templates")}
-                    aria-pressed={drawer === "templates"}
-                    onClick={toggleTemplatesDrawer}
-                  />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("topbar.openMarkdown")} shortcut={shortcuts.openMarkdown} side="bottom" align="end">
-                  <IconButton
-                    className={`canvas-toolbar-button ${drawer === "markdown" ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="topbar-sidebar-right-expand"
-                    size="lg"
-                    aria-label={t("topbar.openMarkdown")}
-                    aria-pressed={drawer === "markdown"}
-                    disabled={!canToggleMarkdown}
-                    onClick={toggleMarkdownDrawer}
-                  />
-                </TooltipAnchor>
-              </div>
-              <div className="canvas-actions" aria-label={t("canvas.actions")}>
-                <TooltipAnchor label={t("canvas.fit")} shortcut={shortcuts.fitCanvas} side="right">
-                  <IconButton className="canvas-tool-button" filled={false} icon="map-pin" size="lg" aria-label={t("canvas.fit")} onClick={fitCanvas} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.undo")} shortcut={shortcuts.undo} side="right">
-                  <IconButton className="canvas-tool-button" filled={false} icon="undo" size="lg" aria-label={t("canvas.undo")} disabled={!canUndo} onClick={undo} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.redo")} shortcut={shortcuts.redo} side="right">
-                  <IconButton className="canvas-tool-button" filled={false} icon="redo" size="lg" aria-label={t("canvas.redo")} disabled={!canRedo} onClick={redo} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("sidebar.settings")} side="right">
-                  <IconButton className="canvas-tool-button" filled={false} icon="settings-cog" size="lg" aria-label={t("sidebar.settings")} onClick={onOpenSettings} />
-                </TooltipAnchor>
-              </div>
-              <div className="canvas-toolbar" aria-label={t("canvas.tools")}>
-                <TooltipAnchor label={t("canvas.addNode")} shortcut={shortcuts.addNode}>
-                  <IconButton className="canvas-toolbar-button" filled={false} icon="plus-lg" size="lg" aria-label={t("canvas.addNode")} onClick={addNode} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.addAsset")}>
-                  <IconButton className="canvas-toolbar-button" filled={false} icon="image-square" size="lg" aria-label={t("canvas.addAsset")} onClick={chooseFilesForCanvas} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.group")} shortcut="⌘G">
-                  <IconButton className="canvas-toolbar-button" filled={false} icon="members" size="lg" aria-label={t("canvas.group")} disabled={!canGroup} onClick={groupSelectedNodes} />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.ungroup")} shortcut="⌘⇧G">
-                  <IconButton className="canvas-toolbar-button" filled={false} icon="folder-unshare" size="lg" aria-label={t("canvas.ungroup")} disabled={!canUngroup} onClick={ungroupSelection} />
-                </TooltipAnchor>
-                <span className="canvas-toolbar-divider" />
-                <TooltipAnchor label={t("canvas.selectTool")} shortcut={shortcuts.selectTool}>
-                  <IconButton
-                    className={`canvas-toolbar-button ${canvasTool === "select" && !spacePanActive ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="work-with-apps"
-                    size="lg"
-                    aria-label={t("canvas.selectTool")}
-                    aria-pressed={canvasTool === "select" && !spacePanActive}
-                    onClick={() => setCanvasTool("select")}
-                  />
-                </TooltipAnchor>
-                <TooltipAnchor label={t("canvas.panTool")} shortcut={shortcuts.panTool}>
-                  <IconButton
-                    className={`canvas-toolbar-button ${panModeActive ? "is-selected" : ""}`}
-                    filled={false}
-                    icon="hand-raised"
-                    size="lg"
-                    aria-label={t("canvas.panTool")}
-                    aria-pressed={panModeActive}
-                    onClick={() => setCanvasTool("pan")}
-                  />
-                </TooltipAnchor>
-                <span className="canvas-toolbar-divider" />
-                <TooltipAnchor label={t("canvas.zoom")}>
-                  <RadixDropdownMenu.Root>
-                    <RadixDropdownMenu.Trigger asChild>
-                      <button className="canvas-zoom-trigger" type="button" aria-label={t("canvas.zoom")}>
-                        <span>{zoomPercent}%</span>
-                        <Icon name="chevron-down" size={16} />
-                      </button>
-                    </RadixDropdownMenu.Trigger>
-                    <RadixDropdownMenu.Portal>
-                      <RadixDropdownMenu.Content className="canvas-zoom-popover" side="top" sideOffset={8} align="end">
-                        <DropdownMenu className="canvas-zoom-menu" role="menu">
-                          {zoomOptions.map((option) => (
-                            <RadixDropdownMenu.Item key={option.value} asChild>
-                              <DropdownMenuItem
-                                label={option.label}
-                                selected={Math.abs(viewportZoom - option.value) < 0.01}
-                                role="menuitemradio"
-                                aria-checked={Math.abs(viewportZoom - option.value) < 0.01}
-                                onClick={() => {
-                                  viewportInteractionGenerationRef.current += 1;
-                                  pendingViewportRecoveryMovesRef.current = 0;
-                                  setViewportZoom(option.value);
-                                  void flowInstanceRef.current?.zoomTo(option.value);
-                                }}
-                              />
-                            </RadixDropdownMenu.Item>
-                          ))}
-                        </DropdownMenu>
-                      </RadixDropdownMenu.Content>
-                    </RadixDropdownMenu.Portal>
-                  </RadixDropdownMenu.Root>
-                </TooltipAnchor>
-              </div>
+                onPaneClick={handlePaneClick}
+              />
+              <CanvasRunToolbar
+                canRun={canRun}
+                canToggleMarkdown={canToggleMarkdown}
+                drawer={drawer}
+                onRefresh={refreshLatestDocument}
+                onRun={runActiveNode}
+                onToggleMarkdown={toggleMarkdownDrawer}
+                onToggleTasks={toggleTasksDrawer}
+                onToggleTemplates={toggleTemplatesDrawer}
+                refreshingDocument={refreshingDocument}
+                t={t}
+              />
+              <CanvasActionsToolbar
+                canRedo={canRedo}
+                canUndo={canUndo}
+                onFit={fitCanvas}
+                onOpenSettings={onOpenSettings}
+                onRedo={redo}
+                onUndo={undo}
+                t={t}
+              />
+              <CanvasCreationToolbar
+                canGroup={canGroup}
+                canUngroup={canUngroup}
+                canvasTool={canvasTool}
+                onAddAsset={chooseFilesForCanvas}
+                onAddNode={addNode}
+                onGroup={groupSelectedNodes}
+                onSelectTool={selectCanvasTool}
+                onSetZoom={selectCanvasZoom}
+                onUngroup={ungroupSelection}
+                panModeActive={panModeActive}
+                t={t}
+                viewportZoom={viewportZoom}
+              />
             </>
           ) : (
             <div className="empty-workspace canvasight-empty">
@@ -3036,7 +2805,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
 
         <RightDrawer
           drawer={drawer}
-          nodes={nodes}
+          nodes={semanticNodes}
           edges={edges}
           templates={templates}
           templateSearch={templateSearch}
@@ -3045,9 +2814,9 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           markdown={markdownResult.markdown}
           markdownAttachments={markdownResult.attachments}
           currentRunMode={selectedRunMode}
-          onLocateNode={(nodeId, mode) => locateNode(nodeId, mode)}
-          onSelectNode={(nodeId, mode) => selectNode(nodeId, mode)}
-          onRunNode={(nodeId, mode) => void runNode(nodeId, mode)}
+          onLocateNode={locateNode}
+          onSelectNode={selectNode}
+          onRunNode={runNode}
           onDeleteTemplate={requestDeleteTemplate}
           onTemplateSearchChange={setTemplateSearch}
           onTemplateDragStart={handleTemplateDragStart}

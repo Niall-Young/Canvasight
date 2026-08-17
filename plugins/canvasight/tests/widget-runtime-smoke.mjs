@@ -1422,6 +1422,96 @@ try {
   assert.equal(evidence.workspaceSizeNotices, 0, "fullscreen workspace must not start ext-apps auto ResizeObserver");
   assert.deepEqual(evidence.errors, []);
 
+  const drawerRenderIsolation = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const metrics = win.__CANVASIGHT_RENDER_METRICS__;
+    const taskListButton = doc.querySelector('.canvas-run-toolbar button[aria-label="Task list"], .canvas-run-toolbar button[aria-label="任务列表"]');
+    if (!taskListButton) return false;
+    const before = metrics?.commits?.canvasFlow ?? null;
+    const lifecycleBefore = metrics?.commits?.widgetLifecycle ?? null;
+    taskListButton.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    return {
+      metricsPresent: Boolean(metrics),
+      before,
+      after: metrics?.commits?.canvasFlow ?? null,
+      lifecycleBefore,
+      lifecycleAfter: metrics?.commits?.widgetLifecycle ?? null,
+      drawerOpen: Boolean(doc.querySelector('.right-drawer.is-open'))
+    };
+  })()`, "task drawer render isolation");
+  assert.equal(drawerRenderIsolation.metricsPresent, true, "production widget must expose bounded render commit diagnostics");
+  assert.equal(drawerRenderIsolation.drawerOpen, true, "task drawer must open during the render isolation probe");
+  assert.equal(
+    drawerRenderIsolation.after,
+    drawerRenderIsolation.before,
+    `opening the task drawer must not commit the ReactFlow surface: ${JSON.stringify(drawerRenderIsolation)}`
+  );
+  assert.ok(drawerRenderIsolation.lifecycleBefore > 0, "the widget lifecycle controller must expose commit diagnostics");
+  assert.equal(
+    drawerRenderIsolation.lifecycleAfter,
+    drawerRenderIsolation.lifecycleBefore,
+    `opening the task drawer must not commit the widget lifecycle controller: ${JSON.stringify(drawerRenderIsolation)}`
+  );
+
+  const dragRenderIsolationSetup = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const metrics = win.__CANVASIGHT_RENDER_METRICS__;
+    const node = doc.querySelector('.react-flow__node[data-id="node-a"]');
+    if (!node) return false;
+    node.click();
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const before = metrics?.commits?.rightDrawer ?? null;
+    const rect = node.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    const from = { x: frameRect.left + rect.left + rect.width / 2, y: frameRect.top + rect.top + 64 };
+    const to = { x: from.x + 48, y: from.y + 24 };
+    return { before, from, to, left: rect.left, top: rect.top, saveCallsBeforeDrag: window.__HOST_RECORDS__.documentSaveCalls };
+  })()`, "node drag render isolation setup");
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: dragRenderIsolationSetup.from.x, y: dragRenderIsolationSetup.from.y });
+  await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: dragRenderIsolationSetup.from.x, y: dragRenderIsolationSetup.from.y, button: "left", buttons: 1, clickCount: 1 });
+  for (let step = 1; step <= 8; step += 1) {
+    const progress = step / 8;
+    await cdp.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: dragRenderIsolationSetup.from.x + (dragRenderIsolationSetup.to.x - dragRenderIsolationSetup.from.x) * progress,
+      y: dragRenderIsolationSetup.from.y + (dragRenderIsolationSetup.to.y - dragRenderIsolationSetup.from.y) * progress,
+      button: "left",
+      buttons: 1
+    });
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: dragRenderIsolationSetup.to.x, y: dragRenderIsolationSetup.to.y, button: "left", buttons: 0, clickCount: 1 });
+  const dragRenderIsolation = await waitForEvaluation(cdp, `(async () => {
+    const frame = document.getElementById('widget');
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+    const metrics = win.__CANVASIGHT_RENDER_METRICS__;
+    const node = doc.querySelector('.react-flow__node[data-id="node-a"]');
+    if (!node) return false;
+    const movedRect = node.getBoundingClientRect();
+    return {
+      before: ${JSON.stringify(dragRenderIsolationSetup.before)},
+      after: metrics?.commits?.rightDrawer ?? null,
+      moved: Math.abs(movedRect.left - ${JSON.stringify(dragRenderIsolationSetup.left)}) > 1 || Math.abs(movedRect.top - ${JSON.stringify(dragRenderIsolationSetup.top)}) > 1
+    };
+  })()`, "node drag render isolation");
+  assert.equal(dragRenderIsolation.moved, true, `the render isolation probe must perform a real node drag: ${JSON.stringify(dragRenderIsolation)}`);
+  assert.equal(dragRenderIsolationSetup.saveCallsBeforeDrag, 0, "initial node measurement and selection must not schedule a document save");
+  assert.equal(
+    dragRenderIsolation.after,
+    dragRenderIsolation.before,
+    `dragging a node must not commit the task drawer: ${JSON.stringify(dragRenderIsolation)}`
+  );
+
   const cleanImmediateRefresh = await waitForEvaluation(cdp, `(async () => {
     const frame = document.getElementById('widget');
     const win = frame.contentWindow;
@@ -1449,8 +1539,8 @@ try {
       status: doc.body.textContent
     };
   })()`, "clean immediate refresh without synthetic dirty state");
-  assert.equal(cleanImmediateRefresh.savesAfterMeasurement, 0, "initial node measurement must not schedule a document save");
-  assert.equal(cleanImmediateRefresh.savesAfterSelection, 0, "selection-only node changes must not schedule a document save");
+  assert.ok(cleanImmediateRefresh.savesAfterMeasurement >= 1, "the preceding real node drag must persist its position");
+  assert.equal(cleanImmediateRefresh.savesAfterSelection, cleanImmediateRefresh.savesAfterMeasurement, "selection-only node changes must not schedule another document save");
   assert.equal(cleanImmediateRefresh.callsAfter, cleanImmediateRefresh.callsBefore + 1);
   assert.match(cleanImmediateRefresh.status, /Canvas is already at the latest version|画布已是最新版本/);
 
