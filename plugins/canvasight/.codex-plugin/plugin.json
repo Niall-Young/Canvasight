@@ -1,6 +1,6 @@
 {
   "name": "canvasight",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "A local canvas workspace for structured Codex prompts and generated image assets.",
   "author": {
     "name": "Niall Young"
