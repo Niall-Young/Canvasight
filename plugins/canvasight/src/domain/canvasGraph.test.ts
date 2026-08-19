@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScatterEdge, ScatterGroupNode, ScatterTaskNode } from "../../shared/types";
-import { assetNodeHeight, assetNodeWidth, assetPositionNextToTask, connectionFromStart, findConnectionDropPosition, findOpenPositionToLeft, flowEdges, isConnectionAllowed, storeEdges } from "./canvasGraph";
+import { assetNodeHeight, assetNodeWidth, assetPositionNextToTask, canGroupCanvasNodes, connectionFromStart, findConnectionDropPosition, findOpenPositionToLeft, findOpenToolbarAssetPositions, flowEdges, groupCanvasNodes, isConnectionAllowed, storeEdges } from "./canvasGraph";
 
 const task = (id: string, x = 0): ScatterTaskNode => ({
   id,
@@ -63,6 +63,63 @@ describe("canvas graph rules", () => {
     const position = assetPositionNextToTask(groupedTask, [parent, groupedTask]);
     expect(position.x).toBeGreaterThanOrEqual(parent.position.x + 32);
     expect(position.y).toBeGreaterThanOrEqual(parent.position.y + 72);
+  });
+
+  it("places toolbar Assets on a readable row without covering existing nodes or each other", () => {
+    const existing = task("task");
+    const positions = findOpenToolbarAssetPositions({ x: 0, y: 0 }, [existing], 2);
+    expect(positions).toHaveLength(2);
+    expect(positions[0].x).toBeGreaterThanOrEqual(existing.position.x + 400 + 32);
+    expect(positions[1].x).toBeGreaterThanOrEqual(positions[0].x + assetNodeWidth + 32);
+    expect(positions.map((position) => position.y)).toEqual([0, 0]);
+  });
+
+  it("places a toolbar Asset beyond an unusually wide Group instead of falling back onto it", () => {
+    const wideGroup = { ...group("wide"), width: 5_000, height: 800 };
+    const [position] = findOpenToolbarAssetPositions({ x: 0, y: 0 }, [wideGroup], 1);
+    expect(position.x).toBeGreaterThanOrEqual(5_000 + 32);
+  });
+
+  it("extends one existing Group instead of creating an empty duplicate", () => {
+    const parent = { ...group("group-a"), position: { x: 100, y: 100 }, width: 1000, height: 500 };
+    const first = { ...task("first"), parentId: parent.id, position: { x: 32, y: 72 } };
+    const second = { ...task("second"), parentId: parent.id, position: { x: 464, y: 72 } };
+    const added = task("added", 1300);
+
+    const result = groupCanvasNodes([parent, first, second, added], [first.id, second.id, added.id], { id: "unused", title: "New group" });
+
+    expect(result.status).toBe("extended");
+    expect(result.groupId).toBe(parent.id);
+    expect(result.nodes.filter((node) => node.type === "group").map((node) => node.id)).toEqual([parent.id]);
+    expect(result.nodes.filter((node) => node.type !== "group").map((node) => node.parentId)).toEqual([parent.id, parent.id, parent.id]);
+  });
+
+  it("does nothing when the selected nodes already share one Group", () => {
+    const parent = group("group-a");
+    const first = { ...task("first"), parentId: parent.id };
+    const second = { ...task("second"), parentId: parent.id };
+    const nodes = [parent, first, second];
+
+    expect(canGroupCanvasNodes(nodes, [first.id, second.id])).toBe(false);
+    expect(groupCanvasNodes(nodes, [first.id, second.id], { id: "unused", title: "New group" })).toMatchObject({
+      nodes,
+      groupId: parent.id,
+      status: "unchanged",
+      removedEmptyGroupIds: []
+    });
+  });
+
+  it("removes only source Groups emptied by a real cross-Group regroup", () => {
+    const left = group("left");
+    const right = { ...group("right"), position: { x: 900, y: 0 } };
+    const first = { ...task("first"), parentId: left.id, position: { x: 32, y: 72 } };
+    const second = { ...task("second"), parentId: right.id, position: { x: 32, y: 72 } };
+
+    const result = groupCanvasNodes([left, right, first, second], [first.id, second.id], { id: "combined", title: "Combined" });
+
+    expect(result.status).toBe("created");
+    expect(result.removedEmptyGroupIds).toEqual([left.id, right.id]);
+    expect(result.nodes.filter((node) => node.type === "group").map((node) => node.id)).toEqual(["combined"]);
   });
 
   it("proxies cross-boundary edges through a collapsed Group and hides internal edges", () => {
