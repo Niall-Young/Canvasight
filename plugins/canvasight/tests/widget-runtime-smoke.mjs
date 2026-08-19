@@ -16,7 +16,15 @@ const chromeCandidates = [
   process.env.CHROME_BIN,
   process.env.GOOGLE_CHROME_BIN,
   ...(process.platform === "darwin"
-    ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+    ? [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/Applications/Arc.app/Contents/MacOS/Arc",
+        "/Applications/Arc 2.app/Contents/MacOS/Arc",
+        "/Applications/Dia.app/Contents/MacOS/Dia"
+      ]
     : process.platform === "win32"
       ? [
           process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google", "Chrome", "Application", "chrome.exe"),
@@ -27,7 +35,7 @@ const chromeCandidates = [
 ].filter(Boolean);
 const chromePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
 
-assert.equal(typeof chromePath, "string", `Chrome is required for the composed widget smoke; checked: ${chromeCandidates.join(", ")}`);
+assert.equal(typeof chromePath, "string", `A Chromium browser is required for the composed widget smoke; checked: ${chromeCandidates.join(", ")}`);
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "canvasight-widget-runtime-"));
 const canvasightHome = path.join(tempRoot, "home");
@@ -627,6 +635,13 @@ function createCdpClient(webSocketUrl) {
   let nextId = 1;
   const pending = new Map();
   const listeners = new Map();
+  let rejectOpened = null;
+  const rejectPending = (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    rejectOpened?.(error);
+    for (const handler of pending.values()) handler.reject(error);
+    pending.clear();
+  };
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     if (!message.id && message.method) {
@@ -640,14 +655,33 @@ function createCdpClient(webSocketUrl) {
     else handler.resolve(message.result);
   });
   const opened = new Promise((resolve, reject) => {
+    rejectOpened = reject;
     socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", reject, { once: true });
+    socket.addEventListener("error", () => rejectPending(new Error(`Chrome DevTools WebSocket failed: ${webSocketUrl}`)), { once: true });
+    socket.addEventListener("close", (event) => {
+      rejectPending(new Error(`Chrome DevTools WebSocket closed unexpectedly: code=${event.code} reason=${event.reason || "none"}`));
+    }, { once: true });
   });
   return {
     async send(method, params = {}) {
       await opened;
       const id = nextId++;
-      const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+      const promise = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`Chrome DevTools command timed out: ${method}`));
+        }, 60_000);
+        pending.set(id, {
+          resolve(value) {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          reject(error) {
+            clearTimeout(timer);
+            reject(error);
+          }
+        });
+      });
       socket.send(JSON.stringify({ id, method, params }));
       return promise;
     },
@@ -852,6 +886,8 @@ try {
     settingsInputs: true,
     kitControls: true
   });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Tab", code: "Tab" });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Tab", code: "Tab" });
   const lightCustomInput = await waitForEvaluation(cdp, `(async () => {
     const doc = document.getElementById('widget').contentDocument;
     const input = doc.querySelector('.framework-question-custom-input');
@@ -879,24 +915,12 @@ try {
       boxSizing: baseStyle.boxSizing,
       contained: inputRect.left >= customRect.left && inputRect.right <= customRect.right && inputRect.width <= customRect.width
     };
-    input.focus();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const focusStyle = getComputedStyle(input);
-    const focus = {
-      visible: input.matches(':focus-visible'),
-      background: focusStyle.backgroundColor,
-      outlineWidth: focusStyle.outlineWidth,
-      outlineColor: focusStyle.outlineColor,
-      outlineOffset: focusStyle.outlineOffset
-    };
-    input.blur();
     input.disabled = true;
     const disabled = { matches: input.matches(':disabled'), background: getComputedStyle(input).backgroundColor, height: input.getBoundingClientRect().height };
     input.disabled = false;
     return {
       tokens: { input: resolveColor('--color-background-input'), raised: resolveColor('--color-background-raised'), focus: resolveColor('--color-border-focus') },
       base,
-      focus,
       disabled
     };
   })()`, "light custom-answer input background");
@@ -911,7 +935,26 @@ try {
   assert.equal(lightCustomInput.base.resize, "none");
   assert.equal(lightCustomInput.base.boxSizing, "border-box");
   assert.equal(lightCustomInput.base.contained, true);
-  assert.deepEqual(lightCustomInput.focus, {
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.getElementById('widget').contentDocument.querySelector('.framework-question-custom-input').focus()`,
+    returnByValue: true
+  });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Shift", code: "ShiftLeft" });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Shift", code: "ShiftLeft" });
+  const lightCustomInputFocus = await waitForEvaluation(cdp, `(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const doc = document.getElementById('widget').contentDocument;
+    const input = doc.querySelector('.framework-question-custom-input');
+    const style = getComputedStyle(input);
+    return input.matches(':focus-visible') ? {
+      visible: true,
+      background: style.backgroundColor,
+      outlineWidth: style.outlineWidth,
+      outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset
+    } : false;
+  })()`, "light keyboard-visible custom-answer focus");
+  assert.deepEqual(lightCustomInputFocus, {
     visible: true,
     background: lightCustomInput.tokens.input,
     outlineWidth: "2px",
@@ -1247,12 +1290,6 @@ try {
     };
     const checkbox = inspect('checkbox');
     const radio = inspect('radio');
-    const radioInput = doc.querySelector('input[type="radio"]');
-    const radioItem = radioInput.closest('.framework-question-option');
-    radioInput.focus();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const keyboardFocus = radioInput.matches(':focus-visible') ? getComputedStyle(radioItem).borderTopColor : null;
-    radioInput.blur();
     return {
       theme: doc.documentElement.getAttribute('data-theme'),
       colors: {
@@ -1263,8 +1300,7 @@ try {
         inverted: resolveColor('--color-inverted')
       },
       checkbox,
-      radio,
-      keyboardFocus
+      radio
     };
   })()`, "dark selected inline choice states");
   assert.equal(darkSelectedChoiceContract.theme, "dark");
@@ -1275,7 +1311,27 @@ try {
     assert.equal(choice.controlColor, darkSelectedChoiceContract.colors.inverted);
   }
   assert.equal(darkSelectedChoiceContract.radio.markBackground, darkSelectedChoiceContract.colors.inverted);
-  assert.equal(darkSelectedChoiceContract.keyboardFocus, darkSelectedChoiceContract.colors.focus);
+  await cdp.send("Runtime.evaluate", {
+    expression: `document.getElementById('widget').contentDocument.querySelector('input[type="radio"]:checked').focus()`,
+    returnByValue: true
+  });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space" });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space" });
+  const darkKeyboardFocusContract = await waitForEvaluation(cdp, `(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const doc = document.getElementById('widget').contentDocument;
+    const input = doc.querySelector('input[type="radio"]:checked');
+    const item = input.closest('.framework-question-option');
+    const probe = doc.createElement('span');
+    probe.style.color = 'var(--color-border-focus)';
+    doc.body.appendChild(probe);
+    const focus = getComputedStyle(probe).color;
+    probe.remove();
+    const result = input.matches(':focus-visible') ? { border: getComputedStyle(item).borderTopColor, focus } : false;
+    input.blur();
+    return result;
+  })()`, "dark keyboard-visible inline choice focus");
+  assert.equal(darkKeyboardFocusContract.border, darkKeyboardFocusContract.focus);
   await captureFrameworkQuestions(cdp, "framework-questions-flat-dark-selected.png");
   await waitForEvaluation(cdp, `(() => {
     window.__HOST_SET_THEME__('light');

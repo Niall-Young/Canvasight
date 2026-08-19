@@ -1,6 +1,6 @@
 {
   "name": "canvasight",
-  "version": "0.5.11",
+  "version": "0.6.20",
   "description": "A local canvas workspace for structured Codex prompts and generated image assets.",
   "author": {
     "name": "Niall Young"
@@ -17,8 +17,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Canvasight",
-    "shortDescription": "Build prompt flows on a local canvas",
-    "longDescription": "Canvasight opens a native Codex widget canvas for arranging task nodes, managed assets, and flows. @Canvasight image requests can use Codex imagegen and add final images directly to the active Page as Asset Nodes. Runs return through the current Codex task's widget host bridge; browser fallback pages remain diagnostic.",
+    "shortDescription": "Build prompt flows and trace project history",
+    "longDescription": "Canvasight opens a native Codex widget for arranging task nodes, managed assets, and flows, plus a separate visual history of protected project states. @Canvasight image requests can use Codex imagegen and add final images directly to the active Page as Asset Nodes. Runs return through the current Codex task's widget host bridge; browser fallback pages remain diagnostic.",
     "developerName": "Niall Young",
     "category": "Productivity",
     "capabilities": [
@@ -27,7 +27,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Open Canvasight for the current Codex project workspace."
+      "Open Canvasight for the current Codex project workspace.",
+      "Open Canvasight and show the current project's visual history."
     ],
     "brandColor": "#0862FD",
     "composerIcon": "./assets/icon.png",

@@ -9,6 +9,17 @@ Language / 语言: [中文](#中文) | [English](#english)
 
 Canvasight 是一个 Codex 插件，用可编辑画布把任务、文件素材和提示词流程整理成 `Page → Group → Task/Asset` 结构，再交给 Codex 执行。正式安装使用 Codex 管理的 Git 快照，不依赖桌面的源码仓库；仓库本身仍采用 repo-local 插件布局，供开发和本地 checkout 使用。正常使用时，画布直接渲染在 Codex 原生 widget 中；项目级本地 daemon 负责画布数据和 API，不依赖某个任务持续运行。
 
+### 30 秒理解 Canvasight
+
+Canvasight 只解决一条核心路径：**把要做的事变成看得见、能调整、能交给 Codex 执行的任务流。**
+
+1. 在项目的 Codex 任务中输入 `@Canvasight 打开当前项目画布`。
+2. 空画布点击“新建第一个任务”，写清目标；复杂工作再连接后续任务或素材。
+3. 选中任务并运行，它会把当前任务及其下游内容发送到这个 Codex 任务。
+4. `版本记录` 是可选的安全网：查看代码进度、回到旧版本或从旧版本继续；它不会自动上传代码。
+
+第一次安装或升级插件后需要重新加载 Codex 一次。普通画布编辑不需要反复重启。
+
 ### 许可证
 
 Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
@@ -33,6 +44,20 @@ Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
 - 从新 Codex 任务恢复最近使用的 Canvasight 项目。
 - 可选地在 Run Markdown 中加入 Agent Team 协作协议：以 `ROSTER.md` 恢复角色席位、以版本化报告维护唯一 owner 与验证证据，并从报告派生 `agent-reports/QUEUE.md`。
 - 在节点正文输入 `$` 搜索当前项目启用的 Skill；也可让专业 Skill 主导一次画布内容生成，或在显式开启后让 AI 为职责明确的节点选择 Skill。
+
+### 版本记录（实验性）
+
+顶部 `工作流 | 版本记录` 可以切换到独立的项目进度画布。`版本记录` 默认打开“功能地图”：主路径展示已经进入项目的功能，仍在开发的功能从真实依赖处分叉，整合后回到主路径。每张卡片先说明“做了什么功能、现在是什么状态”，自动恢复点折叠在卡片内，不再用文件列表代替功能成果。
+
+它不是第二套工作流，也不是要求用户理解 Git 的提交列表。普通用户只需要从图上回答三个问题：**项目已经完成了什么、当前工作从哪里分出、出问题时能从哪里继续**。推荐路径是：先在“功能地图”理解功能与依赖，点开卡片查看阶段成果或恢复点，需要技术核对时再切换“Git 技术图”，确认完成后从卡片请求 Codex 检查并整合。
+
+卡片状态使用产品语言表达：`正在开发` 表示功能仍在变化；`进度已保存` 表示已有可继续的恢复点，但不等于功能完成；`已整合到主线` 表示功能已经回到项目主路径；`恢复不完整` 表示仍可查看记录，但敏感、生成、大文件或外部内容可能没有被快照覆盖。
+
+“Git 技术图”是功能地图旁的辅助视图，把仓库中的真实 commit、分叉、merge 和未提交工作区状态按 Git 事实展示。启用保护后，有净文件变化的 Codex 轮次会形成可恢复的本地版本，不移动当前分支、不修改暂存区，也不会自动上传代码。聊天本身不创建版本，恢复点也不会伪装或改写 Git 拓扑。
+
+History 支持跨任务聚合同一 Git 项目、按分支与恢复状态归并功能、合并后回归主路径、跳回原任务，以及从旧恢复点请求 Codex 创建隔离任务。相同项目状态在功能地图中只计一次，底层恢复引用仍完整保留。敏感文件、生成目录、大文件、外部链接、LFS 或子模块覆盖不足时会明确显示“恢复不完整”。其他 Agent 的修改会在静默两分钟后封存，外部 commit 立即封存，也可手动立即保存。
+
+点击“整合到项目”会先显示确认说明，再把功能目标、分支、依赖和最新恢复点发送给当前 Codex 任务。Codex 检查实际代码并运行相关测试；遇到冲突、未完成内容或结果不符合目标时停止，只允许整合到本地 `main`，不会 push 或改写无关历史。旧版 Agent 验收记录仍可在折叠的技术证据中查看，但不再是 MVP 主流程。跨设备同步需要项目级授权，只同步摘要、布局、状态和 Git 引用，不同步聊天内容或项目代码。History 与 Workflow 的视口、选择、筛选和持久化完全隔离，History 操作不会增加 `.scatter` revision。
 
 ### 基础用法
 
@@ -447,6 +472,20 @@ Canvas ownership and Run delivery are separate bindings: canvas content follows 
 - Reopen recent Canvasight projects from a new Codex task.
 - Optionally include the Agent Team protocol in generated Run Markdown: `ROSTER.md` restores role seats, versioned reports hold the single owner and verification evidence, and `agent-reports/QUEUE.md` is derived from reports.
 - Type `$` in a node body to search enabled project Skills; a professional Skill can also lead one canvas content write, and AI can opt in to choosing Skills for clearly matched node responsibilities.
+
+### Project History (experimental fork)
+
+The top `Workflow | History` control opens a separate project-history canvas. History defaults to `Feature map`: integrated features continue along the main product path, active work branches from its real dependency, and an integrated feature returns to the main path. Each card leads with the feature outcome and current state; automatic checkpoints stay folded inside instead of exposing changed files as the product meaning.
+
+It is neither a second workflow editor nor a commit list that requires Git expertise. A user should be able to answer three questions from the map: **what the project has delivered, where current work branched, and where work can safely continue after a problem**. The recommended path is to understand outcomes and dependencies in `Feature map`, open a card for stage results or checkpoints, switch to `Git technical map` only for factual verification, and ask Codex to inspect and integrate the feature when it is ready.
+
+Card states use product language: `In development` means the feature is still changing; `Progress saved` means a restorable checkpoint exists but the feature is not necessarily complete; `Integrated into main` means the feature has returned to the project's main path; `Incomplete recovery` means the record remains visible while sensitive, generated, large, or external content may be outside snapshot coverage.
+
+`Git technical map` is the secondary factual perspective. It shows real commits, divergence, merges, and the uncommitted working-tree state without fabricating Git topology. Once protection is enabled, Codex turns with net file changes create restore points under Canvasight-only local Git refs without moving the current branch, changing the index, or uploading code. Chat-only turns create neither branches nor snapshots.
+
+History aggregates tasks belonging to the same Git project, attributes branches and restorable states to understandable features, returns integrated work to the main path, opens original tasks, and asks Codex to create an isolated task from an older checkpoint. Identical project states count once in the product view while their underlying recovery references remain intact. Sensitive/generated files, large files, external symlinks, LFS data, submodules, or unavailable Git objects are marked as incomplete recovery. Changes from other agents seal after two minutes of silence, external commits seal immediately, and the user can save immediately.
+
+`Integrate into project` first shows a confirmation, then sends the feature outcome, branch, dependency, and latest checkpoint to the current Codex task. Codex inspects the actual code and runs relevant checks, stops on conflicts or unfinished work, integrates only into local `main`, and never pushes or rewrites unrelated history. Legacy Agent-acceptance records remain readable inside collapsed technical evidence but are not the MVP golden path. Project-scoped cross-device authorization syncs metadata only—summaries, layout, status, and Git references, never chat content or project code. History and Workflow keep independent viewport, selection, filters, and persistence; History actions do not increment `.scatter` revision.
 
 ### Basic Usage
 

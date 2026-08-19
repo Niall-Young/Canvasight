@@ -1,0 +1,6 @@
+interface:
+  display_name: "Canvasight History Check"
+  short_description: "Verify one protected History node and report evidence"
+  default_prompt: "Use $canvasight-history-check to validate the requested Canvasight History node and report the bounded result."
+policy:
+  allow_implicit_invocation: false

@@ -14,6 +14,16 @@ type WidgetLifecycleControllerProps = {
   startupStage: CanvasightStartupStage;
 };
 
+function widgetHasFocus(): boolean {
+  if (document.hasFocus()) return true;
+  try {
+    const frame = window.frameElement;
+    return Boolean(frame && frame.ownerDocument.activeElement === frame);
+  } catch {
+    return false;
+  }
+}
+
 function WidgetLifecycleControllerComponent({
   canvasRef,
   nativeWidget,
@@ -27,6 +37,7 @@ function WidgetLifecycleControllerComponent({
     if (!projectPath) return;
     let cancelled = false;
     let timer: number | null = null;
+    let activityTimer: number | null = null;
     let ownsLease = false;
     let requestInFlight = false;
     let standbyRetryUsed = false;
@@ -50,7 +61,7 @@ function WidgetLifecycleControllerComponent({
       const rect = canvasRef.current?.getBoundingClientRect();
       return {
         visible: document.visibilityState === "visible",
-        focused: document.hasFocus(),
+        focused: widgetHasFocus(),
         canvasWidth: rect?.width ?? 0,
         canvasHeight: rect?.height ?? 0
       };
@@ -139,6 +150,7 @@ function WidgetLifecycleControllerComponent({
     const handleResourceTeardown = (event: Event) => {
       cancelled = true;
       clearTimer();
+      if (activityTimer !== null) window.clearInterval(activityTimer);
       const release = releaseLease();
       (event as CustomEvent<{ waitUntil?: (promise: Promise<unknown>) => void }>).detail?.waitUntil?.(release);
     };
@@ -150,12 +162,14 @@ function WidgetLifecycleControllerComponent({
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("canvasight:host-context-changed", handleActivityChange);
     window.addEventListener("canvasight:resource-teardown", handleResourceTeardown);
+    activityTimer = window.setInterval(handleActivityChange, 500);
     previouslyEligible = isEligible();
     if (previouslyEligible) schedule(0);
 
     return () => {
       cancelled = true;
       clearTimer();
+      if (activityTimer !== null) window.clearInterval(activityTimer);
       observer.disconnect();
       document.removeEventListener("visibilitychange", handleActivityChange);
       window.removeEventListener("focus", handleActivityChange);

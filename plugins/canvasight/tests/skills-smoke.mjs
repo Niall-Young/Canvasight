@@ -18,6 +18,7 @@ const graphWritingContractPath = path.join(pluginRoot, "skills", "canvasight-gra
 const updateSkillPath = path.join(pluginRoot, "skills", "canvasight-update", "SKILL.md");
 const indexSkillPath = path.join(pluginRoot, "skills", "canvasight", "SKILL.md");
 const imagegenSkillPath = path.join(pluginRoot, "skills", "canvasight-imagegen", "SKILL.md");
+const historyCheckSkillPath = path.join(pluginRoot, "skills", "canvasight-history-check", "SKILL.md");
 
 function loadTypescriptModule(sourcePath) {
   const source = fs.readFileSync(sourcePath, "utf8");
@@ -39,8 +40,17 @@ const graphWritingContract = fs.readFileSync(graphWritingContractPath, "utf8");
 const updateSkill = fs.readFileSync(updateSkillPath, "utf8");
 const indexSkill = fs.readFileSync(indexSkillPath, "utf8");
 const imagegenSkill = fs.readFileSync(imagegenSkillPath, "utf8");
+const historyCheckSkill = fs.readFileSync(historyCheckSkillPath, "utf8");
 
 assert.match(indexSkill, /canvasight-imagegen/);
+assert.match(indexSkill, /canvasight-history-check/);
+assert.match(indexSkill, /no model-visible Git write tool/);
+assert.match(indexSkill, /record_project_history_host_action/);
+assert.match(indexSkill, /clientThreadId/);
+assert.match(indexSkill, /promote the same receipt to `succeeded`/u);
+assert.match(historyCheckSkill, /record_project_history_agent_check/);
+assert.match(historyCheckSkill, /isolated checkout/);
+assert.match(historyCheckSkill, /Never confirm a node, merge, commit, push, reset, or rewrite history/);
 assert.match(indexSkill, /\@Canvasight/);
 assert.match(imagegenSkill, /system `\$imagegen` Skill/);
 assert.match(imagegenSkill, /open_canvasight.*await_canvasight_widget_ready/s);
