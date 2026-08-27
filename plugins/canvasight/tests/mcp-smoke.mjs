@@ -515,8 +515,10 @@ async function assertDynamicWidgetRuntimeApi() {
   const bridgeMessages = [];
   let preparedNativeStatus = "preflight_degraded_chat";
   let bridgeFailure = null;
+  let widgetSessionRecovery = null;
   const windowListeners = new Map();
   const readyEvents = [];
+  const rebindEvents = [];
   const mockBridgeState = {
     startupStage: "starting",
     displayMode: "unknown",
@@ -547,6 +549,20 @@ async function assertDynamicWidgetRuntimeApi() {
         serverToolRequests.push(request);
         const path = request.arguments.path;
         const body = request.arguments.body;
+        if (widgetSessionRecovery) {
+          const recovery = widgetSessionRecovery;
+          widgetSessionRecovery = null;
+          return {
+            structuredContent: {
+              ok: true,
+              status: 200,
+              data: { sessionId: recovery.sessionId },
+              recovery,
+              error: null,
+              code: null
+            }
+          };
+        }
         if (path.endsWith("/run") && body?.deliveryMode === "widget_bridge_prepare") {
           assert.equal("codexMode" in body, false, "widget payloads must not forward retired execution modes");
           assert.equal("planMode" in body, false, "widget payloads must not forward retired Plan state");
@@ -618,6 +634,7 @@ async function assertDynamicWidgetRuntimeApi() {
   }
   globalThis.CustomEvent = TestCustomEvent;
   globalThis.window.addEventListener("canvasight:app-ready", (event) => readyEvents.push(event.detail));
+  globalThis.window.addEventListener("canvasight:widget-rebind", (event) => rebindEvents.push(event.detail));
   globalThis.fetch = async (url, init = {}) => {
     requests.push({ url: String(url), init });
     throw new Error("Native widget API must not fetch localhost directly.");
@@ -729,6 +746,33 @@ async function assertDynamicWidgetRuntimeApi() {
       /blocked before sendMessage.*fake transport failure/i
     );
     assert.equal(bridgeMessages.length, 2, "non-degraded preflight failures must still block before native bridge delivery");
+
+    Object.assign(globalThis.window.__CANVASIGHT_WIDGET_DATA__, {
+      projectPath: "/tmp/widget-runtime",
+      language: "zh"
+    });
+    widgetSessionRecovery = {
+      reason: "session_recreated",
+      previousSessionId: "session-runtime",
+      sessionId: "session-runtime-recovered",
+      openAttemptId: "open-runtime-recovered",
+      bindingIssuedAt: 200,
+      projectPath: "/tmp/widget-runtime",
+      threadId: "thread-runtime",
+      codexThreadId: "thread-runtime",
+      language: "zh",
+      token: "token-runtime-recovered",
+      url: "http://127.0.0.1:54322/?sessionId=session-runtime-recovered&token=token-runtime-recovered"
+    };
+    const recoveredSession = await api.getSession();
+    assert.equal(recoveredSession.sessionId, "session-runtime-recovered");
+    assert.equal(api.sessionId, "session-runtime-recovered");
+    assert.equal(api.token, "token-runtime-recovered");
+    assert.equal(rebindEvents.length, 1, "same-version daemon recovery must remount React on the replacement binding");
+    assert.equal(rebindEvents[0].previous.sessionId, "session-runtime");
+    assert.equal(rebindEvents[0].current.openAttemptId, "open-runtime-recovered");
+    assert.equal(serverToolRequests.at(-1).arguments.projectPath, "/tmp/widget-runtime");
+    assert.equal(serverToolRequests.at(-1).arguments.language, "zh");
   } finally {
     await viteServer.close();
     if (originalWindow === undefined) delete globalThis.window;
@@ -3849,6 +3893,8 @@ async function main() {
     assert.equal(toolNames.has("get_canvasight_graph_context"), true);
     assert.equal(toolNames.has("write_canvasight_graph"), true);
     assert.equal(toolNames.has("add_canvasight_generated_images"), true);
+    assert.equal(toolNames.has("record_project_history_host_action"), true);
+    assert.equal(toolNames.has("record_project_history_agent_check"), true);
     assert.equal(toolNames.has("await_canvasight_widget_ready"), true);
     assert.equal(toolNames.has("await_canvasight_run"), true);
     assert.equal(toolNames.has("close_canvasight"), true);
@@ -3858,6 +3904,14 @@ async function main() {
     assert.equal(generatedImagesTool.inputSchema.properties.images.maxItems, 16);
     assert.deepEqual(generatedImagesTool.outputSchema.required, ["targetPage", "documentRevision", "images"]);
     assert.equal(generatedImagesTool.outputSchema.additionalProperties, false);
+    const historyAgentCheckTool = listed.tools.find((tool) => tool.name === "record_project_history_agent_check");
+    assert.deepEqual(historyAgentCheckTool.inputSchema.required, ["projectPath", "threadId", "token", "outcome", "summary", "evidence"]);
+    assert.deepEqual(historyAgentCheckTool.inputSchema.properties.outcome.enum, ["passed", "failed"]);
+    assert.equal(historyAgentCheckTool.annotations.destructiveHint, false);
+    const historyHostActionTool = listed.tools.find((tool) => tool.name === "record_project_history_host_action");
+    assert.deepEqual(historyHostActionTool.inputSchema.required, ["projectPath", "threadId", "token", "outcome"]);
+    assert.deepEqual(historyHostActionTool.inputSchema.properties.outcome.enum, ["succeeded", "queued", "failed"]);
+    assert.equal(historyHostActionTool.annotations.destructiveHint, false);
     const frameworkQuestionsTool = listed.tools.find((tool) => tool.name === "ask_canvasight_framework_questions");
     assert.equal(frameworkQuestionsTool._meta.ui.resourceUri, "ui://widget/canvasight/framework-questions.html");
     assert.deepEqual(frameworkQuestionsTool._meta.ui.visibility, ["model", "app"]);

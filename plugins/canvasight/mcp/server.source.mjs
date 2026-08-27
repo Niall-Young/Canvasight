@@ -26,9 +26,19 @@ import {
 } from "./domain/concurrent-document.mjs";
 import { createToolCatalog } from "./domain/tool-catalog.mjs";
 import { createGeneratedImageWriter } from "./infrastructure/generated-images.mjs";
+import { proxyWidgetApiRequest, recoverableWidgetSessionRoute, widgetApiError, widgetApiRoute } from "./application/canvasight-widget-api-proxy.mjs";
+import { ProjectHistoryService } from "./application/project-history-service.mjs";
+import { ProjectHistoryAgentCheckService } from "./application/project-history-agent-check-service.mjs";
+import { ProjectHistoryHostActionService } from "./application/project-history-host-action-service.mjs";
+import { createProjectHistoryHttpController } from "./application/project-history-http-controller.mjs";
+import { createProjectHistoryHookController } from "./application/project-history-hook-controller.mjs";
+import { createProjectHistoryRuntime } from "./application/project-history-runtime.mjs";
+import { isGitWorktree } from "./infrastructure/git-project-bootstrap.mjs";
+import { daemonNodeExecutableCandidates } from "./infrastructure/node-executable-candidates.mjs";
+import { ProjectHistoryTaskBindingStore } from "./infrastructure/project-history-task-binding-store.mjs";
 
 const SERVER_NAME = "canvasight";
-const SERVER_VERSION = "0.5.11";
+const SERVER_VERSION = "0.6.20";
 const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 const CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -205,8 +215,11 @@ const presentationRecoveryLeases = new Map();
 const projectRevisionStates = new Map();
 const projectWriteLocks = new Map();
 const projectGraphContexts = new Map();
+const projectHistoryTaskBindings = new ProjectHistoryTaskBindingStore(canvasightHome());
 const globalRunWaiters = [];
 let httpState = null;
+let projectHistoryPollTimer = null;
+let projectHistoryPollActive = false;
 let inputBuffer = Buffer.alloc(0);
 let useContentLengthTransport = false;
 let daemonAuthToken = process.env.CANVASIGHT_DAEMON_TOKEN || "";
@@ -1263,21 +1276,46 @@ async function daemonJson(state, route, init = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-async function healthyDaemonState(state) {
+function stableServerVersionParts(value) {
+  const match = typeof value === "string" ? value.match(/^(\d+)\.(\d+)\.(\d+)$/u) : null;
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareStableServerVersions(left, right) {
+  const leftParts = stableServerVersionParts(left);
+  const rightParts = stableServerVersionParts(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < leftParts.length; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] < rightParts[index] ? -1 : 1;
+  }
+  return 0;
+}
+
+async function probeHealthyCanvasightDaemon(state) {
   if (!state) return null;
   try {
     const health = await daemonJson({ ...state, token: "" }, "/api/health");
-    if (health?.status !== "ok") return null;
-    if (health.pluginRoot !== pluginRoot || health.serverVersion !== SERVER_VERSION) return null;
+    if (health?.status !== "ok" || health?.name !== SERVER_NAME) return null;
     return {
-      ...state,
-      origin: health.origin || state.origin,
-      port: health.port || state.port,
-      pid: health.pid || state.pid
+      state: {
+        ...state,
+        origin: health.origin || state.origin,
+        port: health.port || state.port,
+        pid: health.pid || state.pid
+      },
+      health
     };
   } catch {
     return null;
   }
+}
+
+async function healthyDaemonState(state) {
+  const probe = await probeHealthyCanvasightDaemon(state);
+  if (!probe || probe.health.serverVersion !== SERVER_VERSION) return null;
+  // Identical immutable plugin versions share one daemon even when one MCP
+  // process came from the installed cache and another came from a checkout.
+  return probe.state;
 }
 
 function processIsAlive(pid) {
@@ -1346,8 +1384,8 @@ async function waitForProcessExit(pid, timeoutMs = 1200) {
   return !processIsAlive(pid);
 }
 
-async function stopDaemonStateProcess(state, reason = "stale") {
-  if (!state || state.pluginRoot !== pluginRoot) return false;
+async function stopDaemonStateProcess(state, reason = "stale", { allowDifferentPluginRoot = false } = {}) {
+  if (!state || (!allowDifferentPluginRoot && state.pluginRoot !== pluginRoot)) return false;
   const pid = Number(state.pid);
   const shouldStop =
     Number.isFinite(pid) &&
@@ -1427,28 +1465,6 @@ async function waitForDaemon(token) {
     await sleep(120);
   }
   throw new Error("Canvasight daemon did not start in time");
-}
-
-function daemonNodeExecutableCandidates() {
-  const candidates = [];
-  const seen = new Set();
-  const add = (executable, source) => {
-    if (typeof executable !== "string" || !executable.trim()) return;
-    const normalized = executable.trim();
-    if (seen.has(normalized)) return;
-    seen.add(normalized);
-    candidates.push({ executable: normalized, source });
-  };
-
-  // A configured executable is useful for managed runtimes and gives smoke tests a
-  // deterministic way to exercise the fallback path.
-  add(process.env.CANVASIGHT_NODE_BIN, "configured");
-  // Prefer a fresh PATH lookup. Homebrew's Cellar path in process.execPath can be
-  // removed while a long-lived MCP shim is still running.
-  add("node", "path");
-  add(process.env.npm_node_execpath, "npm_node_execpath");
-  add(process.execPath, "process_exec_path");
-  return candidates;
 }
 
 function daemonSpawnErrorDetails(error) {
@@ -1585,6 +1601,13 @@ async function ensureDaemonServer() {
     await stopOrphanDaemonProcesses(Number(existing.pid), "healthy_state_found");
     return existing;
   }
+  const initialProbe = await probeHealthyCanvasightDaemon(initialState);
+  const initialVersionComparison = compareStableServerVersions(initialProbe?.health?.serverVersion, SERVER_VERSION);
+  if (initialProbe && (initialVersionComparison === null || initialVersionComparison > 0)) {
+    throw new Error(
+      `Canvasight runtime version mismatch: active daemon ${initialProbe.health.serverVersion || "unknown"} is newer than this MCP ${SERVER_VERSION}. Reload Codex to use the installed Canvasight version; the older task will not replace the active daemon.`
+    );
+  }
 
   const lock = await acquireDaemonStartLock();
   if (lock.existing) {
@@ -1599,8 +1622,17 @@ async function ensureDaemonServer() {
       await stopOrphanDaemonProcesses(Number(lockedExisting.pid), "healthy_state_after_lock");
       return lockedExisting;
     }
-    const hasCurrentVersionState = state?.pluginRoot === pluginRoot && state.serverVersion === SERVER_VERSION;
-    if (state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
+    const liveProbe = await probeHealthyCanvasightDaemon(state);
+    const liveVersionComparison = compareStableServerVersions(liveProbe?.health?.serverVersion, SERVER_VERSION);
+    if (liveProbe && (liveVersionComparison === null || liveVersionComparison > 0)) {
+      throw new Error(
+        `Canvasight runtime version mismatch: active daemon ${liveProbe.health.serverVersion || "unknown"} is newer than this MCP ${SERVER_VERSION}. Reload Codex to use the installed Canvasight version; the older task will not replace the active daemon.`
+      );
+    }
+    const hasCurrentVersionState = state?.serverVersion === SERVER_VERSION;
+    if (liveProbe && liveVersionComparison !== null && liveVersionComparison < 0) {
+      await stopDaemonStateProcess(state, "older_version_takeover_before_spawn", { allowDifferentPluginRoot: true });
+    } else if (!liveProbe && state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
       await stopDaemonStateProcess(state, "version_mismatch_before_spawn");
     }
     if (!hasCurrentVersionState) {
@@ -4852,7 +4884,7 @@ function waitForOpenAttemptReady(sessionIdValue, openAttemptIdValue, timeoutMs, 
 
 function getSession(id) {
   const session = sessions.get(id);
-  if (!session) throw new HttpError(404, "Session not found");
+  if (!session) throw new HttpError(404, "Session not found", "session_not_found");
   return session;
 }
 
@@ -5074,6 +5106,15 @@ function rememberThreadClaim(session, threadId) {
     threadId,
     claimedAt
   });
+  void projectHistoryTaskBindings.bind({
+    threadId,
+    projectPath: session.projectPath,
+    source: "canvasight-session-claim"
+  }).catch((error) => appendMcpLifecycle("project_history_task_binding_error", {
+    threadId,
+    projectPath: session.projectPath,
+    error: serializeError(error)
+  }));
   return claimedAt;
 }
 
@@ -6268,6 +6309,50 @@ function appServerRequest(method, params, { experimentalApi = false, runtime = n
   return appServerRequestSequence([{ method, params }], { experimentalApi, runtime }).then((results) => results[0] || {});
 }
 
+const {
+  projectHistorySnapshot,
+  enableProjectHistory,
+  refreshProjectHistory,
+  inspectCodexTurn,
+  observationMatchForProject,
+  recordProjectHistoryHookTurn,
+  recordProjectHistoryHookTurnStarted
+} = createProjectHistoryRuntime({
+  appServerRequest,
+  optionalProjectPath,
+  optionalThreadId,
+  HttpError
+});
+
+const {
+  captureStop: captureProjectHistoryStopHook,
+  captureUserPrompt: captureProjectHistoryUserPromptHook
+} = createProjectHistoryHookController({
+  HttpError,
+  activeSessions: () => sessions.values(),
+  appendLifecycle: appendMcpLifecycle,
+  inspectCodexTurn,
+  maxRecentProjects: MAX_RECENT_PROJECTS,
+  observationMatchForProject,
+  optionalProjectPath,
+  optionalThreadId,
+  projectHistoryTaskBindings,
+  recentProjects,
+  recordProjectHistoryHookTurn,
+  recordProjectHistoryHookTurnStarted
+});
+const handleProjectHistorySessionAction = createProjectHistoryHttpController({
+  HttpError,
+  assertMethod,
+  enableProjectHistory,
+  normalizeProjectPath,
+  optionalThreadId,
+  projectHistorySnapshot,
+  readJsonBody,
+  refreshProjectHistory,
+  sendJson
+});
+
 function normalizeSkillListLimit(value) {
   return Math.max(1, Math.min(Math.floor(toNumber(Number(value), 50)), MAX_SKILL_SUMMARIES));
 }
@@ -6772,6 +6857,8 @@ async function handleSessionApi(req, res, url) {
     return true;
   }
 
+  if (await handleProjectHistorySessionAction(req, res, action, session)) return true;
+
   if (action === "document") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
@@ -7087,6 +7174,20 @@ async function handleHttp(req, res) {
       throw new HttpError(405, "Expected GET, POST, or PUT");
     }
 
+    if (url.pathname === "/api/project-history/hooks/stop") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      sendJson(res, 200, await captureProjectHistoryStopHook(await readJsonBody(req)));
+      return;
+    }
+
+    if (url.pathname === "/api/project-history/hooks/user-prompt-submit") {
+      assertDaemonAuthorized(req, url);
+      assertMethod(req, "POST");
+      sendJson(res, 200, await captureProjectHistoryUserPromptHook(await readJsonBody(req)));
+      return;
+    }
+
     if (url.pathname === "/api/templates" || url.pathname.startsWith("/api/templates/")) {
       assertDaemonAuthorized(req, url);
       const templateId = url.pathname.startsWith("/api/templates/")
@@ -7331,6 +7432,10 @@ async function ensureHttpServer() {
 }
 
 async function shutdownDaemon() {
+  if (projectHistoryPollTimer) {
+    clearInterval(projectHistoryPollTimer);
+    projectHistoryPollTimer = null;
+  }
   for (const id of Array.from(sessions.keys())) closeSession(id);
   while (globalRunWaiters.length) {
     const waiter = globalRunWaiters.shift();
@@ -8000,32 +8105,35 @@ async function toolAwaitCanvasightWidgetReady(args) {
   return toolResult(result, text);
 }
 
-function widgetApiRoute(pathValue) {
-  if (typeof pathValue !== "string" || !pathValue.startsWith("/api/")) {
-    throw new Error("Canvasight widget API path must start with /api/.");
-  }
-  const parsed = new URL(pathValue, "http://canvasight.local");
-  if (parsed.origin !== "http://canvasight.local" || parsed.hash || parsed.pathname.includes("..")) {
-    throw new Error("Canvasight widget API path is invalid.");
-  }
-  const allowed =
-    /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) ||
-    /^\/api\/templates(?:\/|$)/.test(parsed.pathname) ||
-    parsed.pathname === "/api/skills" ||
-    parsed.pathname === "/api/preferences" ||
-    parsed.pathname === "/api/reveal" ||
-    parsed.pathname === "/api/open-file";
-  if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
-  if (parsed.search) {
-    if (parsed.pathname !== "/api/skills") throw new Error("Canvasight widget API query parameters are not allowed for this path.");
-    const allowedSkillQueryKeys = new Set(["projectPath", "threadId", "query", "forceReload", "limit"]);
-    for (const key of parsed.searchParams.keys()) {
-      if (!allowedSkillQueryKeys.has(key) || parsed.searchParams.getAll(key).length !== 1) {
-        throw new Error("Canvasight widget Skill API query parameters are invalid.");
-      }
-    }
-  }
-  return `${parsed.pathname}${parsed.search}`;
+async function toolRecordProjectHistoryAgentCheck(args) {
+  const projectPath = normalizeProjectPath(args?.projectPath);
+  const service = await ProjectHistoryService.forRepository(projectPath);
+  const recorded = await new ProjectHistoryAgentCheckService(service).record(args?.token, {
+    outcome: args?.outcome,
+    summary: args?.summary,
+    evidence: args?.evidence,
+    taskId: args?.threadId
+  });
+  return toolResult(
+    { status: "recorded", nodeId: recorded.nodeId, historyRevision: recorded.index.revision },
+    `Canvasight Project History Agent check recorded as ${args?.outcome}. Do not confirm, merge, or push; return the evidence to the user.`
+  );
+}
+
+async function toolRecordProjectHistoryHostAction(args) {
+  const projectPath = normalizeProjectPath(args?.projectPath);
+  const service = await ProjectHistoryService.forRepository(projectPath);
+  const recorded = await new ProjectHistoryHostActionService(service).record(args?.token, {
+    outcome: args?.outcome,
+    sourceTaskId: args?.threadId,
+    targetTaskId: args?.targetTaskId,
+    clientThreadId: args?.clientThreadId,
+    error: args?.error
+  });
+  return toolResult(
+    { status: "recorded", action: recorded },
+    `Canvasight Project History ${recorded.action} receipt recorded as ${recorded.status}. Do not repeat the host action.`
+  );
 }
 
 async function toolCanvasightWidgetApi(args) {
@@ -8039,38 +8147,73 @@ async function toolCanvasightWidgetApi(args) {
   const startupStage = normalizeStartupStage(args?.startupStage);
   if (!openAttemptIdValue || !widgetInstanceId) throw new Error("Canvasight widget API requires openAttemptId and widgetInstanceId.");
   const daemon = await ensureDaemonServer();
-  const response = await fetch(new URL(route, daemon.origin), {
-    method,
-    headers: daemonHeaders(daemon, {
-      ...(args?.body === null || args?.body === undefined ? {} : { "content-type": "application/json" }),
-      "x-canvasight-open-attempt-id": openAttemptIdValue,
-      "x-canvasight-widget-instance-id": widgetInstanceId,
-      "x-canvasight-startup-stage": startupStage,
-      "x-canvasight-display-mode": typeof args?.displayMode === "string" ? args.displayMode : "unknown",
-      "x-canvasight-thread-id": typeof args?.threadId === "string" ? args.threadId : "",
-      "x-canvasight-react-mounted": args?.reactMounted === true ? "true" : "false"
-    }),
-    ...(args?.body === null || args?.body === undefined ? {} : { body: JSON.stringify(args.body) })
-  });
-  const text = await response.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = text || null;
+  const identity = {
+    openAttemptId: openAttemptIdValue,
+    widgetInstanceId,
+    startupStage,
+    displayMode: typeof args?.displayMode === "string" ? args.displayMode : "unknown",
+    threadId: typeof args?.threadId === "string" ? args.threadId.trim() : "",
+    reactMounted: args?.reactMounted === true
+  };
+  let result = await proxyWidgetApiRequest(daemon, route, method, args?.body, identity);
+  let recovery = null;
+  let { code, error } = widgetApiError(result);
+  const recoverable = recoverableWidgetSessionRoute(route, method);
+  const sessionMissing = result.response.status === 404 && (code === "session_not_found" || /session not found/iu.test(error || ""));
+  const projectPath = optionalProjectPath(args?.projectPath);
+  if (sessionMissing && recoverable && identity.threadId && projectPath) {
+    const replacement = await daemonJson(daemon, "/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        projectPath,
+        threadId: identity.threadId,
+        language: args?.language,
+        targetDisplayMode: "fullscreen"
+      })
+    });
+    const replacementSession = replacement?.session;
+    const replacementAttempt = replacementSession?.openAttempt;
+    if (!replacementSession?.sessionId || !replacementAttempt?.openAttemptId) {
+      throw new Error("Canvasight could not create a replacement native widget session.");
+    }
+    const retryIdentity = { ...identity, openAttemptId: replacementAttempt.openAttemptId };
+    const retryBody = isObject(args?.body) && Object.prototype.hasOwnProperty.call(args.body, "openAttemptId")
+      ? { ...args.body, openAttemptId: replacementAttempt.openAttemptId }
+      : args?.body;
+    const retryRoute = `/api/sessions/${encodeURIComponent(replacementSession.sessionId)}${recoverable.suffix}${recoverable.search}`;
+    result = await proxyWidgetApiRequest(daemon, retryRoute, method, retryBody, retryIdentity);
+    ({ code, error } = widgetApiError(result));
+    const replacementUrl = daemonSessionUrl(daemon, replacementSession.sessionId);
+    recovery = {
+      reason: "session_recreated",
+      previousSessionId: recoverable.sessionId,
+      sessionId: replacementSession.sessionId,
+      openAttemptId: replacementAttempt.openAttemptId,
+      bindingIssuedAt: replacementAttempt.bindingIssuedAt,
+      projectPath: replacementSession.projectPath,
+      threadId: replacementSession.codexThreadId,
+      codexThreadId: replacementSession.codexThreadId,
+      language: replacementSession.language,
+      targetDisplayMode: "fullscreen",
+      apiBaseUrl: daemon.origin,
+      origin: daemon.origin,
+      token: daemon.token || "",
+      url: replacementUrl,
+      browserUrl: replacementUrl
+    };
+    appendMcpLifecycle("canvasight_widget_session_recreated", {
+      previousSessionId: recoverable.sessionId,
+      sessionId: replacementSession.sessionId,
+      openAttemptId: replacementAttempt.openAttemptId,
+      widgetInstanceId,
+      route: new URL(route, "http://canvasight.local").pathname
+    });
   }
-  const error =
-    response.ok
-      ? null
-      : payload && typeof payload === "object" && typeof payload.error === "string"
-        ? payload.error
-        : text || `Canvasight daemon request failed: ${response.status}`;
-  const code = payload && typeof payload === "object" && typeof payload.code === "string" ? payload.code : null;
-  if (!response.ok) {
+  if (!result.response.ok) {
     appendMcpLifecycle("canvasight_widget_api_error", {
       route: new URL(route, "http://canvasight.local").pathname,
       method,
-      status: response.status,
+      status: result.response.status,
       code,
       openAttemptId: openAttemptIdValue,
       widgetInstanceId
@@ -8078,13 +8221,14 @@ async function toolCanvasightWidgetApi(args) {
   }
   return toolResult(
     {
-      ok: response.ok,
-      status: response.status,
-      data: response.ok ? payload : null,
+      ok: result.response.ok,
+      status: result.response.status,
+      data: result.response.ok ? result.payload : null,
       error,
-      code
+      code,
+      ...(recovery ? { recovery } : {})
     },
-    response.ok ? "Canvasight widget API request completed." : error
+    result.response.ok ? "Canvasight widget API request completed." : error
   );
 }
 
@@ -8234,6 +8378,8 @@ async function callTool(name, args) {
   if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "add_canvasight_generated_images") return toolAddCanvasightGeneratedImages(args || {});
+  if (name === "record_project_history_host_action") return toolRecordProjectHistoryHostAction(args || {});
+  if (name === "record_project_history_agent_check") return toolRecordProjectHistoryAgentCheck(args || {});
   if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
@@ -8446,6 +8592,22 @@ async function runDaemon() {
   if (!daemonAuthToken) daemonAuthToken = crypto.randomBytes(24).toString("base64url");
   daemonStartedAt = nowIso();
   await ensureHttpServer();
+  projectHistoryPollTimer = setInterval(() => {
+    if (projectHistoryPollActive) return;
+    projectHistoryPollActive = true;
+    const projectPaths = [...new Set([...sessions.values()].map((session) => session.projectPath).filter(Boolean))];
+    void Promise.all(projectPaths.map(async (projectPath) => {
+      try {
+        if (!(await isGitWorktree(projectPath))) return;
+        const service = await ProjectHistoryService.forRepository(projectPath);
+        if (!(await service.readIndex()).protection.initialized) return;
+        await refreshProjectHistory(projectPath);
+      } catch (error) {
+        appendMcpLifecycle("project_history_background_poll_error", { projectPath, error: serializeError(error) });
+      }
+    })).finally(() => { projectHistoryPollActive = false; });
+  }, 30_000);
+  projectHistoryPollTimer.unref?.();
 }
 
 function runMcpStdio() {

@@ -1516,6 +1516,62 @@ button {
   white-space: nowrap;
 }
 
+.workflow-empty-state {
+  position: absolute;
+  z-index: 7;
+  inset: 92px 84px 92px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.workflow-empty-state > div {
+  display: grid;
+  width: min(480px, 100%);
+  justify-items: center;
+  gap: 10px;
+}
+
+.workflow-empty-state h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-20);
+  line-height: var(--line-20);
+}
+
+.workflow-empty-state p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--text-14);
+  line-height: 1.55;
+}
+
+.workflow-empty-state button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 0 15px;
+  pointer-events: auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-inverted);
+  background: var(--color-background-dark);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.workflow-empty-state button:hover { background: var(--color-background-dark-hover); }
+.workflow-empty-state button:focus-visible { outline: 2px solid var(--color-border-focus); outline-offset: 3px; }
+
+@media (max-width: 720px) {
+  .workflow-empty-state { inset: 92px 28px 112px; }
+}
+
 .achievements-wall {
   display: flex;
   min-width: 0;
