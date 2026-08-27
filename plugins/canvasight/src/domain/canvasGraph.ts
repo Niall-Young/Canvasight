@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { ScatterEdge, ScatterNode, ScatterTaskNode } from "../../shared/types";
+import type { ScatterEdge, ScatterGroupNode, ScatterNode, ScatterTaskNode } from "../../shared/types";
 
 export const taskNodeWidth = 400;
 export const taskNodeHeight = 220;
@@ -25,7 +25,15 @@ export interface UngroupNodesResult {
   releasedNodeIds: string[];
 }
 
+export interface GroupCanvasNodesResult {
+  nodes: ScatterNode[];
+  groupId: string | null;
+  status: "created" | "extended" | "unchanged";
+  removedEmptyGroupIds: string[];
+}
+
 type MeasuredScatterNode = ScatterNode & { measured?: { width?: number; height?: number } };
+type ScatterMemberNode = Exclude<ScatterNode, ScatterGroupNode>;
 
 export function roundPosition(position: FlowPosition): FlowPosition {
   return { x: Math.round(position.x), y: Math.round(position.y) };
@@ -132,6 +140,41 @@ function findOpenPositionInDirection(preferred: FlowPosition, nodes: ScatterNode
 export const findOpenPositionToRight = (preferred: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize = taskPlacementSize) => findOpenPositionInDirection(preferred, nodes, 1, size);
 export const findOpenPositionToLeft = (preferred: FlowPosition, nodes: ScatterNode[], size: NodePlacementSize = taskPlacementSize) => findOpenPositionInDirection(preferred, nodes, -1, size);
 
+export function findOpenToolbarAssetPositions(preferred: FlowPosition, nodes: ScatterNode[], count: number): FlowPosition[] {
+  const margin = 32;
+  const topLevelBounds = nodes
+    .filter((node) => node.type === "group" || !node.parentId)
+    .map((node) => ({ position: node.position, ...nodeBounds(node) }));
+  const placed: Array<{ position: FlowPosition; width: number; height: number }> = [];
+  const isOpen = (position: FlowPosition) => [...topLevelBounds, ...placed].every((item) => (
+    position.x + assetNodeWidth <= item.position.x - margin
+    || position.x >= item.position.x + item.width + margin
+    || position.y + assetNodeHeight <= item.position.y - margin
+    || position.y >= item.position.y + item.height + margin
+  ));
+  const stepX = assetNodeWidth + taskNodeHorizontalGap;
+  const stepY = assetNodeHeight + taskNodeVerticalGap;
+  const rowOffsets = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+  const furthestRight = topLevelBounds.reduce((right, item) => Math.max(right, item.position.x + item.width + margin), preferred.x);
+  const guaranteedOpenColumn = Math.max(0, Math.ceil((furthestRight - preferred.x) / stepX) + 1);
+  const maxColumn = guaranteedOpenColumn + Math.max(0, count - 1);
+  const positions: FlowPosition[] = [];
+  for (let index = 0; index < Math.max(0, count); index += 1) {
+    let position = roundPosition({ x: preferred.x + (guaranteedOpenColumn + index) * stepX, y: preferred.y });
+    search: for (const row of rowOffsets) {
+      for (let column = 0; column <= maxColumn; column += 1) {
+        const candidate = roundPosition({ x: preferred.x + column * stepX, y: preferred.y + row * stepY });
+        if (!isOpen(candidate)) continue;
+        position = candidate;
+        break search;
+      }
+    }
+    positions.push(position);
+    placed.push({ position, width: assetNodeWidth, height: assetNodeHeight });
+  }
+  return positions;
+}
+
 export function connectionFromStart(connectionStart: ConnectionStart, targetNodeId: string): Pick<ScatterEdge, "source" | "target"> | null {
   if (connectionStart.nodeId === targetNodeId) return null;
   return connectionStart.handleType === "source"
@@ -154,6 +197,89 @@ export function absoluteNodePosition(node: ScatterNode, nodes: ScatterNode[]): F
   if (node.type === "group" || !node.parentId) return node.position;
   const parent = nodes.find((candidate) => candidate.id === node.parentId && candidate.type === "group");
   return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
+}
+
+function selectedGroupMembers(nodes: ScatterNode[], selectedNodeIds: Iterable<string>): ScatterMemberNode[] {
+  const selected = new Set(selectedNodeIds);
+  return nodes.filter((node): node is ScatterMemberNode => node.type !== "group" && selected.has(node.id));
+}
+
+export function canGroupCanvasNodes(nodes: ScatterNode[], selectedNodeIds: Iterable<string>): boolean {
+  const members = selectedGroupMembers(nodes, selectedNodeIds);
+  if (members.length < 2) return false;
+  const parentIds = new Set(members.map((node) => node.parentId).filter((id): id is string => Boolean(id)));
+  return parentIds.size !== 1 || members.some((node) => !node.parentId);
+}
+
+export function groupCanvasNodes(
+  nodes: ScatterNode[],
+  selectedNodeIds: Iterable<string>,
+  newGroup: { id: string; title: string }
+): GroupCanvasNodesResult {
+  const members = selectedGroupMembers(nodes, selectedNodeIds);
+  if (members.length < 2) return { nodes, groupId: null, status: "unchanged", removedEmptyGroupIds: [] };
+
+  const sourceParentIds = new Set(members.map((node) => node.parentId).filter((id): id is string => Boolean(id)));
+  const soleSourceParentId = sourceParentIds.size === 1 ? [...sourceParentIds][0] : null;
+  const reusableGroupId = sourceParentIds.size === 1 && members.some((node) => !node.parentId)
+    ? soleSourceParentId
+    : null;
+  const reusableGroup = reusableGroupId
+    ? nodes.find((node) => node.type === "group" && node.id === reusableGroupId)
+    : null;
+  if (soleSourceParentId && members.every((node) => node.parentId === soleSourceParentId)) {
+    return { nodes, groupId: soleSourceParentId, status: "unchanged", removedEmptyGroupIds: [] };
+  }
+
+  const targetGroupId = reusableGroup?.id ?? newGroup.id;
+  const targetMemberIds = new Set([
+    ...members.map((node) => node.id),
+    ...(reusableGroup ? nodes.filter((node) => node.type !== "group" && node.parentId === reusableGroup.id).map((node) => node.id) : [])
+  ]);
+  const targetMembers = nodes.filter((node): node is ScatterMemberNode => node.type !== "group" && targetMemberIds.has(node.id));
+  const absoluteMembers = targetMembers.map((node) => ({ node, position: absoluteNodePosition(node, nodes), bounds: nodeBounds(node) }));
+  const minX = Math.min(...absoluteMembers.map((item) => item.position.x));
+  const minY = Math.min(...absoluteMembers.map((item) => item.position.y));
+  const maxX = Math.max(...absoluteMembers.map((item) => item.position.x + item.bounds.width));
+  const maxY = Math.max(...absoluteMembers.map((item) => item.position.y + item.bounds.height));
+  const groupPosition = { x: minX - groupPadding, y: minY - groupHeaderHeight - groupPadding };
+  const groupNode = {
+    ...(reusableGroup ?? {
+      id: newGroup.id,
+      type: "group" as const,
+      data: { title: newGroup.title, description: "" }
+    }),
+    selected: true,
+    position: groupPosition,
+    width: Math.max(groupMinWidth, maxX - minX + groupPadding * 2),
+    height: Math.max(groupMinHeight, maxY - minY + groupHeaderHeight + groupPadding * 2)
+  };
+  const absolutePositions = new Map(absoluteMembers.map((item) => [item.node.id, item.position]));
+  const regrouped = nodes.map((node): ScatterNode => {
+    if (node.id === targetGroupId) return groupNode;
+    if (node.type === "group") return { ...node, selected: false };
+    const absolute = absolutePositions.get(node.id);
+    if (!absolute) return { ...node, selected: false };
+    return {
+      ...node,
+      parentId: targetGroupId,
+      position: { x: absolute.x - groupPosition.x, y: absolute.y - groupPosition.y },
+      selected: false
+    };
+  });
+  if (!reusableGroup) regrouped.unshift(groupNode);
+
+  const removedEmptyGroupIds = [...sourceParentIds].filter((groupId) => (
+    groupId !== targetGroupId
+    && !regrouped.some((node) => node.type !== "group" && node.parentId === groupId)
+  ));
+  const removed = new Set(removedEmptyGroupIds);
+  return {
+    nodes: regrouped.filter((node) => node.type !== "group" || !removed.has(node.id)),
+    groupId: targetGroupId,
+    status: reusableGroup ? "extended" : "created",
+    removedEmptyGroupIds
+  };
 }
 
 export function ungroupNodes(nodes: ScatterNode[], targetIds: Iterable<string>): UngroupNodesResult {

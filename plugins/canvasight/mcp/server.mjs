@@ -268,10 +268,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path19) {
+  if (!path19)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path19.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -599,11 +599,11 @@ function explicitlyAborted(x2, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path19, issues) {
   return issues.map((iss) => {
     var _a4;
     (_a4 = iss).path ?? (_a4.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path19);
     return iss;
   });
 }
@@ -689,8 +689,8 @@ function uint8ArrayToBase64(bytes) {
   }
   return btoa(binaryString);
 }
-function base64urlToUint8Array(base64url3) {
-  const base643 = base64url3.replace(/-/g, "+").replace(/_/g, "/");
+function base64urlToUint8Array(base64url6) {
+  const base643 = base64url6.replace(/-/g, "+").replace(/_/g, "/");
   const padding = "=".repeat((4 - base643.length % 4) % 4);
   return base64ToUint8Array(base643 + padding);
 }
@@ -820,16 +820,16 @@ function flattenError(error51, mapper = (issue2) => issue2.message) {
 }
 function formatError(error51, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error52, path3 = []) => {
+  const processError = (error52, path19 = []) => {
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path19, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path19, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -856,17 +856,17 @@ function formatError(error51, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error51, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error52, path3 = []) => {
+  const processError = (error52, path19 = []) => {
     var _a4, _b2;
     for (const issue2 of error52.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path19, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path19, ...issue2.path]);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path19, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -898,8 +898,8 @@ function treeifyError(error51, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path19 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path19) {
     if (typeof seg === "number")
       segs.push("[".concat(seg, "]"));
     else if (typeof seg === "symbol")
@@ -915,14 +915,14 @@ function toDotPath(_path) {
   return segs.join("");
 }
 function prettifyError(error51) {
-  const lines = [];
+  const lines2 = [];
   const issues = [...error51.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
   for (const issue2 of issues) {
-    lines.push("✖ ".concat(issue2.message));
+    lines2.push("✖ ".concat(issue2.message));
     if (issue2.path?.length)
-      lines.push("  → at ".concat(toDotPath(issue2.path)));
+      lines2.push("  → at ".concat(toDotPath(issue2.path)));
   }
-  return lines.join("\n");
+  return lines2.join("\n");
 }
 var initializer, $ZodError, $ZodRealError;
 var init_errors = __esm({
@@ -1790,9 +1790,9 @@ var init_doc = __esm({
           return;
         }
         const content = arg;
-        const lines = content.split("\n").filter((x2) => x2);
-        const minIndent = Math.min(...lines.map((x2) => x2.length - x2.trimStart().length));
-        const dedented = lines.map((x2) => x2.slice(minIndent)).map((x2) => " ".repeat(this.indent * 2) + x2);
+        const lines2 = content.split("\n").filter((x2) => x2);
+        const minIndent = Math.min(...lines2.map((x2) => x2.length - x2.trimStart().length));
+        const dedented = lines2.map((x2) => x2.slice(minIndent)).map((x2) => " ".repeat(this.indent * 2) + x2);
         for (const line of dedented) {
           this.content.push(line);
         }
@@ -1801,8 +1801,8 @@ var init_doc = __esm({
         const F = Function;
         const args = this?.args;
         const content = this?.content ?? [""];
-        const lines = [...content.map((x2) => "  ".concat(x2))];
-        return new F(...args, lines.join("\n"));
+        const lines2 = [...content.map((x2) => "  ".concat(x2))];
+        return new F(...args, lines2.join("\n"));
       }
     };
   }
@@ -14268,13 +14268,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path3 = ref.slice(1).split("/").filter(Boolean);
-  if (path3.length === 0) {
+  const path19 = ref.slice(1).split("/").filter(Boolean);
+  if (path19.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path3[0] === defsKey) {
-    const key = path3[1];
+  if (path19[0] === defsKey) {
+    const key = path19[1];
     if (!key || !ctx.defs[key]) {
       throw new Error("Reference not found: ".concat(ref));
     }
@@ -15049,13 +15049,13 @@ var init_v4 = __esm({
 });
 
 // mcp/server.source.mjs
-import { spawn } from "node:child_process";
+import { spawn as spawn8 } from "node:child_process";
 import crypto2 from "node:crypto";
 import fs2 from "node:fs";
-import fsp2 from "node:fs/promises";
+import fsp14 from "node:fs/promises";
 import http from "node:http";
-import os2 from "node:os";
-import path2 from "node:path";
+import os7 from "node:os";
+import path18 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
@@ -18040,6 +18040,90 @@ function createToolCatalog({
       outputSchema: generatedImagesOutputSchema2
     },
     {
+      name: "record_project_history_host_action",
+      description: "Record the bounded receipt for a Canvasight Project History native host action. Call only after a widget-generated prompt supplied a short-lived token and you actually attempted the requested Codex navigation or task creation tool. This records metadata only; it never creates a task, changes Git, confirms, merges, or pushes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Exact project path supplied by the Canvasight host-action prompt."
+          },
+          threadId: {
+            type: "string",
+            description: "Source Codex task id supplied by the Canvasight host-action prompt."
+          },
+          token: {
+            type: "string",
+            description: "Short-lived action-, node-, project-, and source-task-bound token supplied by the widget."
+          },
+          outcome: {
+            type: "string",
+            enum: ["succeeded", "queued", "failed"],
+            description: "Use succeeded only after a native host tool returned a target task; queued only when task creation returned clientThreadId; otherwise failed."
+          },
+          targetTaskId: {
+            type: "string",
+            description: "Opened original task id or newly created ready task id. Required for succeeded."
+          },
+          clientThreadId: {
+            type: "string",
+            description: "Queued task setup id returned by Codex. Required for queued and for the one allowed queued-to-succeeded promotion."
+          },
+          error: {
+            type: "string",
+            maxLength: 500,
+            description: "Bounded native host error. Required only for failed."
+          }
+        },
+        required: ["projectPath", "threadId", "token", "outcome"],
+        additionalProperties: false
+      },
+      outputSchema: looseObjectOutputSchema2,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    },
+    {
+      name: "record_project_history_agent_check",
+      description: "Record the bounded result of a Canvasight Project History functional check. Call only after the user started an Agent check from a History node and the resulting prompt supplied a short-lived token. Inspect and test the exact protected snapshot first. This tool records metadata only; it never confirms a node, writes Git, merges, or pushes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Exact project path supplied by the widget check request."
+          },
+          threadId: {
+            type: "string",
+            description: "Current Codex task id that performed the check."
+          },
+          token: {
+            type: "string",
+            description: "Short-lived node- and project-bound token supplied by the widget request."
+          },
+          outcome: {
+            type: "string",
+            enum: ["passed", "failed"],
+            description: "Passed only when the requested functional behavior and relevant checks were actually verified."
+          },
+          summary: {
+            type: "string",
+            maxLength: 500,
+            description: "Concise conclusion describing what was functionally verified or why it failed."
+          },
+          evidence: {
+            type: "array",
+            maxItems: 20,
+            items: { type: "string", maxLength: 280 },
+            description: "Bounded commands, observations, or acceptance results. Never include secrets or full chat content."
+          }
+        },
+        required: ["projectPath", "threadId", "token", "outcome", "summary", "evidence"],
+        additionalProperties: false
+      },
+      outputSchema: looseObjectOutputSchema2,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    },
+    {
       name: "canvasight_widget_api",
       description: "Internal app-only proxy for Canvasight native widget session APIs. The widget uses this instead of fetching localhost directly.",
       inputSchema: {
@@ -18166,7 +18250,7 @@ function createGeneratedImageWriter(dependencies) {
     ensureProjectRevisionState: ensureProjectRevisionState2,
     graphNodeBounds: graphNodeBounds2,
     isObject: isObject3,
-    isPathInside: isPathInside2,
+    isPathInside: isPathInside3,
     normalizeAttachment: normalizeAttachment2,
     normalizeScatterDocument: normalizeScatterDocument2,
     nowIso: nowIso2,
@@ -18236,14 +18320,14 @@ function createGeneratedImageWriter(dependencies) {
     }
   }
   async function sha256File(filePath) {
-    const hash2 = crypto.createHash("sha256");
+    const hash4 = crypto.createHash("sha256");
     await new Promise((resolve, reject) => {
       const stream = fs.createReadStream(filePath);
-      stream.on("data", (chunk) => hash2.update(chunk));
+      stream.on("data", (chunk) => hash4.update(chunk));
       stream.on("end", resolve);
       stream.on("error", reject);
     });
-    return hash2.digest("hex");
+    return hash4.digest("hex");
   }
   async function generatedImageAllowedRoots(projectPath) {
     const candidates = [projectPath, generatedImagesRoot()];
@@ -18275,7 +18359,7 @@ function createGeneratedImageWriter(dependencies) {
         throw new HttpError2(403, "Generated image must be a regular non-symlink file: ".concat(path.basename(request.sourcePath)), "generated_image_not_regular_file");
       }
       const realSourcePath = await fsp.realpath(request.sourcePath);
-      if (!allowedRoots.some((root) => isPathInside2(realSourcePath, root))) {
+      if (!allowedRoots.some((root) => isPathInside3(realSourcePath, root))) {
         throw new HttpError2(403, "Generated image is outside the current project and Codex generated_images directory: ".concat(path.basename(request.sourcePath)), "generated_image_path_forbidden");
       }
       if (stat.size <= 0 || stat.size > MAX_GENERATED_IMAGE_BYTES) {
@@ -18340,7 +18424,7 @@ function createGeneratedImageWriter(dependencies) {
           throw new HttpError2(409, "Generated image changed before import: ".concat(path.basename(image.sourcePath)), "generated_image_changed");
         }
         const realSourcePath = await fsp.realpath(image.sourcePath);
-        if (!allowedRoots.some((root) => isPathInside2(realSourcePath, root))) {
+        if (!allowedRoots.some((root) => isPathInside3(realSourcePath, root))) {
           throw new HttpError2(403, "Generated image moved outside an allowed directory: ".concat(path.basename(image.sourcePath)), "generated_image_path_forbidden");
         }
         await fsp.mkdir(path.dirname(image.storedPath), { recursive: true });
@@ -18540,9 +18624,4204 @@ function createGeneratedImageWriter(dependencies) {
   return writeGeneratedImages2;
 }
 
+// mcp/application/canvasight-widget-api-proxy.mjs
+function widgetApiRoute(pathValue) {
+  if (typeof pathValue !== "string" || !pathValue.startsWith("/api/")) {
+    throw new Error("Canvasight widget API path must start with /api/.");
+  }
+  const parsed = new URL(pathValue, "http://canvasight.local");
+  if (parsed.origin !== "http://canvasight.local" || parsed.hash || parsed.pathname.includes("..")) {
+    throw new Error("Canvasight widget API path is invalid.");
+  }
+  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/skills" || parsed.pathname === "/api/preferences" || parsed.pathname === "/api/reveal" || parsed.pathname === "/api/open-file";
+  if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
+  if (parsed.search) {
+    if (parsed.pathname !== "/api/skills") throw new Error("Canvasight widget API query parameters are not allowed for this path.");
+    const allowedSkillQueryKeys = /* @__PURE__ */ new Set(["projectPath", "threadId", "query", "forceReload", "limit"]);
+    for (const key of parsed.searchParams.keys()) {
+      if (!allowedSkillQueryKeys.has(key) || parsed.searchParams.getAll(key).length !== 1) {
+        throw new Error("Canvasight widget Skill API query parameters are invalid.");
+      }
+    }
+  }
+  return "".concat(parsed.pathname).concat(parsed.search);
+}
+function recoverableWidgetSessionRoute(route, method) {
+  if (method === "DELETE") return null;
+  const parsed = new URL(route, "http://canvasight.local");
+  const match = parsed.pathname.match(/^\/api\/sessions\/([^/]+)(\/.*)?$/u);
+  if (!match) return null;
+  const sessionId2 = decodeURIComponent(match[1]);
+  const suffix = match[2] || "";
+  if (sessionId2 === "claim" || sessionId2 === "local" || suffix === "/close") return null;
+  return { sessionId: sessionId2, suffix, search: parsed.search };
+}
+function widgetApiHeaders(daemon, identity, body) {
+  return {
+    ...daemon?.token ? { "x-canvasight-token": daemon.token } : {},
+    ...body === null || body === void 0 ? {} : { "content-type": "application/json" },
+    "x-canvasight-open-attempt-id": identity.openAttemptId,
+    "x-canvasight-widget-instance-id": identity.widgetInstanceId,
+    "x-canvasight-startup-stage": identity.startupStage,
+    "x-canvasight-display-mode": identity.displayMode,
+    "x-canvasight-thread-id": identity.threadId,
+    "x-canvasight-react-mounted": identity.reactMounted ? "true" : "false"
+  };
+}
+async function proxyWidgetApiRequest(daemon, route, method, body, identity) {
+  const response = await fetch(new URL(route, daemon.origin), {
+    method,
+    headers: widgetApiHeaders(daemon, identity, body),
+    ...body === null || body === void 0 ? {} : { body: JSON.stringify(body) }
+  });
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = text || null;
+  }
+  return { response, text, payload };
+}
+function widgetApiError(result) {
+  if (result.response.ok) return { code: null, error: null };
+  const error51 = result.payload && typeof result.payload === "object" && typeof result.payload.error === "string" ? result.payload.error : result.text || "Canvasight daemon request failed: ".concat(result.response.status);
+  const code = result.payload && typeof result.payload === "object" && typeof result.payload.code === "string" ? result.payload.code : null;
+  return { code, error: error51 };
+}
+
+// mcp/application/project-history-service.mjs
+import { createHash as createHash4 } from "node:crypto";
+import path5 from "node:path";
+
+// mcp/domain/project-history-domain.mjs
+var PROJECT_HISTORY_EVENT_VERSION = 1;
+var EVENT_TYPES = /* @__PURE__ */ new Set([
+  "protection.enabled",
+  "snapshot.recorded",
+  "snapshot.failed",
+  "chat.recorded",
+  "feature.created",
+  "feature.reclassified",
+  "feature.renamed",
+  "feature.abandoned",
+  "feature.reactivated",
+  "node.summary-edited",
+  "node.agent-check-requested",
+  "node.agent-check-recorded",
+  "node.confirmed",
+  "merge.recorded",
+  "coverage.gap-recorded"
+]);
+function validateProjectHistoryEvent(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("history event must be an object");
+  const event2 = structuredClone(input);
+  if (event2.version !== PROJECT_HISTORY_EVENT_VERSION) throw new Error("unsupported history event version: ".concat(event2.version));
+  if (typeof event2.id !== "string" || !event2.id) throw new Error("history event id is required");
+  if (!EVENT_TYPES.has(event2.type)) throw new Error("unsupported history event type: ".concat(event2.type));
+  if (typeof event2.projectId !== "string" || !event2.projectId) throw new Error("history event projectId is required");
+  if (typeof event2.occurredAt !== "string" || !Number.isFinite(Date.parse(event2.occurredAt))) throw new Error("history event occurredAt is invalid");
+  if (!event2.payload || typeof event2.payload !== "object" || Array.isArray(event2.payload)) throw new Error("history event payload is required");
+  return event2;
+}
+function exclusionMatchesCoveragePath(pattern, filePath) {
+  const normalizedPattern = String(pattern || "").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  const normalizedPath = String(filePath || "").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  if (!normalizedPattern || !normalizedPath) return false;
+  if (String(pattern).endsWith("/")) {
+    if (normalizedPath === normalizedPattern || normalizedPath.startsWith("".concat(normalizedPattern, "/")) || normalizedPattern.startsWith("".concat(normalizedPath, "/"))) return true;
+    const pathParts = normalizedPath.split("/");
+    const patternParts = normalizedPattern.split("/");
+    return pathParts.some((_2, start) => patternParts.every((part, offset) => pathParts[start + offset] === part));
+  }
+  const escaped = normalizedPattern.replace(/[.+^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
+  const matcher = new RegExp("^".concat(escaped, "$"), "u");
+  const baseName = normalizedPath.split("/").at(-1) ?? normalizedPath;
+  return normalizedPattern.includes("/") ? matcher.test(normalizedPath) : matcher.test(baseName);
+}
+function normalizedCoverage(input) {
+  const coverage = input && typeof input === "object" && !Array.isArray(input) ? structuredClone(input) : { complete: false, gapCodes: ["coverage-unavailable"] };
+  let gapCodes = Array.isArray(coverage.gapCodes) ? coverage.gapCodes.filter((code) => typeof code === "string" && code) : [];
+  if (Array.isArray(coverage.policyExcludedPaths) && Array.isArray(coverage.excludedPathspecs)) {
+    const auditedPaths = coverage.policyExcludedPaths.filter((filePath) => coverage.excludedPathspecs.some((pattern) => exclusionMatchesCoveragePath(pattern, filePath)));
+    if (auditedPaths.length !== coverage.policyExcludedPaths.length) coverage.coverageAuditCorrected = true;
+    coverage.policyExcludedPaths = auditedPaths;
+    if (auditedPaths.length === 0) {
+      gapCodes = gapCodes.filter((code) => code !== "policy-exclusions");
+      coverage.gapCodes = gapCodes;
+      coverage.complete = gapCodes.length === 0;
+    }
+  }
+  const hasAuditedPolicyPaths = Array.isArray(coverage.policyExcludedPaths);
+  if (!hasAuditedPolicyPaths && gapCodes.includes("policy-exclusions")) {
+    coverage.gapCodes = gapCodes.filter((code) => code !== "policy-exclusions");
+    coverage.legacyPolicyUnverified = true;
+    coverage.complete = coverage.gapCodes.length === 0;
+  }
+  return coverage;
+}
+function nodeFromSnapshot(event2) {
+  const payload = event2.payload;
+  return {
+    id: payload.nodeId,
+    kind: payload.baseline ? "baseline" : "snapshot",
+    summary: payload.summary,
+    status: "protected",
+    source: payload.source,
+    featureLineId: payload.featureLineId ?? null,
+    taskId: payload.taskId ?? null,
+    turnId: payload.turnId ?? null,
+    workflowNodeId: payload.workflowNodeId ?? null,
+    workflowTitle: payload.workflowTitle ?? null,
+    snapshotRef: payload.snapshotRef,
+    commit: payload.commit,
+    tree: payload.tree,
+    gitBranch: payload.gitBranch ?? null,
+    headCommit: payload.headCommit ?? null,
+    changedPaths: payload.changedPaths ?? [],
+    coverage: normalizedCoverage(payload.coverage),
+    occurredAt: event2.occurredAt,
+    confirmed: false,
+    merged: false,
+    edits: []
+  };
+}
+function buildProjectHistoryIndex(eventsInput) {
+  const events = eventsInput.map(validateProjectHistoryEvent);
+  const nodes = /* @__PURE__ */ new Map();
+  const features = /* @__PURE__ */ new Map();
+  const chats = [];
+  const failures = /* @__PURE__ */ new Map();
+  const coverageGaps = [];
+  let protectionEnabled = false;
+  for (const event2 of events) {
+    const payload = event2.payload;
+    if (event2.type === "protection.enabled") protectionEnabled = true;
+    if (event2.type === "snapshot.recorded") {
+      if (typeof payload.nodeId !== "string" || !payload.nodeId) throw new Error("snapshot nodeId is required");
+      if (!nodes.has(payload.nodeId)) nodes.set(payload.nodeId, nodeFromSnapshot(event2));
+      if (payload.observationId) failures.delete(payload.observationId);
+    }
+    if (event2.type === "snapshot.failed") failures.set(payload.observationId, {
+      observationId: payload.observationId,
+      reason: payload.reason,
+      retryable: payload.retryable !== false,
+      occurredAt: event2.occurredAt
+    });
+    if (event2.type === "chat.recorded") {
+      chats.push({ ...structuredClone(payload), occurredAt: event2.occurredAt });
+      if (payload.observationId) failures.delete(payload.observationId);
+    }
+    if (event2.type === "feature.created") features.set(payload.featureLineId, {
+      id: payload.featureLineId,
+      name: payload.name,
+      status: "active",
+      originalClassification: payload.originalClassification ?? null,
+      classificationEdits: []
+    });
+    if (event2.type === "feature.reclassified") {
+      const feature = features.get(payload.featureLineId);
+      if (feature) feature.classificationEdits.push({ from: payload.from, to: payload.to, occurredAt: event2.occurredAt });
+      const node = nodes.get(payload.nodeId);
+      if (node) node.featureLineId = payload.to;
+    }
+    if (event2.type === "feature.renamed") {
+      const feature = features.get(payload.featureLineId);
+      if (feature) feature.name = payload.name;
+    }
+    if (event2.type === "feature.abandoned" || event2.type === "feature.reactivated") {
+      const feature = features.get(payload.featureLineId);
+      if (feature) feature.status = event2.type === "feature.abandoned" ? "abandoned" : "active";
+    }
+    if (event2.type === "node.summary-edited") {
+      const node = nodes.get(payload.nodeId);
+      if (node) {
+        node.edits.push({ previous: node.summary, next: payload.summary, occurredAt: event2.occurredAt });
+        node.summary = payload.summary;
+      }
+    }
+    if (event2.type === "node.agent-check-requested") {
+      const node = nodes.get(payload.nodeId);
+      const sameRequestAlreadyFinished = node?.agentCheck?.requestId === payload.requestId && (node.agentCheck.status === "passed" || node.agentCheck.status === "failed");
+      if (node && !sameRequestAlreadyFinished) {
+        node.agentCheck = {
+          status: "requested",
+          requestId: payload.requestId,
+          expiresAt: payload.expiresAt,
+          occurredAt: event2.occurredAt
+        };
+      }
+    }
+    if (event2.type === "node.agent-check-recorded") {
+      const node = nodes.get(payload.nodeId);
+      if (node) node.agentCheck = {
+        status: payload.outcome,
+        requestId: payload.requestId,
+        summary: payload.summary,
+        evidence: structuredClone(payload.evidence ?? []),
+        taskId: payload.taskId,
+        occurredAt: event2.occurredAt
+      };
+    }
+    if (event2.type === "node.confirmed") {
+      const node = nodes.get(payload.nodeId);
+      if (node) {
+        node.confirmed = true;
+        node.confirmationCommit = payload.commit;
+        node.confirmationRef = payload.ref;
+        node.verification = structuredClone(payload.verification ?? null);
+      }
+    }
+    if (event2.type === "merge.recorded") {
+      const node = nodes.get(payload.nodeId);
+      if (node) {
+        node.merged = true;
+        node.mergeCommit = payload.commit;
+        node.targetBranch = payload.targetBranch ?? null;
+      }
+      const feature = features.get(payload.featureLineId);
+      if (feature) feature.status = "merged";
+    }
+    if (event2.type === "coverage.gap-recorded") coverageGaps.push({ ...structuredClone(payload), occurredAt: event2.occurredAt });
+  }
+  const orderedNodes = [...nodes.values()].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  const protectionInitialized = protectionEnabled && orderedNodes.some((node) => node.kind === "baseline");
+  return {
+    schemaVersion: PROJECT_HISTORY_EVENT_VERSION,
+    revision: events.length,
+    protection: {
+      enabled: protectionEnabled,
+      initialized: protectionInitialized,
+      healthy: protectionInitialized && failures.size === 0,
+      unresolvedFailures: [...failures.values()]
+    },
+    nodes: orderedNodes,
+    featureLines: [...features.values()],
+    chatActivities: chats,
+    coverageGaps,
+    processGroups: foldSnapshotProcessGroups(orderedNodes)
+  };
+}
+function foldSnapshotProcessGroups(nodes) {
+  const groups = [];
+  let pending = [];
+  const flush = () => {
+    if (pending.length >= 3) groups.push({
+      id: "process:".concat(pending[0].id, ":").concat(pending.at(-1).id),
+      featureLineId: pending[0].featureLineId,
+      taskId: pending[0].taskId,
+      nodeIds: pending.map((node) => node.id),
+      count: pending.length
+    });
+    pending = [];
+  };
+  for (const node of nodes) {
+    const foldable = node.kind === "snapshot" && !node.confirmed && !node.merged && !node.agentCheck && node.status === "protected";
+    const sameSeries = pending.length === 0 || pending[0].featureLineId === node.featureLineId && pending[0].taskId === node.taskId;
+    if (!foldable || !sameSeries) flush();
+    if (foldable) pending.push(node);
+  }
+  flush();
+  return groups;
+}
+
+// mcp/infrastructure/git-project-identity.mjs
+import { execFile } from "node:child_process";
+import fsp2 from "node:fs/promises";
+import path2 from "node:path";
+import { promisify } from "node:util";
+
+// mcp/domain/project-history-contract.mjs
+import { createHash } from "node:crypto";
+var PROJECT_HISTORY_CONTRACT_VERSION = 1;
+var PROJECT_IDENTITY_CONTRACT_ID = "canvasight.project-identity.v1";
+function stableHash(parts) {
+  const hash4 = createHash("sha256");
+  for (const part of parts) {
+    const value = String(part);
+    hash4.update(String(Buffer.byteLength(value, "utf8")));
+    hash4.update(":");
+    hash4.update(value);
+    hash4.update(";");
+  }
+  return hash4.digest("hex");
+}
+function normalizedRepositoryPath(value) {
+  return String(value || "").trim().replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+}
+function normalizeGitRemoteIdentity(value) {
+  const remote = String(value || "").trim();
+  if (!remote) return null;
+  const scpMatch = remote.match(/^(?:[^@/\s]+@)?([^:/\s]+):(.+)$/u);
+  if (scpMatch && !/^[a-z][a-z0-9+.-]*:\/\//iu.test(remote)) {
+    const repositoryPath = normalizedRepositoryPath(scpMatch[2]);
+    return repositoryPath ? "".concat(scpMatch[1].toLowerCase(), "/").concat(repositoryPath) : null;
+  }
+  try {
+    const url2 = new URL(remote);
+    if (!url2.hostname) return null;
+    const repositoryPath = normalizedRepositoryPath(decodeURIComponent(url2.pathname));
+    if (!repositoryPath) return null;
+    const port = url2.port && !(url2.protocol === "https:" && url2.port === "443" || url2.protocol === "ssh:" && url2.port === "22") ? ":".concat(url2.port) : "";
+    return "".concat(url2.hostname.toLowerCase()).concat(port, "/").concat(repositoryPath);
+  } catch {
+    return null;
+  }
+}
+function buildGitProjectIdentity({ gitCommonDir, worktreeRoot, rootCommits, remoteUrls, isShallow = false }) {
+  const commonDir = String(gitCommonDir || "").trim();
+  const root = String(worktreeRoot || "").trim();
+  if (!commonDir || !root) throw new TypeError("gitCommonDir and worktreeRoot are required");
+  const roots = Array.from(new Set((rootCommits || []).map((value) => String(value).trim()).filter(Boolean))).sort();
+  const remotes = Array.from(new Set((remoteUrls || []).map(normalizeGitRemoteIdentity).filter(Boolean))).sort();
+  const portableEvidence = remotes.length > 0 ? ["remotes", ...remotes] : isShallow || roots.length === 0 ? null : ["roots", ...roots];
+  const warnings = [];
+  if (remotes.length === 0 && roots.length === 0) {
+    warnings.push("portable identity is unavailable because this repository has no credential-free remote identity or root commit");
+  } else if (remotes.length === 0 && isShallow) {
+    warnings.push("portable identity is unavailable because this shallow repository has no credential-free remote identity");
+  } else if (remotes.length === 0) {
+    warnings.push("portable identity is based on root commits because no credential-free remote identity is available");
+  }
+  return {
+    contractId: PROJECT_IDENTITY_CONTRACT_ID,
+    contractVersion: PROJECT_HISTORY_CONTRACT_VERSION,
+    source: "git",
+    localProjectId: "git-local-".concat(stableHash([commonDir])),
+    portableProjectId: portableEvidence ? "git-portable-".concat(stableHash(portableEvidence)) : null,
+    worktreeRoot: root,
+    gitCommonDir: commonDir,
+    rootCommits: roots,
+    remoteIdentities: remotes,
+    isShallow: isShallow === true,
+    portabilityBasis: remotes.length > 0 ? "remote" : isShallow || roots.length === 0 ? "unavailable" : "root-only",
+    warnings
+  };
+}
+
+// mcp/infrastructure/git-project-identity.mjs
+var execFileAsync = promisify(execFile);
+async function git(cwd, args, { optionalExitCodes = [] } = {}) {
+  try {
+    const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024
+    });
+    return stdout.trim();
+  } catch (error51) {
+    if (optionalExitCodes.includes(Number(error51?.code))) return "";
+    const detail = String(error51?.stderr || error51?.message || error51).trim();
+    throw new Error("Project History Git probe failed for ".concat(args.join(" "), ": ").concat(detail), { cause: error51 });
+  }
+}
+function lines(value) {
+  return String(value || "").split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
+}
+async function canonicalPath(value, base) {
+  const resolved = path2.isAbsolute(value) ? value : path2.resolve(base, value);
+  return fsp2.realpath(resolved);
+}
+async function probeGitProjectIdentity(projectPath) {
+  const cwd = await fsp2.realpath(path2.resolve(projectPath));
+  const insideWorktree = await git(cwd, ["rev-parse", "--is-inside-work-tree"]);
+  if (insideWorktree !== "true") throw new Error("Project History requires a Git worktree for this probe");
+  const worktreeRoot = await canonicalPath(await git(cwd, ["rev-parse", "--show-toplevel"]), cwd);
+  const gitCommonDir = await canonicalPath(await git(cwd, ["rev-parse", "--git-common-dir"]), worktreeRoot);
+  const isShallow = await git(cwd, ["rev-parse", "--is-shallow-repository"]) === "true";
+  const head = await git(cwd, ["rev-parse", "--verify", "HEAD"], { optionalExitCodes: [1, 128] });
+  const rootCommits = head ? lines(await git(cwd, ["rev-list", "--max-parents=0", "HEAD"])) : [];
+  const remoteConfig = lines(await git(cwd, ["config", "--get-regexp", "^remote\\..*\\.url$"], { optionalExitCodes: [1] }));
+  const remoteUrls = remoteConfig.map((line) => line.replace(/^\S+\s+/u, "")).filter(Boolean);
+  return buildGitProjectIdentity({
+    gitCommonDir,
+    worktreeRoot,
+    rootCommits,
+    remoteUrls,
+    isShallow
+  });
+}
+
+// mcp/infrastructure/git-history-snapshot.mjs
+import { createHash as createHash2, randomUUID } from "node:crypto";
+import fsp3 from "node:fs/promises";
+import os2 from "node:os";
+import path3 from "node:path";
+import { spawn } from "node:child_process";
+var ZERO_OID = "0".repeat(40);
+function sha256(value) {
+  return createHash2("sha256").update(value).digest("hex");
+}
+async function git2(cwd, args, { env = {}, input = null, optionalExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", ["-C", cwd, ...args], {
+      env: { ...process.env, ...env },
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const output = Buffer.concat(stdout);
+      if (code === 0) return resolve(output);
+      if (optionalExitCodes.includes(code)) return resolve(Buffer.alloc(0));
+      reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim())));
+    });
+    if (input === null) child.stdin.end();
+    else child.stdin.end(input);
+  });
+}
+async function gitText(cwd, args, options) {
+  return (await git2(cwd, args, options)).toString("utf8").trim();
+}
+async function repositoryPaths(projectPath) {
+  const cwd = await fsp3.realpath(path3.resolve(projectPath));
+  const worktreeRoot = await fsp3.realpath(await gitText(cwd, ["rev-parse", "--show-toplevel"]));
+  const rawCommonDir = await gitText(cwd, ["rev-parse", "--git-common-dir"]);
+  const commonDir = await fsp3.realpath(path3.isAbsolute(rawCommonDir) ? rawCommonDir : path3.resolve(worktreeRoot, rawCommonDir));
+  const rawIndex = await gitText(cwd, ["rev-parse", "--git-path", "index"]);
+  const indexPath = path3.isAbsolute(rawIndex) ? rawIndex : path3.resolve(worktreeRoot, rawIndex);
+  return { cwd, worktreeRoot, commonDir, indexPath };
+}
+async function fileDigest(filePath) {
+  try {
+    return sha256(await fsp3.readFile(filePath));
+  } catch (error51) {
+    if (error51?.code === "ENOENT") return null;
+    throw error51;
+  }
+}
+async function captureGitUserState(projectPath) {
+  const paths = await repositoryPaths(projectPath);
+  const head = await gitText(paths.cwd, ["rev-parse", "--verify", "HEAD"], { optionalExitCodes: [1, 128] });
+  const symbolicHead = await gitText(paths.cwd, ["symbolic-ref", "-q", "HEAD"], { optionalExitCodes: [1] });
+  const status = await git2(paths.cwd, ["status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored=matching"]);
+  const refs = await git2(paths.cwd, [
+    "for-each-ref",
+    "--format=%(refname)%00%(objectname)%00%(symref)%00",
+    "refs/heads",
+    "refs/tags",
+    "refs/remotes"
+  ]);
+  const worktrees = await git2(paths.cwd, ["worktree", "list", "--porcelain", "-z"]);
+  const evidence = {
+    head: head || null,
+    symbolicHead: symbolicHead || null,
+    indexDigest: await fileDigest(paths.indexPath),
+    statusDigest: sha256(status),
+    refsDigest: sha256(refs),
+    worktreesDigest: sha256(worktrees)
+  };
+  return { ...evidence, digest: sha256(JSON.stringify(evidence)) };
+}
+async function readGitSnapshotRevision(projectPath, revision = "HEAD") {
+  const commit = await gitText(projectPath, ["rev-parse", "--verify", revision], { optionalExitCodes: [1, 128] });
+  if (!commit) return null;
+  const tree = await gitText(projectPath, ["rev-parse", "".concat(commit, "^{tree}")]);
+  return { commit, tree };
+}
+function parseCommittedChangedPaths(buffer) {
+  const fields = buffer.toString("utf8").split("\0").filter(Boolean);
+  const changedPaths = [];
+  for (let index = 0; index < fields.length; ) {
+    const rawStatus = fields[index++] ?? "";
+    const status = rawStatus.slice(0, 1);
+    const firstPath = fields[index++]?.replaceAll("\\", "/") ?? "";
+    if (!status || !firstPath) continue;
+    if ((status === "R" || status === "C") && fields[index]) {
+      const nextPath = fields[index++].replaceAll("\\", "/");
+      changedPaths.push({ status, path: nextPath, previousPath: firstPath });
+    } else {
+      changedPaths.push({ status, path: firstPath });
+    }
+  }
+  return changedPaths;
+}
+async function readCommittedHistorySnapshot(projectPath, revision) {
+  const snapshot = await readGitSnapshotRevision(projectPath, revision);
+  if (!snapshot) throw new Error("Project History branch tip commit does not exist");
+  const changedPaths = parseCommittedChangedPaths(await git2(projectPath, [
+    "diff-tree",
+    "--root",
+    "-r",
+    "--name-status",
+    "-z",
+    "--find-renames",
+    "--no-commit-id",
+    snapshot.commit
+  ]));
+  return {
+    ...snapshot,
+    changedPaths,
+    coverage: {
+      complete: true,
+      excludedPathspecs: [],
+      policyExcludedPaths: [],
+      informationalExcludedPaths: [],
+      automaticExcludedPaths: [],
+      largePaths: [],
+      externalSymlinkPaths: [],
+      submodulePaths: [],
+      lfsPaths: [],
+      scanTruncated: false,
+      gapCodes: []
+    }
+  };
+}
+function assertSnapshotRef(snapshotRef) {
+  if (typeof snapshotRef !== "string" || !snapshotRef.startsWith("refs/canvasight/snapshots/")) {
+    throw new Error("Project History snapshot refs must stay below refs/canvasight/snapshots/");
+  }
+  if (/\.\.|[~^:?*\\\s]|@\{|\/$|\/\//u.test(snapshotRef)) throw new Error("invalid Project History snapshot ref");
+}
+async function pinHistorySnapshot(projectPath, snapshotRef, commit) {
+  assertSnapshotRef(snapshotRef);
+  const existing = await gitText(projectPath, ["rev-parse", "--verify", snapshotRef], { optionalExitCodes: [1, 128] });
+  if (existing) {
+    if (existing !== commit) throw new Error("immutable Project History node ref already points to another commit");
+    return { snapshotRef, commit, duplicate: true };
+  }
+  await git2(projectPath, ["update-ref", snapshotRef, commit, ZERO_OID]);
+  return { snapshotRef, commit, duplicate: false };
+}
+async function candidateTree(projectPath, baseCommit, excludePathspecs) {
+  const tempRoot = await fsp3.mkdtemp(path3.join(os2.tmpdir(), "canvasight-history-index-"));
+  const indexPath = path3.join(tempRoot, "index");
+  const env = { GIT_INDEX_FILE: indexPath };
+  try {
+    if (baseCommit) await git2(projectPath, ["read-tree", baseCommit], { env });
+    else await git2(projectPath, ["read-tree", "--empty"], { env });
+    await git2(projectPath, ["add", "-A", "--", "."], { env });
+    if (excludePathspecs.length > 0) {
+      const gitExclusions = expandedGitExclusionPathspecs(excludePathspecs);
+      if (baseCommit) {
+        await git2(projectPath, ["reset", "-q", baseCommit, "--", ...gitExclusions], { env });
+      } else {
+        await git2(projectPath, ["rm", "-r", "--cached", "--ignore-unmatch", "--", ...gitExclusions], { env });
+      }
+    }
+    return await gitText(projectPath, ["write-tree"], { env });
+  } finally {
+    await fsp3.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+function expandedGitExclusionPathspecs(patterns) {
+  const expanded = [];
+  for (const value of patterns) {
+    const pattern = String(value || "");
+    if (!pattern) continue;
+    expanded.push(pattern);
+    if (pattern.startsWith(":(") || pattern.startsWith(":/") || !pattern.endsWith("/")) continue;
+    const normalized = pattern.replace(/^\.\//u, "").replace(/\/+$/u, "");
+    if (normalized && !/[?*[\]\\]/u.test(normalized)) expanded.push(":(glob)**/".concat(normalized, "/**"));
+  }
+  return [...new Set(expanded)];
+}
+function parsePorcelainPaths(buffer) {
+  const entries = buffer.toString("utf8").split("\0").filter(Boolean);
+  const paths = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry.length < 4 || entry[2] !== " ") continue;
+    const status = entry.slice(0, 2);
+    const filePath = entry.slice(3);
+    if (filePath) paths.push(filePath.replaceAll("\\", "/"));
+    if (/^[RC]/u.test(status) && entries[index + 1] && entries[index + 1][2] !== " ") index += 1;
+  }
+  return [...new Set(paths)].sort();
+}
+function informationalExcludedPath(filePath) {
+  const normalized = filePath.replace(/^\.\//u, "").replace(/\/+$/u, "");
+  return normalized === ".scatter" || normalized.startsWith(".scatter/") || normalized === ".cache" || normalized.startsWith(".cache/") || normalized === "node_modules" || normalized.includes("/node_modules/") || normalized.endsWith("/node_modules") || normalized === "dist" || normalized.startsWith("dist/") || normalized.includes("/dist/") || normalized === "build" || normalized.startsWith("build/") || normalized.includes("/build/");
+}
+function exclusionMatchesPath(pattern, filePath) {
+  const normalizedPattern = String(pattern || "").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  const normalizedPath = String(filePath || "").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  if (!normalizedPattern || !normalizedPath) return false;
+  if (String(pattern).endsWith("/")) {
+    if (normalizedPath === normalizedPattern || normalizedPath.startsWith("".concat(normalizedPattern, "/")) || normalizedPattern.startsWith("".concat(normalizedPath, "/"))) return true;
+    const pathParts = normalizedPath.split("/");
+    const patternParts = normalizedPattern.split("/");
+    return pathParts.some((_2, start) => patternParts.every((part, offset) => pathParts[start + offset] === part));
+  }
+  const escaped = normalizedPattern.replace(/[.+^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
+  const matcher = new RegExp("^".concat(escaped, "$"), "u");
+  return normalizedPattern.includes("/") ? matcher.test(normalizedPath) : matcher.test(path3.basename(normalizedPath));
+}
+async function actualPolicyExclusions(projectPath, excludePathspecs) {
+  if (excludePathspecs.length === 0) return { policyExcludedPaths: [], informationalExcludedPaths: [] };
+  const status = await git2(projectPath, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--ignored=matching",
+    "--",
+    ...expandedGitExclusionPathspecs(excludePathspecs)
+  ]);
+  const paths = parsePorcelainPaths(status).filter((filePath) => excludePathspecs.some((pattern) => exclusionMatchesPath(pattern, filePath)));
+  return {
+    policyExcludedPaths: paths.filter((filePath) => !informationalExcludedPath(filePath)),
+    informationalExcludedPaths: paths.filter(informationalExcludedPath)
+  };
+}
+async function analyzeCoverage(projectPath, worktreeRoot, excludePathspecs, largeFileBytes) {
+  const rawCandidates = await git2(projectPath, ["ls-files", "-co", "--exclude-standard", "-z"]);
+  const allCandidates = rawCandidates.toString("utf8").split("\0").filter(Boolean);
+  const scanTruncated = allCandidates.length > 2e4;
+  const candidates = allCandidates.slice(0, 2e4);
+  const largePaths = [];
+  const externalSymlinkPaths = [];
+  for (const relativePath of candidates) {
+    const absolutePath = path3.resolve(worktreeRoot, relativePath);
+    try {
+      const stat = await fsp3.lstat(absolutePath);
+      if (stat.isFile() && stat.size > largeFileBytes) largePaths.push(relativePath);
+      if (stat.isSymbolicLink()) {
+        const target = await fsp3.readlink(absolutePath);
+        const resolvedTarget = path3.resolve(path3.dirname(absolutePath), target);
+        const relativeTarget = path3.relative(worktreeRoot, resolvedTarget);
+        if (path3.isAbsolute(target) || relativeTarget.startsWith("..") || path3.isAbsolute(relativeTarget)) externalSymlinkPaths.push(relativePath);
+      }
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+    }
+  }
+  const staged = await git2(projectPath, ["ls-files", "-s", "-z"]);
+  const submodulePaths = staged.toString("utf8").split("\0").filter(Boolean).flatMap((entry) => {
+    const match = entry.match(/^160000 [0-9a-f]+ \d+\t(.+)$/u);
+    return match ? [match[1]] : [];
+  });
+  const lfsPaths = [];
+  if (candidates.length > 0) {
+    const attributes = await git2(projectPath, ["check-attr", "-z", "--stdin", "filter"], { input: "".concat(candidates.join("\0"), "\0") });
+    const fields = attributes.toString("utf8").split("\0").filter(Boolean);
+    for (let index = 0; index + 2 < fields.length; index += 3) if (fields[index + 2] === "lfs") lfsPaths.push(fields[index]);
+  }
+  const automaticExcludedPaths = [.../* @__PURE__ */ new Set([...largePaths, ...externalSymlinkPaths])];
+  const policy = await actualPolicyExclusions(projectPath, excludePathspecs);
+  const gapCodes = [
+    ...policy.policyExcludedPaths.length > 0 ? ["policy-exclusions"] : [],
+    ...largePaths.length > 0 ? ["large-files-excluded"] : [],
+    ...externalSymlinkPaths.length > 0 ? ["external-symlinks-excluded"] : [],
+    ...submodulePaths.length > 0 ? ["submodule-content-not-captured"] : [],
+    ...lfsPaths.length > 0 ? ["lfs-content-requires-local-object"] : [],
+    ...scanTruncated ? ["coverage-scan-truncated"] : []
+  ];
+  return {
+    complete: gapCodes.length === 0,
+    excludedPathspecs: [...excludePathspecs],
+    policyExcludedPaths: policy.policyExcludedPaths,
+    informationalExcludedPaths: policy.informationalExcludedPaths,
+    automaticExcludedPaths,
+    largePaths,
+    externalSymlinkPaths,
+    submodulePaths,
+    lfsPaths,
+    scanTruncated,
+    gapCodes
+  };
+}
+async function rollbackSnapshotRef(projectPath, snapshotRef, previousCommit, writtenCommit) {
+  if (previousCommit) await git2(projectPath, ["update-ref", snapshotRef, previousCommit, writtenCommit]);
+  else await git2(projectPath, ["update-ref", "-d", snapshotRef, writtenCommit]);
+}
+async function acquireProjectHistoryLock(commonDir) {
+  const lockRoot = path3.join(commonDir, "canvasight");
+  const lockPath = path3.join(lockRoot, "project-history.lock");
+  await fsp3.mkdir(lockRoot, { recursive: true });
+  try {
+    await fsp3.mkdir(lockPath);
+  } catch (error51) {
+    if (error51?.code === "EEXIST") throw new Error("another Canvasight Project History Git operation is active");
+    throw error51;
+  }
+  return async () => {
+    await fsp3.rmdir(lockPath);
+  };
+}
+async function createIsolatedHistorySnapshot(projectPath, {
+  snapshotRef,
+  excludePathspecs = [],
+  message = "Canvasight Project History snapshot",
+  skipIfUnchanged = false,
+  skipIfHeadUnchanged = skipIfUnchanged,
+  changeBase = "previous-snapshot",
+  largeFileBytes = 50 * 1024 * 1024,
+  recoveryToken = null,
+  beforeRefUpdate
+}) {
+  assertSnapshotRef(snapshotRef);
+  if (recoveryToken !== null && (typeof recoveryToken !== "string" || !recoveryToken || /[\r\n]/u.test(recoveryToken))) {
+    throw new Error("snapshot recoveryToken must be a non-empty single line");
+  }
+  const paths = await repositoryPaths(projectPath);
+  const releaseLock = await acquireProjectHistoryLock(paths.commonDir);
+  try {
+    if (!Number.isSafeInteger(largeFileBytes) || largeFileBytes < 1) throw new Error("largeFileBytes must be a positive integer");
+    if (changeBase !== "previous-snapshot" && changeBase !== "head") throw new Error("snapshot changeBase must be previous-snapshot or head");
+    const before = await captureGitUserState(projectPath);
+    const head = await gitText(projectPath, ["rev-parse", "--verify", "HEAD"], { optionalExitCodes: [1, 128] });
+    const previousCommit = await gitText(projectPath, ["rev-parse", "--verify", snapshotRef], { optionalExitCodes: [1, 128] });
+    const coverage = await analyzeCoverage(projectPath, paths.worktreeRoot, excludePathspecs, largeFileBytes);
+    const automaticExclusions = coverage.automaticExcludedPaths.map((item) => ":(top,literal)".concat(item));
+    const tree = await candidateTree(projectPath, head || null, [...excludePathspecs, ...automaticExclusions]);
+    const parent = previousCommit || head || null;
+    const previousSnapshotTree = parent ? await gitText(projectPath, ["rev-parse", "".concat(parent, "^{tree}")]) : await gitText(projectPath, ["mktree"], { input: "" });
+    const headTree = head ? await gitText(projectPath, ["rev-parse", "".concat(head, "^{tree}")]) : null;
+    const unchangedFromPreviousSnapshot = Boolean(previousCommit && tree === previousSnapshotTree);
+    const unchangedFromHead = Boolean(skipIfHeadUnchanged && headTree && tree === headTree);
+    if (skipIfUnchanged && (unchangedFromPreviousSnapshot || unchangedFromHead)) {
+      const after = await captureGitUserState(projectPath);
+      if (after.digest !== before.digest) throw new Error("snapshot scan observed a concurrent Git state change");
+      let changedPaths = [];
+      if (unchangedFromPreviousSnapshot && previousCommit) {
+        const previousParentTree = await gitText(projectPath, ["rev-parse", "".concat(previousCommit, "^1^{tree}")], { optionalExitCodes: [1, 128] });
+        if (previousParentTree) {
+          const rawChanges = await git2(projectPath, ["diff-tree", "-r", "--no-commit-id", "--name-status", "-z", previousParentTree, tree]);
+          const fields = rawChanges.toString("utf8").split("\0").filter(Boolean);
+          for (let index = 0; index < fields.length; ) {
+            const status = fields[index++];
+            const firstPath = fields[index++];
+            const secondPath = /^[RC]/u.test(status) ? fields[index++] : null;
+            changedPaths.push({ status, path: secondPath ?? firstPath, ...secondPath ? { previousPath: firstPath } : {} });
+          }
+        }
+      }
+      const existingMessage = previousCommit ? await gitText(projectPath, ["show", "-s", "--format=%B", previousCommit]) : "";
+      const recovered = Boolean(unchangedFromPreviousSnapshot && recoveryToken && existingMessage.includes("Recovery-Token: ".concat(recoveryToken)));
+      return {
+        snapshotRef,
+        skipped: true,
+        recovered,
+        commit: recovered ? previousCommit : null,
+        tree,
+        parent,
+        coverage,
+        gitBranch: before.symbolicHead?.startsWith("refs/heads/") ? before.symbolicHead.slice("refs/heads/".length) : null,
+        headCommit: head || null,
+        userStateDigest: before.digest,
+        changedPaths
+      };
+    }
+    let changeBaseTree = changeBase === "head" && headTree ? headTree : previousSnapshotTree;
+    if (changeBase === "head" && head && headTree && tree === headTree) {
+      const headParentTree = await gitText(projectPath, ["rev-parse", "".concat(head, "^1^{tree}")], { optionalExitCodes: [1, 128] });
+      changeBaseTree = headParentTree || await gitText(projectPath, ["mktree"], { input: "" });
+    }
+    const identityEnv = {
+      GIT_AUTHOR_NAME: "Canvasight Project History",
+      GIT_AUTHOR_EMAIL: "canvasight-history@localhost.invalid",
+      GIT_COMMITTER_NAME: "Canvasight Project History",
+      GIT_COMMITTER_EMAIL: "canvasight-history@localhost.invalid"
+    };
+    const commitArgs = ["commit-tree", tree];
+    if (parent) commitArgs.push("-p", parent);
+    const trailers = ["Snapshot-Id: ".concat(randomUUID())];
+    if (recoveryToken) trailers.push("Recovery-Token: ".concat(recoveryToken));
+    const commit = await gitText(projectPath, commitArgs, { env: identityEnv, input: "".concat(message, "\n\n").concat(trailers.join("\n"), "\n") });
+    if (beforeRefUpdate !== void 0) {
+      if (typeof beforeRefUpdate !== "function") throw new Error("beforeRefUpdate must be a function");
+      await beforeRefUpdate({ snapshotRef, previousCommit: previousCommit || null, commit, tree });
+    }
+    await git2(projectPath, ["update-ref", snapshotRef, commit, previousCommit || ZERO_OID]);
+    try {
+      const verificationTree = await candidateTree(projectPath, head || null, [...excludePathspecs, ...automaticExclusions]);
+      const after = await captureGitUserState(projectPath);
+      if (verificationTree !== tree) throw new Error("working tree changed while the snapshot was being created");
+      if (after.digest !== before.digest) throw new Error("snapshot changed the user's Git state");
+      const rawChanges = await git2(projectPath, ["diff-tree", "-r", "--no-commit-id", "--name-status", "-z", changeBaseTree, tree]);
+      const fields = rawChanges.toString("utf8").split("\0").filter(Boolean);
+      const changedPaths = [];
+      for (let index = 0; index < fields.length; ) {
+        const status = fields[index++];
+        const firstPath = fields[index++];
+        const secondPath = /^[RC]/u.test(status) ? fields[index++] : null;
+        changedPaths.push({ status, path: secondPath ?? firstPath, ...secondPath ? { previousPath: firstPath } : {} });
+      }
+      return {
+        snapshotRef,
+        commit,
+        tree,
+        parent,
+        coverage,
+        gitBranch: before.symbolicHead?.startsWith("refs/heads/") ? before.symbolicHead.slice("refs/heads/".length) : null,
+        headCommit: head || null,
+        userStateDigest: before.digest,
+        changedPaths
+      };
+    } catch (error51) {
+      await rollbackSnapshotRef(projectPath, snapshotRef, previousCommit || null, commit);
+      throw error51;
+    }
+  } finally {
+    await releaseLock();
+  }
+}
+async function restoreSnapshotToNewWorktree(projectPath, snapshotCommit, targetPath) {
+  const resolvedTarget = path3.resolve(targetPath);
+  try {
+    await fsp3.lstat(resolvedTarget);
+    throw new Error("restore target already exists");
+  } catch (error51) {
+    if (error51?.code !== "ENOENT") throw error51;
+  }
+  let added = false;
+  try {
+    await git2(projectPath, ["worktree", "add", "--detach", resolvedTarget, snapshotCommit]);
+    added = true;
+    const restoredTree = await gitText(resolvedTarget, ["rev-parse", "HEAD^{tree}"]);
+    const expectedTree = await gitText(projectPath, ["rev-parse", "".concat(snapshotCommit, "^{tree}")]);
+    if (restoredTree !== expectedTree) throw new Error("restored worktree tree does not match the snapshot");
+    return { targetPath: resolvedTarget, commit: snapshotCommit, tree: restoredTree };
+  } catch (error51) {
+    if (added) await git2(projectPath, ["worktree", "remove", resolvedTarget]);
+    throw error51;
+  }
+}
+async function removeIsolatedHistoryWorktree(projectPath, targetPath) {
+  const resolvedTarget = path3.resolve(targetPath);
+  await git2(projectPath, ["worktree", "remove", resolvedTarget]);
+}
+
+// mcp/infrastructure/project-history-main-branch.mjs
+import { spawn as spawn2 } from "node:child_process";
+var ZERO_OID2 = "0".repeat(40);
+async function git3(projectPath, args, { optionalExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn2("git", ["-C", projectPath, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) return resolve(Buffer.concat(stdout).toString("utf8").trim());
+      if (optionalExitCodes.includes(code)) return resolve("");
+      reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim())));
+    });
+  });
+}
+async function commitFor(projectPath, revision) {
+  if (!revision) return "";
+  return git3(projectPath, ["rev-parse", "--verify", "".concat(revision, "^{commit}")], { optionalExitCodes: [1, 128] });
+}
+async function readProjectHistoryGitState(projectPath) {
+  const [mainCommit, currentBranch, headCommit] = await Promise.all([
+    commitFor(projectPath, "refs/heads/main"),
+    git3(projectPath, ["branch", "--show-current"]),
+    commitFor(projectPath, "HEAD")
+  ]);
+  return {
+    mainBranch: mainCommit ? "main" : null,
+    mainCommit: mainCommit || null,
+    currentBranch: currentBranch || null,
+    headCommit: headCommit || null,
+    detached: Boolean(headCommit && !currentBranch)
+  };
+}
+async function ensureLocalMainBranch(projectPath, { fallbackCommit = null } = {}) {
+  const existing = await readProjectHistoryGitState(projectPath);
+  if (existing.mainCommit) return { ...existing, created: false, source: "refs/heads/main" };
+  const remoteRefs = (await git3(projectPath, ["for-each-ref", "--format=%(refname:short)", "refs/remotes"])).split(/\r?\n/u).filter((ref) => ref && !ref.endsWith("/HEAD") && ref.endsWith("/main"));
+  const orderedRemoteRefs = [
+    "origin/main",
+    "upstream/main",
+    ...remoteRefs.filter((ref) => ref !== "origin/main" && ref !== "upstream/main").sort()
+  ];
+  const candidates = [
+    ...orderedRemoteRefs,
+    "refs/heads/master",
+    "HEAD",
+    fallbackCommit
+  ].filter(Boolean);
+  let source = "";
+  let commit = "";
+  for (const candidate of candidates) {
+    commit = await commitFor(projectPath, candidate);
+    if (commit) {
+      source = candidate;
+      break;
+    }
+  }
+  if (!commit) throw new Error("Project History could not create main because the repository has no commit yet");
+  await git3(projectPath, ["update-ref", "refs/heads/main", commit, ZERO_OID2]);
+  return {
+    ...await readProjectHistoryGitState(projectPath),
+    created: true,
+    source,
+    mainBranch: "main",
+    mainCommit: commit
+  };
+}
+
+// mcp/infrastructure/project-history-store.mjs
+import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import fsp4 from "node:fs/promises";
+import path4 from "node:path";
+function digest(value) {
+  return createHash3("sha256").update(JSON.stringify(value)).digest("hex");
+}
+var indexWriteQueues = /* @__PURE__ */ new Map();
+async function serializeIndexWrite(indexPath, operation) {
+  const previous = indexWriteQueues.get(indexPath) ?? Promise.resolve();
+  const current = previous.catch(() => void 0).then(operation);
+  indexWriteQueues.set(indexPath, current);
+  try {
+    return await current;
+  } finally {
+    if (indexWriteQueues.get(indexPath) === current) indexWriteQueues.delete(indexPath);
+  }
+}
+async function readJsonLines(filePath) {
+  try {
+    const content = await fsp4.readFile(filePath, "utf8");
+    return content.split(/\r?\n/u).filter(Boolean).map((line, index) => {
+      try {
+        return JSON.parse(line);
+      } catch (error51) {
+        throw new Error("invalid Project History journal line ".concat(index + 1), { cause: error51 });
+      }
+    });
+  } catch (error51) {
+    if (error51?.code === "ENOENT") return [];
+    throw error51;
+  }
+}
+var ProjectHistoryStore = class {
+  constructor(storageDirectory, { beforePersist } = {}) {
+    this.storageDirectory = path4.resolve(storageDirectory);
+    this.journalPath = path4.join(this.storageDirectory, "events.jsonl");
+    this.indexPath = path4.join(this.storageDirectory, "index.json");
+    this.lockPath = path4.join(this.storageDirectory, ".write-lock");
+    this.beforePersist = beforePersist;
+  }
+  async initialize() {
+    await fsp4.mkdir(this.storageDirectory, { recursive: true });
+    const events = await this.readEvents();
+    await this.#writeIndex(events);
+    return buildProjectHistoryIndex(events);
+  }
+  async readRecords() {
+    return readJsonLines(this.journalPath);
+  }
+  async readEvents() {
+    return (await this.readRecords()).map((record2) => validateProjectHistoryEvent(record2.event));
+  }
+  async hasReceipt(receiptId) {
+    return (await this.readRecords()).some((record2) => record2.receiptId === receiptId);
+  }
+  async append(eventInput, receiptId) {
+    const event2 = validateProjectHistoryEvent(eventInput);
+    if (typeof receiptId !== "string" || !receiptId) throw new Error("history receiptId is required");
+    await fsp4.mkdir(this.storageDirectory, { recursive: true });
+    try {
+      await fsp4.mkdir(this.lockPath);
+    } catch (error51) {
+      if (error51?.code === "EEXIST") throw new Error("Project History journal is locked by another writer");
+      throw error51;
+    }
+    try {
+      const records = await this.readRecords();
+      const prior = records.find((record3) => record3.receiptId === receiptId);
+      if (prior) {
+        if (digest(prior.event) !== digest(event2)) throw new Error("history receipt was replayed with different content");
+        const index2 = await this.#writeIndex(records.map((record3) => record3.event));
+        return { duplicate: true, event: validateProjectHistoryEvent(prior.event), index: index2 };
+      }
+      if (records.some((record3) => record3.event.id === event2.id)) throw new Error("duplicate history event id: ".concat(event2.id));
+      if (this.beforePersist) await this.beforePersist({ event: event2, receiptId, recordCount: records.length });
+      const record2 = { receiptId, event: event2 };
+      const handle = await fsp4.open(this.journalPath, "a", 384);
+      try {
+        await handle.write("".concat(JSON.stringify(record2), "\n"), null, "utf8");
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      const allEvents = [...records.map((item) => item.event), event2];
+      const index = await this.#writeIndex(allEvents);
+      return { duplicate: false, event: event2, index };
+    } finally {
+      await fsp4.rmdir(this.lockPath);
+    }
+  }
+  async readIndex() {
+    const events = await this.readEvents();
+    const rebuilt = buildProjectHistoryIndex(events);
+    try {
+      const cached2 = JSON.parse(await fsp4.readFile(this.indexPath, "utf8"));
+      if (cached2?.revision === rebuilt.revision && digest(cached2) === digest(rebuilt)) return cached2;
+    } catch (error51) {
+      if (error51?.code !== "ENOENT" && !(error51 instanceof SyntaxError)) throw error51;
+    }
+    return this.#writeIndex(events);
+  }
+  async rebuild() {
+    return this.#writeIndex(await this.readEvents());
+  }
+  async #writeIndex(events) {
+    const index = buildProjectHistoryIndex(events);
+    return serializeIndexWrite(this.indexPath, async () => {
+      try {
+        const current = JSON.parse(await fsp4.readFile(this.indexPath, "utf8"));
+        if (Number.isInteger(current?.revision) && current.revision > index.revision) return current;
+        if (current?.revision === index.revision && digest(current) === digest(index)) return current;
+      } catch (error51) {
+        if (error51?.code !== "ENOENT" && !(error51 instanceof SyntaxError)) throw error51;
+      }
+      const temporaryPath = "".concat(this.indexPath, ".").concat(process.pid, ".").concat(randomUUID2(), ".tmp");
+      try {
+        await fsp4.writeFile(temporaryPath, "".concat(JSON.stringify(index, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+        await fsp4.rename(temporaryPath, this.indexPath);
+      } finally {
+        await fsp4.rm(temporaryPath, { force: true });
+      }
+      return index;
+    });
+  }
+};
+
+// mcp/infrastructure/project-git-topology.mjs
+import { spawn as spawn3 } from "node:child_process";
+var DEFAULT_COMMIT_LIMIT = 1e3;
+async function git4(projectPath, args, { optionalExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn3("git", ["-C", projectPath, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) return resolve(Buffer.concat(stdout).toString("utf8"));
+      if (optionalExitCodes.includes(code)) return resolve("");
+      reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim())));
+    });
+  });
+}
+function normalizedText(value, maxLength) {
+  return String(value || "").replace(/[\u0000-\u001f\u007f]+/gu, " ").replace(/\s+/gu, " ").trim().slice(0, maxLength);
+}
+function refKind(refName) {
+  if (refName.startsWith("refs/heads/")) return "local-branch";
+  if (refName.startsWith("refs/remotes/")) return "remote-branch";
+  return "tag";
+}
+function shortRefName(refName) {
+  return refName.replace(/^refs\/heads\//u, "").replace(/^refs\/remotes\//u, "").replace(/^refs\/tags\//u, "");
+}
+function parseRefs(raw, currentBranch) {
+  return raw.split(/\r?\n/u).filter(Boolean).map((line) => {
+    const [name, objectId, peeledObjectId] = line.split("");
+    const commit = peeledObjectId || objectId;
+    const kind = refKind(name);
+    return {
+      name,
+      shortName: shortRefName(name),
+      kind,
+      commit,
+      current: kind === "local-branch" && shortRefName(name) === currentBranch
+    };
+  }).filter((ref) => ref.commit && !ref.name.endsWith("/HEAD"));
+}
+function parseCommits(raw, refsByCommit, mainCommits, mainlineCommits, headCommit) {
+  return raw.split("").map((record2) => record2.trim()).filter(Boolean).map((record2) => {
+    const [id, parentText, committedAtSeconds, author, ...subjectParts] = record2.split("");
+    const parents = parentText.trim() ? parentText.trim().split(/\s+/u) : [];
+    const seconds = Number(committedAtSeconds);
+    const subject = normalizedText(subjectParts.join(" "), 160) || "Untitled commit";
+    return {
+      id,
+      shortId: id.slice(0, 8),
+      parents,
+      subject,
+      author: normalizedText(author, 80) || "Unknown author",
+      committedAt: Number.isFinite(seconds) ? new Date(seconds * 1e3).toISOString() : (/* @__PURE__ */ new Date(0)).toISOString(),
+      refs: refsByCommit.get(id) ?? [],
+      isHead: id === headCommit,
+      isOnMain: mainCommits.has(id),
+      isOnMainline: mainlineCommits.has(id),
+      isCanvasightGenerated: subject.startsWith("Canvasight Project History turn "),
+      isMerge: parents.length > 1
+    };
+  });
+}
+function workingTreeState(raw) {
+  const entries = raw.split("\0").filter(Boolean);
+  let stagedCount = 0;
+  let unstagedCount = 0;
+  let untrackedCount = 0;
+  let changeCount = 0;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const status = entry.slice(0, 2);
+    const firstPath = entry.slice(3).replaceAll("\\", "/");
+    const renamed = /[RC]/u.test(status) && index + 1 < entries.length;
+    const secondPath = renamed ? entries[index + 1].replaceAll("\\", "/") : null;
+    if (renamed) index += 1;
+    const internal = (value) => value === ".scatter" || value?.startsWith(".scatter/");
+    if (internal(firstPath) && (!secondPath || internal(secondPath))) continue;
+    changeCount += 1;
+    if (status === "??") {
+      untrackedCount += 1;
+      continue;
+    }
+    if (status[0] && status[0] !== " ") stagedCount += 1;
+    if (status[1] && status[1] !== " ") unstagedCount += 1;
+  }
+  return {
+    dirty: changeCount > 0,
+    changeCount,
+    stagedCount,
+    unstagedCount,
+    untrackedCount
+  };
+}
+function topologyKind(commits) {
+  const childCounts = /* @__PURE__ */ new Map();
+  for (const commit of commits) {
+    for (const parent of commit.parents) childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
+  }
+  return commits.some((commit) => commit.isMerge) || [...childCounts.values()].some((count) => count > 1) ? "branched" : "linear";
+}
+function mergeStatus({ currentBranch, headCommit, mainCommit, ahead, behind, workingTree }) {
+  if (!mainCommit) return "main-unavailable";
+  if (workingTree.dirty) return "uncommitted";
+  if (!headCommit || headCommit === mainCommit || currentBranch === "main") return "up-to-date";
+  if (ahead > 0 && behind > 0) return "diverged";
+  if (ahead > 0) return "ready-to-merge";
+  if (behind > 0) return "behind-main";
+  return "up-to-date";
+}
+async function readProjectGitTopology(projectPath, { limit = DEFAULT_COMMIT_LIMIT } = {}) {
+  const boundedLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 5e3) : DEFAULT_COMMIT_LIMIT;
+  const [currentBranchRaw, headCommitRaw, refsRaw, statusRaw] = await Promise.all([
+    git4(projectPath, ["branch", "--show-current"]),
+    git4(projectPath, ["rev-parse", "--verify", "HEAD^{commit}"], { optionalExitCodes: [1, 128] }),
+    git4(projectPath, ["for-each-ref", "--format=%(refname)%1f%(objectname)%1f%(*objectname)", "refs/heads", "refs/remotes", "refs/tags"]),
+    git4(projectPath, ["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+  ]);
+  const currentBranch = currentBranchRaw.trim() || null;
+  const headCommit = headCommitRaw.trim() || null;
+  const refs = parseRefs(refsRaw, currentBranch);
+  const roots = [...new Set(refs.map((ref) => ref.name))];
+  if (headCommit && roots.length === 0) roots.push("HEAD");
+  if (!headCommit || roots.length === 0) {
+    const workingTree2 = workingTreeState(statusRaw);
+    return {
+      schemaVersion: 1,
+      commits: [],
+      refs,
+      totalCommitCount: 0,
+      truncated: false,
+      topology: "linear",
+      mergeStatus: "main-unavailable",
+      currentBranch,
+      headCommit,
+      mainCommit: null,
+      ahead: 0,
+      behind: 0,
+      workingTree: workingTree2
+    };
+  }
+  const mainCommit = refs.find((ref) => ref.name === "refs/heads/main")?.commit ?? null;
+  const [commitCountRaw, logRaw, mainListRaw, mainlineListRaw, aheadBehindRaw] = await Promise.all([
+    git4(projectPath, ["rev-list", "--count", ...roots]),
+    git4(projectPath, ["log", "--topo-order", "--date-order", "--max-count=".concat(boundedLimit), "--format=%x1e%H%x1f%P%x1f%ct%x1f%an%x1f%s", ...roots]),
+    mainCommit ? git4(projectPath, ["rev-list", "--max-count=".concat(boundedLimit), "refs/heads/main"]) : Promise.resolve(""),
+    mainCommit ? git4(projectPath, ["rev-list", "--first-parent", "--max-count=".concat(boundedLimit), "refs/heads/main"]) : Promise.resolve(""),
+    mainCommit ? git4(projectPath, ["rev-list", "--left-right", "--count", "refs/heads/main...HEAD"]) : Promise.resolve("0	0")
+  ]);
+  const totalCommitCount = Number.parseInt(commitCountRaw.trim(), 10) || 0;
+  const mainCommits = new Set(mainListRaw.split(/\r?\n/u).filter(Boolean));
+  const mainlineCommits = new Set(mainlineListRaw.split(/\r?\n/u).filter(Boolean));
+  const refsByCommit = /* @__PURE__ */ new Map();
+  for (const ref of refs) {
+    const list = refsByCommit.get(ref.commit) ?? [];
+    list.push({ name: ref.shortName, kind: ref.kind, current: ref.current });
+    refsByCommit.set(ref.commit, list);
+  }
+  const commits = parseCommits(logRaw, refsByCommit, mainCommits, mainlineCommits, headCommit);
+  const [behindText, aheadText] = aheadBehindRaw.trim().split(/\s+/u);
+  const behind = Number.parseInt(behindText, 10) || 0;
+  const ahead = Number.parseInt(aheadText, 10) || 0;
+  const workingTree = workingTreeState(statusRaw);
+  return {
+    schemaVersion: 1,
+    commits,
+    refs,
+    totalCommitCount,
+    truncated: totalCommitCount > commits.length,
+    topology: topologyKind(commits),
+    mergeStatus: mergeStatus({ currentBranch, headCommit, mainCommit, ahead, behind, workingTree }),
+    currentBranch,
+    headCommit,
+    mainCommit,
+    ahead,
+    behind,
+    workingTree
+  };
+}
+
+// mcp/application/project-history-service.mjs
+var DEFAULT_HISTORY_EXCLUSIONS = [
+  ".env",
+  ".env.*",
+  "*.pem",
+  "*.key",
+  "node_modules/",
+  "dist/",
+  "build/",
+  ".cache/",
+  ".scatter/"
+];
+function shortHash(value) {
+  return createHash4("sha256").update(value).digest("hex").slice(0, 24);
+}
+function event(projectId, id, type, payload, occurredAt = (/* @__PURE__ */ new Date()).toISOString()) {
+  return { version: PROJECT_HISTORY_EVENT_VERSION, id, projectId, type, occurredAt, payload };
+}
+function summarizeChanges(changes, status) {
+  if (changes.length === 0) return status === "interrupted" ? "任务已中断，没有留下项目变化" : "完成讨论，没有项目变化";
+  const paths = changes.slice(0, 3).map((change) => change.path);
+  const suffix = changes.length > paths.length ? "等 ".concat(changes.length, " 个文件") : "".concat(changes.length, " 个文件");
+  return "修改 ".concat(suffix, "：").concat(paths.join("、"));
+}
+function normalizedSummary(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/gu, " ").slice(0, 160);
+}
+function normalizedAttributedPaths(paths) {
+  return new Set(
+    (Array.isArray(paths) ? paths : []).map((value) => String(value || "").trim().replaceAll("\\", "/")).filter(Boolean)
+  );
+}
+function featureNameFromBranch(branch) {
+  const known = /* @__PURE__ */ new Map([["ai", "AI"], ["api", "API"], ["canvasight", "Canvasight"], ["codex", "Codex"], ["electron", "Electron"], ["git", "Git"], ["mcp", "MCP"], ["ui", "UI"], ["ux", "UX"], ["webdav", "WebDAV"]]);
+  const leaf = String(branch || "").replace(/^refs\/heads\//u, "").replace(/^(?:feat|feature|fix|chore|refactor|release)\//u, "").replace(/^\d+[._-]*/u, "");
+  return leaf.split(/[\s._-]+/u).filter(Boolean).map((part) => known.get(part.toLocaleLowerCase()) || "".concat(part[0].toLocaleUpperCase()).concat(part.slice(1))).join(" ") || "待归类功能";
+}
+var ProjectHistoryService = class _ProjectHistoryService {
+  static async forRepository(projectPath, options = {}) {
+    const identity = await probeGitProjectIdentity(projectPath);
+    const storageDirectory = path5.join(identity.gitCommonDir, "canvasight", "project-history");
+    const store = new ProjectHistoryStore(storageDirectory, options.storeOptions);
+    await store.initialize();
+    return new _ProjectHistoryService(projectPath, identity, store, options);
+  }
+  constructor(projectPath, identity, store, {
+    exclusions = DEFAULT_HISTORY_EXCLUSIONS,
+    snapshotOptions = {}
+  } = {}) {
+    this.projectPath = path5.resolve(projectPath);
+    this.identity = identity;
+    this.store = store;
+    this.exclusions = [...exclusions];
+    this.snapshotOptions = snapshotOptions;
+  }
+  async enableProtection({ currentTaskId = null, classifyDirtyState = "project-start" } = {}) {
+    const receiptId = "protection:".concat(this.identity.localProjectId);
+    const snapshotReceipt = "".concat(receiptId, ":snapshot");
+    const initialDirtyReceipt = "".concat(receiptId, ":initial-dirty-snapshot");
+    if (await this.store.hasReceipt(snapshotReceipt)) {
+      const index = await this.store.readIndex();
+      const baselineCommit = index.nodes.find((node) => node.kind === "baseline")?.commit ?? null;
+      const main2 = await ensureLocalMainBranch(this.projectPath, { fallbackCommit: baselineCommit });
+      return { duplicate: true, index, main: main2 };
+    }
+    const requestedFeatureLine = classifyDirtyState === "feature-line";
+    const existingProtection = (await this.store.readRecords()).find((record2) => record2.receiptId === receiptId);
+    const selectedFeatureLine = existingProtection ? existingProtection.event.payload.classifyDirtyState === "feature-line" : requestedFeatureLine;
+    const enabledAt = existingProtection ? new Date(existingProtection.event.occurredAt) : /* @__PURE__ */ new Date();
+    if (!existingProtection) {
+      await this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "protection.enabled", {
+        currentTaskId,
+        classifyDirtyState: selectedFeatureLine ? "feature-line" : "project-start"
+      }, enabledAt.toISOString()), receiptId);
+    }
+    const baselineRef = "refs/canvasight/snapshots/project-".concat(shortHash(this.identity.localProjectId));
+    const headRevision = await readGitSnapshotRevision(this.projectPath);
+    const initialDirtyObservationId = "".concat(receiptId, ":initial-dirty");
+    const snapshot = await createIsolatedHistorySnapshot(this.projectPath, {
+      snapshotRef: baselineRef,
+      excludePathspecs: this.exclusions,
+      message: "Canvasight Project History initial protected baseline",
+      skipIfUnchanged: Boolean(headRevision),
+      recoveryToken: "".concat(receiptId, ":capture"),
+      ...this.snapshotOptions
+    });
+    const splitInitialDirtyState = selectedFeatureLine && Boolean(headRevision) && Boolean(snapshot.commit);
+    const baselineSnapshot = splitInitialDirtyState ? headRevision : { commit: snapshot.commit || snapshot.parent || headRevision?.commit, tree: snapshot.tree || headRevision?.tree };
+    if (!baselineSnapshot?.commit || !baselineSnapshot?.tree) throw new Error("Project History could not create an initial recoverable baseline");
+    const main = await ensureLocalMainBranch(this.projectPath, { fallbackCommit: baselineSnapshot.commit });
+    if (splitInitialDirtyState) {
+      const featureLineId = "feature:".concat(shortHash(initialDirtyObservationId));
+      const featureReceipt = "feature:".concat(featureLineId);
+      if (!await this.store.hasReceipt(featureReceipt)) {
+        await this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(featureReceipt)), "feature.created", {
+          featureLineId,
+          name: "启用前已有变化",
+          originalClassification: "user-selected-initial-state"
+        }, new Date(enabledAt.getTime() + 1).toISOString()), featureReceipt);
+      }
+      const dirtyNodeId = "node:".concat(shortHash(initialDirtyObservationId));
+      const dirtyNodeRef = "refs/canvasight/snapshots/nodes/".concat(shortHash(dirtyNodeId));
+      await pinHistorySnapshot(this.projectPath, dirtyNodeRef, snapshot.commit);
+      await this.store.append(event(this.identity.localProjectId, dirtyNodeId, "snapshot.recorded", {
+        nodeId: dirtyNodeId,
+        observationId: initialDirtyObservationId,
+        baseline: false,
+        summary: summarizeChanges(snapshot.changedPaths, "completed"),
+        source: "external",
+        featureLineId,
+        taskId: null,
+        turnId: null,
+        snapshotRef: dirtyNodeRef,
+        chainRef: baselineRef,
+        commit: snapshot.commit,
+        tree: snapshot.tree,
+        gitBranch: snapshot.gitBranch,
+        headCommit: snapshot.headCommit,
+        changedPaths: snapshot.changedPaths,
+        coverage: snapshot.coverage
+      }, new Date(enabledAt.getTime() + 2).toISOString()), initialDirtyReceipt);
+    }
+    const nodeId = "node:".concat(shortHash("".concat(receiptId, ":snapshot")));
+    const nodeRef = "refs/canvasight/snapshots/nodes/".concat(shortHash(nodeId));
+    await pinHistorySnapshot(this.projectPath, nodeRef, baselineSnapshot.commit);
+    const recorded = await this.store.append(event(this.identity.localProjectId, nodeId, "snapshot.recorded", {
+      nodeId,
+      observationId: receiptId,
+      baseline: true,
+      summary: "项目保护起点",
+      source: "external",
+      taskId: null,
+      snapshotRef: nodeRef,
+      chainRef: baselineRef,
+      commit: baselineSnapshot.commit,
+      tree: baselineSnapshot.tree,
+      gitBranch: snapshot.gitBranch,
+      headCommit: snapshot.headCommit,
+      changedPaths: splitInitialDirtyState ? [] : snapshot.changedPaths,
+      coverage: snapshot.coverage
+    }, enabledAt.toISOString()), snapshotReceipt);
+    return { ...recorded, main };
+  }
+  async recordTurn({
+    taskId,
+    turnId,
+    status,
+    featureLineId,
+    featureName,
+    source = "codex",
+    occurredAt,
+    summary,
+    chatSummary,
+    workflowNodeId,
+    workflowTitle,
+    workingTreePath,
+    attributedPaths,
+    hasProjectFileChanges,
+    captureTrigger = "provider-poll",
+    snapshotOptions = {}
+  }) {
+    if (!taskId || !turnId) throw new Error("taskId and turnId are required");
+    const observationId = "codex:".concat(taskId, ":").concat(turnId, ":terminal:").concat(status);
+    const successReceipt = "observation:".concat(observationId);
+    if (await this.store.hasReceipt(successReceipt)) return { duplicate: true, index: await this.store.readIndex() };
+    const snapshotProjectPath = workingTreePath ? path5.resolve(workingTreePath) : this.projectPath;
+    const topology = await readProjectGitTopology(snapshotProjectPath).catch(() => null);
+    const branch = typeof topology?.currentBranch === "string" ? topology.currentBranch : null;
+    const branchFeature = branch && branch !== "main" && branch !== "master" ? "feature:branch:".concat(shortHash(branch)) : null;
+    const resolvedFeature = (workflowNodeId ? "feature:workflow:".concat(shortHash(workflowNodeId)) : null) || branchFeature || featureLineId || "feature:".concat(shortHash(taskId));
+    const resolvedFeatureName = workflowTitle || (branchFeature ? featureNameFromBranch(branch) : featureName);
+    const featureReceipt = "feature:".concat(resolvedFeature);
+    if (!await this.store.hasReceipt(featureReceipt)) {
+      await this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(featureReceipt)), "feature.created", {
+        featureLineId: resolvedFeature,
+        name: typeof resolvedFeatureName === "string" && resolvedFeatureName.trim() ? resolvedFeatureName.trim().slice(0, 80) : "待归类功能",
+        originalClassification: workflowNodeId ? "canvasight-workflow" : branchFeature ? "git-branch" : featureLineId ? "explicit-binding" : "automatic"
+      }, occurredAt), featureReceipt);
+    }
+    const snapshotRef = "refs/canvasight/snapshots/project-".concat(shortHash(this.identity.localProjectId));
+    try {
+      const semanticSummary = normalizedSummary(summary);
+      const semanticChatSummary = normalizedSummary(chatSummary) || semanticSummary;
+      if (hasProjectFileChanges === false) {
+        const recorded2 = await this.store.append(event(this.identity.localProjectId, "chat:".concat(shortHash(observationId)), "chat.recorded", {
+          observationId,
+          taskId,
+          turnId,
+          status,
+          featureLineId: resolvedFeature,
+          summary: semanticChatSummary || summarizeChanges([], status),
+          workflowNodeId: workflowNodeId ?? null,
+          workflowTitle: workflowTitle ?? null,
+          captureTrigger
+        }, occurredAt), successReceipt);
+        return { ...recorded2, snapshotRecorded: false };
+      }
+      const isolatedWorktree = snapshotProjectPath !== this.projectPath;
+      const snapshot = await createIsolatedHistorySnapshot(snapshotProjectPath, {
+        snapshotRef,
+        excludePathspecs: this.exclusions,
+        message: "Canvasight Project History turn ".concat(turnId),
+        skipIfUnchanged: true,
+        skipIfHeadUnchanged: hasProjectFileChanges !== true,
+        changeBase: isolatedWorktree ? "head" : "previous-snapshot",
+        recoveryToken: observationId,
+        ...this.snapshotOptions,
+        ...snapshotOptions
+      });
+      if (snapshot.skipped && !snapshot.recovered) {
+        const recorded2 = await this.store.append(event(this.identity.localProjectId, "chat:".concat(shortHash(observationId)), "chat.recorded", {
+          observationId,
+          taskId,
+          turnId,
+          status,
+          featureLineId: resolvedFeature,
+          summary: semanticChatSummary || summarizeChanges([], status),
+          workflowNodeId: workflowNodeId ?? null,
+          workflowTitle: workflowTitle ?? null,
+          captureTrigger
+        }, occurredAt), successReceipt);
+        return { ...recorded2, snapshotRecorded: false };
+      }
+      const attributed = normalizedAttributedPaths(attributedPaths);
+      const snapshotSource = source === "codex" && attributed.size > 0 && snapshot.changedPaths.some((change) => !attributed.has(String(change.path || "").replaceAll("\\", "/"))) ? "mixed" : source;
+      const nodeId = "node:".concat(shortHash(observationId));
+      const nodeRef = "refs/canvasight/snapshots/nodes/".concat(shortHash(nodeId));
+      await pinHistorySnapshot(snapshotProjectPath, nodeRef, snapshot.commit);
+      const recorded = await this.store.append(event(this.identity.localProjectId, nodeId, "snapshot.recorded", {
+        nodeId,
+        observationId,
+        baseline: false,
+        summary: semanticSummary || summarizeChanges(snapshot.changedPaths, status),
+        source: snapshotSource,
+        featureLineId: resolvedFeature,
+        taskId,
+        turnId,
+        workflowNodeId: workflowNodeId ?? null,
+        workflowTitle: workflowTitle ?? null,
+        turnStatus: status,
+        snapshotRef: nodeRef,
+        chainRef: snapshotRef,
+        commit: snapshot.commit,
+        tree: snapshot.tree,
+        gitBranch: snapshot.gitBranch,
+        headCommit: snapshot.headCommit,
+        changedPaths: snapshot.changedPaths,
+        coverage: snapshot.coverage,
+        recoveredAfterPartialWrite: snapshot.recovered === true,
+        captureTrigger,
+        workingTreePath: snapshotProjectPath
+      }, occurredAt), successReceipt);
+      return { ...recorded, snapshotRecorded: true };
+    } catch (error51) {
+      const records = await this.store.readRecords();
+      const attempt = records.filter((record2) => record2.receiptId.startsWith("".concat(successReceipt, ":failure:"))).length + 1;
+      const failureReceipt = "".concat(successReceipt, ":failure:").concat(attempt);
+      const failure = await this.store.append(event(this.identity.localProjectId, "failure:".concat(shortHash(failureReceipt)), "snapshot.failed", {
+        observationId,
+        taskId,
+        turnId,
+        status,
+        reason: error51 instanceof Error ? error51.message : String(error51),
+        retryable: true
+      }, occurredAt), failureReceipt);
+      return { ...failure, failed: true };
+    }
+  }
+  async recordCommittedBranchTip({ branch, commit, summary, occurredAt }) {
+    const normalizedBranch = typeof branch === "string" ? branch.trim() : "";
+    const normalizedCommit = typeof commit === "string" ? commit.trim() : "";
+    if (!normalizedBranch || normalizedBranch === "main" || normalizedBranch === "master" || /[\r\n]/u.test(normalizedBranch)) {
+      throw new Error("Project History branch tip requires a non-main local branch");
+    }
+    if (!/^[0-9a-f]{40}$/u.test(normalizedCommit)) throw new Error("Project History branch tip commit is invalid");
+    const existing = await this.store.readIndex();
+    const alreadyRecorded = existing.nodes.find(
+      (node) => node.gitBranch === normalizedBranch && (node.headCommit === normalizedCommit || node.commit === normalizedCommit)
+    );
+    if (alreadyRecorded) return { duplicate: true, skipped: true, node: alreadyRecorded, index: existing };
+    const observationId = "git-branch-tip:".concat(normalizedBranch, ":").concat(normalizedCommit);
+    const receiptId = "observation:".concat(observationId);
+    if (await this.store.hasReceipt(receiptId)) return { duplicate: true, index: await this.store.readIndex() };
+    const featureLineId = "feature:branch:".concat(shortHash(normalizedBranch));
+    const featureReceipt = "feature:".concat(featureLineId);
+    if (!await this.store.hasReceipt(featureReceipt)) {
+      await this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(featureReceipt)), "feature.created", {
+        featureLineId,
+        name: featureNameFromBranch(normalizedBranch),
+        originalClassification: "git-branch"
+      }, occurredAt), featureReceipt);
+    }
+    const snapshot = await readCommittedHistorySnapshot(this.projectPath, normalizedCommit);
+    const nodeId = "node:".concat(shortHash(observationId));
+    const nodeRef = "refs/canvasight/snapshots/nodes/".concat(shortHash(nodeId));
+    await pinHistorySnapshot(this.projectPath, nodeRef, normalizedCommit);
+    return this.store.append(event(this.identity.localProjectId, nodeId, "snapshot.recorded", {
+      nodeId,
+      observationId,
+      baseline: false,
+      summary: normalizedSummary(summary) || featureNameFromBranch(normalizedBranch),
+      source: "external",
+      featureLineId,
+      taskId: "external-change",
+      turnId: observationId,
+      snapshotRef: nodeRef,
+      commit: snapshot.commit,
+      tree: snapshot.tree,
+      gitBranch: normalizedBranch,
+      headCommit: snapshot.commit,
+      changedPaths: snapshot.changedPaths,
+      coverage: snapshot.coverage,
+      captureTrigger: "git-branch-tip-scan"
+    }, occurredAt), receiptId);
+  }
+  async readIndex() {
+    return this.store.readIndex();
+  }
+  async ensureMainBranch() {
+    const index = await this.store.readIndex();
+    const baselineCommit = index.nodes.find((node) => node.kind === "baseline")?.commit ?? null;
+    return ensureLocalMainBranch(this.projectPath, { fallbackCommit: baselineCommit });
+  }
+  async readGitState() {
+    return readProjectHistoryGitState(this.projectPath);
+  }
+  async readGitTopology() {
+    return readProjectGitTopology(this.projectPath);
+  }
+  async editNodeSummary(nodeId, summary) {
+    const normalized = typeof summary === "string" ? summary.trim().replace(/\s+/gu, " ") : "";
+    if (!normalized) throw new Error("history node summary is required");
+    if (normalized.length > 160) throw new Error("history node summary must be 160 characters or fewer");
+    const index = await this.store.readIndex();
+    if (!index.nodes.some((node) => node.id === nodeId)) throw new Error("history node was not found");
+    const receiptId = "summary:".concat(nodeId, ":").concat(shortHash(normalized));
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "node.summary-edited", {
+      nodeId,
+      summary: normalized
+    }), receiptId);
+  }
+  async reclassifyNode(nodeId, { featureLineId, name = "待归类功能" }) {
+    const normalizedFeatureId = typeof featureLineId === "string" ? featureLineId.trim() : "";
+    if (!normalizedFeatureId) throw new Error("featureLineId is required");
+    const index = await this.store.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("history node was not found");
+    if (!index.featureLines.some((feature) => feature.id === normalizedFeatureId)) {
+      const createReceipt = "feature:".concat(normalizedFeatureId);
+      await this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(createReceipt)), "feature.created", {
+        featureLineId: normalizedFeatureId,
+        name: String(name || "待归类功能").trim().slice(0, 80) || "待归类功能",
+        originalClassification: "manual"
+      }), createReceipt);
+    }
+    if (node.featureLineId === normalizedFeatureId) return { duplicate: true, index: await this.store.readIndex() };
+    const receiptId = "reclassify:".concat(nodeId, ":").concat(normalizedFeatureId);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "feature.reclassified", {
+      nodeId,
+      featureLineId: node.featureLineId,
+      from: node.featureLineId,
+      to: normalizedFeatureId
+    }), receiptId);
+  }
+  async setFeatureAbandoned(featureLineId, abandoned) {
+    const index = await this.store.readIndex();
+    const feature = index.featureLines.find((candidate) => candidate.id === featureLineId);
+    if (!feature) throw new Error("history feature line was not found");
+    const type = abandoned ? "feature.abandoned" : "feature.reactivated";
+    const receiptId = "".concat(type, ":").concat(featureLineId, ":").concat(index.revision);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), type, { featureLineId }), receiptId);
+  }
+  async renameFeature(featureLineId, name) {
+    const normalized = typeof name === "string" ? name.trim().replace(/\s+/gu, " ") : "";
+    if (!normalized) throw new Error("history feature name is required");
+    if (normalized.length > 80) throw new Error("history feature name must be 80 characters or fewer");
+    const index = await this.store.readIndex();
+    const feature = index.featureLines.find((candidate) => candidate.id === featureLineId);
+    if (!feature) throw new Error("history feature line was not found");
+    if (feature.name === normalized) return { duplicate: true, index };
+    const receiptId = "feature-name:".concat(featureLineId, ":").concat(shortHash(normalized));
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "feature.renamed", {
+      featureLineId,
+      name: normalized
+    }), receiptId);
+  }
+  async recordConfirmation(nodeId, { commit, ref, verification }) {
+    const index = await this.store.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("history node was not found");
+    if (node.confirmed) return { duplicate: true, index };
+    const receiptId = "confirmation:".concat(nodeId);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "node.confirmed", {
+      nodeId,
+      commit,
+      ref,
+      verification
+    }), receiptId);
+  }
+  async recordAgentCheckRequested(nodeId, { requestId, expiresAt }) {
+    const index = await this.store.readIndex();
+    if (!index.nodes.some((node) => node.id === nodeId)) throw new Error("history node was not found");
+    const receiptId = "agent-check-requested:".concat(nodeId, ":").concat(requestId);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "node.agent-check-requested", {
+      nodeId,
+      requestId,
+      expiresAt
+    }), receiptId);
+  }
+  async recordAgentCheckResult(nodeId, { requestId, outcome, summary, evidence, taskId }) {
+    const index = await this.store.readIndex();
+    if (!index.nodes.some((node) => node.id === nodeId)) throw new Error("history node was not found");
+    const receiptId = "agent-check-result:".concat(nodeId, ":").concat(requestId, ":").concat(outcome);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "node.agent-check-recorded", {
+      nodeId,
+      requestId,
+      outcome,
+      summary,
+      evidence,
+      taskId
+    }), receiptId);
+  }
+  async recordMerge(nodeId, { featureLineId, commit, targetBranch }) {
+    const index = await this.store.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("history node was not found");
+    if (node.merged) return { duplicate: true, index };
+    const receiptId = "merge:".concat(nodeId);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "merge.recorded", {
+      nodeId,
+      featureLineId: featureLineId ?? node.featureLineId,
+      commit,
+      targetBranch
+    }), receiptId);
+  }
+  async recordCoverageGap(gapId, payload) {
+    const receiptId = "coverage-gap:".concat(gapId);
+    return this.store.append(event(this.identity.localProjectId, "event:".concat(shortHash(receiptId)), "coverage.gap-recorded", {
+      gapId,
+      ...structuredClone(payload)
+    }), receiptId);
+  }
+};
+
+// mcp/application/project-history-agent-check-service.mjs
+import { createHmac, randomBytes, randomUUID as randomUUID3, timingSafeEqual } from "node:crypto";
+import fsp5 from "node:fs/promises";
+import path6 from "node:path";
+var TOKEN_TTL_MS = 30 * 60 * 1e3;
+function base64url3(value) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+function boundedText(value, label, maximum) {
+  const normalized = typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
+  if (!normalized) throw new Error("".concat(label, " is required"));
+  if (normalized.length > maximum) throw new Error("".concat(label, " must be ").concat(maximum, " characters or fewer"));
+  return normalized;
+}
+var ProjectHistoryAgentCheckService = class {
+  constructor(historyService) {
+    this.history = historyService;
+    this.secretPath = path6.join(historyService.store.storageDirectory, "agent-check-token.key");
+  }
+  async #secret() {
+    try {
+      return await fsp5.readFile(this.secretPath);
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+      const secret = randomBytes(32);
+      await fsp5.mkdir(path6.dirname(this.secretPath), { recursive: true });
+      try {
+        await fsp5.writeFile(this.secretPath, secret, { mode: 384, flag: "wx" });
+        return secret;
+      } catch (writeError2) {
+        if (writeError2?.code !== "EEXIST") throw writeError2;
+        return fsp5.readFile(this.secretPath);
+      }
+    }
+  }
+  async #sign(payload) {
+    const encoded = base64url3(JSON.stringify(payload));
+    const signature = createHmac("sha256", await this.#secret()).update(encoded).digest("base64url");
+    return "".concat(encoded, ".").concat(signature);
+  }
+  async #verify(token) {
+    if (typeof token !== "string" || !token.includes(".")) throw new Error("Project History Agent check token is invalid");
+    const [encoded, signature] = token.split(".");
+    const expected = createHmac("sha256", await this.#secret()).update(encoded).digest("base64url");
+    const suppliedBytes = Buffer.from(signature, "utf8");
+    const expectedBytes = Buffer.from(expected, "utf8");
+    if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes, expectedBytes)) {
+      throw new Error("Project History Agent check token signature is invalid");
+    }
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (payload.type !== "agent-check" || payload.projectId !== this.history.identity.localProjectId) {
+      throw new Error("Project History Agent check token scope is invalid");
+    }
+    if (!Number.isFinite(payload.expiresAt) || Date.now() > payload.expiresAt) throw new Error("Project History Agent check token has expired");
+    return payload;
+  }
+  async prepare(nodeId) {
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node || node.kind === "baseline") throw new Error("a snapshot history node is required for Agent checking");
+    if (node.merged) throw new Error("merged history nodes cannot start a new Agent check");
+    const issuedAt = Date.now();
+    const payload = {
+      type: "agent-check",
+      projectId: this.history.identity.localProjectId,
+      requestId: randomUUID3(),
+      nodeId,
+      snapshotCommit: node.commit,
+      issuedAt,
+      expiresAt: issuedAt + TOKEN_TTL_MS
+    };
+    return {
+      requestId: payload.requestId,
+      nodeId,
+      summary: node.summary,
+      changedPaths: node.changedPaths,
+      snapshotRef: node.snapshotRef,
+      commit: node.commit,
+      token: await this.#sign(payload),
+      expiresAt: new Date(payload.expiresAt).toISOString()
+    };
+  }
+  async markRequested(token) {
+    const payload = await this.#verify(token);
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === payload.nodeId);
+    if (!node || node.commit !== payload.snapshotCommit) throw new Error("history node changed before the Agent check was dispatched");
+    return this.history.recordAgentCheckRequested(node.id, {
+      requestId: payload.requestId,
+      expiresAt: new Date(payload.expiresAt).toISOString()
+    });
+  }
+  async record(token, { outcome, summary, evidence = [], taskId }) {
+    const payload = await this.#verify(token);
+    if (outcome !== "passed" && outcome !== "failed") throw new Error("Agent check outcome must be passed or failed");
+    if (!Array.isArray(evidence) || evidence.length > 20) throw new Error("Agent check evidence must contain at most 20 items");
+    const normalizedEvidence = evidence.map((item, index2) => boundedText(item, "evidence[".concat(index2, "]"), 280));
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === payload.nodeId);
+    if (!node || node.commit !== payload.snapshotCommit) throw new Error("history node changed before the Agent check result was recorded");
+    const recorded = await this.history.recordAgentCheckResult(node.id, {
+      requestId: payload.requestId,
+      outcome,
+      summary: boundedText(summary, "Agent check summary", 500),
+      evidence: normalizedEvidence,
+      taskId: boundedText(taskId, "Agent check taskId", 160)
+    });
+    return { ...recorded, nodeId: node.id, requestId: payload.requestId };
+  }
+};
+
+// mcp/application/project-history-host-action-service.mjs
+import { createHash as createHash5, createHmac as createHmac2, randomBytes as randomBytes2, randomUUID as randomUUID4, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import fsp6 from "node:fs/promises";
+import path7 from "node:path";
+var ACTION_TTL_MS = 10 * 60 * 1e3;
+var DEFAULT_PENDING_ACK_TIMEOUT_MS = 30 * 1e3;
+var MAX_ACTIONS = 100;
+var HOST_ACTIONS = /* @__PURE__ */ new Set(["navigate", "continue"]);
+var HOST_ACTION_OUTCOMES = /* @__PURE__ */ new Set(["succeeded", "queued", "failed"]);
+function compactText(value, maximum) {
+  const normalized = typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
+  if (!normalized) return "";
+  return normalized.slice(0, maximum);
+}
+function requiredText(value, label, maximum) {
+  const normalized = compactText(value, maximum);
+  if (!normalized) throw new Error("".concat(label, " is required"));
+  return normalized;
+}
+function base64url4(value) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+function tokenDigest(value) {
+  return createHash5("sha256").update(value).digest("hex");
+}
+function emptyState() {
+  return { schemaVersion: 1, revision: 0, actions: [] };
+}
+function normalizedAction(value) {
+  if (!value || typeof value !== "object") return null;
+  const requestId = compactText(value.requestId, 160);
+  const nodeId = compactText(value.nodeId, 240);
+  const action = compactText(value.action, 20);
+  const sourceTaskId = compactText(value.sourceTaskId, 160);
+  if (!requestId || !nodeId || !HOST_ACTIONS.has(action) || !sourceTaskId) return null;
+  const status = (/* @__PURE__ */ new Set(["pending", "succeeded", "queued", "failed"])).has(value.status) ? value.status : "failed";
+  return {
+    requestId,
+    nodeId,
+    action,
+    status,
+    sourceTaskId,
+    expectedTargetTaskId: compactText(value.expectedTargetTaskId, 160) || null,
+    targetTaskId: compactText(value.targetTaskId, 160) || null,
+    clientThreadId: compactText(value.clientThreadId, 160) || null,
+    summary: compactText(value.summary, 160),
+    tokenDigest: compactText(value.tokenDigest, 64),
+    issuedAt: compactText(value.issuedAt, 40),
+    expiresAt: compactText(value.expiresAt, 40),
+    updatedAt: compactText(value.updatedAt, 40),
+    error: compactText(value.error, 500) || null
+  };
+}
+function normalizeState(value) {
+  const actions = Array.isArray(value?.actions) ? value.actions.map(normalizedAction).filter(Boolean).slice(-MAX_ACTIONS) : [];
+  return {
+    schemaVersion: 1,
+    revision: Number.isInteger(value?.revision) && value.revision >= 0 ? value.revision : 0,
+    actions
+  };
+}
+function pendingAcknowledgementExpired(action, now, timeoutMs) {
+  const issuedAt = Date.parse(action.issuedAt);
+  return action.status === "pending" && Number.isFinite(issuedAt) && now - issuedAt >= timeoutMs;
+}
+function publicAction(action, now = Date.now(), pendingAckTimeoutMs = DEFAULT_PENDING_ACK_TIMEOUT_MS) {
+  const acknowledgementExpired = pendingAcknowledgementExpired(action, now, pendingAckTimeoutMs);
+  const tokenExpired = action.status === "pending" && Number.isFinite(Date.parse(action.expiresAt)) && now > Date.parse(action.expiresAt);
+  return {
+    requestId: action.requestId,
+    nodeId: action.nodeId,
+    action: action.action,
+    status: acknowledgementExpired ? "cancelled" : tokenExpired ? "failed" : action.status,
+    sourceTaskId: action.sourceTaskId,
+    expectedTargetTaskId: action.expectedTargetTaskId,
+    targetTaskId: action.targetTaskId,
+    clientThreadId: action.clientThreadId,
+    summary: action.summary,
+    issuedAt: action.issuedAt,
+    expiresAt: action.expiresAt,
+    updatedAt: action.updatedAt,
+    error: tokenExpired ? "The Codex host action did not return a receipt before it expired." : action.error
+  };
+}
+var ProjectHistoryHostActionService = class {
+  constructor(historyService, { pendingAckTimeoutMs = DEFAULT_PENDING_ACK_TIMEOUT_MS } = {}) {
+    this.history = historyService;
+    this.pendingAckTimeoutMs = pendingAckTimeoutMs;
+    this.filePath = path7.join(historyService.store.storageDirectory, "host-actions.json");
+    this.secretPath = path7.join(historyService.store.storageDirectory, "host-action-token.key");
+    this.lockPath = path7.join(historyService.store.storageDirectory, ".host-action-lock");
+  }
+  #public(action) {
+    return publicAction(action, Date.now(), this.pendingAckTimeoutMs);
+  }
+  async #secret() {
+    try {
+      return await fsp6.readFile(this.secretPath);
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+      const secret = randomBytes2(32);
+      await fsp6.mkdir(path7.dirname(this.secretPath), { recursive: true });
+      try {
+        await fsp6.writeFile(this.secretPath, secret, { mode: 384, flag: "wx" });
+        return secret;
+      } catch (writeError2) {
+        if (writeError2?.code !== "EEXIST") throw writeError2;
+        return fsp6.readFile(this.secretPath);
+      }
+    }
+  }
+  async #sign(payload) {
+    const encoded = base64url4(JSON.stringify(payload));
+    const signature = createHmac2("sha256", await this.#secret()).update(encoded).digest("base64url");
+    return "".concat(encoded, ".").concat(signature);
+  }
+  async #verify(token) {
+    if (typeof token !== "string" || !token.includes(".")) throw new Error("Project History host action token is invalid");
+    const [encoded, signature] = token.split(".");
+    const expected = createHmac2("sha256", await this.#secret()).update(encoded).digest("base64url");
+    const suppliedBytes = Buffer.from(signature, "utf8");
+    const expectedBytes = Buffer.from(expected, "utf8");
+    if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual2(suppliedBytes, expectedBytes)) {
+      throw new Error("Project History host action token signature is invalid");
+    }
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (payload.type !== "host-action" || payload.projectId !== this.history.identity.localProjectId || !HOST_ACTIONS.has(payload.action)) {
+      throw new Error("Project History host action token scope is invalid");
+    }
+    if (!Number.isFinite(payload.expiresAt) || Date.now() > payload.expiresAt) throw new Error("Project History host action token has expired");
+    return payload;
+  }
+  async #read() {
+    try {
+      return normalizeState(JSON.parse(await fsp6.readFile(this.filePath, "utf8")));
+    } catch (error51) {
+      if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return emptyState();
+      throw error51;
+    }
+  }
+  async #withWrite(mutator) {
+    await fsp6.mkdir(path7.dirname(this.filePath), { recursive: true });
+    let locked = false;
+    for (let attempt = 0; attempt < 40 && !locked; attempt += 1) {
+      try {
+        await fsp6.mkdir(this.lockPath);
+        locked = true;
+      } catch (error51) {
+        if (error51?.code !== "EEXIST") throw error51;
+        try {
+          const lock = await fsp6.stat(this.lockPath);
+          if (Date.now() - lock.mtimeMs > 1e4) await fsp6.rmdir(this.lockPath);
+        } catch (lockError) {
+          if (lockError?.code !== "ENOENT" && lockError?.code !== "ENOTEMPTY") throw lockError;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+    if (!locked) throw new Error("Project History host action store is busy");
+    try {
+      const current = await this.#read();
+      const result = await mutator(current);
+      const next = normalizeState({ ...current, revision: current.revision + 1, actions: result.actions });
+      const temporaryPath = "".concat(this.filePath, ".").concat(process.pid, ".").concat(randomUUID4(), ".tmp");
+      await fsp6.writeFile(temporaryPath, "".concat(JSON.stringify(next, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+      await fsp6.rename(temporaryPath, this.filePath);
+      return { value: result.value, state: next };
+    } finally {
+      await fsp6.rmdir(this.lockPath).catch(() => {
+      });
+    }
+  }
+  async prepare(nodeId, action, sourceTaskId) {
+    const normalizedActionName = requiredText(action, "Project History host action", 20);
+    if (!HOST_ACTIONS.has(normalizedActionName)) throw new Error("Project History host action must be navigate or continue");
+    const normalizedSourceTaskId = requiredText(sourceTaskId, "Project History source task id", 160);
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("Project History host action node was not found");
+    if (normalizedActionName === "navigate" && !node.taskId) throw new Error("This history node has no original Codex task");
+    if (normalizedActionName === "continue" && (!node.snapshotRef || !node.commit || node.status === "content-unavailable")) {
+      throw new Error("This history node cannot create an isolated continuation task");
+    }
+    const issuedAt = Date.now();
+    const payload = {
+      type: "host-action",
+      projectId: this.history.identity.localProjectId,
+      requestId: randomUUID4(),
+      action: normalizedActionName,
+      nodeId: node.id,
+      nodeCommit: node.commit,
+      sourceTaskId: normalizedSourceTaskId,
+      expectedTargetTaskId: normalizedActionName === "navigate" ? node.taskId : null,
+      issuedAt,
+      expiresAt: issuedAt + ACTION_TTL_MS
+    };
+    const token = await this.#sign(payload);
+    const stored = {
+      requestId: payload.requestId,
+      nodeId: node.id,
+      action: normalizedActionName,
+      status: "pending",
+      sourceTaskId: normalizedSourceTaskId,
+      expectedTargetTaskId: payload.expectedTargetTaskId,
+      targetTaskId: null,
+      clientThreadId: null,
+      summary: node.summary,
+      tokenDigest: tokenDigest(token),
+      issuedAt: new Date(payload.issuedAt).toISOString(),
+      expiresAt: new Date(payload.expiresAt).toISOString(),
+      updatedAt: new Date(payload.issuedAt).toISOString(),
+      error: null
+    };
+    await this.#withWrite((current) => ({ actions: current.actions.concat(stored).slice(-MAX_ACTIONS), value: stored }));
+    return {
+      ...this.#public(stored),
+      token,
+      projectPath: this.history.projectPath,
+      snapshotRef: node.snapshotRef,
+      commit: node.commit,
+      coverageComplete: node.coverage?.complete === true,
+      prompt: this.#prompt({ node, payload, token })
+    };
+  }
+  #prompt({ node, payload, token }) {
+    const receipt = "Then call record_project_history_host_action with projectPath ".concat(JSON.stringify(this.history.projectPath), ", threadId ").concat(JSON.stringify(payload.sourceTaskId), ", token ").concat(JSON.stringify(token), ", and the real outcome. Record succeeded only after the native host tool returns success; record queued when task creation returns only clientThreadId; record failed with the bounded error if any native call fails. If task creation was queued, call codex_app__list_threads once. Promote the same receipt from queued to succeeded only after one real task is unambiguously identified by its new-task time, exact title, Worktree repository path, source task, node id, and snapshot commit; pass both the original clientThreadId and the real targetTaskId. Otherwise leave it queued.");
+    if (payload.action === "navigate") {
+      return "Use $canvasight to handle this exact widget-issued action. The user explicitly clicked Canvasight Project History action ".concat(JSON.stringify(payload.requestId), ". Call codex_app__navigate_to_codex_page with threadId ").concat(JSON.stringify(node.taskId), ". Do not summarize or copy the chat. ").concat(receipt);
+    }
+    const recoveryWarning = node.coverage?.complete === true ? "The protected snapshot reports complete recovery coverage." : "Recovery coverage is incomplete; the new task must warn that excluded, generated, sensitive, or external files may be missing.";
+    return "Use $canvasight to handle this exact widget-issued action. The user explicitly clicked Canvasight Project History action ".concat(JSON.stringify(payload.requestId), " to continue from node ").concat(JSON.stringify(node.id), ". First call codex_app__list_projects and select the project whose path exactly equals ").concat(JSON.stringify(this.history.projectPath), '. Then call codex_app__create_thread for that project using a worktree environment with startingState { type: "branch", branchName: ').concat(JSON.stringify(node.snapshotRef), " }, title ").concat(JSON.stringify(node.summary), ", and an initial prompt that says this task continues from Canvasight history node ").concat(JSON.stringify(node.id), " at snapshot commit ").concat(JSON.stringify(node.commit), ". ").concat(recoveryWarning, " Do not modify the current checkout, merge, or push. ").concat(receipt);
+  }
+  async markDispatchFailed(requestId, errorMessage) {
+    const normalizedRequestId = requiredText(requestId, "Project History host action request id", 160);
+    const message = requiredText(errorMessage, "Project History host action dispatch error", 500);
+    const result = await this.#withWrite((current) => {
+      const index = current.actions.findIndex((action) => action.requestId === normalizedRequestId);
+      if (index < 0) throw new Error("Project History host action request was not found");
+      const existing = current.actions[index];
+      if (existing.status !== "pending") return { actions: current.actions, value: existing };
+      const next = { ...existing, status: "failed", error: message, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+      const actions = [...current.actions];
+      actions[index] = next;
+      return { actions, value: next };
+    });
+    return this.#public(result.value);
+  }
+  async record(token, { outcome, sourceTaskId, targetTaskId = null, clientThreadId = null, error: error51 = null }) {
+    const payload = await this.#verify(token);
+    const normalizedOutcome = requiredText(outcome, "Project History host action outcome", 20);
+    if (!HOST_ACTION_OUTCOMES.has(normalizedOutcome)) throw new Error("Project History host action outcome must be succeeded, queued, or failed");
+    const normalizedSourceTaskId = requiredText(sourceTaskId, "Project History source task id", 160);
+    if (normalizedSourceTaskId !== payload.sourceTaskId) throw new Error("Project History host action receipt came from the wrong source task");
+    const normalizedTargetTaskId = compactText(targetTaskId, 160) || null;
+    const normalizedClientThreadId = compactText(clientThreadId, 160) || null;
+    const normalizedError = compactText(error51, 500) || null;
+    if (normalizedOutcome === "failed" && !normalizedError) throw new Error("A failed Project History host action receipt requires an error");
+    if (payload.action === "navigate" && normalizedOutcome === "succeeded" && normalizedTargetTaskId !== payload.expectedTargetTaskId) {
+      throw new Error("Project History navigation receipt does not match the requested target task");
+    }
+    if (payload.action === "continue" && normalizedOutcome === "succeeded" && !normalizedTargetTaskId) {
+      throw new Error("A successful Project History continuation receipt requires the new task id");
+    }
+    if (payload.action === "continue" && normalizedOutcome === "queued" && !normalizedClientThreadId) {
+      throw new Error("A queued Project History continuation receipt requires clientThreadId");
+    }
+    const result = await this.#withWrite((current) => {
+      const index = current.actions.findIndex((action) => action.requestId === payload.requestId);
+      if (index < 0) throw new Error("Project History host action request was not found");
+      const existing = current.actions[index];
+      if (existing.tokenDigest !== tokenDigest(token)) throw new Error("Project History host action token does not match the request");
+      if (pendingAcknowledgementExpired(existing, Date.now(), this.pendingAckTimeoutMs)) {
+        throw new Error("Project History host action is no longer waiting for a receipt");
+      }
+      const desired = {
+        ...existing,
+        status: normalizedOutcome,
+        targetTaskId: normalizedTargetTaskId,
+        clientThreadId: normalizedClientThreadId,
+        error: normalizedError,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (existing.status !== "pending") {
+        const same = existing.status === desired.status && existing.targetTaskId === desired.targetTaskId && existing.clientThreadId === desired.clientThreadId && existing.error === desired.error;
+        if (same) return { actions: current.actions, value: existing };
+        const isQueuedContinuationPromotion = payload.action === "continue" && existing.status === "queued" && desired.status === "succeeded" && existing.clientThreadId && desired.clientThreadId === existing.clientThreadId && desired.targetTaskId && !desired.error;
+        if (!isQueuedContinuationPromotion) {
+          throw new Error("Project History host action receipt was replayed with different content");
+        }
+        const actions2 = [...current.actions];
+        actions2[index] = desired;
+        return { actions: actions2, value: desired };
+      }
+      const actions = [...current.actions];
+      actions[index] = desired;
+      return { actions, value: desired };
+    });
+    return this.#public(result.value);
+  }
+  async status(requestId) {
+    const normalizedRequestId = requiredText(requestId, "Project History host action request id", 160);
+    const state = await this.#read();
+    const action = state.actions.find((candidate) => candidate.requestId === normalizedRequestId);
+    if (!action) throw new Error("Project History host action request was not found");
+    return this.#public(action);
+  }
+  async list() {
+    const state = await this.#read();
+    return { revision: state.revision, actions: state.actions.map((action) => this.#public(action)) };
+  }
+};
+
+// mcp/application/project-history-external-watcher.mjs
+import { createHash as createHash6 } from "node:crypto";
+import { spawn as spawn4 } from "node:child_process";
+function digest2(value) {
+  return createHash6("sha256").update(value).digest("hex");
+}
+async function git5(cwd, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn4("git", ["-C", cwd, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve(Buffer.concat(stdout)) : reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim()))));
+  });
+}
+async function fingerprint(projectPath) {
+  const head = (await git5(projectPath, ["rev-parse", "HEAD"])).toString("utf8").trim();
+  const headSubject = (await git5(projectPath, ["log", "-1", "--format=%s", "HEAD"])).toString("utf8").trim();
+  const status = await git5(projectPath, ["status", "--porcelain=v2", "-z", "--untracked-files=all", "--", ".", ":(exclude).scatter", ":(exclude).scatter/**"]);
+  const statusDigest = digest2(status);
+  return { head, headSubject, dirty: status.length > 0, statusDigest, fingerprint: digest2("".concat(head, ":").concat(statusDigest)) };
+}
+var ProjectHistoryExternalWatcher = class {
+  constructor(historyService, observerState, { silenceMs = 12e4 } = {}) {
+    this.history = historyService;
+    this.observer = observerState;
+    this.silenceMs = silenceMs;
+  }
+  async acknowledgeCurrent({ now = /* @__PURE__ */ new Date() } = {}) {
+    const current = await fingerprint(this.history.projectPath);
+    const nowIso2 = now.toISOString();
+    await this.observer.updateExternal({
+      ...current,
+      firstSeenAt: nowIso2,
+      lastSeenAt: nowIso2,
+      lastSealedFingerprint: current.fingerprint
+    });
+    return current;
+  }
+  async reconcileLocalBranchTips() {
+    const topology = await this.history.readGitTopology();
+    const commits = new Map(topology.commits.map((commit) => [commit.id, commit]));
+    const refsByCommit = /* @__PURE__ */ new Map();
+    for (const ref of topology.refs) {
+      if (ref.kind !== "local-branch" || ref.shortName === "main" || ref.shortName === "master") continue;
+      const refs = refsByCommit.get(ref.commit) ?? [];
+      refs.push(ref);
+      refsByCommit.set(ref.commit, refs);
+    }
+    const candidates = [...refsByCommit.entries()].map(([commitId, refs]) => ({ commit: commits.get(commitId), ref: [...refs].sort((left, right) => left.shortName.localeCompare(right.shortName))[0] })).filter((candidate) => candidate.commit && candidate.ref).sort((left, right) => left.commit.committedAt.localeCompare(right.commit.committedAt) || left.ref.shortName.localeCompare(right.ref.shortName));
+    const captured = [];
+    const skipped = [];
+    for (const candidate of candidates) {
+      const result = await this.history.recordCommittedBranchTip({
+        branch: candidate.ref.shortName,
+        commit: candidate.commit.id,
+        summary: candidate.commit.subject,
+        occurredAt: candidate.commit.committedAt
+      });
+      if (result.skipped || result.duplicate) skipped.push({ branch: candidate.ref.shortName, commit: candidate.commit.id });
+      else captured.push({ branch: candidate.ref.shortName, commit: candidate.commit.id });
+    }
+    return { captured, skipped };
+  }
+  async inspect({ force = false, now = /* @__PURE__ */ new Date() } = {}) {
+    const branchTips = await this.reconcileLocalBranchTips();
+    const current = await fingerprint(this.history.projectPath);
+    const provider = await this.observer.read();
+    const prior = provider.external;
+    const nowIso2 = now.toISOString();
+    if (!prior) {
+      await this.observer.updateExternal({ ...current, firstSeenAt: nowIso2, lastSeenAt: nowIso2, lastSealedFingerprint: null });
+      return { status: "observing", sealed: false, current, branchTips };
+    }
+    if (current.fingerprint === prior.lastSealedFingerprint) {
+      await this.observer.updateExternal({ ...prior, ...current, firstSeenAt: nowIso2, lastSeenAt: nowIso2 });
+      return { status: "unchanged", sealed: false, current, branchTips };
+    }
+    const headChanged = current.head !== prior.head;
+    const samePending = current.fingerprint === prior.fingerprint;
+    const firstSeenAt = samePending ? prior.firstSeenAt : nowIso2;
+    const silentForMs = Math.max(0, now.getTime() - Date.parse(firstSeenAt));
+    const activeCodexTurns = await this.observer.activeTurns(now);
+    if (activeCodexTurns.length > 0) {
+      await this.observer.updateExternal({ ...current, firstSeenAt, lastSeenAt: nowIso2, lastSealedFingerprint: prior.lastSealedFingerprint ?? null });
+      return {
+        status: "waiting-for-codex-turn",
+        sealed: false,
+        silentForMs,
+        activeCodexTurns: activeCodexTurns.map((turn) => ({ taskId: turn.taskId, turnId: turn.turnId, startedAt: turn.startedAt })),
+        current,
+        branchTips
+      };
+    }
+    const shouldSeal = force || headChanged || current.dirty && samePending && silentForMs >= this.silenceMs;
+    if (!shouldSeal) {
+      await this.observer.updateExternal({ ...current, firstSeenAt, lastSeenAt: nowIso2, lastSealedFingerprint: prior.lastSealedFingerprint ?? null });
+      return { status: current.dirty ? "waiting-for-silence" : "observing", sealed: false, silentForMs, current, branchTips };
+    }
+    const reason = force ? "manual" : headChanged ? "external-commit" : "two-minute-silence";
+    const result = await this.history.recordTurn({
+      taskId: "external-change",
+      turnId: "".concat(reason, ":").concat(current.fingerprint),
+      status: "completed",
+      featureName: "外部变化",
+      source: "external",
+      summary: headChanged ? current.headSubject : void 0,
+      snapshotOptions: { skipIfUnchanged: headChanged ? false : true }
+    });
+    if (result.failed) return { status: "failed", sealed: false, reason, current, branchTips };
+    await this.observer.updateExternal({ ...current, firstSeenAt: nowIso2, lastSeenAt: nowIso2, lastSealedFingerprint: current.fingerprint });
+    return { status: "sealed", sealed: true, reason, current, index: result.index, branchTips };
+  }
+};
+
+// mcp/application/project-history-portability-service.mjs
+import { createHash as createHash8, randomUUID as randomUUID6 } from "node:crypto";
+import { spawn as spawn6 } from "node:child_process";
+import fsp8 from "node:fs/promises";
+import os4 from "node:os";
+import path9 from "node:path";
+
+// mcp/infrastructure/git-history-sidecar.mjs
+import { createHash as createHash7, randomUUID as randomUUID5 } from "node:crypto";
+import fsp7 from "node:fs/promises";
+import os3 from "node:os";
+import path8 from "node:path";
+import { spawn as spawn5 } from "node:child_process";
+var PORTABLE_HISTORY_SCHEMA_VERSION = 1;
+var ZERO_OID3 = "0".repeat(40);
+var CUSTOM_REF_PREFIX = "refs/canvasight/history/";
+var FALLBACK_REF_PREFIX = "refs/heads/canvasight-history/";
+var TEMP_REF_PREFIX = "refs/canvasight/imports/";
+var EVENT_KEYS = /* @__PURE__ */ new Set(["id", "type", "summary", "status", "source", "coverage", "parents", "git", "occurredAt"]);
+var LAYOUT_KEYS = /* @__PURE__ */ new Set(["eventId", "x", "y", "collapsed", "revision"]);
+var CONFLICT_KEYS = /* @__PURE__ */ new Set(["kind", "id", "variants"]);
+var COVERAGE_KEYS = /* @__PURE__ */ new Set(["complete", "excludedPathspecs", "gapCodes"]);
+var MAX_PORTABLE_EVENTS = 5e4;
+var MAX_PORTABLE_LAYOUT_ITEMS = 5e4;
+var MAX_PORTABLE_CONFLICTS = 1e4;
+function stableJson(value) {
+  if (Array.isArray(value)) return "[".concat(value.map(stableJson).join(","), "]");
+  if (value && typeof value === "object") {
+    return "{".concat(Object.keys(value).sort().map((key) => "".concat(JSON.stringify(key), ":").concat(stableJson(value[key]))).join(","), "}");
+  }
+  return JSON.stringify(value);
+}
+function digest3(value) {
+  return createHash7("sha256").update(stableJson(value)).digest("hex");
+}
+async function git6(cwd, args, { env = {}, input = null, optionalExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn5("git", ["-C", cwd, ...args], {
+      env: { ...process.env, ...env },
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      const output = Buffer.concat(stdout);
+      if (code === 0 || optionalExitCodes.includes(code)) return resolve({ code, output });
+      reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim())));
+    });
+    child.stdin.end(input ?? void 0);
+  });
+}
+async function gitText2(cwd, args, options) {
+  return (await git6(cwd, args, options)).output.toString("utf8").trim();
+}
+function assertPortableRef(historyRef) {
+  const validPrefix = historyRef.startsWith(CUSTOM_REF_PREFIX) || historyRef.startsWith(FALLBACK_REF_PREFIX);
+  if (!validPrefix || /\.\.|[~^:?*\\\s]|@\{|\/$|\/\//u.test(historyRef)) {
+    throw new Error("invalid Project History sidecar ref");
+  }
+}
+function assertObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("".concat(label, " must be an object"));
+}
+function assertAllowedKeys(value, allowed, label) {
+  for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error("".concat(label, " contains forbidden field: ").concat(key));
+}
+function normalizeEvent(event2) {
+  assertObject(event2, "event");
+  assertAllowedKeys(event2, EVENT_KEYS, "event");
+  if (typeof event2.id !== "string" || event2.id.length === 0) throw new Error("event.id is required");
+  if (typeof event2.type !== "string" || event2.type.length === 0) throw new Error("event.type is required");
+  if (typeof event2.summary !== "string" || event2.summary.length === 0 || event2.summary.length > 280) {
+    throw new Error("event.summary must contain 1-280 characters");
+  }
+  if (event2.parents !== void 0 && (!Array.isArray(event2.parents) || event2.parents.some((item) => typeof item !== "string"))) {
+    throw new Error("event.parents must be string IDs");
+  }
+  if (event2.status !== void 0 && (typeof event2.status !== "string" || event2.status.length > 40)) throw new Error("event.status is invalid");
+  if (event2.occurredAt !== void 0 && (typeof event2.occurredAt !== "string" || !Number.isFinite(Date.parse(event2.occurredAt)))) {
+    throw new Error("event.occurredAt is invalid");
+  }
+  if (event2.source !== void 0 && !(/* @__PURE__ */ new Set(["codex", "mixed", "external", "portable"])).has(event2.source)) throw new Error("event.source is invalid");
+  if (event2.coverage !== void 0) {
+    assertObject(event2.coverage, "event.coverage");
+    assertAllowedKeys(event2.coverage, COVERAGE_KEYS, "event.coverage");
+    if (typeof event2.coverage.complete !== "boolean") throw new Error("event.coverage.complete is required");
+    for (const key of ["excludedPathspecs", "gapCodes"]) {
+      if (event2.coverage[key] !== void 0 && (!Array.isArray(event2.coverage[key]) || event2.coverage[key].some((item) => typeof item !== "string" || item.length > 160))) {
+        throw new Error("event.coverage.".concat(key, " must contain bounded strings"));
+      }
+    }
+  }
+  if (event2.git !== void 0) {
+    assertObject(event2.git, "event.git");
+    assertAllowedKeys(event2.git, /* @__PURE__ */ new Set(["objectId", "refName"]), "event.git");
+    if (event2.git.objectId !== void 0 && !/^[0-9a-f]{40,64}$/u.test(event2.git.objectId)) throw new Error("event.git.objectId is invalid");
+    if (event2.git.refName !== void 0 && (typeof event2.git.refName !== "string" || !event2.git.refName.startsWith("refs/canvasight/"))) throw new Error("event.git.refName is invalid");
+  }
+  return structuredClone(event2);
+}
+function normalizeLayout(item) {
+  assertObject(item, "layout item");
+  assertAllowedKeys(item, LAYOUT_KEYS, "layout item");
+  if (typeof item.eventId !== "string" || !Number.isFinite(item.x) || !Number.isFinite(item.y)) {
+    throw new Error("layout item requires eventId, x, and y");
+  }
+  if (Math.abs(item.x) > 1e6 || Math.abs(item.y) > 1e6) throw new Error("layout coordinates are out of bounds");
+  if (item.collapsed !== void 0 && typeof item.collapsed !== "boolean") throw new Error("layout collapsed must be boolean");
+  if (item.revision !== void 0 && (!Number.isSafeInteger(item.revision) || item.revision < 0)) throw new Error("layout revision is invalid");
+  return structuredClone(item);
+}
+function migratePortableHistory(input) {
+  assertObject(input, "portable history");
+  if (input.schemaVersion === PORTABLE_HISTORY_SCHEMA_VERSION) return structuredClone(input);
+  if (input.schemaVersion === 0) {
+    return {
+      schemaVersion: PORTABLE_HISTORY_SCHEMA_VERSION,
+      projectId: input.projectId,
+      events: (input.nodes ?? []).map((node) => ({
+        id: node.id,
+        type: node.kind ?? "snapshot",
+        summary: node.label,
+        status: node.status ?? "recorded"
+      })),
+      layout: (input.positions ?? []).map((position) => ({
+        eventId: position.nodeId,
+        x: position.x,
+        y: position.y,
+        revision: 0
+      }))
+    };
+  }
+  throw new Error("unsupported Project History schema version: ".concat(input.schemaVersion));
+}
+function validatePortableHistory(input) {
+  const manifest = migratePortableHistory(input);
+  assertAllowedKeys(manifest, /* @__PURE__ */ new Set(["schemaVersion", "projectId", "events", "layout", "conflicts"]), "portable history");
+  if (typeof manifest.projectId !== "string" || manifest.projectId.length === 0) throw new Error("projectId is required");
+  if (!Array.isArray(manifest.events) || !Array.isArray(manifest.layout)) throw new Error("events and layout must be arrays");
+  if (manifest.events.length > MAX_PORTABLE_EVENTS || manifest.layout.length > MAX_PORTABLE_LAYOUT_ITEMS) {
+    throw new Error("portable history exceeds the supported event or layout limit");
+  }
+  const events = manifest.events.map(normalizeEvent);
+  const ids = /* @__PURE__ */ new Set();
+  for (const event2 of events) {
+    if (ids.has(event2.id)) throw new Error("duplicate event ID: ".concat(event2.id));
+    ids.add(event2.id);
+  }
+  const layout = manifest.layout.map(normalizeLayout);
+  for (const item of layout) if (!ids.has(item.eventId)) throw new Error("layout references unknown event: ".concat(item.eventId));
+  if (manifest.conflicts !== void 0 && !Array.isArray(manifest.conflicts)) throw new Error("conflicts must be an array");
+  if ((manifest.conflicts?.length ?? 0) > MAX_PORTABLE_CONFLICTS) throw new Error("portable history exceeds the supported conflict limit");
+  const conflicts = (manifest.conflicts ?? []).map((conflict) => {
+    assertObject(conflict, "conflict");
+    assertAllowedKeys(conflict, CONFLICT_KEYS, "conflict");
+    if (conflict.kind !== "event" && conflict.kind !== "layout" || typeof conflict.id !== "string") {
+      throw new Error("conflict requires an event or layout kind and stable ID");
+    }
+    if (!Array.isArray(conflict.variants) || conflict.variants.length < 2) throw new Error("conflict requires at least two variants");
+    const variants = conflict.variants.map(conflict.kind === "event" ? normalizeEvent : normalizeLayout);
+    if (variants.some((variant) => (conflict.kind === "event" ? variant.id : variant.eventId) !== conflict.id)) {
+      throw new Error("conflict variants must share the conflict ID");
+    }
+    return { kind: conflict.kind, id: conflict.id, variants };
+  });
+  return { schemaVersion: PORTABLE_HISTORY_SCHEMA_VERSION, projectId: manifest.projectId, events, layout, conflicts };
+}
+function mergePortableHistories(leftInput, rightInput) {
+  const left = validatePortableHistory(leftInput);
+  const right = validatePortableHistory(rightInput);
+  if (left.projectId !== right.projectId) throw new Error("cannot merge sidecars from different projects");
+  const events = new Map(left.events.map((event2) => [event2.id, event2]));
+  const conflicts = [...left.conflicts, ...right.conflicts];
+  for (const event2 of right.events) {
+    const current = events.get(event2.id);
+    if (!current) events.set(event2.id, event2);
+    else if (stableJson(current) !== stableJson(event2)) {
+      conflicts.push({ kind: "event", id: event2.id, variants: [current, event2].sort((a, b) => digest3(a).localeCompare(digest3(b))) });
+    }
+  }
+  const layout = new Map(left.layout.map((item) => [item.eventId, item]));
+  for (const item of right.layout) {
+    const current = layout.get(item.eventId);
+    if (!current || (item.revision ?? 0) > (current.revision ?? 0)) layout.set(item.eventId, item);
+    else if ((item.revision ?? 0) === (current.revision ?? 0) && stableJson(current) !== stableJson(item)) {
+      conflicts.push({ kind: "layout", id: item.eventId, variants: [current, item].sort((a, b) => digest3(a).localeCompare(digest3(b))) });
+    }
+  }
+  return validatePortableHistory({
+    schemaVersion: PORTABLE_HISTORY_SCHEMA_VERSION,
+    projectId: left.projectId,
+    events: [...events.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    layout: [...layout.values()].sort((a, b) => a.eventId.localeCompare(b.eventId)),
+    conflicts: conflicts.sort((a, b) => stableJson(a).localeCompare(stableJson(b)))
+  });
+}
+async function refOid(repository, ref) {
+  return gitText2(repository, ["rev-parse", "--verify", ref], { optionalExitCodes: [1, 128] });
+}
+async function readManifestAtCommit(repository, commit) {
+  const result = await git6(repository, ["show", "".concat(commit, ":history.json")]);
+  return validatePortableHistory(JSON.parse(result.output.toString("utf8")));
+}
+async function readHistorySidecar(repository, historyRef) {
+  assertPortableRef(historyRef);
+  const commit = await refOid(repository, historyRef);
+  if (!commit) return null;
+  return { commit, manifest: await readManifestAtCommit(repository, commit) };
+}
+async function createMetadataCommit(repository, manifest, parents) {
+  const temporaryRoot = await fsp7.mkdtemp(path8.join(os3.tmpdir(), "canvasight-history-sidecar-"));
+  const env = { GIT_INDEX_FILE: path8.join(temporaryRoot, "index") };
+  try {
+    await git6(repository, ["read-tree", "--empty"], { env });
+    const blob = await gitText2(repository, ["hash-object", "-w", "--stdin"], { input: "".concat(stableJson(manifest), "\n") });
+    await git6(repository, ["update-index", "--add", "--cacheinfo", "100644,".concat(blob, ",history.json")], { env });
+    const tree = await gitText2(repository, ["write-tree"], { env });
+    const commitArgs = ["commit-tree", tree];
+    for (const parent of parents) commitArgs.push("-p", parent);
+    const identityEnv = {
+      GIT_AUTHOR_NAME: "Canvasight Project History",
+      GIT_AUTHOR_EMAIL: "canvasight-history@localhost.invalid",
+      GIT_COMMITTER_NAME: "Canvasight Project History",
+      GIT_COMMITTER_EMAIL: "canvasight-history@localhost.invalid"
+    };
+    return gitText2(repository, commitArgs, {
+      env: identityEnv,
+      input: "Canvasight Project History metadata\n\nSidecar-Id: ".concat(randomUUID5(), "\n")
+    });
+  } finally {
+    await fsp7.rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+async function writeHistorySidecar(repository, historyRef, input, { expectedCommit } = {}) {
+  assertPortableRef(historyRef);
+  const manifest = validatePortableHistory(input);
+  const previousCommit = await refOid(repository, historyRef);
+  if (expectedCommit !== void 0 && (previousCommit || null) !== expectedCommit) throw new Error("sidecar changed concurrently");
+  const commit = await createMetadataCommit(repository, manifest, previousCommit ? [previousCommit] : []);
+  await git6(repository, ["update-ref", historyRef, commit, previousCommit || ZERO_OID3]);
+  return { commit, manifest };
+}
+function requireAuthorization(authorized) {
+  if (authorized !== true) throw new Error("project-scoped sidecar sync authorization is required");
+}
+async function pushHistorySidecar(repository, remote, historyRef, { authorized = false } = {}) {
+  requireAuthorization(authorized);
+  assertPortableRef(historyRef);
+  const commit = await refOid(repository, historyRef);
+  if (!commit) throw new Error("local sidecar ref does not exist");
+  await git6(repository, ["push", remote, "".concat(historyRef, ":").concat(historyRef)]);
+  return { historyRef, commit };
+}
+async function fetchIntoTemporaryRef(repository, remote, historyRef) {
+  assertPortableRef(historyRef);
+  const temporaryRef = "".concat(TEMP_REF_PREFIX).concat(randomUUID5());
+  await git6(repository, ["fetch", "--no-tags", remote, "".concat(historyRef, ":").concat(temporaryRef)]);
+  return { temporaryRef, commit: await refOid(repository, temporaryRef) };
+}
+async function missingHistoryGitObjects(repository, manifest) {
+  const candidates = [...new Set(manifest.events.map((event2) => event2.git?.objectId).filter(Boolean))];
+  const missing = [];
+  for (const objectId of candidates) {
+    const result = await git6(repository, ["cat-file", "-e", "".concat(objectId, "^{object}")], { optionalExitCodes: [1, 128] });
+    if (result.code !== 0) missing.push(objectId);
+  }
+  return missing;
+}
+async function importHistorySidecar(repository, remote, historyRef, { authorized = false } = {}) {
+  requireAuthorization(authorized);
+  const localCommit = await refOid(repository, historyRef);
+  const { temporaryRef, commit } = await fetchIntoTemporaryRef(repository, remote, historyRef);
+  try {
+    const manifest = await readManifestAtCommit(repository, commit);
+    if (localCommit && localCommit !== commit) {
+      const ancestry = await git6(repository, ["merge-base", "--is-ancestor", localCommit, commit], { optionalExitCodes: [1] });
+      if (ancestry.code !== 0) throw new Error("local and remote sidecars diverged; synchronize instead of importing");
+    }
+    await git6(repository, ["update-ref", historyRef, commit, localCommit || ZERO_OID3]);
+    return { commit, manifest, missingObjectIds: await missingHistoryGitObjects(repository, manifest) };
+  } finally {
+    await git6(repository, ["update-ref", "-d", temporaryRef], { optionalExitCodes: [1] });
+  }
+}
+async function synchronizeHistorySidecar(repository, remote, historyRef, { authorized = false } = {}) {
+  requireAuthorization(authorized);
+  const local = await readHistorySidecar(repository, historyRef);
+  if (!local) throw new Error("local sidecar ref does not exist");
+  const { temporaryRef, commit: remoteCommit } = await fetchIntoTemporaryRef(repository, remote, historyRef);
+  try {
+    const remoteManifest = await readManifestAtCommit(repository, remoteCommit);
+    if (remoteCommit === local.commit) return { commit: local.commit, manifest: local.manifest, changed: false };
+    const manifest = mergePortableHistories(local.manifest, remoteManifest);
+    const mergeCommit = await createMetadataCommit(repository, manifest, [remoteCommit, local.commit]);
+    await git6(repository, ["update-ref", historyRef, mergeCommit, local.commit]);
+    await git6(repository, ["push", remote, "".concat(historyRef, ":").concat(historyRef)]);
+    return { commit: mergeCommit, manifest, changed: true, missingObjectIds: await missingHistoryGitObjects(repository, manifest) };
+  } finally {
+    await git6(repository, ["update-ref", "-d", temporaryRef], { optionalExitCodes: [1] });
+  }
+}
+
+// mcp/application/project-history-portability-service.mjs
+function hash2(value) {
+  return createHash8("sha256").update(value).digest("hex").slice(0, 24);
+}
+async function uniqueExportPath(directory, stem) {
+  for (let serial = 1; serial < 1e4; serial += 1) {
+    const suffix = serial === 1 ? "" : "-".concat(serial);
+    const candidate = path9.join(directory, "".concat(stem).concat(suffix, ".json"));
+    try {
+      await fsp8.access(candidate);
+    } catch (error51) {
+      if (error51?.code === "ENOENT") return candidate;
+      throw error51;
+    }
+  }
+  throw new Error("could not choose a unique Project History export name");
+}
+async function git7(cwd, args, { optionalExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn6("git", ["-C", cwd, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0 || optionalExitCodes.includes(code)) resolve({ code, stdout: Buffer.concat(stdout).toString("utf8").trim() });
+      else reject(new Error("git ".concat(args.join(" "), " failed (").concat(code, "): ").concat(Buffer.concat(stderr).toString("utf8").trim())));
+    });
+  });
+}
+var ProjectHistoryPortabilityService = class {
+  constructor(historyService, viewStore) {
+    this.history = historyService;
+    this.viewStore = viewStore;
+    this.projectPath = historyService.projectPath;
+    this.settingsPath = path9.join(historyService.store.storageDirectory, "portability.json");
+    this.importPath = path9.join(historyService.store.storageDirectory, "portable-manifest.json");
+    this.projectId = historyService.identity.portableProjectId || historyService.identity.localProjectId;
+    const suffix = hash2(this.projectId);
+    this.customRef = "refs/canvasight/history/".concat(suffix);
+    this.fallbackRef = "refs/heads/canvasight-history/".concat(suffix);
+  }
+  async #remotes() {
+    return (await git7(this.projectPath, ["remote"])).stdout.split(/\r?\n/u).filter(Boolean).sort();
+  }
+  async #settings() {
+    try {
+      const value = JSON.parse(await fsp8.readFile(this.settingsPath, "utf8"));
+      return {
+        authorized: value?.authorized === true,
+        remote: typeof value?.remote === "string" ? value.remote : null,
+        historyRef: typeof value?.historyRef === "string" ? value.historyRef : this.customRef,
+        updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : null
+      };
+    } catch (error51) {
+      if (error51?.code === "ENOENT") return { authorized: false, remote: null, historyRef: this.customRef, updatedAt: null };
+      throw error51;
+    }
+  }
+  async #saveSettings(settings) {
+    const value = { ...settings, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const temporaryPath = "".concat(this.settingsPath, ".").concat(process.pid, ".tmp");
+    await fsp8.writeFile(temporaryPath, "".concat(JSON.stringify(value, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+    await fsp8.rename(temporaryPath, this.settingsPath);
+    return value;
+  }
+  async status() {
+    const settings = await this.#settings();
+    const remotes = await this.#remotes();
+    const local = await readHistorySidecar(this.projectPath, settings.historyRef).catch(() => null);
+    return {
+      projectId: this.projectId,
+      remotes,
+      authorized: settings.authorized && Boolean(settings.remote) && remotes.includes(settings.remote),
+      remote: settings.remote,
+      historyRef: settings.historyRef,
+      localCommit: local?.commit ?? null,
+      updatedAt: settings.updatedAt
+    };
+  }
+  async authorize(remote) {
+    const remotes = await this.#remotes();
+    if (typeof remote !== "string" || !remotes.includes(remote)) throw new Error("selected Git remote does not exist");
+    await fsp8.mkdir(path9.dirname(this.settingsPath), { recursive: true });
+    return this.#saveSettings({ authorized: true, remote, historyRef: this.customRef });
+  }
+  async revoke() {
+    await fsp8.mkdir(path9.dirname(this.settingsPath), { recursive: true });
+    return this.#saveSettings({ authorized: false, remote: null, historyRef: this.customRef });
+  }
+  async manifest() {
+    const index = await this.history.readIndex();
+    const view = await this.viewStore.read();
+    const parentByNode = /* @__PURE__ */ new Map();
+    const baseline = index.nodes.find((node) => node.kind === "baseline");
+    const series = /* @__PURE__ */ new Map();
+    for (const node of index.nodes.filter((candidate) => candidate.kind !== "baseline")) {
+      const key = node.featureLineId || "unclassified";
+      const previous = series.get(key) || baseline?.id || null;
+      if (previous) parentByNode.set(node.id, previous);
+      series.set(key, node.id);
+    }
+    return validatePortableHistory({
+      schemaVersion: 1,
+      projectId: this.projectId,
+      events: index.nodes.map((node) => ({
+        id: node.id,
+        type: node.kind,
+        summary: node.summary,
+        occurredAt: node.occurredAt,
+        status: node.merged ? "merged" : node.confirmed ? "confirmed" : node.agentCheck?.status ? "agent-".concat(node.agentCheck.status) : node.status,
+        source: node.source === "codex" || node.source === "mixed" || node.source === "external" ? node.source : "portable",
+        coverage: {
+          complete: node.coverage?.complete === true,
+          excludedPathspecs: Array.isArray(node.coverage?.excludedPathspecs) ? node.coverage.excludedPathspecs : []
+        },
+        parents: parentByNode.has(node.id) ? [parentByNode.get(node.id)] : [],
+        git: {
+          objectId: node.mergeCommit || node.confirmationCommit || node.commit,
+          refName: node.confirmationRef || node.snapshotRef
+        }
+      })),
+      layout: index.nodes.map((node) => ({
+        eventId: node.id,
+        x: view.positions[node.id]?.x ?? 0,
+        y: view.positions[node.id]?.y ?? 0,
+        collapsed: index.processGroups.some((group) => group.nodeIds.includes(node.id) && view.collapsedGroupIds.includes(group.id)),
+        revision: view.revision
+      })),
+      conflicts: []
+    });
+  }
+  async writeLocal() {
+    const settings = await this.#settings();
+    const historyRef = settings.historyRef || this.customRef;
+    return writeHistorySidecar(this.projectPath, historyRef, await this.manifest());
+  }
+  async sync() {
+    const settings = await this.#settings();
+    if (!settings.authorized || !settings.remote) throw new Error("project-scoped sidecar sync authorization is required");
+    const remotes = await this.#remotes();
+    if (!remotes.includes(settings.remote)) throw new Error("authorized Git remote no longer exists");
+    let historyRef = settings.historyRef || this.customRef;
+    await writeHistorySidecar(this.projectPath, historyRef, await this.manifest());
+    const remoteExists = (await git7(this.projectPath, ["ls-remote", "--exit-code", settings.remote, historyRef], { optionalExitCodes: [2] })).code === 0;
+    try {
+      const result = remoteExists ? await synchronizeHistorySidecar(this.projectPath, settings.remote, historyRef, { authorized: true }) : await pushHistorySidecar(this.projectPath, settings.remote, historyRef, { authorized: true });
+      await this.#saveSettings({ ...settings, historyRef });
+      return { status: "synced", historyRef, ...result };
+    } catch (error51) {
+      if (historyRef !== this.customRef) throw error51;
+      historyRef = this.fallbackRef;
+      await writeHistorySidecar(this.projectPath, historyRef, await this.manifest());
+      const result = await pushHistorySidecar(this.projectPath, settings.remote, historyRef, { authorized: true });
+      await this.#saveSettings({ ...settings, historyRef });
+      return { status: "synced", fallback: true, historyRef, ...result };
+    }
+  }
+  async importRemote(remote) {
+    const remotes = await this.#remotes();
+    if (typeof remote !== "string" || !remotes.includes(remote)) throw new Error("selected Git remote does not exist");
+    let historyRef = this.customRef;
+    let result;
+    try {
+      result = await importHistorySidecar(this.projectPath, remote, historyRef, { authorized: true });
+    } catch {
+      historyRef = this.fallbackRef;
+      result = await importHistorySidecar(this.projectPath, remote, historyRef, { authorized: true });
+    }
+    await fsp8.mkdir(path9.dirname(this.importPath), { recursive: true });
+    const temporaryPath = "".concat(this.importPath, ".").concat(process.pid, ".tmp");
+    await fsp8.writeFile(temporaryPath, "".concat(JSON.stringify({ manifest: result.manifest, missingObjectIds: result.missingObjectIds ?? [] }, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+    await fsp8.rename(temporaryPath, this.importPath);
+    await this.#saveSettings({ authorized: true, remote, historyRef });
+    return { status: "imported", historyRef, ...result };
+  }
+  async importManifest(input) {
+    const manifest = validatePortableHistory(input);
+    if (manifest.projectId !== this.projectId) throw new Error("portable history belongs to a different project");
+    const missingObjectIds = await missingHistoryGitObjects(this.projectPath, manifest);
+    await fsp8.mkdir(path9.dirname(this.importPath), { recursive: true });
+    const temporaryPath = "".concat(this.importPath, ".").concat(process.pid, ".tmp");
+    await fsp8.writeFile(temporaryPath, "".concat(JSON.stringify({ manifest, missingObjectIds }, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+    await fsp8.rename(temporaryPath, this.importPath);
+    return { status: "imported-local", manifest, missingObjectIds };
+  }
+  async exportManifest({ directory = process.env.CANVASIGHT_EXPORT_DIR || path9.join(os4.homedir(), "Downloads") } = {}) {
+    const manifest = await this.manifest();
+    const outputDirectory = path9.resolve(directory);
+    await fsp8.mkdir(outputDirectory, { recursive: true });
+    const targetPath = await uniqueExportPath(outputDirectory, "canvasight-project-history-".concat(hash2(manifest.projectId).slice(0, 12)));
+    const temporaryPath = path9.join(outputDirectory, ".".concat(path9.basename(targetPath), ".").concat(randomUUID6(), ".tmp"));
+    try {
+      await fsp8.writeFile(temporaryPath, "".concat(JSON.stringify(manifest, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+      await fsp8.rename(temporaryPath, targetPath);
+    } catch (error51) {
+      await fsp8.rm(temporaryPath, { force: true }).catch(() => void 0);
+      throw error51;
+    }
+    return { status: "exported-local", fileName: path9.basename(targetPath), targetPath };
+  }
+  async readImportedManifest() {
+    try {
+      const value = JSON.parse(await fsp8.readFile(this.importPath, "utf8"));
+      return validatePortableHistory(value?.manifest ?? value);
+    } catch (error51) {
+      if (error51?.code === "ENOENT") return null;
+      throw error51;
+    }
+  }
+  async readImportStatus() {
+    try {
+      const value = JSON.parse(await fsp8.readFile(this.importPath, "utf8"));
+      const manifest = validatePortableHistory(value?.manifest ?? value);
+      return { manifest, missingObjectIds: Array.isArray(value?.missingObjectIds) ? value.missingObjectIds.filter((item) => typeof item === "string") : [] };
+    } catch (error51) {
+      if (error51?.code === "ENOENT") return null;
+      throw error51;
+    }
+  }
+};
+
+// mcp/application/project-history-release-service.mjs
+import { createHash as createHash9, createHmac as createHmac3, randomBytes as randomBytes3, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
+import { spawn as spawn7 } from "node:child_process";
+import fsp9 from "node:fs/promises";
+import os5 from "node:os";
+import path10 from "node:path";
+var TOKEN_TTL_MS2 = 10 * 60 * 1e3;
+var OUTPUT_LIMIT = 64 * 1024;
+var VERIFIER_TIMEOUT_MS = 12e4;
+var VERIFIER_ALLOWLIST = ["lint", "typecheck", "test"];
+function hash3(value) {
+  return createHash9("sha256").update(value).digest("hex");
+}
+function base64url5(value) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+async function run(cwd, command, args, { env = {}, input = null, timeoutMs = 3e4, allowExitCodes = [] } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn7(command, args, { cwd, env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    const stdout = [];
+    const stderr = [];
+    let outputBytes = 0;
+    let timedOut = false;
+    const collect = (target) => (chunk) => {
+      if (outputBytes >= OUTPUT_LIMIT) return;
+      const remaining = OUTPUT_LIMIT - outputBytes;
+      target.push(chunk.subarray(0, remaining));
+      outputBytes += Math.min(chunk.length, remaining);
+    };
+    child.stdout.on("data", collect(stdout));
+    child.stderr.on("data", collect(stderr));
+    child.on("error", reject);
+    child.stdin.end(input === null ? void 0 : input);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const result = {
+        code: Number(code),
+        timedOut,
+        truncated: outputBytes >= OUTPUT_LIMIT,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8")
+      };
+      if (!timedOut && (code === 0 || allowExitCodes.includes(code))) resolve(result);
+      else reject(Object.assign(new Error(timedOut ? "".concat(command, " timed out") : "".concat(command, " exited with ").concat(code)), { result }));
+    });
+  });
+}
+async function git8(cwd, args, options = {}) {
+  const result = await run(cwd, "git", args, options);
+  return result.stdout.trim();
+}
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await fsp9.readFile(filePath, "utf8"));
+  } catch (error51) {
+    if (error51?.code === "ENOENT") return null;
+    throw error51;
+  }
+}
+function safeSummary(summary) {
+  return String(summary || "Project History confirmed change").replace(/[\r\n]+/gu, " ").trim().slice(0, 120);
+}
+function documentationOnly(changedPaths) {
+  return Array.isArray(changedPaths) && changedPaths.length > 0 && changedPaths.every((change) => {
+    const filePath = String(change?.path || "").toLowerCase();
+    const base = path10.basename(filePath);
+    return filePath.startsWith("docs/") || /\.(md|mdx)$/u.test(filePath) || /^(readme|license|changelog|contributing)(\.|$)/u.test(base);
+  });
+}
+var ProjectHistoryReleaseService = class {
+  constructor(historyService) {
+    this.history = historyService;
+    this.projectPath = historyService.projectPath;
+    this.storageDirectory = historyService.store.storageDirectory;
+    this.secretPath = path10.join(this.storageDirectory, "release-token.key");
+  }
+  async #secret() {
+    try {
+      return await fsp9.readFile(this.secretPath);
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+      const secret = randomBytes3(32);
+      await fsp9.mkdir(this.storageDirectory, { recursive: true });
+      try {
+        await fsp9.writeFile(this.secretPath, secret, { mode: 384, flag: "wx" });
+        return secret;
+      } catch (writeError2) {
+        if (writeError2?.code !== "EEXIST") throw writeError2;
+        return fsp9.readFile(this.secretPath);
+      }
+    }
+  }
+  async #sign(payload) {
+    const encoded = base64url5(JSON.stringify(payload));
+    const signature = createHmac3("sha256", await this.#secret()).update(encoded).digest("base64url");
+    return "".concat(encoded, ".").concat(signature);
+  }
+  async #verifyToken(token, type) {
+    if (typeof token !== "string" || !token.includes(".")) throw new Error("Project History confirmation token is invalid");
+    const [encoded, signature] = token.split(".");
+    const expected = createHmac3("sha256", await this.#secret()).update(encoded).digest("base64url");
+    const suppliedBytes = Buffer.from(signature, "utf8");
+    const expectedBytes = Buffer.from(expected, "utf8");
+    if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual3(suppliedBytes, expectedBytes)) {
+      throw new Error("Project History confirmation token signature is invalid");
+    }
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (payload.type !== type || payload.projectId !== this.history.identity.localProjectId) throw new Error("Project History confirmation token scope is invalid");
+    if (!Number.isFinite(payload.expiresAt) || Date.now() > payload.expiresAt) throw new Error("Project History confirmation token has expired");
+    return payload;
+  }
+  async #mainState() {
+    const state = await this.history.ensureMainBranch();
+    if (state.mainBranch !== "main" || !state.mainCommit) {
+      throw new Error("Project History requires a local main branch before confirmation or merge");
+    }
+    return { branch: "main", commit: state.mainCommit };
+  }
+  async runVerifier(nodeId) {
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("history node was not found");
+    const fixtureRoot = await fsp9.mkdtemp(path10.join(os5.tmpdir(), "canvasight-history-verify-"));
+    const worktreePath = path10.join(fixtureRoot, "worktree");
+    let added = false;
+    try {
+      await restoreSnapshotToNewWorktree(this.projectPath, node.commit, worktreePath);
+      added = true;
+      const sourceModules = path10.join(this.projectPath, "node_modules");
+      const targetModules = path10.join(worktreePath, "node_modules");
+      try {
+        const stat = await fsp9.stat(sourceModules);
+        if (stat.isDirectory()) await fsp9.symlink(sourceModules, targetModules, "dir");
+      } catch (error51) {
+        if (error51?.code !== "ENOENT") throw error51;
+      }
+      const manifest = await readJson(path10.join(worktreePath, "package.json"));
+      const scripts = manifest?.scripts && typeof manifest.scripts === "object" ? manifest.scripts : {};
+      const selected = VERIFIER_ALLOWLIST.filter((name) => typeof scripts[name] === "string" && scripts[name].trim());
+      if (selected.length === 0) return { status: "unavailable", passed: false, checks: [], reason: "No declared lint, typecheck, or test script" };
+      const checks = [];
+      for (const script of selected) {
+        try {
+          const result = await run(worktreePath, "npm", ["run", script], { timeoutMs: VERIFIER_TIMEOUT_MS });
+          checks.push({ name: script, status: "passed", ...result });
+        } catch (error51) {
+          checks.push({ name: script, status: "failed", ...error51?.result ?? { code: -1, timedOut: false, truncated: false, stdout: "", stderr: String(error51) } });
+        }
+      }
+      return { status: checks.every((check2) => check2.status === "passed") ? "passed" : "failed", passed: checks.every((check2) => check2.status === "passed"), checks };
+    } finally {
+      if (added) await removeIsolatedHistoryWorktree(this.projectPath, worktreePath).catch(() => void 0);
+      await fsp9.rm(fixtureRoot, { recursive: true, force: true });
+    }
+  }
+  async prepareConfirmation(nodeId) {
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) throw new Error("history node was not found");
+    if (node.merged) throw new Error("history node is already merged");
+    const requiresAgentCheck = !documentationOnly(node.changedPaths);
+    if (requiresAgentCheck && node.agentCheck?.status !== "passed") {
+      throw new Error("a passed Agent functional check is required before confirming this node");
+    }
+    const main = await this.#mainState();
+    const verification = await this.runVerifier(nodeId);
+    const issuedAt = Date.now();
+    const payload = {
+      type: "confirm",
+      projectId: this.history.identity.localProjectId,
+      nodeId,
+      snapshotCommit: node.commit,
+      mainBranch: main.branch,
+      mainCommit: main.commit,
+      historyRevision: index.revision,
+      verificationPassed: verification.passed,
+      agentCheckRequestId: requiresAgentCheck ? node.agentCheck.requestId : null,
+      issuedAt,
+      expiresAt: issuedAt + TOKEN_TTL_MS2
+    };
+    return {
+      nodeId,
+      summary: node.summary,
+      changedPaths: node.changedPaths,
+      verification,
+      requiresRiskConfirmation: !verification.passed,
+      autoMergeEligible: verification.passed && documentationOnly(node.changedPaths),
+      token: await this.#sign(payload),
+      expiresAt: new Date(payload.expiresAt).toISOString(),
+      targetBranch: main.branch
+    };
+  }
+  async confirmNode(token, { acceptVerificationRisk = false } = {}) {
+    const payload = await this.#verifyToken(token, "confirm");
+    if (!payload.verificationPassed && acceptVerificationRisk !== true) throw new Error("Project checks did not pass; explicit risk confirmation is required");
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === payload.nodeId);
+    if (!node || node.commit !== payload.snapshotCommit) throw new Error("history node changed after confirmation was prepared");
+    if (payload.agentCheckRequestId && (node.agentCheck?.status !== "passed" || node.agentCheck.requestId !== payload.agentCheckRequestId)) {
+      throw new Error("Agent functional check changed after confirmation was prepared");
+    }
+    const main = await this.#mainState();
+    if (main.branch !== payload.mainBranch || main.commit !== payload.mainCommit) throw new Error("main changed after confirmation was prepared");
+    let mergeTree;
+    try {
+      const output = await git8(this.projectPath, ["merge-tree", "--write-tree", main.commit, node.commit]);
+      mergeTree = output.split(/\r?\n/u)[0];
+    } catch (error51) {
+      return { status: "conflict", nodeId: node.id, targetBranch: main.branch, snapshotRef: node.snapshotRef, snapshotCommit: node.commit, mainCommit: main.commit, details: error51?.result?.stdout || error51?.message || String(error51) };
+    }
+    if (!/^[0-9a-f]{40,64}$/u.test(mergeTree)) throw new Error("Project History could not produce a verified merge tree");
+    const message = "".concat(safeSummary(node.summary), "\n\nCanvasight-History-Node: ").concat(node.id, "\n");
+    const commitResult = await run(this.projectPath, "git", ["commit-tree", mergeTree, "-p", main.commit], {
+      env: {
+        GIT_AUTHOR_NAME: "Canvasight Project History",
+        GIT_AUTHOR_EMAIL: "canvasight-history@localhost.invalid",
+        GIT_COMMITTER_NAME: "Canvasight Project History",
+        GIT_COMMITTER_EMAIL: "canvasight-history@localhost.invalid"
+      },
+      input: message,
+      timeoutMs: 3e4
+    });
+    const commit = commitResult.stdout.trim();
+    const ref = "refs/canvasight/snapshots/confirmed/".concat(hash3(node.id).slice(0, 24));
+    await pinHistorySnapshot(this.projectPath, ref, commit);
+    const recorded = await this.history.recordConfirmation(node.id, {
+      commit,
+      ref,
+      verification: { passed: payload.verificationPassed, acceptedRisk: !payload.verificationPassed }
+    });
+    return {
+      status: "confirmed",
+      nodeId: node.id,
+      commit,
+      ref,
+      targetBranch: main.branch,
+      autoMergeEligible: payload.verificationPassed && documentationOnly(node.changedPaths),
+      index: recorded.index
+    };
+  }
+  async prepareMerge(nodeId) {
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node?.confirmed || !node.confirmationCommit) throw new Error("history node must be confirmed before merge");
+    if (node.merged) return { status: "already-merged", nodeId, index };
+    const main = await this.#mainState();
+    const parent = await git8(this.projectPath, ["rev-parse", "".concat(node.confirmationCommit, "^1")]);
+    if (parent !== main.commit) throw new Error("main changed after node confirmation; prepare confirmation again");
+    const issuedAt = Date.now();
+    const payload = {
+      type: "merge",
+      projectId: this.history.identity.localProjectId,
+      nodeId,
+      confirmedCommit: node.confirmationCommit,
+      mainBranch: main.branch,
+      mainCommit: main.commit,
+      issuedAt,
+      expiresAt: issuedAt + TOKEN_TTL_MS2
+    };
+    return { status: "ready", nodeId, targetBranch: main.branch, commit: node.confirmationCommit, token: await this.#sign(payload), expiresAt: new Date(payload.expiresAt).toISOString() };
+  }
+  async mergeNode(token) {
+    const payload = await this.#verifyToken(token, "merge");
+    const index = await this.history.readIndex();
+    const node = index.nodes.find((candidate) => candidate.id === payload.nodeId);
+    if (!node?.confirmed || node.confirmationCommit !== payload.confirmedCommit) throw new Error("confirmed node changed after merge was prepared");
+    if (node.merged) return { status: "already-merged", nodeId: node.id, index };
+    const main = await this.#mainState();
+    if (main.branch !== payload.mainBranch || main.commit !== payload.mainCommit) throw new Error("main changed after merge was prepared");
+    const porcelain = await git8(this.projectPath, ["worktree", "list", "--porcelain"]);
+    const records = porcelain.split(/\n\n+/u).map((record2) => Object.fromEntries(record2.split(/\r?\n/u).map((line) => {
+      const separator = line.indexOf(" ");
+      return separator < 0 ? [line, true] : [line.slice(0, separator), line.slice(separator + 1)];
+    })));
+    const branchRef = "refs/heads/".concat(main.branch);
+    const checkedOut = records.find((record2) => record2.branch === branchRef);
+    if (checkedOut?.worktree) {
+      const status = await git8(checkedOut.worktree, ["status", "--porcelain=v2", "--untracked-files=all"]);
+      if (status) throw new Error("main worktree has local changes; merge stopped without modifying it");
+      await git8(checkedOut.worktree, ["merge", "--ff-only", node.confirmationCommit]);
+    } else {
+      await git8(this.projectPath, ["update-ref", branchRef, node.confirmationCommit, main.commit]);
+    }
+    const recorded = await this.history.recordMerge(node.id, {
+      featureLineId: node.featureLineId,
+      commit: node.confirmationCommit,
+      targetBranch: main.branch
+    });
+    return { status: "merged", nodeId: node.id, commit: node.confirmationCommit, targetBranch: main.branch, index: recorded.index };
+  }
+};
+
+// mcp/infrastructure/project-history-observer-state.mjs
+import fsp10 from "node:fs/promises";
+import path11 from "node:path";
+var ProjectHistoryObserverState = class {
+  constructor(storageDirectory) {
+    this.filePath = path11.join(storageDirectory, "provider-state.json");
+    this.lockPath = path11.join(storageDirectory, ".provider-write-lock");
+  }
+  async read() {
+    try {
+      const parsed = JSON.parse(await fsp10.readFile(this.filePath, "utf8"));
+      return {
+        schemaVersion: 1,
+        coverageStartedAt: typeof parsed.coverageStartedAt === "string" ? parsed.coverageStartedAt : null,
+        observations: parsed.observations && typeof parsed.observations === "object" ? parsed.observations : {},
+        activeCodexTurns: parsed.activeCodexTurns && typeof parsed.activeCodexTurns === "object" ? parsed.activeCodexTurns : {},
+        external: parsed.external && typeof parsed.external === "object" ? parsed.external : null,
+        providerCoverage: parsed.providerCoverage && typeof parsed.providerCoverage === "object" ? parsed.providerCoverage : null
+      };
+    } catch (error51) {
+      if (error51?.code !== "ENOENT") throw error51;
+      return { schemaVersion: 1, coverageStartedAt: null, observations: {}, activeCodexTurns: {}, external: null, providerCoverage: null };
+    }
+  }
+  async initializeCoverage(observations, coverageStartedAt = (/* @__PURE__ */ new Date()).toISOString()) {
+    return this.#mutate((current) => {
+      if (current.coverageStartedAt) return current;
+      const next = { ...current, coverageStartedAt, observations: { ...current.observations } };
+      for (const observation of observations) next.observations[observation.id] = { status: observation.status, seenAt: coverageStartedAt };
+      return next;
+    });
+  }
+  async unprocessed(observations) {
+    const current = await this.read();
+    return observations.filter((observation) => !current.observations[observation.id]);
+  }
+  async markProcessed(observation, seenAt = (/* @__PURE__ */ new Date()).toISOString()) {
+    return this.#mutate((current) => ({
+      ...current,
+      observations: { ...current.observations, [observation.id]: { status: observation.status, seenAt } }
+    }));
+  }
+  async markTurnActive({ taskId, turnId, cwd = null, promptSummary = null, startedAt = (/* @__PURE__ */ new Date()).toISOString(), expiresAt }) {
+    if (typeof taskId !== "string" || !taskId || typeof turnId !== "string" || !turnId) {
+      throw new Error("Project History active Codex turn requires taskId and turnId");
+    }
+    const expiry = typeof expiresAt === "string" && Number.isFinite(Date.parse(expiresAt)) ? new Date(expiresAt).toISOString() : new Date(Date.parse(startedAt) + 12 * 60 * 60 * 1e3).toISOString();
+    return this.#mutate((current) => ({
+      ...current,
+      activeCodexTurns: {
+        ...current.activeCodexTurns,
+        ["".concat(taskId, ":").concat(turnId)]: {
+          taskId,
+          turnId,
+          cwd: typeof cwd === "string" && cwd ? cwd : null,
+          promptSummary: typeof promptSummary === "string" && promptSummary ? promptSummary.slice(0, 160) : null,
+          startedAt: new Date(startedAt).toISOString(),
+          expiresAt: expiry
+        }
+      }
+    }));
+  }
+  async markTurnStopped(taskId, turnId) {
+    if (typeof taskId !== "string" || !taskId || typeof turnId !== "string" || !turnId) return this.read();
+    return this.#mutate((current) => {
+      const activeCodexTurns = { ...current.activeCodexTurns };
+      delete activeCodexTurns["".concat(taskId, ":").concat(turnId)];
+      return { ...current, activeCodexTurns };
+    });
+  }
+  async activeTurns(now = /* @__PURE__ */ new Date()) {
+    const current = await this.read();
+    return Object.values(current.activeCodexTurns).filter(
+      (turn) => turn && typeof turn.expiresAt === "string" && Number.isFinite(Date.parse(turn.expiresAt)) && Date.parse(turn.expiresAt) > now.getTime()
+    );
+  }
+  async updateExternal(external) {
+    return this.#mutate((current) => ({ ...current, external: structuredClone(external) }));
+  }
+  async updateProviderCoverage(providerCoverage) {
+    return this.#mutate((current) => ({ ...current, providerCoverage: structuredClone(providerCoverage) }));
+  }
+  async #mutate(operation) {
+    await fsp10.mkdir(path11.dirname(this.filePath), { recursive: true });
+    let locked = false;
+    for (let attempt = 0; attempt < 40 && !locked; attempt += 1) {
+      try {
+        await fsp10.mkdir(this.lockPath);
+        locked = true;
+      } catch (error51) {
+        if (error51?.code !== "EEXIST") throw error51;
+        try {
+          const lock = await fsp10.stat(this.lockPath);
+          if (Date.now() - lock.mtimeMs > 1e4) await fsp10.rmdir(this.lockPath);
+        } catch (lockError) {
+          if (lockError?.code !== "ENOENT" && lockError?.code !== "ENOTEMPTY") throw lockError;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+    if (!locked) throw new Error("Project History provider state is busy");
+    try {
+      const current = await this.read();
+      const next = operation(current);
+      await this.#write(next);
+      return next;
+    } finally {
+      await fsp10.rmdir(this.lockPath).catch(() => {
+      });
+    }
+  }
+  async #write(state) {
+    await fsp10.mkdir(path11.dirname(this.filePath), { recursive: true });
+    const temporaryPath = "".concat(this.filePath, ".").concat(process.pid, ".tmp");
+    await fsp10.writeFile(temporaryPath, "".concat(JSON.stringify(state, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+    await fsp10.rename(temporaryPath, this.filePath);
+  }
+};
+
+// mcp/infrastructure/project-history-view-store.mjs
+import fsp11 from "node:fs/promises";
+import path12 from "node:path";
+var DEFAULT_VIEW = {
+  schemaVersion: 1,
+  revision: 0,
+  viewport: { x: 0, y: 0, zoom: 1 },
+  positions: {},
+  collapsedGroupIds: [],
+  filters: { query: "", status: "all", source: "all" }
+};
+var ProjectHistoryViewStore = class {
+  constructor(storageDirectory) {
+    this.filePath = path12.join(storageDirectory, "view.json");
+    this.lockPath = path12.join(storageDirectory, ".view-write-lock");
+  }
+  async read() {
+    try {
+      const value = JSON.parse(await fsp11.readFile(this.filePath, "utf8"));
+      return {
+        ...structuredClone(DEFAULT_VIEW),
+        ...value,
+        viewport: { ...DEFAULT_VIEW.viewport, ...value.viewport ?? {} },
+        positions: value.positions && typeof value.positions === "object" ? value.positions : {},
+        collapsedGroupIds: Array.isArray(value.collapsedGroupIds) ? value.collapsedGroupIds.filter((item) => typeof item === "string") : [],
+        filters: { ...DEFAULT_VIEW.filters, ...value.filters ?? {} }
+      };
+    } catch (error51) {
+      if (error51?.code === "ENOENT") return structuredClone(DEFAULT_VIEW);
+      throw error51;
+    }
+  }
+  async save(input, expectedRevision) {
+    await fsp11.mkdir(path12.dirname(this.filePath), { recursive: true });
+    try {
+      await fsp11.mkdir(this.lockPath);
+    } catch (error51) {
+      if (error51?.code === "EEXIST") throw new Error("Project History view changed concurrently");
+      throw error51;
+    }
+    try {
+      const current = await this.read();
+      if (current.revision !== expectedRevision) throw new Error("Project History view changed concurrently");
+      const next = {
+        schemaVersion: 1,
+        revision: current.revision + 1,
+        viewport: {
+          x: Number.isFinite(input?.viewport?.x) ? input.viewport.x : current.viewport.x,
+          y: Number.isFinite(input?.viewport?.y) ? input.viewport.y : current.viewport.y,
+          zoom: Number.isFinite(input?.viewport?.zoom) ? Math.max(0.2, Math.min(2, input.viewport.zoom)) : current.viewport.zoom
+        },
+        positions: input?.positions && typeof input.positions === "object" ? structuredClone(input.positions) : current.positions,
+        collapsedGroupIds: Array.isArray(input?.collapsedGroupIds) ? [...new Set(input.collapsedGroupIds.filter((item) => typeof item === "string"))] : current.collapsedGroupIds,
+        filters: {
+          query: typeof input?.filters?.query === "string" ? input.filters.query.slice(0, 200) : current.filters.query,
+          status: typeof input?.filters?.status === "string" ? input.filters.status : current.filters.status,
+          source: typeof input?.filters?.source === "string" ? input.filters.source : current.filters.source
+        }
+      };
+      const temporaryPath = "".concat(this.filePath, ".").concat(process.pid, ".").concat(expectedRevision, ".tmp");
+      await fsp11.writeFile(temporaryPath, "".concat(JSON.stringify(next, null, 2), "\n"), { encoding: "utf8", mode: 384 });
+      await fsp11.rename(temporaryPath, this.filePath);
+      return next;
+    } finally {
+      await fsp11.rmdir(this.lockPath);
+    }
+  }
+};
+
+// mcp/application/project-history-http-controller.mjs
+var HISTORY_ACTIONS = /* @__PURE__ */ new Set([
+  "history",
+  "history-enable",
+  "history-refresh",
+  "history-save-now",
+  "history-view",
+  "history-node",
+  "history-feature",
+  "history-agent-check-prepare",
+  "history-agent-check-dispatched",
+  "history-host-action",
+  "history-confirm-prepare",
+  "history-confirm",
+  "history-merge-prepare",
+  "history-merge",
+  "history-portability"
+]);
+function createProjectHistoryHttpController({
+  HttpError: HttpError2,
+  assertMethod: assertMethod2,
+  enableProjectHistory: enableProjectHistory2,
+  normalizeProjectPath: normalizeProjectPath2,
+  optionalThreadId: optionalThreadId2,
+  projectHistorySnapshot: projectHistorySnapshot2,
+  readJsonBody: readJsonBody2,
+  refreshProjectHistory: refreshProjectHistory2,
+  sendJson: sendJson2
+}) {
+  return async function handleProjectHistorySessionAction2(req, res, action, session) {
+    if (!HISTORY_ACTIONS.has(action)) return false;
+    const projectPath = normalizeProjectPath2(session.projectPath);
+    if (action === "history") {
+      assertMethod2(req, "GET");
+      sendJson2(res, 200, await projectHistorySnapshot2(projectPath));
+      return true;
+    }
+    if (action === "history-enable") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      sendJson2(res, 200, await enableProjectHistory2(projectPath, {
+        ...body2,
+        threadId: optionalThreadId2(body2?.threadId) || session.codexThreadId
+      }));
+      return true;
+    }
+    if (action === "history-refresh") {
+      assertMethod2(req, "POST");
+      sendJson2(res, 200, await refreshProjectHistory2(projectPath));
+      return true;
+    }
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    if (action === "history-save-now") {
+      assertMethod2(req, "POST");
+      const observer = new ProjectHistoryObserverState(service.store.storageDirectory);
+      const externalWatcher = await new ProjectHistoryExternalWatcher(service, observer).inspect({ force: true });
+      sendJson2(res, 200, { ...await projectHistorySnapshot2(projectPath), externalWatcher });
+      return true;
+    }
+    if (action === "history-view") {
+      if (req.method !== "PUT" && req.method !== "POST") throw new HttpError2(405, "Expected POST or PUT");
+      const body2 = await readJsonBody2(req);
+      const expectedRevision = Number(body2?.expectedRevision);
+      if (!Number.isFinite(expectedRevision)) throw new HttpError2(400, "History view expectedRevision is required.", "history_view_revision_required");
+      try {
+        sendJson2(res, 200, await new ProjectHistoryViewStore(service.store.storageDirectory).save(body2.view, expectedRevision));
+      } catch (error51) {
+        if (error51 instanceof Error && error51.message.includes("concurrently")) throw new HttpError2(409, error51.message, "history_view_stale");
+        throw error51;
+      }
+      return true;
+    }
+    if (action === "history-node") {
+      if (req.method !== "PUT" && req.method !== "POST") throw new HttpError2(405, "Expected POST or PUT");
+      const body2 = await readJsonBody2(req);
+      if (typeof body2?.nodeId !== "string" || !body2.nodeId) throw new HttpError2(400, "History nodeId is required.", "history_node_required");
+      if (body2.operation === "edit-summary") await service.editNodeSummary(body2.nodeId, body2.summary);
+      else if (body2.operation === "reclassify") await service.reclassifyNode(body2.nodeId, { featureLineId: body2.featureLineId, name: body2.featureName });
+      else throw new HttpError2(400, "Unsupported History node operation.", "history_node_operation_invalid");
+      sendJson2(res, 200, await projectHistorySnapshot2(projectPath));
+      return true;
+    }
+    if (action === "history-feature") {
+      if (req.method !== "PUT" && req.method !== "POST") throw new HttpError2(405, "Expected POST or PUT");
+      const body2 = await readJsonBody2(req);
+      if (typeof body2?.featureLineId !== "string" || !body2.featureLineId) throw new HttpError2(400, "History featureLineId is required.", "history_feature_required");
+      if (body2.operation === "abandon" || body2.operation === "reactivate") await service.setFeatureAbandoned(body2.featureLineId, body2.operation === "abandon");
+      else if (body2.operation === "rename") await service.renameFeature(body2.featureLineId, body2.name);
+      else throw new HttpError2(400, "Unsupported History feature operation.", "history_feature_operation_invalid");
+      sendJson2(res, 200, await projectHistorySnapshot2(projectPath));
+      return true;
+    }
+    if (action === "history-agent-check-prepare") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      sendJson2(res, 200, await new ProjectHistoryAgentCheckService(service).prepare(body2?.nodeId));
+      return true;
+    }
+    if (action === "history-agent-check-dispatched") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      await new ProjectHistoryAgentCheckService(service).markRequested(body2?.token);
+      sendJson2(res, 200, await projectHistorySnapshot2(projectPath));
+      return true;
+    }
+    if (action === "history-host-action") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      const hostActions = new ProjectHistoryHostActionService(service);
+      if (body2?.operation === "prepare") {
+        const sessionTaskId = optionalThreadId2(session.codexThreadId);
+        const requestedTaskId = optionalThreadId2(body2?.sourceTaskId);
+        if (sessionTaskId && requestedTaskId && sessionTaskId !== requestedTaskId) {
+          throw new HttpError2(409, "Project History host action source task does not match this Canvasight session.", "history_host_action_task_mismatch");
+        }
+        const sourceTaskId = sessionTaskId || requestedTaskId;
+        sendJson2(res, 200, await hostActions.prepare(body2?.nodeId, body2?.action, sourceTaskId));
+      } else if (body2?.operation === "status") {
+        sendJson2(res, 200, await hostActions.status(body2?.requestId));
+      } else if (body2?.operation === "dispatch-failed") {
+        sendJson2(res, 200, await hostActions.markDispatchFailed(body2?.requestId, body2?.error));
+      } else {
+        throw new HttpError2(400, "Unsupported Project History host action operation.", "history_host_action_operation_invalid");
+      }
+      return true;
+    }
+    if (action === "history-confirm-prepare") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      sendJson2(res, 200, await new ProjectHistoryReleaseService(service).prepareConfirmation(body2?.nodeId));
+      return true;
+    }
+    if (action === "history-confirm") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      const release = new ProjectHistoryReleaseService(service);
+      let operation2 = await release.confirmNode(body2?.token, { acceptVerificationRisk: body2?.acceptVerificationRisk === true });
+      if (body2?.autoMergeIfEligible === true && operation2?.status === "confirmed" && operation2.autoMergeEligible === true) {
+        try {
+          const preparedMerge = await release.prepareMerge(operation2.nodeId);
+          if (preparedMerge?.token) operation2 = { ...await release.mergeNode(preparedMerge.token), automatic: true, reason: "documentation-only" };
+        } catch (error51) {
+          operation2 = {
+            ...operation2,
+            automatic: false,
+            reason: "auto-merge-stopped",
+            details: String(error51?.message || error51 || "automatic merge stopped").slice(0, 600)
+          };
+        }
+      }
+      sendJson2(res, 200, { operation: operation2, history: await projectHistorySnapshot2(projectPath) });
+      return true;
+    }
+    if (action === "history-merge-prepare") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      sendJson2(res, 200, await new ProjectHistoryReleaseService(service).prepareMerge(body2?.nodeId));
+      return true;
+    }
+    if (action === "history-merge") {
+      assertMethod2(req, "POST");
+      const body2 = await readJsonBody2(req);
+      const operation2 = await new ProjectHistoryReleaseService(service).mergeNode(body2?.token);
+      sendJson2(res, 200, { operation: operation2, history: await projectHistorySnapshot2(projectPath) });
+      return true;
+    }
+    const portability = new ProjectHistoryPortabilityService(service, new ProjectHistoryViewStore(service.store.storageDirectory));
+    if (req.method === "GET") {
+      sendJson2(res, 200, await portability.status());
+      return true;
+    }
+    if (req.method !== "POST") throw new HttpError2(405, "Expected GET or POST");
+    const body = await readJsonBody2(req);
+    let operation;
+    if (body?.operation === "authorize") operation = await portability.authorize(body.remote);
+    else if (body?.operation === "revoke") operation = await portability.revoke();
+    else if (body?.operation === "sync") operation = await portability.sync();
+    else if (body?.operation === "import") operation = await portability.importRemote(body.remote);
+    else if (body?.operation === "write-local") operation = await portability.writeLocal();
+    else if (body?.operation === "export-local") operation = await portability.exportManifest();
+    else if (body?.operation === "import-local") operation = await portability.importManifest(body.manifest);
+    else throw new HttpError2(400, "Unsupported History portability operation.", "history_portability_operation_invalid");
+    sendJson2(res, 200, { operation, history: await projectHistorySnapshot2(projectPath) });
+    return true;
+  };
+}
+
+// mcp/application/project-history-hook-controller.mjs
+import path14 from "node:path";
+
+// mcp/infrastructure/git-project-bootstrap.mjs
+import fsp12 from "node:fs/promises";
+import path13 from "node:path";
+import { execFile as execFile2 } from "node:child_process";
+import { promisify as promisify2 } from "node:util";
+var execFileAsync2 = promisify2(execFile2);
+var DEFAULT_EXCLUDED_DIRECTORIES = /* @__PURE__ */ new Set([".git", "node_modules", "dist", "build", ".cache", ".next", "coverage"]);
+var SENSITIVE_PATTERN = /(^|\/)(?:\.env(?:\..*)?|[^/]+\.(?:pem|key|p12|pfx))$/iu;
+async function isGitWorktree(projectPath) {
+  try {
+    const { stdout } = await execFileAsync2("git", ["-C", path13.resolve(projectPath), "rev-parse", "--is-inside-work-tree"], { encoding: "utf8" });
+    return stdout.trim() === "true";
+  } catch {
+    return false;
+  }
+}
+async function scanProjectBootstrapScope(projectPath, { maxEntries = 2e4 } = {}) {
+  const root = await fsp12.realpath(path13.resolve(projectPath));
+  const result = { projectPath: root, fileCount: 0, directoryCount: 0, sensitiveCount: 0, excludedDirectoryCount: 0, truncated: false };
+  const pending = [root];
+  let entries = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    const children = await fsp12.readdir(current, { withFileTypes: true });
+    for (const child of children) {
+      entries += 1;
+      if (entries > maxEntries) {
+        result.truncated = true;
+        return result;
+      }
+      const absolute = path13.join(current, child.name);
+      const relative = path13.relative(root, absolute).split(path13.sep).join("/");
+      if (child.isSymbolicLink()) continue;
+      if (child.isDirectory()) {
+        if (DEFAULT_EXCLUDED_DIRECTORIES.has(child.name)) result.excludedDirectoryCount += 1;
+        else {
+          result.directoryCount += 1;
+          pending.push(absolute);
+        }
+      } else if (child.isFile()) {
+        result.fileCount += 1;
+        if (SENSITIVE_PATTERN.test(relative)) result.sensitiveCount += 1;
+      }
+    }
+  }
+  return result;
+}
+async function initializeLocalGitRepository(projectPath, { confirmed = false } = {}) {
+  if (confirmed !== true) throw new Error("explicit confirmation is required before Git initialization");
+  const root = await fsp12.realpath(path13.resolve(projectPath));
+  if (await isGitWorktree(root)) return { initialized: false, alreadyGit: true, projectPath: root };
+  await execFileAsync2("git", ["-C", root, "init", "-b", "main"], { encoding: "utf8" });
+  if (!await isGitWorktree(root)) throw new Error("Git initialization did not produce a worktree");
+  return { initialized: true, alreadyGit: false, projectPath: root };
+}
+
+// mcp/application/project-history-hook-controller.mjs
+function createProjectHistoryHookController({
+  HttpError: HttpError2,
+  activeSessions,
+  appendLifecycle,
+  inspectCodexTurn: inspectCodexTurn2,
+  maxRecentProjects,
+  observationMatchForProject: observationMatchForProject2,
+  optionalProjectPath: optionalProjectPath2,
+  optionalThreadId: optionalThreadId2,
+  projectHistoryTaskBindings: projectHistoryTaskBindings2,
+  recentProjects: recentProjects2,
+  recordProjectHistoryHookTurn: recordProjectHistoryHookTurn2,
+  recordProjectHistoryHookTurnStarted: recordProjectHistoryHookTurnStarted2
+}) {
+  async function candidatesFor(observation) {
+    const bound = await projectHistoryTaskBindings2.bindingsForThread(observation.taskId);
+    const boundByPath = new Map(bound.map((binding) => [path14.resolve(binding.projectPath), binding]));
+    for (const session of activeSessions()) {
+      if (session.codexThreadId !== observation.taskId) continue;
+      const projectPath = path14.resolve(session.projectPath);
+      if (!boundByPath.has(projectPath)) {
+        const binding = await projectHistoryTaskBindings2.bind({
+          threadId: observation.taskId,
+          projectPath,
+          source: "active-canvasight-session"
+        });
+        if (binding) boundByPath.set(projectPath, binding);
+      }
+    }
+    const recent = await recentProjects2(maxRecentProjects);
+    const candidatePaths = /* @__PURE__ */ new Set([...boundByPath.keys(), ...recent.map((project) => path14.resolve(project.path))]);
+    const matched = [];
+    for (const projectPath of candidatePaths) {
+      if (!await isGitWorktree(projectPath).catch(() => false)) continue;
+      const binding = boundByPath.get(projectPath) || null;
+      const match = binding ? { matches: true, reason: "task-binding" } : await observationMatchForProject2(projectPath, observation);
+      if (match.matches) matched.push({ projectPath, binding, reason: match.reason });
+    }
+    return matched;
+  }
+  async function captureStop(body) {
+    const taskId = optionalThreadId2(body?.taskId);
+    const turnId = typeof body?.turnId === "string" ? body.turnId.trim() : "";
+    const fallbackCandidates = taskId && turnId ? await candidatesFor({ taskId, turnId, cwd: optionalProjectPath2(body?.cwd), fileChanges: [] }) : [];
+    try {
+      const observation = await inspectCodexTurn2(body);
+      const candidates = await candidatesFor(observation);
+      const results = [];
+      for (const candidate of candidates) {
+        results.push({
+          matchReason: candidate.reason,
+          ...await recordProjectHistoryHookTurn2(candidate.projectPath, observation, candidate.binding)
+        });
+      }
+      appendLifecycle("project_history_stop_hook", {
+        taskId: observation.taskId,
+        turnId: observation.turnId,
+        candidateCount: candidates.length,
+        results: results.map((result) => ({ projectPath: result.projectPath, status: result.status, reason: result.reason || null }))
+      });
+      return {
+        status: results.some((result) => result.status === "snapshot-recorded") ? "snapshot-recorded" : results.some((result) => result.status === "chat-recorded") ? "chat-recorded" : "ignored",
+        taskId: observation.taskId,
+        turnId: observation.turnId,
+        summary: observation.summary,
+        fileChangeCount: observation.fileChanges.length,
+        results
+      };
+    } finally {
+      for (const candidate of fallbackCandidates) {
+        await ProjectHistoryService.forRepository(candidate.projectPath).then((service) => new ProjectHistoryObserverState(service.store.storageDirectory).markTurnStopped(taskId, turnId)).catch(() => {
+        });
+      }
+    }
+  }
+  async function captureUserPrompt(body) {
+    const taskId = optionalThreadId2(body?.taskId);
+    const turnId = typeof body?.turnId === "string" ? body.turnId.trim() : "";
+    const cwd = optionalProjectPath2(body?.cwd);
+    if (!taskId || !turnId || !cwd) {
+      throw new HttpError2(400, "Project History UserPromptSubmit hook requires taskId, turnId, and cwd.", "history_hook_identity_required");
+    }
+    const candidates = await candidatesFor({ taskId, turnId, cwd, fileChanges: [] });
+    const results = [];
+    for (const candidate of candidates) {
+      results.push({
+        matchReason: candidate.reason,
+        ...await recordProjectHistoryHookTurnStarted2(candidate.projectPath, body, candidate.binding)
+      });
+    }
+    appendLifecycle("project_history_user_prompt_hook", {
+      taskId,
+      turnId,
+      candidateCount: candidates.length,
+      results: results.map((result) => ({ projectPath: result.projectPath, status: result.status, reason: result.reason || null }))
+    });
+    return {
+      status: results.some((result) => result.status === "active-turn-recorded") ? "active-turn-recorded" : "ignored",
+      taskId,
+      turnId,
+      results
+    };
+  }
+  return { captureStop, captureUserPrompt };
+}
+
+// mcp/application/project-history-runtime.mjs
+import path15 from "node:path";
+function historyTimestamp(value) {
+  if (typeof value === "string" && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
+  if (!Number.isFinite(value)) return (/* @__PURE__ */ new Date()).toISOString();
+  const milliseconds = value < 1e10 ? value * 1e3 : value;
+  const date5 = new Date(milliseconds);
+  return Number.isFinite(date5.getTime()) ? date5.toISOString() : (/* @__PURE__ */ new Date()).toISOString();
+}
+var TERMINAL_TURN_STATUSES = /* @__PURE__ */ new Set(["completed", "interrupted", "failed"]);
+function isPathInside(candidatePath, rootPath) {
+  const relative = path15.relative(path15.resolve(rootPath), path15.resolve(candidatePath));
+  return relative === "" || !relative.startsWith("..".concat(path15.sep)) && relative !== ".." && !path15.isAbsolute(relative);
+}
+function compactText2(value, limit = 160) {
+  if (typeof value !== "string") return "";
+  return value.replace(/<codex_internal_context[\s\S]*?<\/codex_internal_context>/giu, " ").replace(/<[^>]+>/gu, " ").replace(/\s+/gu, " ").trim().slice(0, limit);
+}
+function textFromMessageContent(content) {
+  if (!Array.isArray(content)) return "";
+  return content.filter((item) => item?.type === "text" && typeof item.text === "string").map((item) => item.text).join("\n").trim();
+}
+function requestedText(value) {
+  const text = typeof value === "string" ? value : "";
+  const requestMarker = text.match(/##\s*My request:\s*([\s\S]*)/iu);
+  return compactText2(requestMarker?.[1] || text);
+}
+function canvasightWorkflowContext(turn) {
+  const texts = (Array.isArray(turn?.items) ? turn.items : []).filter((item) => item?.type === "userMessage").map((item) => textFromMessageContent(item.content)).filter(Boolean);
+  for (const text of texts.reverse()) {
+    const title = text.match(/^#\s*Canvasight\s+任务:\s*(.+)$/imu)?.[1]?.trim();
+    const nodeId = text.match(/^节点 ID:\s*([^\s]+)$/imu)?.[1]?.trim();
+    if (!title || !nodeId) continue;
+    const prompt = text.match(/###\s*提示词\s*\n([\s\S]*?)(?=\n###\s|\n##\s|$)/iu)?.[1]?.trim();
+    return { nodeId, title: compactText2(title, 80), prompt: compactText2(prompt, 160) };
+  }
+  return null;
+}
+function summarizeTurnIntent(turn, hookInput) {
+  const bootstrapSummary = compactText2(hookInput?.bootstrapSummary);
+  if (bootstrapSummary) return bootstrapSummary;
+  const workflow = canvasightWorkflowContext(turn);
+  if (workflow?.prompt) return workflow.prompt;
+  const items = Array.isArray(turn?.items) ? turn.items : [];
+  const userTexts = items.filter((item) => item?.type === "userMessage").map((item) => requestedText(textFromMessageContent(item.content))).filter(Boolean);
+  if (userTexts.length) return userTexts.at(-1);
+  const finalAssistant = [...items].reverse().find((item) => item?.type === "agentMessage" && typeof item.text === "string" && item.text.trim());
+  return compactText2(finalAssistant?.text || hookInput?.lastAssistantMessage || "完成当前 Codex 开发轮次");
+}
+function turnFileChanges(turn) {
+  const changes = [];
+  for (const item of Array.isArray(turn?.items) ? turn.items : []) {
+    if (item?.type !== "fileChange" || !Array.isArray(item.changes)) continue;
+    for (const change of item.changes) {
+      if (typeof change?.path !== "string" || !change.path.trim()) continue;
+      changes.push({
+        path: path15.resolve(change.path),
+        kind: typeof change.kind?.type === "string" ? change.kind.type : "update",
+        ...typeof change.kind?.move_path === "string" && change.kind.move_path ? { previousPath: path15.resolve(change.kind.move_path) } : {}
+      });
+    }
+  }
+  return changes;
+}
+function createProjectHistoryRuntime({ appServerRequest: appServerRequest2, optionalProjectPath: optionalProjectPath2, optionalThreadId: optionalThreadId2, HttpError: HttpError2 }) {
+  async function inspectCodexTurn2(hookInput) {
+    const taskId = optionalThreadId2(hookInput?.taskId);
+    const turnId = typeof hookInput?.turnId === "string" ? hookInput.turnId.trim() : "";
+    if (!taskId || !turnId) throw new HttpError2(400, "Project History Stop hook requires taskId and turnId.", "history_hook_identity_required");
+    const threadRead = await appServerRequest2("thread/read", { threadId: taskId, includeTurns: false });
+    let matchedTurn = null;
+    for (let attempt = 0; attempt < 3 && !matchedTurn; attempt += 1) {
+      let cursor = null;
+      let pages = 0;
+      do {
+        const page = await appServerRequest2("thread/turns/list", {
+          threadId: taskId,
+          cursor,
+          limit: 100,
+          sortDirection: "desc",
+          itemsView: "full"
+        }, { experimentalApi: true });
+        matchedTurn = (Array.isArray(page?.data) ? page.data : []).find((turn) => turn?.id === turnId) || null;
+        cursor = typeof page?.nextCursor === "string" && page.nextCursor ? page.nextCursor : null;
+        pages += 1;
+      } while (!matchedTurn && cursor && pages < 20);
+      if (!matchedTurn && attempt < 2) await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    if (!matchedTurn) throw new HttpError2(404, "Codex turn was not found for Project History capture.", "history_hook_turn_not_found");
+    const status = typeof matchedTurn.status === "string" ? matchedTurn.status : "unknown";
+    if (!TERMINAL_TURN_STATUSES.has(status)) {
+      throw new HttpError2(409, "Codex turn is not terminal yet: ".concat(status), "history_hook_turn_not_terminal");
+    }
+    const thread = threadRead?.thread || {};
+    const workflow = canvasightWorkflowContext(matchedTurn);
+    return {
+      id: "codex:".concat(taskId, ":").concat(turnId, ":terminal:").concat(status),
+      taskId,
+      turnId,
+      status,
+      cwd: optionalProjectPath2(hookInput?.cwd) || optionalProjectPath2(thread.cwd),
+      taskName: typeof thread.name === "string" && thread.name.trim() ? thread.name.trim() : null,
+      occurredAt: historyTimestamp(matchedTurn.completedAt ?? matchedTurn.startedAt),
+      summary: summarizeTurnIntent(matchedTurn, hookInput),
+      workflow,
+      fileChanges: turnFileChanges(matchedTurn),
+      hook: {
+        eventName: hookInput?.hookEventName === "Stop" ? "Stop" : "manual-bootstrap",
+        receivedAt: historyTimestamp(hookInput?.receivedAt),
+        stopHookActive: hookInput?.stopHookActive === true
+      }
+    };
+  }
+  async function observationMatchForProject2(projectPath, observation) {
+    const resolvedProjectPath = optionalProjectPath2(projectPath);
+    if (!resolvedProjectPath) return { matches: false, reason: "invalid-project" };
+    if (observation.fileChanges.some((change) => isPathInside(change.path, resolvedProjectPath))) {
+      return { matches: true, reason: "changed-path" };
+    }
+    const projectIdentity = await probeGitProjectIdentity(resolvedProjectPath).catch(() => null);
+    const cwdIdentity = observation.cwd ? await probeGitProjectIdentity(observation.cwd).catch(() => null) : null;
+    if (projectIdentity && cwdIdentity?.localProjectId === projectIdentity.localProjectId) {
+      return { matches: true, reason: "git-worktree" };
+    }
+    return { matches: false, reason: "unrelated" };
+  }
+  async function recordProjectHistoryHookTurn2(projectPath, observation, binding = null) {
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    const observer = new ProjectHistoryObserverState(service.store.storageDirectory);
+    try {
+      const before = await service.readIndex();
+      if (!before.protection.enabled) return { status: "ignored", reason: "protection-disabled", projectPath };
+      const projectIdentity = service.identity;
+      const cwdIdentity = observation.cwd ? await probeGitProjectIdentity(observation.cwd).catch(() => null) : null;
+      const workingTreePath = cwdIdentity?.localProjectId === projectIdentity.localProjectId ? cwdIdentity.worktreeRoot : service.projectPath;
+      const attributedPaths = observation.fileChanges.filter((change) => isPathInside(change.path, workingTreePath)).map((change) => path15.relative(workingTreePath, change.path).replaceAll(path15.sep, "/"));
+      const featureLineId = typeof binding?.featureLineId === "string" && binding.featureLineId ? binding.featureLineId : void 0;
+      const recorded = await service.recordTurn({
+        taskId: observation.taskId,
+        turnId: observation.turnId,
+        status: observation.status,
+        featureLineId,
+        featureName: observation.taskName || observation.summary,
+        source: "codex",
+        occurredAt: observation.occurredAt,
+        summary: observation.summary,
+        chatSummary: observation.summary,
+        workflowNodeId: observation.workflow?.nodeId,
+        workflowTitle: observation.workflow?.title,
+        workingTreePath,
+        attributedPaths,
+        hasProjectFileChanges: attributedPaths.length > 0,
+        captureTrigger: observation.hook?.eventName === "Stop" ? "codex-stop-hook" : "manual-current-task-bootstrap"
+      });
+      if (recorded.failed) return { status: "failed", projectPath, recorded };
+      const existingIndex = recorded.duplicate ? await service.readIndex() : null;
+      const existingSnapshot = existingIndex?.nodes.some((node) => node.taskId === observation.taskId && node.turnId === observation.turnId);
+      const existingChat = existingIndex?.chatActivities.some((chat) => chat.taskId === observation.taskId && chat.turnId === observation.turnId);
+      if (!before.protection.initialized) {
+        await service.enableProtection({ currentTaskId: observation.taskId, classifyDirtyState: "project-start" });
+      }
+      await observer.markProcessed(observation);
+      await observer.updateProviderCoverage({
+        complete: true,
+        source: "codex-stop-hook",
+        scannedThreadCount: 1,
+        observedTurnCount: 1,
+        lastCapturedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      if (recorded.snapshotRecorded || existingSnapshot) await new ProjectHistoryExternalWatcher(service, observer).acknowledgeCurrent();
+      return {
+        status: recorded.snapshotRecorded || existingSnapshot ? "snapshot-recorded" : recorded.snapshotRecorded === false || existingChat ? "chat-recorded" : "ignored",
+        projectPath,
+        taskId: observation.taskId,
+        turnId: observation.turnId,
+        summary: observation.summary,
+        source: "codex-stop-hook",
+        history: await projectHistorySnapshot2(projectPath)
+      };
+    } finally {
+      await observer.markTurnStopped(observation.taskId, observation.turnId).catch(() => {
+      });
+    }
+  }
+  async function recordProjectHistoryHookTurnStarted2(projectPath, hookInput) {
+    const taskId = optionalThreadId2(hookInput?.taskId);
+    const turnId = typeof hookInput?.turnId === "string" ? hookInput.turnId.trim() : "";
+    if (!taskId || !turnId) throw new HttpError2(400, "Project History UserPromptSubmit hook requires taskId and turnId.", "history_hook_identity_required");
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    const index = await service.readIndex();
+    if (!index.protection.enabled) return { status: "ignored", reason: "protection-disabled", projectPath };
+    const startedAt = historyTimestamp(hookInput?.receivedAt);
+    await new ProjectHistoryObserverState(service.store.storageDirectory).markTurnActive({
+      taskId,
+      turnId,
+      cwd: optionalProjectPath2(hookInput?.cwd),
+      promptSummary: compactText2(hookInput?.prompt),
+      startedAt,
+      expiresAt: new Date(Date.parse(startedAt) + 12 * 60 * 60 * 1e3).toISOString()
+    });
+    return { status: "active-turn-recorded", projectPath, taskId, turnId };
+  }
+  async function codexTerminalObservationsForProject(projectPath) {
+    const projectIdentity = await probeGitProjectIdentity(projectPath);
+    const listedThreads = [];
+    let threadCursor = null;
+    let threadPages = 0;
+    let threadListTruncated = false;
+    do {
+      const listed = await appServerRequest2("thread/list", {
+        archived: false,
+        cwd: null,
+        cursor: threadCursor,
+        limit: 100,
+        sortKey: "updated_at",
+        sortDirection: "desc",
+        sourceKinds: ["appServer", "vscode", "cli", "unknown"],
+        useStateDbOnly: false
+      }, { experimentalApi: true });
+      listedThreads.push(...Array.isArray(listed?.data) ? listed.data : []);
+      threadCursor = typeof listed?.nextCursor === "string" && listed.nextCursor ? listed.nextCursor : null;
+      threadPages += 1;
+      if (threadCursor && threadPages >= 5) {
+        threadListTruncated = true;
+        break;
+      }
+    } while (threadCursor);
+    const threads = [];
+    const identityByCwd = /* @__PURE__ */ new Map();
+    for (const thread of listedThreads) {
+      const cwd = optionalProjectPath2(thread?.cwd);
+      if (!cwd || typeof thread?.id !== "string") continue;
+      let identity = identityByCwd.get(cwd);
+      if (identity === void 0) {
+        identity = await probeGitProjectIdentity(cwd).catch(() => null);
+        identityByCwd.set(cwd, identity);
+      }
+      if (identity?.localProjectId === projectIdentity.localProjectId) {
+        threads.push({ id: thread.id, cwd, name: typeof thread?.name === "string" ? thread.name : null });
+      }
+    }
+    const observations = [];
+    let turnListTruncated = false;
+    for (const thread of threads) {
+      let cursor = null;
+      let pages = 0;
+      do {
+        const page = await appServerRequest2("thread/turns/list", {
+          threadId: thread.id,
+          cursor,
+          limit: 100,
+          sortDirection: "asc",
+          itemsView: "notLoaded"
+        }, { experimentalApi: true });
+        for (const turn of Array.isArray(page?.data) ? page.data : []) {
+          const status = typeof turn?.status === "string" ? turn.status : "unknown";
+          if (!(/* @__PURE__ */ new Set(["completed", "interrupted", "failed"])).has(status) || typeof turn?.id !== "string") continue;
+          observations.push({
+            id: "codex:".concat(thread.id, ":").concat(turn.id, ":terminal:").concat(status),
+            taskId: thread.id,
+            turnId: turn.id,
+            status,
+            cwd: thread.cwd,
+            taskName: thread.name,
+            occurredAt: historyTimestamp(turn.completedAt ?? turn.startedAt)
+          });
+        }
+        cursor = typeof page?.nextCursor === "string" && page.nextCursor ? page.nextCursor : null;
+        pages += 1;
+        if (cursor && pages >= 20) {
+          turnListTruncated = true;
+          break;
+        }
+      } while (cursor);
+    }
+    observations.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.id.localeCompare(right.id));
+    return {
+      observations,
+      coverage: {
+        complete: !threadListTruncated && !turnListTruncated,
+        threadListTruncated,
+        turnListTruncated,
+        scannedThreadCount: threads.length,
+        observedTurnCount: observations.length
+      }
+    };
+  }
+  async function projectHistorySnapshot2(projectPath) {
+    if (!await isGitWorktree(projectPath)) {
+      return { status: "needs-git-confirmation", enabled: false, scan: await scanProjectBootstrapScope(projectPath) };
+    }
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    const observer = new ProjectHistoryObserverState(service.store.storageDirectory);
+    const provider = await observer.read();
+    const activeCodexTurns = await observer.activeTurns();
+    const viewStore = new ProjectHistoryViewStore(service.store.storageDirectory);
+    const portability = new ProjectHistoryPortabilityService(service, viewStore);
+    const index = await service.readIndex();
+    const gitState = index.protection.initialized ? await service.ensureMainBranch() : await service.readGitState();
+    const gitTopology = await service.readGitTopology();
+    const view = await viewStore.read();
+    const imported = await portability.readImportStatus();
+    if (imported) {
+      const localIds = new Set(index.nodes.map((node) => node.id));
+      const missingObjects = new Set(imported.missingObjectIds);
+      imported.manifest.events.forEach((portableEvent, eventIndex) => {
+        if (localIds.has(portableEvent.id)) return;
+        const objectId = portableEvent.git?.objectId || "";
+        const unavailable = !objectId || missingObjects.has(objectId);
+        const portableOccurredAt = typeof portableEvent.occurredAt === "string" && Number.isFinite(Date.parse(portableEvent.occurredAt)) ? new Date(portableEvent.occurredAt).toISOString() : new Date(eventIndex).toISOString();
+        index.nodes.push({
+          id: portableEvent.id,
+          kind: portableEvent.type === "baseline" ? "baseline" : "snapshot",
+          summary: portableEvent.summary,
+          status: unavailable ? "content-unavailable" : "protected",
+          source: "portable",
+          featureLineId: null,
+          taskId: null,
+          turnId: null,
+          snapshotRef: portableEvent.git?.refName || "",
+          commit: objectId,
+          tree: "",
+          changedPaths: [],
+          coverage: unavailable ? { complete: false, gapCodes: ["git-object-unavailable"] } : portableEvent.coverage,
+          occurredAt: portableOccurredAt,
+          confirmed: portableEvent.status === "confirmed" || portableEvent.status === "merged",
+          merged: portableEvent.status === "merged",
+          ...portableEvent.status?.startsWith("agent-") ? {
+            agentCheck: {
+              status: portableEvent.status.slice("agent-".length),
+              requestId: "portable-status",
+              occurredAt: portableOccurredAt
+            }
+          } : {},
+          edits: [],
+          portableOnly: true
+        });
+      });
+      for (const item of imported.manifest.layout) {
+        if (!view.positions[item.eventId]) view.positions[item.eventId] = { x: item.x, y: item.y };
+      }
+    }
+    const portabilityStatus = await portability.status();
+    const hostActions = await new ProjectHistoryHostActionService(service).list();
+    return {
+      status: "ready",
+      enabled: index.protection.initialized,
+      identity: service.identity,
+      git: {
+        ...gitState,
+        featureModel: "logical-lines",
+        snapshotRefNamespace: "refs/canvasight/snapshots/"
+      },
+      gitTopology: {
+        ...gitTopology,
+        commits: gitTopology.commits.map((commit) => {
+          const historyNodes = index.nodes.filter(
+            (node) => node.commit === commit.id || node.confirmationCommit === commit.id || node.mergeCommit === commit.id
+          );
+          return {
+            ...commit,
+            historyNodeIds: historyNodes.map((node) => node.id),
+            ...commit.isCanvasightGenerated && historyNodes[0]?.summary ? { displaySubject: historyNodes[0].summary } : {}
+          };
+        })
+      },
+      index,
+      view,
+      provider: {
+        coverageStartedAt: provider.coverageStartedAt,
+        observedTurnCount: Object.keys(provider.observations).length,
+        coverageComplete: provider.providerCoverage?.complete !== false,
+        coverage: provider.providerCoverage,
+        activeTurnCount: activeCodexTurns.length,
+        navigation: "native-host-bridge",
+        taskCreation: "native-host-bridge"
+      },
+      hostActions,
+      portability: {
+        ...portabilityStatus,
+        importedEventCount: imported?.manifest.events.length ?? 0,
+        missingObjectCount: imported?.missingObjectIds.length ?? 0
+      }
+    };
+  }
+  async function enableProjectHistory2(projectPath, body) {
+    if (!await isGitWorktree(projectPath)) {
+      if (body?.confirmGitInitialization !== true) {
+        throw new HttpError2(409, "Project History requires confirmation before initializing local Git.", "git_initialization_confirmation_required");
+      }
+      await initializeLocalGitRepository(projectPath, { confirmed: true });
+    }
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    await service.enableProtection({
+      currentTaskId: optionalThreadId2(body?.threadId),
+      classifyDirtyState: body?.classifyDirtyState === "feature-line" ? "feature-line" : "project-start"
+    });
+    let providerWarning = null;
+    const observer = new ProjectHistoryObserverState(service.store.storageDirectory);
+    try {
+      const scan = await codexTerminalObservationsForProject(projectPath);
+      await observer.initializeCoverage(scan.observations);
+      await observer.updateProviderCoverage(scan.coverage);
+      if (!scan.coverage.complete) await service.recordCoverageGap("provider-pagination-limit", scan.coverage);
+    } catch (error51) {
+      providerWarning = error51 instanceof Error ? error51.message : String(error51);
+    }
+    await new ProjectHistoryExternalWatcher(service, observer).inspect().catch((error51) => {
+      providerWarning = providerWarning || (error51 instanceof Error ? error51.message : String(error51));
+    });
+    return { ...await projectHistorySnapshot2(projectPath), providerWarning };
+  }
+  async function refreshProjectHistory2(projectPath) {
+    const service = await ProjectHistoryService.forRepository(projectPath);
+    const currentIndex = await service.readIndex();
+    if (!currentIndex.protection.initialized) {
+      throw new HttpError2(409, "Project History protection is not enabled.", "history_not_enabled");
+    }
+    const observer = new ProjectHistoryObserverState(service.store.storageDirectory);
+    const provider = await observer.read();
+    let providerWarning = null;
+    let scan = { observations: [], coverage: { complete: false, unavailable: true } };
+    try {
+      scan = await codexTerminalObservationsForProject(projectPath);
+    } catch (error51) {
+      providerWarning = error51 instanceof Error ? error51.message : String(error51);
+    }
+    await observer.updateProviderCoverage(scan.coverage);
+    if (!scan.coverage.complete) await service.recordCoverageGap("provider-pagination-limit", scan.coverage);
+    if (!provider.coverageStartedAt) {
+      await observer.initializeCoverage(scan.observations);
+      const externalWatcher2 = await new ProjectHistoryExternalWatcher(service, observer).inspect();
+      return { ...await projectHistorySnapshot2(projectPath), externalWatcher: externalWatcher2, providerWarning };
+    }
+    const pending = await observer.unprocessed(scan.observations);
+    const newestFirst = pending.sort((left, right) => right.occurredAt.localeCompare(left.occurredAt) || right.id.localeCompare(left.id));
+    let capturedCurrentSnapshot = false;
+    for (const observation of newestFirst) {
+      const recorded = await service.recordTurn({
+        taskId: observation.taskId,
+        turnId: observation.turnId,
+        status: observation.status,
+        featureName: observation.taskName,
+        source: "mixed",
+        occurredAt: observation.occurredAt
+      });
+      if (!recorded.failed) {
+        await observer.markProcessed(observation);
+        capturedCurrentSnapshot ||= recorded.snapshotRecorded === true;
+      }
+    }
+    const watcher = new ProjectHistoryExternalWatcher(service, observer);
+    if (capturedCurrentSnapshot) await watcher.acknowledgeCurrent();
+    const externalWatcher = await watcher.inspect();
+    return {
+      ...await projectHistorySnapshot2(projectPath),
+      refreshedObservationCount: newestFirst.length,
+      externalWatcher,
+      providerWarning
+    };
+  }
+  return {
+    projectHistorySnapshot: projectHistorySnapshot2,
+    enableProjectHistory: enableProjectHistory2,
+    refreshProjectHistory: refreshProjectHistory2,
+    inspectCodexTurn: inspectCodexTurn2,
+    observationMatchForProject: observationMatchForProject2,
+    recordProjectHistoryHookTurn: recordProjectHistoryHookTurn2,
+    recordProjectHistoryHookTurnStarted: recordProjectHistoryHookTurnStarted2
+  };
+}
+
+// mcp/infrastructure/node-executable-candidates.mjs
+import os6 from "node:os";
+import path16 from "node:path";
+function daemonNodeExecutableCandidates({
+  env = process.env,
+  execPath = process.execPath,
+  platform = process.platform,
+  homeDirectory = os6.homedir()
+} = {}) {
+  const candidates = [];
+  const seen = /* @__PURE__ */ new Set();
+  const platformPath = platform === "win32" ? path16.win32 : path16.posix;
+  const add = (executable, source) => {
+    if (typeof executable !== "string" || !executable.trim()) return;
+    const normalized = executable.trim();
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push({ executable: normalized, source });
+  };
+  const below = (directory, source) => {
+    if (typeof directory === "string" && directory.trim()) add(platformPath.join(directory.trim(), platform === "win32" ? "node.exe" : "node"), source);
+  };
+  add(env.CANVASIGHT_NODE_BIN, "configured");
+  add(platform === "win32" ? "node.exe" : "node", "path");
+  add(env.npm_node_execpath, "npm_node_execpath");
+  add(execPath, "process_exec_path");
+  below(env.VOLTA_HOME && platformPath.join(env.VOLTA_HOME, "bin"), "volta_home");
+  below(env.NVM_BIN, "nvm_bin");
+  below(env.FNM_MULTISHELL_PATH, "fnm_multishell");
+  below(env.HOMEBREW_PREFIX && platformPath.join(env.HOMEBREW_PREFIX, "bin"), "homebrew_prefix");
+  below(env.MISE_DATA_DIR && platformPath.join(env.MISE_DATA_DIR, "shims"), "mise_data");
+  if (typeof homeDirectory === "string" && homeDirectory) {
+    below(platformPath.join(homeDirectory, ".volta", "bin"), "volta_shim");
+    below(platformPath.join(homeDirectory, ".nvm", "current", "bin"), "nvm_current");
+    below(platformPath.join(homeDirectory, ".fnm", "current", "bin"), "fnm_current");
+    below(platformPath.join(homeDirectory, ".asdf", "shims"), "asdf_shim");
+    below(platformPath.join(homeDirectory, ".local", "share", "mise", "shims"), "mise_shim");
+    below(platformPath.join(homeDirectory, ".local", "bin"), "user_local");
+  }
+  if (platform === "darwin") {
+    add("/opt/homebrew/bin/node", "homebrew_apple_silicon");
+    add("/usr/local/bin/node", "homebrew_intel");
+    add("/usr/bin/node", "system");
+  } else if (platform === "linux") {
+    add("/usr/local/bin/node", "system_local");
+    add("/usr/bin/node", "system");
+    add("/snap/bin/node", "snap");
+  } else if (platform === "win32") {
+    below(env.ProgramFiles && platformPath.join(env.ProgramFiles, "nodejs"), "program_files");
+    below(env.LOCALAPPDATA && platformPath.join(env.LOCALAPPDATA, "Programs", "nodejs"), "local_app_data");
+  }
+  return candidates;
+}
+
+// mcp/infrastructure/project-history-task-binding-store.mjs
+import fsp13 from "node:fs/promises";
+import path17 from "node:path";
+var MAX_BINDINGS = 512;
+function normalizedThreadId(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+function normalizedProjectPath(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  return path17.resolve(value.trim());
+}
+function normalizedFeatureLineId(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function emptyState2() {
+  return { version: 1, bindings: [] };
+}
+function normalizeState2(value) {
+  const bindings = Array.isArray(value?.bindings) ? value.bindings.map((binding) => {
+    const threadId = normalizedThreadId(binding?.threadId);
+    const projectPath = normalizedProjectPath(binding?.projectPath);
+    if (!threadId || !projectPath) return null;
+    return {
+      threadId,
+      projectPath,
+      featureLineId: normalizedFeatureLineId(binding?.featureLineId),
+      source: typeof binding?.source === "string" && binding.source.trim() ? binding.source.trim().slice(0, 80) : "canvasight-session",
+      firstBoundAt: typeof binding?.firstBoundAt === "string" && Number.isFinite(Date.parse(binding.firstBoundAt)) ? new Date(binding.firstBoundAt).toISOString() : (/* @__PURE__ */ new Date(0)).toISOString(),
+      lastBoundAt: typeof binding?.lastBoundAt === "string" && Number.isFinite(Date.parse(binding.lastBoundAt)) ? new Date(binding.lastBoundAt).toISOString() : (/* @__PURE__ */ new Date(0)).toISOString()
+    };
+  }).filter(Boolean) : [];
+  return { version: 1, bindings: bindings.slice(-MAX_BINDINGS) };
+}
+var ProjectHistoryTaskBindingStore = class {
+  constructor(canvasightHome2) {
+    this.filePath = path17.join(path17.resolve(canvasightHome2), "project-history-task-bindings.json");
+  }
+  async read() {
+    try {
+      return normalizeState2(JSON.parse(await fsp13.readFile(this.filePath, "utf8")));
+    } catch (error51) {
+      if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return emptyState2();
+      throw error51;
+    }
+  }
+  async bind({ threadId, projectPath, featureLineId = null, source = "canvasight-session" }) {
+    const normalizedThread = normalizedThreadId(threadId);
+    const normalizedProject = normalizedProjectPath(projectPath);
+    if (!normalizedThread || !normalizedProject) return null;
+    const current = await this.read();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existing = current.bindings.find((binding) => binding.threadId === normalizedThread && binding.projectPath === normalizedProject);
+    const nextBinding = {
+      threadId: normalizedThread,
+      projectPath: normalizedProject,
+      featureLineId: normalizedFeatureLineId(featureLineId) ?? existing?.featureLineId ?? null,
+      source: typeof source === "string" && source.trim() ? source.trim().slice(0, 80) : existing?.source ?? "canvasight-session",
+      firstBoundAt: existing?.firstBoundAt ?? now,
+      lastBoundAt: now
+    };
+    const bindings = current.bindings.filter((binding) => !(binding.threadId === normalizedThread && binding.projectPath === normalizedProject)).concat(nextBinding).slice(-MAX_BINDINGS);
+    await this.#write({ version: 1, bindings });
+    return nextBinding;
+  }
+  async bindingsForThread(threadId) {
+    const normalizedThread = normalizedThreadId(threadId);
+    if (!normalizedThread) return [];
+    const state = await this.read();
+    return state.bindings.filter((binding) => binding.threadId === normalizedThread).sort((left, right) => right.lastBoundAt.localeCompare(left.lastBoundAt));
+  }
+  async #write(state) {
+    await fsp13.mkdir(path17.dirname(this.filePath), { recursive: true });
+    const temporaryPath = "".concat(this.filePath, ".").concat(process.pid, ".tmp");
+    await fsp13.writeFile(temporaryPath, "".concat(JSON.stringify(normalizeState2(state), null, 2), "\n"), { encoding: "utf8", mode: 384 });
+    await fsp13.rename(temporaryPath, this.filePath);
+  }
+};
+
 // mcp/server.source.mjs
 var SERVER_NAME = "canvasight";
-var SERVER_VERSION = "0.5.11";
+var SERVER_VERSION = "0.6.20";
 var DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 var CANVASIGHT_WIDGET_URI = "ui://widget/canvasight/canvas.html";
 var CANVASIGHT_FRAMEWORK_QUESTIONS_URI = "ui://widget/canvasight/framework-questions.html";
@@ -18662,13 +22941,13 @@ var GRAPH_GRID_COLUMNS = 3;
 var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set([".apng", ".avif", ".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 var DEFAULT_CODEX_APP_BIN = "/Applications/Codex.app/Contents/Resources/codex";
 var DEFAULT_CHATGPT_APP_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
-var DEFAULT_CANVASIGHT_HOME = path2.join(os2.homedir(), ".canvasight");
+var DEFAULT_CANVASIGHT_HOME = path18.join(os7.homedir(), ".canvasight");
 var CLI_CANVASIGHT_HOME = (() => {
   let configured = "";
   for (const argument of process.argv.slice(2)) {
     if (argument.startsWith("--canvasight-home=")) configured = argument.slice("--canvasight-home=".length).trim();
   }
-  return configured ? path2.resolve(configured) : null;
+  return configured ? path18.resolve(configured) : null;
 })();
 var CODEX_APP_SERVER_TURN_CONFIRMATION_METHODS = /* @__PURE__ */ new Set(["turn/started", "item/started", "turn/completed"]);
 var AGENT_TEAM_ROLE_IDS = /* @__PURE__ */ new Set([
@@ -18718,9 +22997,9 @@ var SOFTWARE_PRODUCT_GUIDANCE_FILES = [
   }
 ];
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path2.dirname(__filename);
-var pluginRoot = path2.resolve(__dirname, "..");
-var distRoot = path2.join(pluginRoot, "dist");
+var __dirname = path18.dirname(__filename);
+var pluginRoot = path18.resolve(__dirname, "..");
+var distRoot = path18.join(pluginRoot, "dist");
 var isDaemonMode = process.argv.includes("--daemon");
 var isStopDaemonMode = process.argv.includes("--stop-daemon");
 var sessions = /* @__PURE__ */ new Map();
@@ -18731,8 +23010,11 @@ var presentationRecoveryLeases = /* @__PURE__ */ new Map();
 var projectRevisionStates = /* @__PURE__ */ new Map();
 var projectWriteLocks = /* @__PURE__ */ new Map();
 var projectGraphContexts = /* @__PURE__ */ new Map();
+var projectHistoryTaskBindings = new ProjectHistoryTaskBindingStore(canvasightHome());
 var globalRunWaiters = [];
 var httpState = null;
+var projectHistoryPollTimer = null;
+var projectHistoryPollActive = false;
 var inputBuffer = Buffer.alloc(0);
 var useContentLengthTransport = false;
 var daemonAuthToken = process.env.CANVASIGHT_DAEMON_TOKEN || "";
@@ -18750,17 +23032,17 @@ var HttpError = class extends Error {
   }
 };
 function projectRevisionKey(projectPath) {
-  return path2.resolve(projectPath);
+  return path18.resolve(projectPath);
 }
 var REVISION_POLL_INTERVAL_MS = 5e3;
 var REVISION_POLL_LEASE_MS = 1e4;
 var PRESENTATION_RECOVERY_LEASE_MS = 4e3;
 var PRESENTATION_RECOVERY_COOLDOWN_MS = 5e3;
 function revisionPollLeaseKey(projectPath, threadId) {
-  return JSON.stringify([path2.resolve(projectPath), optionalThreadId(threadId) || ""]);
+  return JSON.stringify([path18.resolve(projectPath), optionalThreadId(threadId) || ""]);
 }
 function presentationRecoveryLeaseKey(projectPath, threadId) {
-  return JSON.stringify([path2.resolve(projectPath), optionalThreadId(threadId) || ""]);
+  return JSON.stringify([path18.resolve(projectPath), optionalThreadId(threadId) || ""]);
 }
 function revisionPollOwner(session, identity) {
   return {
@@ -18821,7 +23103,7 @@ function serializeError(error51) {
     stack: typeof error51?.stack === "string" ? error51.stack : ""
   };
 }
-function appendMcpLifecycle(event, data = {}) {
+function appendMcpLifecycle(event2, data = {}) {
   if (isDaemonMode || isStopDaemonMode) return;
   try {
     fs2.mkdirSync(canvasightHome(), { recursive: true });
@@ -18845,7 +23127,7 @@ function appendMcpLifecycle(event, data = {}) {
         pid: process.pid,
         version: SERVER_VERSION,
         pluginRoot,
-        event,
+        event: event2,
         ...rotatedBytes ? { rotatedBytes } : {},
         ...data
       }), "\n"),
@@ -18854,12 +23136,12 @@ function appendMcpLifecycle(event, data = {}) {
   } catch {
   }
 }
-function appendOpenAttemptLifecycle(event, data = {}) {
+function appendOpenAttemptLifecycle(event2, data = {}) {
   try {
     fs2.mkdirSync(canvasightHome(), { recursive: true });
     fs2.appendFileSync(
       canvasightMcpLifecycleLogPath(),
-      "".concat(JSON.stringify({ ts: nowIso(), pid: process.pid, version: SERVER_VERSION, pluginRoot, event, ...data }), "\n"),
+      "".concat(JSON.stringify({ ts: nowIso(), pid: process.pid, version: SERVER_VERSION, pluginRoot, event: event2, ...data }), "\n"),
       "utf8"
     );
   } catch {
@@ -18897,9 +23179,9 @@ function deprecatedGraphLayoutAdvisories(args) {
     { path: "layout", value: args?.layout },
     ...Array.isArray(args?.pages) ? args.pages.map((page, index) => ({ path: "pages[".concat(index, "].layout"), value: page?.layout })) : []
   ];
-  return requested.filter(({ value }) => value === "vertical" || value === "grid").map(({ path: path3, value }) => ({
+  return requested.filter(({ value }) => value === "vertical" || value === "grid").map(({ path: path19, value }) => ({
     code: "deprecated_graph_layout",
-    path: path3,
+    path: path19,
     message: "Graph layout ".concat(value, " is deprecated for AI writes and was normalized to horizontal.")
   }));
 }
@@ -18969,10 +23251,10 @@ function codexAppRuntime() {
   return { bin: "codex", source: "path_fallback", isDesktop: false };
 }
 function commandAvailableOnPath(command) {
-  const pathEntries = String(process.env.PATH || "").split(path2.delimiter).filter(Boolean);
+  const pathEntries = String(process.env.PATH || "").split(path18.delimiter).filter(Boolean);
   const extensions = process.platform === "win32" ? String(process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean) : [""];
   return pathEntries.some(
-    (entry) => extensions.some((extension) => fs2.existsSync(path2.join(entry, "".concat(command).concat(extension.toLowerCase()))) || fs2.existsSync(path2.join(entry, "".concat(command).concat(extension.toUpperCase()))))
+    (entry) => extensions.some((extension) => fs2.existsSync(path18.join(entry, "".concat(command).concat(extension.toLowerCase()))) || fs2.existsSync(path18.join(entry, "".concat(command).concat(extension.toUpperCase()))))
   );
 }
 function codexSkillsRuntime() {
@@ -18999,11 +23281,11 @@ function normalizeProjectPath(projectPath) {
   if (typeof projectPath !== "string" || !projectPath.trim()) {
     throw new HttpError(400, "projectPath is required");
   }
-  return path2.resolve(projectPath);
+  return path18.resolve(projectPath);
 }
 function optionalProjectPath(projectPath) {
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
-  return path2.resolve(projectPath);
+  return path18.resolve(projectPath);
 }
 function defaultProjectPath() {
   const envNames = [
@@ -19019,15 +23301,15 @@ function defaultProjectPath() {
     const candidate = optionalProjectPath(process.env[envName]);
     if (candidate && candidate !== pluginRoot) return candidate;
   }
-  if (path2.basename(path2.dirname(pluginRoot)) === "plugins") {
-    return path2.resolve(pluginRoot, "../..");
+  if (path18.basename(path18.dirname(pluginRoot)) === "plugins") {
+    return path18.resolve(pluginRoot, "../..");
   }
-  return path2.join(os2.homedir(), "Canvasight");
+  return path18.join(os7.homedir(), "Canvasight");
 }
 function isPluginInternalPath(candidate) {
   if (!candidate) return false;
-  const resolved = path2.resolve(candidate);
-  return resolved === pluginRoot || resolved.startsWith("".concat(pluginRoot).concat(path2.sep));
+  const resolved = path18.resolve(candidate);
+  return resolved === pluginRoot || resolved.startsWith("".concat(pluginRoot).concat(path18.sep));
 }
 async function codexThreadProjectPath(threadId) {
   const resolvedThreadId = optionalThreadId(threadId);
@@ -19056,48 +23338,48 @@ async function resolveSessionProjectPath(projectPath, threadId, options = {}) {
   return defaultProjectPath();
 }
 function projectNameFromPath(projectPath) {
-  return path2.basename(projectPath) || projectPath;
+  return path18.basename(projectPath) || projectPath;
 }
 function canvasightHome() {
   if (CLI_CANVASIGHT_HOME) return CLI_CANVASIGHT_HOME;
   const configured = process.env.CANVASIGHT_HOME;
-  return path2.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
+  return path18.resolve(typeof configured === "string" && configured.trim() ? configured : DEFAULT_CANVASIGHT_HOME);
 }
 function canvasightStatePath() {
-  return path2.join(canvasightHome(), "state.json");
+  return path18.join(canvasightHome(), "state.json");
 }
 function canvasightDaemonStatePath() {
-  return path2.join(canvasightHome(), "daemon.json");
+  return path18.join(canvasightHome(), "daemon.json");
 }
 function canvasightDaemonStartLockPath() {
-  return path2.join(canvasightHome(), "daemon-start.lock");
+  return path18.join(canvasightHome(), "daemon-start.lock");
 }
 function canvasightMcpLifecycleLogPath() {
-  return path2.join(canvasightHome(), "mcp-lifecycle.log");
+  return path18.join(canvasightHome(), "mcp-lifecycle.log");
 }
 function canvasightTemplatesPath() {
-  return path2.join(canvasightHome(), "templates.json");
+  return path18.join(canvasightHome(), "templates.json");
 }
 function canvasightPreferencesPath() {
-  return path2.join(canvasightHome(), "preferences.json");
+  return path18.join(canvasightHome(), "preferences.json");
 }
 function canvasightTemplateAssetsDir() {
-  return path2.join(canvasightHome(), "template-assets");
+  return path18.join(canvasightHome(), "template-assets");
 }
 function scatterDir(projectPath) {
-  return path2.join(projectPath, ".scatter");
+  return path18.join(projectPath, ".scatter");
 }
 function scatterPath(projectPath) {
-  return path2.join(scatterDir(projectPath), "scatter.json");
+  return path18.join(scatterDir(projectPath), "scatter.json");
 }
 function scatterRevisionStatePath(projectPath) {
-  return path2.join(scatterDir(projectPath), "revision-state.json");
+  return path18.join(scatterDir(projectPath), "revision-state.json");
 }
 function scatterAssetsDir(projectPath) {
-  return path2.join(scatterDir(projectPath), "assets");
+  return path18.join(scatterDir(projectPath), "assets");
 }
 function toRelativeProjectPath(projectPath, targetPath) {
-  return path2.relative(projectPath, targetPath).split(path2.sep).join("/");
+  return path18.relative(projectPath, targetPath).split(path18.sep).join("/");
 }
 function base64UrlEncode(value) {
   return Buffer.from(value, "utf8").toString("base64url");
@@ -19120,14 +23402,14 @@ function daemonSessionUrl(state, sessionIdValue) {
   return url2.toString();
 }
 function isScatterAssetPath(filePath) {
-  return filePath.includes("".concat(path2.sep, ".scatter").concat(path2.sep, "assets").concat(path2.sep));
+  return filePath.includes("".concat(path18.sep, ".scatter").concat(path18.sep, "assets").concat(path18.sep));
 }
 function isTemplateAssetPath(filePath) {
-  const root = "".concat(path2.resolve(canvasightTemplateAssetsDir())).concat(path2.sep);
-  return path2.resolve(filePath).startsWith(root);
+  const root = "".concat(path18.resolve(canvasightTemplateAssetsDir())).concat(path18.sep);
+  return path18.resolve(filePath).startsWith(root);
 }
 function safeFileName(name) {
-  const base = path2.basename(typeof name === "string" && name.trim() ? name : "attachment");
+  const base = path18.basename(typeof name === "string" && name.trim() ? name : "attachment");
   const sanitized = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/\s+/g, " ").trim();
   return sanitized.slice(0, 140) || "attachment";
 }
@@ -19137,7 +23419,7 @@ function exportFileStem(value) {
 }
 function uniqueAssetExportName(originalName, usedNames) {
   const safeName = safeFileName(originalName || "attachment");
-  const extension = path2.extname(safeName);
+  const extension = path18.extname(safeName);
   const stem = extension ? safeName.slice(0, -extension.length) : safeName;
   let candidate = safeName;
   let serial = 2;
@@ -19148,9 +23430,9 @@ function uniqueAssetExportName(originalName, usedNames) {
   usedNames.add(candidate.toLocaleLowerCase());
   return candidate;
 }
-function isPathInside(targetPath, parentPath) {
-  const relative = path2.relative(parentPath, targetPath);
-  return relative !== "" && !relative.startsWith("..".concat(path2.sep)) && relative !== ".." && !path2.isAbsolute(relative);
+function isPathInside2(targetPath, parentPath) {
+  const relative = path18.relative(parentPath, targetPath);
+  return relative !== "" && !relative.startsWith("..".concat(path18.sep)) && relative !== ".." && !path18.isAbsolute(relative);
 }
 function archiveExportMarkdown(markdown, assetPaths, attachments) {
   let result = markdown;
@@ -19167,9 +23449,9 @@ function archiveExportMarkdown(markdown, assetPaths, attachments) {
 async function uniqueDownloadPath(directory, stem, extension) {
   for (let serial = 1; serial < 1e4; serial += 1) {
     const suffix = serial === 1 ? "" : "-".concat(serial);
-    const candidate = path2.join(directory, "".concat(stem).concat(suffix).concat(extension));
+    const candidate = path18.join(directory, "".concat(stem).concat(suffix).concat(extension));
     try {
-      await fsp2.access(candidate);
+      await fsp14.access(candidate);
     } catch (error51) {
       if (error51?.code === "ENOENT") return candidate;
       throw error51;
@@ -19182,26 +23464,26 @@ async function exportMarkdownToDownloads(session, input) {
   if (typeof input?.markdown !== "string") throw new HttpError(400, "markdown must be a string", "invalid_export_markdown");
   if (!Array.isArray(input?.attachments)) throw new HttpError(400, "attachments must be an array", "invalid_export_attachments");
   const projectPath = normalizeProjectPath(session.projectPath);
-  const assetsDirectory = path2.resolve(scatterAssetsDir(projectPath));
-  const templateAssetsDirectory = path2.resolve(canvasightTemplateAssetsDir());
+  const assetsDirectory = path18.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsDirectory = path18.resolve(canvasightTemplateAssetsDir());
   const attachments = input.attachments.map(normalizeAttachment);
   const files = {};
   const usedAssetNames = /* @__PURE__ */ new Set();
   const assetPaths = /* @__PURE__ */ new Map();
   for (const attachment of attachments) {
-    const storedPath = path2.resolve(attachment.storedPath);
-    if (!attachment.storedPath || !isPathInside(storedPath, assetsDirectory) && !isPathInside(storedPath, templateAssetsDirectory)) {
+    const storedPath = path18.resolve(attachment.storedPath);
+    if (!attachment.storedPath || !isPathInside2(storedPath, assetsDirectory) && !isPathInside2(storedPath, templateAssetsDirectory)) {
       throw new HttpError(400, "Attachment is not a Canvasight project asset: ".concat(attachment.originalName), "invalid_export_attachment_path");
     }
     let stat;
     try {
-      stat = await fsp2.lstat(storedPath);
+      stat = await fsp14.lstat(storedPath);
     } catch {
       throw new HttpError(404, "Attachment is unavailable: ".concat(attachment.originalName), "export_attachment_missing");
     }
     if (!stat.isFile() || stat.isSymbolicLink()) throw new HttpError(400, "Attachment is not a regular file: ".concat(attachment.originalName), "invalid_export_attachment_path");
     const archivePath = "assets/".concat(uniqueAssetExportName(attachment.originalName, usedAssetNames));
-    files[archivePath] = await fsp2.readFile(storedPath);
+    files[archivePath] = await fsp14.readFile(storedPath);
     assetPaths.set(attachment.id, archivePath);
   }
   const stem = exportFileStem(typeof input?.title === "string" ? input.title : "scatter-prompt");
@@ -19209,24 +23491,24 @@ async function exportMarkdownToDownloads(session, input) {
   const extension = attachments.length ? ".zip" : ".md";
   if (attachments.length) files["".concat(stem, ".md")] = strToU8(markdown);
   const bytes = attachments.length ? zipSync(files) : Buffer.from(markdown, "utf8");
-  const downloadsDirectory = path2.resolve(process.env.CANVASIGHT_EXPORT_DIR || path2.join(os2.homedir(), "Downloads"));
-  await fsp2.mkdir(downloadsDirectory, { recursive: true });
+  const downloadsDirectory = path18.resolve(process.env.CANVASIGHT_EXPORT_DIR || path18.join(os7.homedir(), "Downloads"));
+  await fsp14.mkdir(downloadsDirectory, { recursive: true });
   const targetPath = await uniqueDownloadPath(downloadsDirectory, stem, extension);
-  const temporaryPath = path2.join(downloadsDirectory, ".".concat(path2.basename(targetPath), ".").concat(crypto2.randomUUID(), ".tmp"));
+  const temporaryPath = path18.join(downloadsDirectory, ".".concat(path18.basename(targetPath), ".").concat(crypto2.randomUUID(), ".tmp"));
   try {
-    await fsp2.writeFile(temporaryPath, bytes);
-    await fsp2.rename(temporaryPath, targetPath);
+    await fsp14.writeFile(temporaryPath, bytes);
+    await fsp14.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp14.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
   return {
-    fileName: path2.basename(targetPath),
+    fileName: path18.basename(targetPath),
     targetPath
   };
 }
 function extensionFromName(name) {
-  return path2.extname(name || "").toLowerCase();
+  return path18.extname(name || "").toLowerCase();
 }
 function mimeFromPath(filePath) {
   const ext = extensionFromName(filePath);
@@ -19316,7 +23598,7 @@ function emptyUserState() {
 }
 function normalizeRecentProject(value) {
   if (!isObject2(value) || typeof value.path !== "string" || !value.path.trim()) return null;
-  const projectPath = path2.resolve(value.path);
+  const projectPath = path18.resolve(value.path);
   return {
     name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : projectNameFromPath(projectPath),
     path: projectPath,
@@ -19326,13 +23608,13 @@ function normalizeRecentProject(value) {
 }
 async function readUserState() {
   try {
-    const raw = await fsp2.readFile(canvasightStatePath(), "utf8");
+    const raw = await fsp14.readFile(canvasightStatePath(), "utf8");
     const parsed = JSON.parse(raw);
     const recentProjects2 = Array.isArray(parsed?.recentProjects) ? parsed.recentProjects.map(normalizeRecentProject).filter(Boolean) : [];
     return {
       version: 1,
       updatedAt: typeof parsed?.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : nowIso(),
-      lastProjectPath: typeof parsed?.lastProjectPath === "string" && parsed.lastProjectPath.trim() ? path2.resolve(parsed.lastProjectPath) : recentProjects2[0]?.path || null,
+      lastProjectPath: typeof parsed?.lastProjectPath === "string" && parsed.lastProjectPath.trim() ? path18.resolve(parsed.lastProjectPath) : recentProjects2[0]?.path || null,
       recentProjects: recentProjects2
     };
   } catch (error51) {
@@ -19348,8 +23630,8 @@ async function writeUserState(state) {
     lastProjectPath: normalizedRecentProjects[0]?.path || null,
     recentProjects: normalizedRecentProjects
   };
-  await fsp2.mkdir(canvasightHome(), { recursive: true });
-  await fsp2.writeFile(canvasightStatePath(), "".concat(JSON.stringify(normalizedState, null, 2), "\n"), "utf8");
+  await fsp14.mkdir(canvasightHome(), { recursive: true });
+  await fsp14.writeFile(canvasightStatePath(), "".concat(JSON.stringify(normalizedState, null, 2), "\n"), "utf8");
   return normalizedState;
 }
 function defaultPreferences() {
@@ -19364,7 +23646,7 @@ function normalizePreferences(value) {
 }
 async function readPreferences() {
   try {
-    const raw = await fsp2.readFile(canvasightPreferencesPath(), "utf8");
+    const raw = await fsp14.readFile(canvasightPreferencesPath(), "utf8");
     return normalizePreferences(JSON.parse(raw));
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return defaultPreferences();
@@ -19373,14 +23655,14 @@ async function readPreferences() {
 }
 async function writePreferences(value) {
   const preferences = normalizePreferences(value);
-  await fsp2.mkdir(canvasightHome(), { recursive: true });
+  await fsp14.mkdir(canvasightHome(), { recursive: true });
   const targetPath = canvasightPreferencesPath();
   const temporaryPath = "".concat(targetPath, ".").concat(process.pid, ".").concat(crypto2.randomBytes(4).toString("hex"), ".tmp");
   try {
-    await fsp2.writeFile(temporaryPath, "".concat(JSON.stringify(preferences, null, 2), "\n"), "utf8");
-    await fsp2.rename(temporaryPath, targetPath);
+    await fsp14.writeFile(temporaryPath, "".concat(JSON.stringify(preferences, null, 2), "\n"), "utf8");
+    await fsp14.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp14.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
   return preferences;
@@ -19400,22 +23682,22 @@ function normalizeNodeTemplate(value) {
 }
 async function copyTemplateAttachments(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return [];
-  await fsp2.mkdir(canvasightTemplateAssetsDir(), { recursive: true });
+  await fsp14.mkdir(canvasightTemplateAssetsDir(), { recursive: true });
   const copied = [];
   for (const value of attachments) {
     const attachment = normalizeAttachment(value);
-    const sourcePath = typeof value?.storedPath === "string" && value.storedPath ? path2.resolve(value.storedPath) : "";
+    const sourcePath = typeof value?.storedPath === "string" && value.storedPath ? path18.resolve(value.storedPath) : "";
     if (!sourcePath) continue;
     let bytes;
     try {
-      bytes = await fsp2.readFile(sourcePath);
+      bytes = await fsp14.readFile(sourcePath);
     } catch {
       continue;
     }
     const originalName = safeFileName(attachment.originalName);
     const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
-    const storedPath = path2.join(canvasightTemplateAssetsDir(), uniqueName);
-    await fsp2.writeFile(storedPath, bytes);
+    const storedPath = path18.join(canvasightTemplateAssetsDir(), uniqueName);
+    await fsp14.writeFile(storedPath, bytes);
     copied.push({
       ...attachment,
       id: crypto2.randomUUID(),
@@ -19431,7 +23713,7 @@ async function copyTemplateAttachments(attachments) {
 }
 async function readNodeTemplates() {
   try {
-    const raw = await fsp2.readFile(canvasightTemplatesPath(), "utf8");
+    const raw = await fsp14.readFile(canvasightTemplatesPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.map(normalizeNodeTemplate).filter(Boolean);
@@ -19442,8 +23724,8 @@ async function readNodeTemplates() {
 }
 async function writeNodeTemplates(templates) {
   const normalized = Array.isArray(templates) ? templates.map(normalizeNodeTemplate).filter(Boolean) : [];
-  await fsp2.mkdir(canvasightHome(), { recursive: true });
-  await fsp2.writeFile(canvasightTemplatesPath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
+  await fsp14.mkdir(canvasightHome(), { recursive: true });
+  await fsp14.writeFile(canvasightTemplatesPath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
   return normalized;
 }
 async function createNodeTemplate(input, options = {}) {
@@ -19472,10 +23754,10 @@ async function deleteTemplateAssets(template) {
   if (!template || !Array.isArray(template.attachments)) return;
   await Promise.all(
     template.attachments.map(async (attachment) => {
-      const storedPath = typeof attachment.storedPath === "string" ? path2.resolve(attachment.storedPath) : "";
+      const storedPath = typeof attachment.storedPath === "string" ? path18.resolve(attachment.storedPath) : "";
       if (!storedPath || !isTemplateAssetPath(storedPath)) return;
       try {
-        await fsp2.unlink(storedPath);
+        await fsp14.unlink(storedPath);
       } catch {
       }
     })
@@ -19547,7 +23829,7 @@ function normalizeDaemonState(value) {
 }
 async function readDaemonState() {
   try {
-    const raw = await fsp2.readFile(canvasightDaemonStatePath(), "utf8");
+    const raw = await fsp14.readFile(canvasightDaemonStatePath(), "utf8");
     return normalizeDaemonState(JSON.parse(raw));
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return null;
@@ -19566,12 +23848,12 @@ function readDaemonStateSync() {
 async function writeDaemonState(state) {
   const normalized = normalizeDaemonState(state);
   if (!normalized) throw new Error("Invalid Canvasight daemon state");
-  await fsp2.mkdir(canvasightHome(), { recursive: true });
-  await fsp2.writeFile(canvasightDaemonStatePath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
+  await fsp14.mkdir(canvasightHome(), { recursive: true });
+  await fsp14.writeFile(canvasightDaemonStatePath(), "".concat(JSON.stringify(normalized, null, 2), "\n"), "utf8");
   return normalized;
 }
 async function removeDaemonState() {
-  await fsp2.rm(canvasightDaemonStatePath(), { force: true });
+  await fsp14.rm(canvasightDaemonStatePath(), { force: true });
 }
 async function removeOwnedDaemonState() {
   const state = await readDaemonState();
@@ -19608,21 +23890,41 @@ async function daemonJson(state, route, init = {}) {
   }
   return text ? JSON.parse(text) : null;
 }
-async function healthyDaemonState(state) {
+function stableServerVersionParts(value) {
+  const match = typeof value === "string" ? value.match(/^(\d+)\.(\d+)\.(\d+)$/u) : null;
+  return match ? match.slice(1).map(Number) : null;
+}
+function compareStableServerVersions(left, right) {
+  const leftParts = stableServerVersionParts(left);
+  const rightParts = stableServerVersionParts(right);
+  if (!leftParts || !rightParts) return null;
+  for (let index = 0; index < leftParts.length; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] < rightParts[index] ? -1 : 1;
+  }
+  return 0;
+}
+async function probeHealthyCanvasightDaemon(state) {
   if (!state) return null;
   try {
     const health = await daemonJson({ ...state, token: "" }, "/api/health");
-    if (health?.status !== "ok") return null;
-    if (health.pluginRoot !== pluginRoot || health.serverVersion !== SERVER_VERSION) return null;
+    if (health?.status !== "ok" || health?.name !== SERVER_NAME) return null;
     return {
-      ...state,
-      origin: health.origin || state.origin,
-      port: health.port || state.port,
-      pid: health.pid || state.pid
+      state: {
+        ...state,
+        origin: health.origin || state.origin,
+        port: health.port || state.port,
+        pid: health.pid || state.pid
+      },
+      health
     };
   } catch {
     return null;
   }
+}
+async function healthyDaemonState(state) {
+  const probe = await probeHealthyCanvasightDaemon(state);
+  if (!probe || probe.health.serverVersion !== SERVER_VERSION) return null;
+  return probe.state;
 }
 function processIsAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -19637,7 +23939,7 @@ async function canvasightDaemonPidsForPluginRoot() {
   if (process.platform === "win32") return [];
   try {
     const output = await new Promise((resolve) => {
-      const ps = spawn("ps", ["-axo", "pid=,command="], {
+      const ps = spawn8("ps", ["-axo", "pid=,command="], {
         stdio: ["ignore", "pipe", "ignore"]
       });
       let text = "";
@@ -19658,14 +23960,14 @@ async function canvasightDaemonPidsForPluginRoot() {
     }).filter((entry) => {
       if (!entry || entry.pid === process.pid) return false;
       if (!entry.command.includes("mcp/server.mjs") || !entry.command.includes("--daemon")) return false;
-      const currentScript = path2.join(pluginRoot, "mcp", "server.mjs");
+      const currentScript = path18.join(pluginRoot, "mcp", "server.mjs");
       const isCurrentCheckout = entry.command.includes(currentScript);
       const isCanvasightCache = /\/\.codex\/plugins\/cache\/canvasight-local\/canvasight\/[^/]+\/mcp\/server\.mjs/.test(entry.command);
       const isCanvasightPluginCheckout = /\/plugins\/canvasight\/mcp\/server\.mjs/.test(entry.command);
       if (!isCurrentCheckout && !isCanvasightCache && !isCanvasightPluginCheckout) return false;
       const homeArg = "--canvasight-home=".concat(canvasightHome());
       if (entry.command.includes(homeArg)) return true;
-      return canvasightHome() === path2.resolve(DEFAULT_CANVASIGHT_HOME) && !entry.command.includes("--canvasight-home=");
+      return canvasightHome() === path18.resolve(DEFAULT_CANVASIGHT_HOME) && !entry.command.includes("--canvasight-home=");
     }).map((entry) => entry.pid);
   } catch {
     return [];
@@ -19682,8 +23984,8 @@ async function waitForProcessExit(pid, timeoutMs = 1200) {
   }
   return !processIsAlive(pid);
 }
-async function stopDaemonStateProcess(state, reason = "stale") {
-  if (!state || state.pluginRoot !== pluginRoot) return false;
+async function stopDaemonStateProcess(state, reason = "stale", { allowDifferentPluginRoot = false } = {}) {
+  if (!state || !allowDifferentPluginRoot && state.pluginRoot !== pluginRoot) return false;
   const pid = Number(state.pid);
   const shouldStop = Number.isFinite(pid) && pid > 0 && state.serverVersion && state.serverVersion !== SERVER_VERSION && processIsAlive(pid);
   if (!shouldStop) {
@@ -19749,22 +24051,6 @@ async function waitForDaemon(token) {
   }
   throw new Error("Canvasight daemon did not start in time");
 }
-function daemonNodeExecutableCandidates() {
-  const candidates = [];
-  const seen = /* @__PURE__ */ new Set();
-  const add = (executable, source) => {
-    if (typeof executable !== "string" || !executable.trim()) return;
-    const normalized = executable.trim();
-    if (seen.has(normalized)) return;
-    seen.add(normalized);
-    candidates.push({ executable: normalized, source });
-  };
-  add(process.env.CANVASIGHT_NODE_BIN, "configured");
-  add("node", "path");
-  add(process.env.npm_node_execpath, "npm_node_execpath");
-  add(process.execPath, "process_exec_path");
-  return candidates;
-}
 function daemonSpawnErrorDetails(error51) {
   return {
     code: typeof error51?.code === "string" ? error51.code : "",
@@ -19783,7 +24069,7 @@ async function spawnDaemonWithNodeFallback(token) {
     const launched = await new Promise((resolve) => {
       let child;
       try {
-        child = spawn(candidate.executable, daemonArgs, {
+        child = spawn8(candidate.executable, daemonArgs, {
           cwd: pluginRoot,
           detached: true,
           stdio: "ignore",
@@ -19826,7 +24112,7 @@ async function spawnDaemonWithNodeFallback(token) {
 }
 async function readDaemonStartLock() {
   try {
-    const raw = await fsp2.readFile(canvasightDaemonStartLockPath(), "utf8");
+    const raw = await fsp14.readFile(canvasightDaemonStartLockPath(), "utf8");
     return JSON.parse(raw);
   } catch (error51) {
     if (error51?.code === "ENOENT" || error51 instanceof SyntaxError) return null;
@@ -19834,12 +24120,12 @@ async function readDaemonStartLock() {
   }
 }
 async function acquireDaemonStartLock() {
-  await fsp2.mkdir(canvasightHome(), { recursive: true });
+  await fsp14.mkdir(canvasightHome(), { recursive: true });
   const deadline = Date.now() + DAEMON_START_LOCK_WAIT_MS;
   while (Date.now() < deadline) {
     const token = crypto2.randomBytes(12).toString("base64url");
     try {
-      await fsp2.writeFile(
+      await fsp14.writeFile(
         canvasightDaemonStartLockPath(),
         "".concat(JSON.stringify({ pid: process.pid, token, serverVersion: SERVER_VERSION, pluginRoot, createdAt: nowIso() }), "\n"),
         { encoding: "utf8", flag: "wx" }
@@ -19855,7 +24141,7 @@ async function acquireDaemonStartLock() {
     let unreadableLockAgeMs = null;
     if (!lock) {
       try {
-        const stat = await fsp2.stat(canvasightDaemonStartLockPath());
+        const stat = await fsp14.stat(canvasightDaemonStartLockPath());
         unreadableLockAgeMs = Math.max(0, Date.now() - stat.mtimeMs);
       } catch (error51) {
         if (error51?.code !== "ENOENT") throw error51;
@@ -19863,7 +24149,7 @@ async function acquireDaemonStartLock() {
     }
     const stale = lock ? !processIsAlive(Number(lock.pid)) || Number.isFinite(createdAt) && Date.now() - createdAt >= DAEMON_START_LOCK_STALE_MS : unreadableLockAgeMs !== null && unreadableLockAgeMs >= DAEMON_START_LOCK_UNREADABLE_STALE_MS;
     if (stale) {
-      await fsp2.rm(canvasightDaemonStartLockPath(), { force: true });
+      await fsp14.rm(canvasightDaemonStartLockPath(), { force: true });
       continue;
     }
     await sleep(100);
@@ -19873,7 +24159,7 @@ async function acquireDaemonStartLock() {
 async function releaseDaemonStartLock(lock) {
   if (!lock?.acquired) return;
   const current = await readDaemonStartLock();
-  if (current?.token === lock.token) await fsp2.rm(canvasightDaemonStartLockPath(), { force: true });
+  if (current?.token === lock.token) await fsp14.rm(canvasightDaemonStartLockPath(), { force: true });
 }
 async function ensureDaemonServer() {
   const initialState = await readDaemonState();
@@ -19881,6 +24167,13 @@ async function ensureDaemonServer() {
   if (existing) {
     await stopOrphanDaemonProcesses(Number(existing.pid), "healthy_state_found");
     return existing;
+  }
+  const initialProbe = await probeHealthyCanvasightDaemon(initialState);
+  const initialVersionComparison = compareStableServerVersions(initialProbe?.health?.serverVersion, SERVER_VERSION);
+  if (initialProbe && (initialVersionComparison === null || initialVersionComparison > 0)) {
+    throw new Error(
+      "Canvasight runtime version mismatch: active daemon ".concat(initialProbe.health.serverVersion || "unknown", " is newer than this MCP ").concat(SERVER_VERSION, ". Reload Codex to use the installed Canvasight version; the older task will not replace the active daemon.")
+    );
   }
   const lock = await acquireDaemonStartLock();
   if (lock.existing) {
@@ -19894,8 +24187,17 @@ async function ensureDaemonServer() {
       await stopOrphanDaemonProcesses(Number(lockedExisting.pid), "healthy_state_after_lock");
       return lockedExisting;
     }
-    const hasCurrentVersionState = state?.pluginRoot === pluginRoot && state.serverVersion === SERVER_VERSION;
-    if (state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
+    const liveProbe = await probeHealthyCanvasightDaemon(state);
+    const liveVersionComparison = compareStableServerVersions(liveProbe?.health?.serverVersion, SERVER_VERSION);
+    if (liveProbe && (liveVersionComparison === null || liveVersionComparison > 0)) {
+      throw new Error(
+        "Canvasight runtime version mismatch: active daemon ".concat(liveProbe.health.serverVersion || "unknown", " is newer than this MCP ").concat(SERVER_VERSION, ". Reload Codex to use the installed Canvasight version; the older task will not replace the active daemon.")
+      );
+    }
+    const hasCurrentVersionState = state?.serverVersion === SERVER_VERSION;
+    if (liveProbe && liveVersionComparison !== null && liveVersionComparison < 0) {
+      await stopDaemonStateProcess(state, "older_version_takeover_before_spawn", { allowDifferentPluginRoot: true });
+    } else if (!liveProbe && state?.pluginRoot === pluginRoot && state.serverVersion && state.serverVersion !== SERVER_VERSION) {
       await stopDaemonStateProcess(state, "version_mismatch_before_spawn");
     }
     if (!hasCurrentVersionState) {
@@ -19946,7 +24248,7 @@ async function stopDaemonFromState() {
 }
 async function rememberProject(projectPath, project) {
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
-  const resolvedProjectPath = path2.resolve(projectPath);
+  const resolvedProjectPath = path18.resolve(projectPath);
   const state = await readUserState();
   const now = nowIso();
   const entry = {
@@ -20129,14 +24431,14 @@ function normalizeScatterDocument(value, projectPath) {
   };
 }
 async function ensureScatterLayout(projectPath) {
-  await fsp2.mkdir(projectPath, { recursive: true });
-  await fsp2.mkdir(scatterAssetsDir(projectPath), { recursive: true });
+  await fsp14.mkdir(projectPath, { recursive: true });
+  await fsp14.mkdir(scatterAssetsDir(projectPath), { recursive: true });
 }
 async function readScatterDocument(projectPath) {
   await ensureScatterLayout(projectPath);
   const target = scatterPath(projectPath);
   try {
-    const raw = await fsp2.readFile(target, "utf8");
+    const raw = await fsp14.readFile(target, "utf8");
     const document2 = normalizeScatterDocument(JSON.parse(raw), projectPath);
     await ensureProjectRevisionState(projectPath, document2);
     return document2;
@@ -20157,13 +24459,13 @@ async function writeScatterDocument(projectPath, document2) {
   await ensureScatterLayout(projectPath);
   const normalized = normalizeScatterDocument(document2, projectPath);
   if (normalized.version === 2) {
-    const backupPath = path2.join(scatterDir(projectPath), "scatter.v1.backup.json");
+    const backupPath = path18.join(scatterDir(projectPath), "scatter.v1.backup.json");
     try {
-      await fsp2.access(backupPath);
+      await fsp14.access(backupPath);
     } catch (error51) {
       if (error51?.code !== "ENOENT") throw error51;
       try {
-        const current = JSON.parse(await fsp2.readFile(scatterPath(projectPath), "utf8"));
+        const current = JSON.parse(await fsp14.readFile(scatterPath(projectPath), "utf8"));
         if (current?.version === 1) await writeJsonAtomic(backupPath, current);
       } catch (readError) {
         if (readError?.code !== "ENOENT" && !(readError instanceof SyntaxError)) throw readError;
@@ -20189,13 +24491,13 @@ function documentFingerprint(document2) {
   return crypto2.createHash("sha256").update(serialized).digest("hex");
 }
 async function writeJsonAtomic(targetPath, value) {
-  await fsp2.mkdir(path2.dirname(targetPath), { recursive: true });
-  const temporaryPath = path2.join(path2.dirname(targetPath), ".".concat(path2.basename(targetPath), ".").concat(process.pid, ".").concat(crypto2.randomUUID(), ".tmp"));
+  await fsp14.mkdir(path18.dirname(targetPath), { recursive: true });
+  const temporaryPath = path18.join(path18.dirname(targetPath), ".".concat(path18.basename(targetPath), ".").concat(process.pid, ".").concat(crypto2.randomUUID(), ".tmp"));
   try {
-    await fsp2.writeFile(temporaryPath, "".concat(JSON.stringify(value, null, 2), "\n"), "utf8");
-    await fsp2.rename(temporaryPath, targetPath);
+    await fsp14.writeFile(temporaryPath, "".concat(JSON.stringify(value, null, 2), "\n"), "utf8");
+    await fsp14.rename(temporaryPath, targetPath);
   } catch (error51) {
-    await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
+    await fsp14.rm(temporaryPath, { force: true }).catch(() => void 0);
     throw error51;
   }
 }
@@ -20213,26 +24515,26 @@ function normalizeRevisionState(value) {
 }
 async function ensureProjectRevisionState(projectPath, document2) {
   const key = projectRevisionKey(projectPath);
-  const fingerprint = documentFingerprint(document2);
+  const fingerprint2 = documentFingerprint(document2);
   const cached2 = projectRevisionStates.get(key);
-  if (cached2?.documentVersion === fingerprint) {
+  if (cached2?.documentVersion === fingerprint2) {
     setProjectDocumentRevision(projectPath, cached2.revision);
     return cached2;
   }
   let state;
   try {
-    state = normalizeRevisionState(JSON.parse(await fsp2.readFile(scatterRevisionStatePath(projectPath), "utf8")));
+    state = normalizeRevisionState(JSON.parse(await fsp14.readFile(scatterRevisionStatePath(projectPath), "utf8")));
   } catch (error51) {
     if (error51?.code !== "ENOENT" && !(error51 instanceof SyntaxError)) throw error51;
     state = normalizeRevisionState(null);
   }
-  if (state.documentVersion && state.documentVersion !== fingerprint) {
+  if (state.documentVersion && state.documentVersion !== fingerprint2) {
     state.revision += 1;
     state.receipts = [];
   }
-  state.documentVersion = fingerprint;
-  if (!state.history.some((entry) => entry.revision === state.revision && entry.documentVersion === fingerprint)) {
-    state.history = [...state.history, { revision: state.revision, documentVersion: fingerprint }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS);
+  state.documentVersion = fingerprint2;
+  if (!state.history.some((entry) => entry.revision === state.revision && entry.documentVersion === fingerprint2)) {
+    state.history = [...state.history, { revision: state.revision, documentVersion: fingerprint2 }].slice(-MAX_DOCUMENT_MUTATION_RECEIPTS);
   }
   projectRevisionStates.set(key, state);
   setProjectDocumentRevision(projectPath, state.revision);
@@ -20289,11 +24591,11 @@ function conflictCopyName(sourceName, language, createdAt, existingNames, copyKi
   return candidate;
 }
 function deterministicUniqueId(prefix, mutationId, sourceId, usedIds) {
-  const digest = crypto2.createHash("sha256").update("".concat(mutationId, ":").concat(sourceId)).digest("hex").slice(0, 12);
+  const digest4 = crypto2.createHash("sha256").update("".concat(mutationId, ":").concat(sourceId)).digest("hex").slice(0, 12);
   const safeSource = String(sourceId || "item").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48);
-  let candidate = "".concat(prefix, "-").concat(safeSource, "-").concat(digest);
+  let candidate = "".concat(prefix, "-").concat(safeSource, "-").concat(digest4);
   let serial = 2;
-  while (usedIds.has(candidate)) candidate = "".concat(prefix, "-").concat(safeSource, "-").concat(digest, "-").concat(serial++);
+  while (usedIds.has(candidate)) candidate = "".concat(prefix, "-").concat(safeSource, "-").concat(digest4, "-").concat(serial++);
   usedIds.add(candidate);
   return candidate;
 }
@@ -20552,7 +24854,7 @@ function graphHasGuidanceNode(rawNodes, guidanceFile) {
   });
 }
 function projectGuidanceFileStatus(projectPath, guidanceFile) {
-  const existingPath = guidanceFile.candidates.map((candidate) => path2.join(projectPath, candidate)).find((candidate) => fs2.existsSync(candidate));
+  const existingPath = guidanceFile.candidates.map((candidate) => path18.join(projectPath, candidate)).find((candidate) => fs2.existsSync(candidate));
   if (!existingPath) return "missing";
   if (guidanceFile.canonicalName !== "AGENTS.md") return "present";
   try {
@@ -20865,8 +25167,8 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
   if (selectedTemplateIds.size === 0) {
     return { templates, pendingAssetPaths: /* @__PURE__ */ new Set(), entries: [] };
   }
-  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
-  const templateAssetsRoot = path2.resolve(canvasightTemplateAssetsDir());
+  const assetsRoot = path18.resolve(scatterAssetsDir(projectPath));
+  const templateAssetsRoot = path18.resolve(canvasightTemplateAssetsDir());
   const pendingAssetPaths = /* @__PURE__ */ new Set();
   const entries = [];
   const preparedTemplates = [];
@@ -20878,14 +25180,14 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
     const attachments = [];
     for (const value of template.attachments) {
       const attachment = normalizeAttachment(value);
-      const sourceCandidate = typeof value?.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : typeof value?.relativePath === "string" && value.relativePath.trim() ? path2.resolve(canvasightHome(), value.relativePath.trim()) : "";
-      const sourcePath = path2.resolve(sourceCandidate || ".");
-      if (!sourceCandidate || !isPathInside(sourcePath, templateAssetsRoot)) {
+      const sourceCandidate = typeof value?.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : typeof value?.relativePath === "string" && value.relativePath.trim() ? path18.resolve(canvasightHome(), value.relativePath.trim()) : "";
+      const sourcePath = path18.resolve(sourceCandidate || ".");
+      if (!sourceCandidate || !isPathInside2(sourcePath, templateAssetsRoot)) {
         throw new HttpError(400, "Template attachment is not a Canvasight template asset: ".concat(attachment.originalName), "invalid_template_asset_path");
       }
       let stat;
       try {
-        stat = await fsp2.lstat(sourcePath);
+        stat = await fsp14.lstat(sourcePath);
       } catch {
         throw new HttpError(400, "Template attachment is unavailable: ".concat(attachment.originalName), "template_asset_unavailable");
       }
@@ -20894,7 +25196,7 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
       }
       const originalName = safeFileName(attachment.originalName);
       const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
-      const storedPath = path2.join(assetsRoot, uniqueName);
+      const storedPath = path18.join(assetsRoot, uniqueName);
       const mime = normalizedAttachmentMime(originalName, attachment.mime);
       const prepared = normalizeAttachment({
         ...attachment,
@@ -20908,58 +25210,58 @@ async function prepareGraphTemplateAssets(args, templates, projectPath) {
         createdAt: nowIso()
       });
       attachments.push(prepared);
-      pendingAssetPaths.add(path2.resolve(storedPath));
-      entries.push({ sourcePath, storedPath: path2.resolve(storedPath) });
+      pendingAssetPaths.add(path18.resolve(storedPath));
+      entries.push({ sourcePath, storedPath: path18.resolve(storedPath) });
     }
     preparedTemplates.push({ ...template, attachments });
   }
   return { templates: preparedTemplates, pendingAssetPaths, entries };
 }
 async function commitPreparedGraphAssets(entries, referencedPaths) {
-  const selected = entries.filter((entry) => referencedPaths.has(path2.resolve(entry.storedPath)));
+  const selected = entries.filter((entry) => referencedPaths.has(path18.resolve(entry.storedPath)));
   const committedPaths = [];
   try {
     for (const entry of selected) {
-      const stat = await fsp2.lstat(entry.sourcePath);
+      const stat = await fsp14.lstat(entry.sourcePath);
       if (!stat.isFile() || stat.isSymbolicLink()) {
-        throw new HttpError(400, "Template attachment must remain a regular file: ".concat(path2.basename(entry.sourcePath)), "invalid_template_asset_file");
+        throw new HttpError(400, "Template attachment must remain a regular file: ".concat(path18.basename(entry.sourcePath)), "invalid_template_asset_file");
       }
-      await fsp2.mkdir(path2.dirname(entry.storedPath), { recursive: true });
+      await fsp14.mkdir(path18.dirname(entry.storedPath), { recursive: true });
       const temporaryPath = "".concat(entry.storedPath, ".").concat(process.pid, ".").concat(crypto2.randomBytes(4).toString("hex"), ".tmp");
       try {
-        await fsp2.copyFile(entry.sourcePath, temporaryPath, fs2.constants.COPYFILE_EXCL);
-        await fsp2.rename(temporaryPath, entry.storedPath);
+        await fsp14.copyFile(entry.sourcePath, temporaryPath, fs2.constants.COPYFILE_EXCL);
+        await fsp14.rename(temporaryPath, entry.storedPath);
       } catch (error51) {
-        await fsp2.rm(temporaryPath, { force: true }).catch(() => void 0);
+        await fsp14.rm(temporaryPath, { force: true }).catch(() => void 0);
         throw error51;
       }
       committedPaths.push(entry.storedPath);
     }
     return committedPaths;
   } catch (error51) {
-    await Promise.all(committedPaths.map((storedPath) => fsp2.rm(storedPath, { force: true }).catch(() => void 0)));
+    await Promise.all(committedPaths.map((storedPath) => fsp14.rm(storedPath, { force: true }).catch(() => void 0)));
     throw error51;
   }
 }
 function referencedPreparedAssetPaths(pages, pendingAssetPaths) {
   return new Set(
-    pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").map((node) => path2.resolve(node.data?.asset?.storedPath || ".")).filter((storedPath) => pendingAssetPaths.has(storedPath))
+    pages.flatMap((page) => page.nodes).filter((node) => node.type === "asset").map((node) => path18.resolve(node.data?.asset?.storedPath || ".")).filter((storedPath) => pendingAssetPaths.has(storedPath))
   );
 }
 function normalizeManagedGraphAsset(value, projectPath, fieldPath, pendingAssetPaths = /* @__PURE__ */ new Set()) {
   if (!isObject2(value)) throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
-  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
+  const assetsRoot = path18.resolve(scatterAssetsDir(projectPath));
   const relativePath = typeof value.relativePath === "string" ? value.relativePath.trim() : "";
-  const candidatePath = typeof value.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : relativePath ? path2.resolve(projectPath, relativePath) : "";
-  const storedPath = path2.resolve(candidatePath || ".");
-  if (!candidatePath || !isPathInside(storedPath, assetsRoot)) {
+  const candidatePath = typeof value.storedPath === "string" && value.storedPath.trim() ? value.storedPath.trim() : relativePath ? path18.resolve(projectPath, relativePath) : "";
+  const storedPath = path18.resolve(candidatePath || ".");
+  if (!candidatePath || !isPathInside2(storedPath, assetsRoot)) {
     throw new HttpError(400, "".concat(fieldPath, " must reference a managed project asset"));
   }
   const asset = normalizeAttachment({
     ...value,
     storedPath,
-    relativePath: relativePath || path2.relative(projectPath, storedPath),
-    originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path2.basename(storedPath),
+    relativePath: relativePath || path18.relative(projectPath, storedPath),
+    originalName: typeof value.originalName === "string" && value.originalName.trim() ? value.originalName.trim() : path18.basename(storedPath),
     fileUrl: assetUrlForPath(storedPath)
   });
   if (!pendingAssetPaths.has(storedPath)) {
@@ -22007,7 +26309,7 @@ function validateGraphCandidate(page, args, projectPath, options = {}) {
   };
 }
 function graphContextProjectKey(projectPath) {
-  return path2.resolve(projectPath);
+  return path18.resolve(projectPath);
 }
 function rememberGraphContext(projectPath, document2, revisionState) {
   const projectKey = graphContextProjectKey(projectPath);
@@ -22049,7 +26351,7 @@ var writeGeneratedImages = createGeneratedImageWriter({
   ensureProjectRevisionState,
   graphNodeBounds,
   isObject: isObject2,
-  isPathInside,
+  isPathInside: isPathInside2,
   normalizeAttachment,
   normalizeScatterDocument,
   nowIso,
@@ -22376,7 +26678,7 @@ async function writeScatterGraph(projectPath, args) {
         edges: activePage.edges
       });
     } catch (error51) {
-      await Promise.all(committedGraphAssetPaths.map((storedPath) => fsp2.rm(storedPath, { force: true }).catch(() => void 0)));
+      await Promise.all(committedGraphAssetPaths.map((storedPath) => fsp14.rm(storedPath, { force: true }).catch(() => void 0)));
       throw error51;
     }
     const documentRevision = currentRevision + 1;
@@ -22425,13 +26727,13 @@ async function openProject(projectPath) {
   };
 }
 function safeGraphContextAssetRelativePath(value, projectPath) {
-  const assetsRoot = path2.resolve(scatterAssetsDir(projectPath));
-  const storedPath = typeof value?.storedPath === "string" && value.storedPath.trim() ? path2.resolve(value.storedPath.trim()) : "";
-  if (storedPath && isPathInside(storedPath, assetsRoot)) return toRelativeProjectPath(projectPath, storedPath);
+  const assetsRoot = path18.resolve(scatterAssetsDir(projectPath));
+  const storedPath = typeof value?.storedPath === "string" && value.storedPath.trim() ? path18.resolve(value.storedPath.trim()) : "";
+  if (storedPath && isPathInside2(storedPath, assetsRoot)) return toRelativeProjectPath(projectPath, storedPath);
   const relativePath = typeof value?.relativePath === "string" ? value.relativePath.trim() : "";
-  if (!relativePath || path2.isAbsolute(relativePath)) return "";
-  const resolvedPath = path2.resolve(projectPath, relativePath);
-  return isPathInside(resolvedPath, assetsRoot) ? toRelativeProjectPath(projectPath, resolvedPath) : "";
+  if (!relativePath || path18.isAbsolute(relativePath)) return "";
+  const resolvedPath = path18.resolve(projectPath, relativePath);
+  return isPathInside2(resolvedPath, assetsRoot) ? toRelativeProjectPath(projectPath, resolvedPath) : "";
 }
 function summarizeGraphContextNode(node, projectPath) {
   const body = typeof node?.data?.body === "string" ? node.data.body : "";
@@ -22816,7 +27118,7 @@ function waitForOpenAttemptReady(sessionIdValue, openAttemptIdValue, timeoutMs, 
 }
 function getSession(id) {
   const session = sessions.get(id);
-  if (!session) throw new HttpError(404, "Session not found");
+  if (!session) throw new HttpError(404, "Session not found", "session_not_found");
   return session;
 }
 function revisionPollContext(session, identity) {
@@ -22860,7 +27162,7 @@ function claimRevisionPollLease(session, identity, evidence = {}) {
   const expiresAt = now + REVISION_POLL_LEASE_MS;
   revisionPollLeases.set(context.key, {
     owner: context.owner,
-    projectPath: path2.resolve(session.projectPath),
+    projectPath: path18.resolve(session.projectPath),
     threadId: context.threadId,
     expiresAt
   });
@@ -22966,7 +27268,7 @@ function claimPresentationRecovery(session, identity) {
   const cooldownExpiresAt = now + PRESENTATION_RECOVERY_COOLDOWN_MS;
   presentationRecoveryLeases.set(key, {
     owner,
-    projectPath: path2.resolve(session.projectPath),
+    projectPath: path18.resolve(session.projectPath),
     threadId,
     bindingIssuedAt: attempt.bindingIssuedAt,
     leaseExpiresAt,
@@ -22988,11 +27290,11 @@ function claimPresentationRecovery(session, identity) {
   };
 }
 function projectThreadClaimKey(projectPath) {
-  return path2.resolve(projectPath);
+  return path18.resolve(projectPath);
 }
 function sessionsForProject(projectPath) {
-  const resolved = path2.resolve(projectPath);
-  return Array.from(sessions.values()).filter((session) => path2.resolve(session.projectPath) === resolved);
+  const resolved = path18.resolve(projectPath);
+  return Array.from(sessions.values()).filter((session) => path18.resolve(session.projectPath) === resolved);
 }
 function sessionSortTime(session) {
   return Date.parse(session.threadClaimedAt || session.createdAt || "") || 0;
@@ -23010,13 +27312,22 @@ function rememberThreadClaim(session, threadId) {
     threadId,
     claimedAt
   });
+  void projectHistoryTaskBindings.bind({
+    threadId,
+    projectPath: session.projectPath,
+    source: "canvasight-session-claim"
+  }).catch((error51) => appendMcpLifecycle("project_history_task_binding_error", {
+    threadId,
+    projectPath: session.projectPath,
+    error: serializeError(error51)
+  }));
   return claimedAt;
 }
 function resolvedThreadClaim(projectPath) {
   const claim = projectThreadClaims.get(projectThreadClaimKey(projectPath));
   if (claim) {
     const session = sessions.get(claim.sessionId);
-    if (session && path2.resolve(session.projectPath) === path2.resolve(projectPath) && session.codexThreadId === claim.threadId) {
+    if (session && path18.resolve(session.projectPath) === path18.resolve(projectPath) && session.codexThreadId === claim.threadId) {
       return {
         claim,
         session
@@ -23042,7 +27353,7 @@ async function claimThreadForProject({ projectPath, sessionId: sessionId2, langu
   }
   let targetSession = sessionId2 ? getSession(sessionId2) : null;
   const resolvedProjectPath = optionalProjectPath(projectPath) || targetSession?.projectPath || await resolveSessionProjectPath(null, resolvedThreadId, { requireThreadProject: Boolean(resolvedThreadId) });
-  if (targetSession && path2.resolve(targetSession.projectPath) !== path2.resolve(resolvedProjectPath)) {
+  if (targetSession && path18.resolve(targetSession.projectPath) !== path18.resolve(resolvedProjectPath)) {
     targetSession = null;
   }
   const projectSessions = sessionsForProject(resolvedProjectPath);
@@ -23057,7 +27368,7 @@ async function claimThreadForProject({ projectPath, sessionId: sessionId2, langu
   }
   const claimedSessionIds = [];
   for (const session of projectSessions) {
-    if (path2.resolve(session.projectPath) !== path2.resolve(resolvedProjectPath)) continue;
+    if (path18.resolve(session.projectPath) !== path18.resolve(resolvedProjectPath)) continue;
     rememberThreadClaim(session, resolvedThreadId);
     claimedSessionIds.push(session.id);
   }
@@ -23100,7 +27411,7 @@ function disabledAgentTeamAgentsMdResult(projectPath, reason) {
   return {
     status: "skipped",
     reason,
-    path: projectPath ? path2.join(projectPath, "AGENTS.md") : null
+    path: projectPath ? path18.join(projectPath, "AGENTS.md") : null
   };
 }
 function agentTeamTimestamp() {
@@ -23127,33 +27438,33 @@ function initialAgentTeamRoster(agentTeam) {
   return "# Canvasight Agent Team Roster\n\nThis registry stores role-seat runtime mappings. Issue reports remain authoritative for issue ownership.\n\n```yaml\nschema_version: 1\nroles:\n".concat(roles.join("\n"), "\n```\n");
 }
 async function ensureAgentTeamRoster(projectPath, agentTeam, agentsMd) {
-  const rosterPath = path2.join(projectPath, "ROSTER.md");
+  const rosterPath = path18.join(projectPath, "ROSTER.md");
   if (!agentTeam.enabled) return { status: "skipped", reason: "agent_team_disabled", path: rosterPath };
   if (agentsMd.status === "skipped" || agentsMd.status === "failed") {
     return { status: "skipped", reason: "agents_md_unavailable", path: rosterPath };
   }
   try {
-    await fsp2.access(rosterPath);
+    await fsp14.access(rosterPath);
     return { status: "unchanged", reason: "existing_roster", path: rosterPath };
   } catch (error51) {
     if (error51?.code !== "ENOENT") return { status: "failed", reason: "read_failed", path: rosterPath, error: error51?.message || String(error51) };
   }
   try {
-    await fsp2.writeFile(rosterPath, initialAgentTeamRoster(agentTeam), "utf8");
+    await fsp14.writeFile(rosterPath, initialAgentTeamRoster(agentTeam), "utf8");
     return { status: "created", reason: "missing_roster", path: rosterPath };
   } catch (error51) {
     return { status: "failed", reason: "write_failed", path: rosterPath, error: error51?.message || String(error51) };
   }
 }
 async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
-  const agentsPath = path2.join(projectPath, "AGENTS.md");
+  const agentsPath = path18.join(projectPath, "AGENTS.md");
   if (!agentTeam.enabled) return disabledAgentTeamAgentsMdResult(projectPath, "agent_team_disabled");
   try {
-    await fsp2.mkdir(projectPath, { recursive: true });
+    await fsp14.mkdir(projectPath, { recursive: true });
     let existing = "";
     let existed = true;
     try {
-      existing = await fsp2.readFile(agentsPath, "utf8");
+      existing = await fsp14.readFile(agentsPath, "utf8");
     } catch (error51) {
       if (error51?.code !== "ENOENT") throw error51;
       existed = false;
@@ -23172,7 +27483,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
       const after = existing.slice(endIndex + AGENT_TEAM_AGENTS_MD_END.length).replace(/^\s*/, "");
       const next2 = [before, AGENT_TEAM_AGENTS_MD_BLOCK, after].filter(Boolean).join("\n\n") + "\n";
       if (next2 !== existing) {
-        await fsp2.writeFile(agentsPath, next2, "utf8");
+        await fsp14.writeFile(agentsPath, next2, "utf8");
         return {
           status: "updated",
           reason: "managed_block_refreshed",
@@ -23186,7 +27497,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
       };
     }
     const next = existed && existing.trim() ? "".concat(existing.replace(/\s*$/, ""), "\n\n").concat(AGENT_TEAM_AGENTS_MD_BLOCK, "\n") : "".concat(AGENT_TEAM_AGENTS_MD_BLOCK, "\n");
-    await fsp2.writeFile(agentsPath, next, "utf8");
+    await fsp14.writeFile(agentsPath, next, "utf8");
     return {
       status: existed ? "appended" : "created",
       reason: existed ? "missing_managed_block" : "missing_agents_md",
@@ -23203,7 +27514,7 @@ async function ensureAgentTeamAgentsMd(projectPath, agentTeam) {
 }
 function normalizeRunPayload(session, value) {
   const payload = isObject2(value) ? value : {};
-  const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path2.resolve(payload.projectPath) : session.projectPath;
+  const projectPath = typeof payload.projectPath === "string" && payload.projectPath ? path18.resolve(payload.projectPath) : session.projectPath;
   const codexMode = normalizeCodexMode();
   return {
     status: "received",
@@ -23234,7 +27545,7 @@ function completeWaiter(waiter, payload) {
 }
 function waiterMatches(waiter, session, payload) {
   if (waiter.sessionId && waiter.sessionId !== session.id) return false;
-  if (waiter.projectPath && path2.resolve(waiter.projectPath) !== path2.resolve(payload.projectPath || session.projectPath)) return false;
+  if (waiter.projectPath && path18.resolve(waiter.projectPath) !== path18.resolve(payload.projectPath || session.projectPath)) return false;
   if (waiter.threadId && session.codexThreadId && waiter.threadId !== session.codexThreadId) return false;
   return true;
 }
@@ -23355,9 +27666,9 @@ async function prepareWidgetRun(session, payload) {
   };
   return normalized;
 }
-function queuedRunMatchesThread(run, threadId) {
+function queuedRunMatchesThread(run2, threadId) {
   if (!threadId) return true;
-  const runThreadId = run?.delivery?.threadId || run?.codexNative?.threadId || run?.codexTurn?.threadId || null;
+  const runThreadId = run2?.delivery?.threadId || run2?.codexNative?.threadId || run2?.codexTurn?.threadId || null;
   return !runThreadId || runThreadId === threadId;
 }
 function takeQueuedRun(sessionIdValue, projectPath, threadId = null) {
@@ -23366,19 +27677,19 @@ function takeQueuedRun(sessionIdValue, projectPath, threadId = null) {
     if (!session) return null;
     if (projectPath) {
       const index2 = session.runQueue.findIndex(
-        (run) => queuedRunMatchesThread(run, threadId) && path2.resolve(run.projectPath || session.projectPath) === path2.resolve(projectPath)
+        (run2) => queuedRunMatchesThread(run2, threadId) && path18.resolve(run2.projectPath || session.projectPath) === path18.resolve(projectPath)
       );
       return index2 >= 0 ? session.runQueue.splice(index2, 1)[0] : null;
     }
-    const index = session.runQueue.findIndex((run) => queuedRunMatchesThread(run, threadId));
+    const index = session.runQueue.findIndex((run2) => queuedRunMatchesThread(run2, threadId));
     return index >= 0 ? session.runQueue.splice(index, 1)[0] : null;
   }
   const resolvedProjectPath = optionalProjectPath(projectPath);
   for (const session of sessions.values()) {
-    const index = session.runQueue.findIndex((run) => {
-      if (!queuedRunMatchesThread(run, threadId)) return false;
+    const index = session.runQueue.findIndex((run2) => {
+      if (!queuedRunMatchesThread(run2, threadId)) return false;
       if (!resolvedProjectPath) return true;
-      return path2.resolve(run.projectPath || session.projectPath) === resolvedProjectPath;
+      return path18.resolve(run2.projectPath || session.projectPath) === resolvedProjectPath;
     });
     if (index >= 0) return session.runQueue.splice(index, 1)[0];
   }
@@ -23543,16 +27854,16 @@ async function saveAttachments(projectPath, files) {
     const originalName = safeFileName(input.name);
     const mime = normalizedAttachmentMime(originalName, input.mime);
     const uniqueName = "".concat(Date.now(), "-").concat(crypto2.randomBytes(4).toString("hex"), "-").concat(originalName);
-    const storedPath = path2.join(assetsDir, uniqueName);
+    const storedPath = path18.join(assetsDir, uniqueName);
     let bytes;
     if (typeof input.dataBase64 === "string") {
       bytes = Buffer.from(input.dataBase64, "base64");
     } else if (typeof input.path === "string" && input.path.trim()) {
-      bytes = await fsp2.readFile(path2.resolve(input.path));
+      bytes = await fsp14.readFile(path18.resolve(input.path));
     } else {
       throw new HttpError(400, "attachment requires dataBase64 or path");
     }
-    await fsp2.writeFile(storedPath, bytes);
+    await fsp14.writeFile(storedPath, bytes);
     saved.push({
       id: crypto2.randomUUID(),
       kind: attachmentKind(originalName, mime),
@@ -23570,7 +27881,7 @@ async function saveAttachments(projectPath, files) {
 }
 function revealPath(targetPath) {
   if (typeof targetPath !== "string" || !targetPath.trim()) return;
-  const resolved = path2.resolve(targetPath);
+  const resolved = path18.resolve(targetPath);
   let command;
   let args;
   if (process.platform === "darwin") {
@@ -23581,9 +27892,9 @@ function revealPath(targetPath) {
     args = ["/select,", resolved];
   } else {
     command = "xdg-open";
-    args = [fs2.existsSync(resolved) && fs2.statSync(resolved).isDirectory() ? resolved : path2.dirname(resolved)];
+    args = [fs2.existsSync(resolved) && fs2.statSync(resolved).isDirectory() ? resolved : path18.dirname(resolved)];
   }
-  const child = spawn(command, args, {
+  const child = spawn8(command, args, {
     detached: true,
     stdio: "ignore"
   });
@@ -23592,7 +27903,7 @@ function revealPath(targetPath) {
 }
 function openPath(targetPath) {
   if (typeof targetPath !== "string" || !targetPath.trim()) return;
-  const resolved = path2.resolve(targetPath);
+  const resolved = path18.resolve(targetPath);
   let command;
   let args;
   if (process.platform === "darwin") {
@@ -23605,7 +27916,7 @@ function openPath(targetPath) {
     command = "xdg-open";
     args = [resolved];
   }
-  const child = spawn(command, args, { detached: true, stdio: "ignore" });
+  const child = spawn8(command, args, { detached: true, stdio: "ignore" });
   child.on("error", () => void 0);
   child.unref();
 }
@@ -23629,7 +27940,7 @@ function openExternalBrowser(url2) {
     command = "xdg-open";
     args = [url2];
   }
-  const child = spawn(command, args, {
+  const child = spawn8(command, args, {
     detached: true,
     stdio: "ignore"
   });
@@ -23649,13 +27960,13 @@ function escapeInlineStyle(source) {
 }
 function inlineCanvasightApp() {
   if (cachedInlineCanvasightApp) return cachedInlineCanvasightApp;
-  const indexPath = path2.join(distRoot, "index.html");
+  const indexPath = path18.join(distRoot, "index.html");
   const indexHtml = fs2.readFileSync(indexPath, "utf8");
   const scriptMatch = indexHtml.match(/<script[^>]+src="([^"]+)"[^>]*><\/script>/);
   const styleMatch = indexHtml.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"[^>]*>/);
   if (!scriptMatch) throw new Error("Could not find Canvasight app bundle in dist/index.html.");
-  const scriptPath = path2.join(distRoot, scriptMatch[1].replace(/^\//, ""));
-  const stylePath = styleMatch ? path2.join(distRoot, styleMatch[1].replace(/^\//, "")) : "";
+  const scriptPath = path18.join(distRoot, scriptMatch[1].replace(/^\//, ""));
+  const stylePath = styleMatch ? path18.join(distRoot, styleMatch[1].replace(/^\//, "")) : "";
   cachedInlineCanvasightApp = {
     script: fs2.readFileSync(scriptPath, "utf8"),
     style: stylePath ? fs2.readFileSync(stylePath, "utf8") : ""
@@ -23757,7 +28068,7 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
   const confirmationTimeoutMs = nativeCodexConfirmationTimeoutMs();
   const requestFactories = Array.isArray(requests) ? requests : [];
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
+    const child = spawn8(bin, args, {
       stdio: ["pipe", "pipe", "pipe"]
     });
     let stdout = "";
@@ -23978,6 +28289,48 @@ function appServerRequestSequenceViaTransport(requests, { experimentalApi = fals
 function appServerRequest(method, params, { experimentalApi = false, runtime = null } = {}) {
   return appServerRequestSequence([{ method, params }], { experimentalApi, runtime }).then((results) => results[0] || {});
 }
+var {
+  projectHistorySnapshot,
+  enableProjectHistory,
+  refreshProjectHistory,
+  inspectCodexTurn,
+  observationMatchForProject,
+  recordProjectHistoryHookTurn,
+  recordProjectHistoryHookTurnStarted
+} = createProjectHistoryRuntime({
+  appServerRequest,
+  optionalProjectPath,
+  optionalThreadId,
+  HttpError
+});
+var {
+  captureStop: captureProjectHistoryStopHook,
+  captureUserPrompt: captureProjectHistoryUserPromptHook
+} = createProjectHistoryHookController({
+  HttpError,
+  activeSessions: () => sessions.values(),
+  appendLifecycle: appendMcpLifecycle,
+  inspectCodexTurn,
+  maxRecentProjects: MAX_RECENT_PROJECTS,
+  observationMatchForProject,
+  optionalProjectPath,
+  optionalThreadId,
+  projectHistoryTaskBindings,
+  recentProjects,
+  recordProjectHistoryHookTurn,
+  recordProjectHistoryHookTurnStarted
+});
+var handleProjectHistorySessionAction = createProjectHistoryHttpController({
+  HttpError,
+  assertMethod,
+  enableProjectHistory,
+  normalizeProjectPath,
+  optionalThreadId,
+  projectHistorySnapshot,
+  readJsonBody,
+  refreshProjectHistory,
+  sendJson
+});
 function normalizeSkillListLimit(value) {
   return Math.max(1, Math.min(Math.floor(toNumber(Number(value), 50)), MAX_SKILL_SUMMARIES));
 }
@@ -24219,10 +28572,10 @@ async function applyWidgetCodexMode(session, payload) {
 function staticTarget(urlPath) {
   const decodedPath = decodeURIComponent(urlPath);
   const requested = decodedPath === "/" ? "/index.html" : decodedPath;
-  const normalized = path2.normalize(requested).replace(/^(\.\.[/\\])+/, "");
-  const target = path2.join(distRoot, normalized);
-  const resolved = path2.resolve(target);
-  if (!resolved.startsWith(path2.resolve(distRoot))) {
+  const normalized = path18.normalize(requested).replace(/^(\.\.[/\\])+/, "");
+  const target = path18.join(distRoot, normalized);
+  const resolved = path18.resolve(target);
+  if (!resolved.startsWith(path18.resolve(distRoot))) {
     throw new HttpError(403, "Forbidden");
   }
   return resolved;
@@ -24230,12 +28583,12 @@ function staticTarget(urlPath) {
 async function serveStatic(req, res, url2) {
   let target = staticTarget(url2.pathname);
   try {
-    const stat = await fsp2.stat(target);
-    if (stat.isDirectory()) target = path2.join(target, "index.html");
+    const stat = await fsp14.stat(target);
+    if (stat.isDirectory()) target = path18.join(target, "index.html");
   } catch {
-    const indexPath = path2.join(distRoot, "index.html");
+    const indexPath = path18.join(distRoot, "index.html");
     try {
-      await fsp2.access(indexPath);
+      await fsp14.access(indexPath);
       target = indexPath;
     } catch {
       sendText(res, 503, "Canvasight dist is not built. Run the plugin build before opening the UI.");
@@ -24243,7 +28596,7 @@ async function serveStatic(req, res, url2) {
     }
   }
   try {
-    const stat = await fsp2.stat(target);
+    const stat = await fsp14.stat(target);
     if (!stat.isFile()) {
       sendText(res, 404, "Not found");
       return;
@@ -24285,9 +28638,9 @@ function managedAssetResponseHeaders(assetPath, headers = {}) {
 }
 async function serveAsset(req, res, url2) {
   assertMethod(req, "GET");
-  const assetPath = path2.resolve(base64UrlDecode(url2.searchParams.get("path")));
+  const assetPath = path18.resolve(base64UrlDecode(url2.searchParams.get("path")));
   if (!isScatterAssetPath(assetPath) && !isTemplateAssetPath(assetPath)) throw new HttpError(403, "Forbidden");
-  const stat = await fsp2.stat(assetPath);
+  const stat = await fsp14.stat(assetPath);
   if (!stat.isFile()) throw new HttpError(404, "Asset not found");
   const range = parseSingleByteRange(req.headers.range, stat.size);
   if (range === false) {
@@ -24418,6 +28771,7 @@ async function handleSessionApi(req, res, url2) {
     });
     return true;
   }
+  if (await handleProjectHistorySessionAction(req, res, action, session)) return true;
   if (action === "document") {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
@@ -24553,21 +28907,21 @@ async function handleSessionApi(req, res, url2) {
     assertMethod(req, "POST");
     const body = await readJsonBody(req);
     const storedPath = typeof body?.storedPath === "string" ? body.storedPath.trim() : "";
-    if (!storedPath || !path2.isAbsolute(storedPath)) {
+    if (!storedPath || !path18.isAbsolute(storedPath)) {
       throw new HttpError(400, "Canvasight attachment preview requires an absolute storedPath.", "invalid_attachment_preview_path");
     }
-    const assetPath = path2.resolve(storedPath);
+    const assetPath = path18.resolve(storedPath);
     const projectPath = normalizeProjectPath(session.projectPath);
     const allowedRoots = [scatterAssetsDir(projectPath), canvasightTemplateAssetsDir()];
-    const stat = await fsp2.lstat(assetPath);
+    const stat = await fsp14.lstat(assetPath);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw new HttpError(403, "Canvasight attachment preview requires a regular project asset.", "forbidden_attachment_preview_path");
     }
-    const realAssetPath = await fsp2.realpath(assetPath);
+    const realAssetPath = await fsp14.realpath(assetPath);
     const realAllowedRoots = await Promise.all(
-      allowedRoots.map((root) => fsp2.realpath(root).catch(() => null))
+      allowedRoots.map((root) => fsp14.realpath(root).catch(() => null))
     );
-    if (!realAllowedRoots.some((root) => root && isPathInside(realAssetPath, root))) {
+    if (!realAllowedRoots.some((root) => root && isPathInside2(realAssetPath, root))) {
       throw new HttpError(403, "Canvasight attachment preview is outside the current project.", "forbidden_attachment_preview_path");
     }
     if (stat.size > MAX_WIDGET_IMAGE_PREVIEW_BYTES) {
@@ -24577,7 +28931,7 @@ async function handleSessionApi(req, res, url2) {
     if (!mime.startsWith("image/")) {
       throw new HttpError(415, "Canvasight attachment preview requires an image.", "attachment_preview_not_image");
     }
-    const bytes = await fsp2.readFile(realAssetPath);
+    const bytes = await fsp14.readFile(realAssetPath);
     sendJson(res, 200, {
       dataBase64: bytes.toString("base64"),
       mime,
@@ -24718,6 +29072,18 @@ async function handleHttp(req, res) {
       }
       throw new HttpError(405, "Expected GET, POST, or PUT");
     }
+    if (url2.pathname === "/api/project-history/hooks/stop") {
+      assertDaemonAuthorized(req, url2);
+      assertMethod(req, "POST");
+      sendJson(res, 200, await captureProjectHistoryStopHook(await readJsonBody(req)));
+      return;
+    }
+    if (url2.pathname === "/api/project-history/hooks/user-prompt-submit") {
+      assertDaemonAuthorized(req, url2);
+      assertMethod(req, "POST");
+      sendJson(res, 200, await captureProjectHistoryUserPromptHook(await readJsonBody(req)));
+      return;
+    }
     if (url2.pathname === "/api/templates" || url2.pathname.startsWith("/api/templates/")) {
       assertDaemonAuthorized(req, url2);
       const templateId = url2.pathname.startsWith("/api/templates/") ? decodeURIComponent(url2.pathname.slice("/api/templates/".length)) : "";
@@ -24843,7 +29209,7 @@ async function handleHttp(req, res) {
         if (!res.writableEnded) abortController.abort();
       };
       res.on("close", abort);
-      const run = await waitForRun(
+      const run2 = await waitForRun(
         typeof body?.sessionId === "string" && body.sessionId ? body.sessionId : "",
         body?.timeoutMs,
         {
@@ -24854,7 +29220,7 @@ async function handleHttp(req, res) {
       );
       res.off("close", abort);
       if (res.destroyed) return;
-      sendJson(res, 200, run);
+      sendJson(res, 200, run2);
       return;
     }
     if (url2.pathname === "/api/widget-ready/await") {
@@ -24946,6 +29312,10 @@ async function ensureHttpServer() {
   return httpState;
 }
 async function shutdownDaemon() {
+  if (projectHistoryPollTimer) {
+    clearInterval(projectHistoryPollTimer);
+    projectHistoryPollTimer = null;
+  }
   for (const id of Array.from(sessions.keys())) closeSession(id);
   while (globalRunWaiters.length) {
     const waiter = globalRunWaiters.shift();
@@ -25526,7 +29896,7 @@ async function toolAwaitCanvasightRun(args) {
     projectPathValue = await resolveSessionProjectPath(null, threadId, { requireThreadProject: Boolean(threadId) });
   }
   const daemon = await ensureDaemonServer();
-  const run = await daemonJson(daemon, "/api/runs/await", {
+  const run2 = await daemonJson(daemon, "/api/runs/await", {
     method: "POST",
     body: JSON.stringify({
       sessionId: sessionIdValue,
@@ -25535,16 +29905,16 @@ async function toolAwaitCanvasightRun(args) {
       threadId
     })
   });
-  if (run.status === "received" && !codexNativeModeApplied(run.codexNative?.status)) {
-    run.codexNative = await applyCodexNativeMode(
+  if (run2.status === "received" && !codexNativeModeApplied(run2.codexNative?.status)) {
+    run2.codexNative = await applyCodexNativeMode(
       {
         codexThreadId: threadId
       },
-      run
+      run2
     );
   }
-  const text = run.status === "received" ? run.markdown : "Canvasight run status: ".concat(run.status);
-  return toolResult(run, text);
+  const text = run2.status === "received" ? run2.markdown : "Canvasight run status: ".concat(run2.status);
+  return toolResult(run2, text);
 }
 async function toolAwaitCanvasightWidgetReady(args) {
   const sessionIdValue = typeof args?.sessionId === "string" ? args.sessionId.trim() : "";
@@ -25567,26 +29937,34 @@ async function toolAwaitCanvasightWidgetReady(args) {
   const text = result.status === "ready" ? "Canvasight widget ready: ".concat(result.sessionId) : "Canvasight widget ".concat(result.status, ": ").concat(result.error || result.stage || "unknown");
   return toolResult(result, text);
 }
-function widgetApiRoute(pathValue) {
-  if (typeof pathValue !== "string" || !pathValue.startsWith("/api/")) {
-    throw new Error("Canvasight widget API path must start with /api/.");
-  }
-  const parsed = new URL(pathValue, "http://canvasight.local");
-  if (parsed.origin !== "http://canvasight.local" || parsed.hash || parsed.pathname.includes("..")) {
-    throw new Error("Canvasight widget API path is invalid.");
-  }
-  const allowed = /^\/api\/sessions(?:\/|$)/.test(parsed.pathname) || /^\/api\/templates(?:\/|$)/.test(parsed.pathname) || parsed.pathname === "/api/skills" || parsed.pathname === "/api/preferences" || parsed.pathname === "/api/reveal" || parsed.pathname === "/api/open-file";
-  if (!allowed) throw new Error("Canvasight widget API path is not allowed.");
-  if (parsed.search) {
-    if (parsed.pathname !== "/api/skills") throw new Error("Canvasight widget API query parameters are not allowed for this path.");
-    const allowedSkillQueryKeys = /* @__PURE__ */ new Set(["projectPath", "threadId", "query", "forceReload", "limit"]);
-    for (const key of parsed.searchParams.keys()) {
-      if (!allowedSkillQueryKeys.has(key) || parsed.searchParams.getAll(key).length !== 1) {
-        throw new Error("Canvasight widget Skill API query parameters are invalid.");
-      }
-    }
-  }
-  return "".concat(parsed.pathname).concat(parsed.search);
+async function toolRecordProjectHistoryAgentCheck(args) {
+  const projectPath = normalizeProjectPath(args?.projectPath);
+  const service = await ProjectHistoryService.forRepository(projectPath);
+  const recorded = await new ProjectHistoryAgentCheckService(service).record(args?.token, {
+    outcome: args?.outcome,
+    summary: args?.summary,
+    evidence: args?.evidence,
+    taskId: args?.threadId
+  });
+  return toolResult(
+    { status: "recorded", nodeId: recorded.nodeId, historyRevision: recorded.index.revision },
+    "Canvasight Project History Agent check recorded as ".concat(args?.outcome, ". Do not confirm, merge, or push; return the evidence to the user.")
+  );
+}
+async function toolRecordProjectHistoryHostAction(args) {
+  const projectPath = normalizeProjectPath(args?.projectPath);
+  const service = await ProjectHistoryService.forRepository(projectPath);
+  const recorded = await new ProjectHistoryHostActionService(service).record(args?.token, {
+    outcome: args?.outcome,
+    sourceTaskId: args?.threadId,
+    targetTaskId: args?.targetTaskId,
+    clientThreadId: args?.clientThreadId,
+    error: args?.error
+  });
+  return toolResult(
+    { status: "recorded", action: recorded },
+    "Canvasight Project History ".concat(recorded.action, " receipt recorded as ").concat(recorded.status, ". Do not repeat the host action.")
+  );
 }
 async function toolCanvasightWidgetApi(args) {
   const route = widgetApiRoute(args?.path);
@@ -25599,33 +29977,71 @@ async function toolCanvasightWidgetApi(args) {
   const startupStage = normalizeStartupStage(args?.startupStage);
   if (!openAttemptIdValue || !widgetInstanceId) throw new Error("Canvasight widget API requires openAttemptId and widgetInstanceId.");
   const daemon = await ensureDaemonServer();
-  const response = await fetch(new URL(route, daemon.origin), {
-    method,
-    headers: daemonHeaders(daemon, {
-      ...args?.body === null || args?.body === void 0 ? {} : { "content-type": "application/json" },
-      "x-canvasight-open-attempt-id": openAttemptIdValue,
-      "x-canvasight-widget-instance-id": widgetInstanceId,
-      "x-canvasight-startup-stage": startupStage,
-      "x-canvasight-display-mode": typeof args?.displayMode === "string" ? args.displayMode : "unknown",
-      "x-canvasight-thread-id": typeof args?.threadId === "string" ? args.threadId : "",
-      "x-canvasight-react-mounted": args?.reactMounted === true ? "true" : "false"
-    }),
-    ...args?.body === null || args?.body === void 0 ? {} : { body: JSON.stringify(args.body) }
-  });
-  const text = await response.text();
-  let payload = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = text || null;
+  const identity = {
+    openAttemptId: openAttemptIdValue,
+    widgetInstanceId,
+    startupStage,
+    displayMode: typeof args?.displayMode === "string" ? args.displayMode : "unknown",
+    threadId: typeof args?.threadId === "string" ? args.threadId.trim() : "",
+    reactMounted: args?.reactMounted === true
+  };
+  let result = await proxyWidgetApiRequest(daemon, route, method, args?.body, identity);
+  let recovery = null;
+  let { code, error: error51 } = widgetApiError(result);
+  const recoverable = recoverableWidgetSessionRoute(route, method);
+  const sessionMissing = result.response.status === 404 && (code === "session_not_found" || /session not found/iu.test(error51 || ""));
+  const projectPath = optionalProjectPath(args?.projectPath);
+  if (sessionMissing && recoverable && identity.threadId && projectPath) {
+    const replacement = await daemonJson(daemon, "/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        projectPath,
+        threadId: identity.threadId,
+        language: args?.language,
+        targetDisplayMode: "fullscreen"
+      })
+    });
+    const replacementSession = replacement?.session;
+    const replacementAttempt = replacementSession?.openAttempt;
+    if (!replacementSession?.sessionId || !replacementAttempt?.openAttemptId) {
+      throw new Error("Canvasight could not create a replacement native widget session.");
+    }
+    const retryIdentity = { ...identity, openAttemptId: replacementAttempt.openAttemptId };
+    const retryBody = isObject2(args?.body) && Object.prototype.hasOwnProperty.call(args.body, "openAttemptId") ? { ...args.body, openAttemptId: replacementAttempt.openAttemptId } : args?.body;
+    const retryRoute = "/api/sessions/".concat(encodeURIComponent(replacementSession.sessionId)).concat(recoverable.suffix).concat(recoverable.search);
+    result = await proxyWidgetApiRequest(daemon, retryRoute, method, retryBody, retryIdentity);
+    ({ code, error: error51 } = widgetApiError(result));
+    const replacementUrl = daemonSessionUrl(daemon, replacementSession.sessionId);
+    recovery = {
+      reason: "session_recreated",
+      previousSessionId: recoverable.sessionId,
+      sessionId: replacementSession.sessionId,
+      openAttemptId: replacementAttempt.openAttemptId,
+      bindingIssuedAt: replacementAttempt.bindingIssuedAt,
+      projectPath: replacementSession.projectPath,
+      threadId: replacementSession.codexThreadId,
+      codexThreadId: replacementSession.codexThreadId,
+      language: replacementSession.language,
+      targetDisplayMode: "fullscreen",
+      apiBaseUrl: daemon.origin,
+      origin: daemon.origin,
+      token: daemon.token || "",
+      url: replacementUrl,
+      browserUrl: replacementUrl
+    };
+    appendMcpLifecycle("canvasight_widget_session_recreated", {
+      previousSessionId: recoverable.sessionId,
+      sessionId: replacementSession.sessionId,
+      openAttemptId: replacementAttempt.openAttemptId,
+      widgetInstanceId,
+      route: new URL(route, "http://canvasight.local").pathname
+    });
   }
-  const error51 = response.ok ? null : payload && typeof payload === "object" && typeof payload.error === "string" ? payload.error : text || "Canvasight daemon request failed: ".concat(response.status);
-  const code = payload && typeof payload === "object" && typeof payload.code === "string" ? payload.code : null;
-  if (!response.ok) {
+  if (!result.response.ok) {
     appendMcpLifecycle("canvasight_widget_api_error", {
       route: new URL(route, "http://canvasight.local").pathname,
       method,
-      status: response.status,
+      status: result.response.status,
       code,
       openAttemptId: openAttemptIdValue,
       widgetInstanceId
@@ -25633,13 +30049,14 @@ async function toolCanvasightWidgetApi(args) {
   }
   return toolResult(
     {
-      ok: response.ok,
-      status: response.status,
-      data: response.ok ? payload : null,
+      ok: result.response.ok,
+      status: result.response.status,
+      data: result.response.ok ? result.payload : null,
       error: error51,
-      code
+      code,
+      ...recovery ? { recovery } : {}
     },
-    response.ok ? "Canvasight widget API request completed." : error51
+    result.response.ok ? "Canvasight widget API request completed." : error51
   );
 }
 async function toolCloseCanvasight(args) {
@@ -25776,6 +30193,8 @@ async function callTool(name, args) {
   if (name === "get_canvasight_graph_context") return toolGetCanvasightGraphContext(args || {});
   if (name === "write_canvasight_graph") return toolWriteCanvasightGraph(args || {});
   if (name === "add_canvasight_generated_images") return toolAddCanvasightGeneratedImages(args || {});
+  if (name === "record_project_history_host_action") return toolRecordProjectHistoryHostAction(args || {});
+  if (name === "record_project_history_agent_check") return toolRecordProjectHistoryAgentCheck(args || {});
   if (name === "canvasight_widget_api") return toolCanvasightWidgetApi(args || {});
   if (name === "await_canvasight_widget_ready") return toolAwaitCanvasightWidgetReady(args || {});
   if (name === "await_canvasight_run") return toolAwaitCanvasightRun(args || {});
@@ -25964,6 +30383,24 @@ async function runDaemon() {
   if (!daemonAuthToken) daemonAuthToken = crypto2.randomBytes(24).toString("base64url");
   daemonStartedAt = nowIso();
   await ensureHttpServer();
+  projectHistoryPollTimer = setInterval(() => {
+    if (projectHistoryPollActive) return;
+    projectHistoryPollActive = true;
+    const projectPaths = [...new Set([...sessions.values()].map((session) => session.projectPath).filter(Boolean))];
+    void Promise.all(projectPaths.map(async (projectPath) => {
+      try {
+        if (!await isGitWorktree(projectPath)) return;
+        const service = await ProjectHistoryService.forRepository(projectPath);
+        if (!(await service.readIndex()).protection.initialized) return;
+        await refreshProjectHistory(projectPath);
+      } catch (error51) {
+        appendMcpLifecycle("project_history_background_poll_error", { projectPath, error: serializeError(error51) });
+      }
+    })).finally(() => {
+      projectHistoryPollActive = false;
+    });
+  }, 3e4);
+  projectHistoryPollTimer.unref?.();
 }
 function runMcpStdio() {
   appendMcpLifecycle("stdio_start", {

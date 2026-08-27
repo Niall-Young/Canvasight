@@ -634,6 +634,19 @@ function canvasightDevApiPlugin() {
             sendJson(res, 200, opened);
             return;
           }
+          if (new Set([
+            "history", "history-enable", "history-refresh", "history-save-now", "history-view", "history-node", "history-feature",
+            "history-confirm-prepare", "history-confirm", "history-merge-prepare", "history-merge", "history-portability"
+          ]).has(action)) {
+            const { daemon, sessionId } = await ensureDevProjectSession(session, projectPath);
+            const method = (req.method || "GET").toUpperCase();
+            const result = await daemonJson(daemon, `/api/sessions/${encodeURIComponent(sessionId)}/${action}`, {
+              method,
+              ...(method === "GET" ? {} : { body: JSON.stringify(body) })
+            });
+            sendJson(res, 200, result);
+            return;
+          }
           if (action === "document") {
             const { daemon, sessionId } = await ensureDevProjectSession(session, projectPath);
             const result = await daemonJson<{ documentRevision: number }>(daemon, `/api/sessions/${encodeURIComponent(sessionId)}/document`, {

@@ -119,6 +119,7 @@ Run plugin commands from `/Users/niallyoung/Desktop/Canvasight/plugins/canvasigh
 - `npm run test:skills` verifies `$` query detection, fuzzy Chinese/name matching, token replacement, and multiple node-body Skill tokens.
 - `npm run test:dev-server` verifies the persistent dev server lifecycle.
 - `npm run test:mcp` runs the MCP smoke test, including daemon persistence across MCP process restarts, concurrent daemon single-flight, stdout-close/EPIPE handling, and newline plus `Content-Length` JSON-RPC transports.
+- `npm run test:widget-session-recovery` verifies native widget API calls recover from a lost same-version Session, older MCP shims cannot replace a newer daemon, and the current MCP can replace an older daemon.
 - `npm run test:concurrency` verifies cross-task three-way document merging, conflict copies, mutation replay and daemon-restart idempotency, and concurrent AI graph-writer behavior.
 - `npm run test:plugin-distribution` copies the plugin without `node_modules` and verifies that the installed MCP entry completes registration with all expected tools.
 - `npm run test:update` verifies read-only checks, complete stable installs, protected local/custom/development sources, rollback, version boundaries, and cross-platform CLI invocation without touching real Codex state.

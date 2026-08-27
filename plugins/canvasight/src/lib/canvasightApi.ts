@@ -136,6 +136,221 @@ export interface MarkdownExportResponse {
   targetPath: string;
 }
 
+export interface ProjectHistoryNode {
+  [key: string]: unknown;
+  id: string;
+  kind: "baseline" | "snapshot";
+  summary: string;
+  status: string;
+  source: "codex" | "external" | "mixed" | string;
+  featureLineId: string | null;
+  taskId: string | null;
+  turnId: string | null;
+  workflowNodeId?: string | null;
+  workflowTitle?: string | null;
+  snapshotRef: string;
+  commit: string;
+  tree: string;
+  gitBranch?: string | null;
+  headCommit?: string | null;
+  changedPaths: Array<{ status: string; path: string; previousPath?: string }>;
+  coverage: { complete: boolean; excludedPathspecs?: string[]; policyExcludedPaths?: string[]; informationalExcludedPaths?: string[]; automaticExcludedPaths?: string[]; gapCodes?: string[]; largePaths?: string[]; externalSymlinkPaths?: string[]; submodulePaths?: string[]; lfsPaths?: string[]; scanTruncated?: boolean; legacyPolicyUnverified?: boolean; coverageAuditCorrected?: boolean };
+  occurredAt: string;
+  confirmed: boolean;
+  merged: boolean;
+  confirmationCommit?: string;
+  confirmationRef?: string;
+  verification?: { passed: boolean; acceptedRisk?: boolean };
+  mergeCommit?: string;
+  agentCheck?: {
+    status: "requested" | "passed" | "failed";
+    requestId: string;
+    summary?: string;
+    evidence?: string[];
+    taskId?: string;
+    expiresAt?: string;
+    occurredAt: string;
+  };
+}
+
+export interface ProjectHistoryView {
+  schemaVersion: number;
+  revision: number;
+  viewport: { x: number; y: number; zoom: number };
+  positions: Record<string, { x: number; y: number }>;
+  collapsedGroupIds: string[];
+  filters: { query: string; status: string; source: string };
+}
+
+export interface ProjectGitCommit {
+  id: string;
+  shortId: string;
+  parents: string[];
+  subject: string;
+  displaySubject?: string;
+  author: string;
+  committedAt: string;
+  refs: Array<{ name: string; kind: "local-branch" | "remote-branch" | "tag"; current: boolean }>;
+  isHead: boolean;
+  isOnMain: boolean;
+  isOnMainline: boolean;
+  isCanvasightGenerated: boolean;
+  isMerge: boolean;
+  historyNodeIds: string[];
+}
+
+export interface ProjectGitTopology {
+  schemaVersion: number;
+  commits: ProjectGitCommit[];
+  refs: Array<{ name: string; shortName: string; kind: "local-branch" | "remote-branch" | "tag"; commit: string; current: boolean }>;
+  totalCommitCount: number;
+  truncated: boolean;
+  topology: "linear" | "branched";
+  mergeStatus: "main-unavailable" | "uncommitted" | "up-to-date" | "ready-to-merge" | "behind-main" | "diverged";
+  currentBranch: string | null;
+  headCommit: string | null;
+  mainCommit: string | null;
+  ahead: number;
+  behind: number;
+  workingTree: { dirty: boolean; changeCount: number; stagedCount: number; unstagedCount: number; untrackedCount: number };
+}
+
+export interface ProjectHistoryResponse {
+  status: "ready" | "needs-git-confirmation";
+  enabled: boolean;
+  scan?: {
+    projectPath: string;
+    fileCount: number;
+    directoryCount: number;
+    sensitiveCount: number;
+    excludedDirectoryCount: number;
+    truncated: boolean;
+  };
+  identity?: {
+    localProjectId: string;
+    portableProjectId: string | null;
+    portabilityBasis: string;
+    warnings: string[];
+  };
+  git?: {
+    mainBranch: "main" | null;
+    mainCommit: string | null;
+    currentBranch: string | null;
+    headCommit: string | null;
+    detached: boolean;
+    created?: boolean;
+    source?: string;
+    featureModel: "logical-lines";
+    snapshotRefNamespace: string;
+  };
+  gitTopology?: ProjectGitTopology;
+  index?: {
+    schemaVersion: number;
+    revision: number;
+    protection: { enabled: boolean; initialized: boolean; healthy: boolean; unresolvedFailures: Array<{ observationId: string; reason: string; retryable: boolean; occurredAt: string }> };
+    nodes: ProjectHistoryNode[];
+    featureLines: Array<{ id: string; name: string; status: "active" | "abandoned" | "merged"; classificationEdits: unknown[] }>;
+    chatActivities: Array<{ observationId: string; taskId: string; turnId: string; status: string; featureLineId: string; summary: string; occurredAt: string }>;
+    coverageGaps: unknown[];
+    processGroups: Array<{ id: string; featureLineId: string | null; taskId: string | null; nodeIds: string[]; count: number }>;
+  };
+  view?: ProjectHistoryView;
+  provider?: {
+    coverageStartedAt: string | null;
+    observedTurnCount: number;
+    coverageComplete?: boolean;
+    coverage?: { complete: boolean; threadListTruncated?: boolean; turnListTruncated?: boolean; scannedThreadCount?: number; observedTurnCount?: number } | null;
+    activeTurnCount?: number;
+    navigation: string;
+    taskCreation: string;
+  };
+  providerWarning?: string | null;
+  hostActions?: {
+    revision: number;
+    actions: ProjectHistoryHostAction[];
+  };
+  refreshedObservationCount?: number;
+  externalWatcher?: { status: string; sealed: boolean; reason?: string };
+  portability?: ProjectHistoryPortabilityStatus & { importedEventCount: number; missingObjectCount: number };
+}
+
+export interface ProjectHistoryPortabilityStatus {
+  projectId: string;
+  remotes: string[];
+  authorized: boolean;
+  remote: string | null;
+  historyRef: string;
+  localCommit: string | null;
+  updatedAt: string | null;
+}
+
+export interface ProjectHistoryConfirmationPreparation {
+  nodeId: string;
+  summary: string;
+  changedPaths: ProjectHistoryNode["changedPaths"];
+  verification: {
+    status: "passed" | "failed" | "unavailable";
+    passed: boolean;
+    reason?: string;
+    checks: Array<{ name: string; status: "passed" | "failed"; code: number; timedOut: boolean; truncated: boolean; stdout: string; stderr: string }>;
+  };
+  requiresRiskConfirmation: boolean;
+  autoMergeEligible: boolean;
+  token: string;
+  expiresAt: string;
+  targetBranch: string;
+}
+
+export interface ProjectHistoryAgentCheckPreparation {
+  requestId: string;
+  nodeId: string;
+  summary: string;
+  changedPaths: ProjectHistoryNode["changedPaths"];
+  snapshotRef: string;
+  commit: string;
+  token: string;
+  expiresAt: string;
+}
+
+export interface ProjectHistoryHostAction {
+  requestId: string;
+  nodeId: string;
+  action: "navigate" | "continue";
+  status: "pending" | "succeeded" | "queued" | "failed" | "cancelled";
+  sourceTaskId: string;
+  expectedTargetTaskId: string | null;
+  targetTaskId: string | null;
+  clientThreadId: string | null;
+  summary: string;
+  issuedAt: string;
+  expiresAt: string;
+  updatedAt: string;
+  error: string | null;
+}
+
+export interface ProjectHistoryHostActionPreparation extends ProjectHistoryHostAction {
+  token: string;
+  projectPath: string;
+  snapshotRef: string;
+  commit: string;
+  coverageComplete: boolean;
+  prompt: string;
+}
+
+export interface ProjectHistoryMergePreparation {
+  status: "ready" | "already-merged";
+  nodeId: string;
+  targetBranch?: string;
+  commit?: string;
+  token?: string;
+  expiresAt?: string;
+}
+
+export interface ProjectHistoryOperationResponse {
+  operation: { status: string; nodeId: string; commit?: string; targetBranch?: string; snapshotRef?: string; snapshotCommit?: string; mainCommit?: string; details?: string; automatic?: boolean; reason?: string };
+  history: ProjectHistoryResponse;
+}
+
 export interface SkillSummary {
   name: string;
   description: string;
@@ -177,7 +392,7 @@ export type CanvasightStartupStage =
   | "ready"
   | "failed";
 
-interface CanvasightWidgetRuntimeData {
+interface CanvasightWidgetRuntimeData extends Record<string, unknown> {
   apiBaseUrl?: string;
   browserUrl?: string;
   canvasightHost?: string;
@@ -185,6 +400,7 @@ interface CanvasightWidgetRuntimeData {
   origin?: string;
   openAttemptId?: string;
   bindingIssuedAt?: number;
+  language?: "zh" | "en";
   projectPath?: string | null;
   sessionId?: string;
   threadId?: string | null;
@@ -258,6 +474,8 @@ export function getCanvasightStartupIdentity(): {
   openAttemptId: string;
   widgetInstanceId: string;
   displayMode: string;
+  language: "zh" | "en" | "";
+  projectPath: string;
   threadId: string;
   stage: CanvasightStartupStage;
 } {
@@ -267,6 +485,8 @@ export function getCanvasightStartupIdentity(): {
     openAttemptId: runtime.openAttemptId || "",
     widgetInstanceId: runtime.widgetInstanceId || bridge?.widgetInstanceId || "",
     displayMode: bridge?.displayMode || "unknown",
+    language: runtime.language === "en" || runtime.language === "zh" ? runtime.language : "",
+    projectPath: runtime.projectPath || "",
     threadId: runtime.threadId || runtime.codexThreadId || "",
     stage: bridge?.startupStage || "starting"
   };
@@ -674,7 +894,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         startupStage: identity.stage,
         displayMode: identity.displayMode,
         threadId: identity.threadId,
-        reactMounted: identity.stage !== "starting" && identity.stage !== "connecting_bridge"
+        reactMounted: identity.stage !== "starting" && identity.stage !== "connecting_bridge",
+        ...(identity.projectPath ? { projectPath: identity.projectPath } : {}),
+        ...(identity.language ? { language: identity.language } : {})
       }
     })) as {
       isError?: boolean;
@@ -683,11 +905,29 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         data?: unknown;
         error?: string | null;
         ok?: boolean;
+        recovery?: CanvasightWidgetRuntimeData & {
+          previousSessionId?: string;
+          reason?: string;
+        };
         status?: number;
       };
     };
-    assertCanvasightBindingCurrent(requestBindingKey);
     const envelope = result?.structuredContent;
+    const recovery = envelope?.recovery;
+    if (recovery?.sessionId && recovery.openAttemptId && recovery.bindingIssuedAt) {
+      const previous = { ...widgetRuntimeData() };
+      const current: CanvasightWidgetRuntimeData = {
+        ...previous,
+        ...recovery,
+        canvasightHost: "widget",
+        widgetInstanceId: previous.widgetInstanceId
+      };
+      bridgeWindow.__CANVASIGHT_WIDGET_DATA__ = current;
+      window.dispatchEvent(new CustomEvent("canvasight:widget-data", { detail: current }));
+      window.dispatchEvent(new CustomEvent("canvasight:widget-rebind", { detail: { previous, current } }));
+    } else {
+      assertCanvasightBindingCurrent(requestBindingKey);
+    }
     if (result?.isError || !envelope || envelope.ok !== true) {
       const status = typeof envelope?.status === "number" ? envelope.status : 502;
       const payload = {
@@ -999,6 +1239,144 @@ export const canvasightApi = {
     return requestSessionJson<SaveDocumentResult>("/document", {
       method: "POST",
       body: JSON.stringify(input)
+    });
+  },
+
+  getProjectHistory(): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history");
+  },
+
+  enableProjectHistory(input: { confirmGitInitialization: boolean; classifyDirtyState: "project-start" | "feature-line"; threadId?: string }): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-enable", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+
+  refreshProjectHistory(): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-refresh", {
+      method: "POST",
+      body: "{}"
+    });
+  },
+
+  saveProjectHistoryNow(): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-save-now", {
+      method: "POST",
+      body: "{}"
+    });
+  },
+
+  saveProjectHistoryView(view: ProjectHistoryView, expectedRevision: number): Promise<ProjectHistoryView> {
+    return requestSessionJson<ProjectHistoryView>("/history-view", {
+      method: "PUT",
+      body: JSON.stringify({ expectedRevision, view })
+    });
+  },
+
+  editProjectHistoryNode(nodeId: string, summary: string): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-node", {
+      method: "PUT",
+      body: JSON.stringify({ operation: "edit-summary", nodeId, summary })
+    });
+  },
+
+  reclassifyProjectHistoryNode(nodeId: string, featureLineId: string, featureName?: string): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-node", {
+      method: "PUT",
+      body: JSON.stringify({ operation: "reclassify", nodeId, featureLineId, featureName })
+    });
+  },
+
+  setProjectHistoryFeatureState(featureLineId: string, abandoned: boolean): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-feature", {
+      method: "PUT",
+      body: JSON.stringify({ operation: abandoned ? "abandon" : "reactivate", featureLineId })
+    });
+  },
+
+  renameProjectHistoryFeature(featureLineId: string, name: string): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-feature", {
+      method: "PUT",
+      body: JSON.stringify({ operation: "rename", featureLineId, name })
+    });
+  },
+
+  prepareProjectHistoryConfirmation(nodeId: string): Promise<ProjectHistoryConfirmationPreparation> {
+    return requestSessionJson<ProjectHistoryConfirmationPreparation>("/history-confirm-prepare", {
+      method: "POST",
+      body: JSON.stringify({ nodeId })
+    });
+  },
+
+  prepareProjectHistoryAgentCheck(nodeId: string): Promise<ProjectHistoryAgentCheckPreparation> {
+    return requestSessionJson<ProjectHistoryAgentCheckPreparation>("/history-agent-check-prepare", {
+      method: "POST",
+      body: JSON.stringify({ nodeId })
+    });
+  },
+
+  markProjectHistoryAgentCheckDispatched(token: string): Promise<ProjectHistoryResponse> {
+    return requestSessionJson<ProjectHistoryResponse>("/history-agent-check-dispatched", {
+      method: "POST",
+      body: JSON.stringify({ token })
+    });
+  },
+
+  prepareProjectHistoryHostAction(nodeId: string, action: "navigate" | "continue", sourceTaskId: string): Promise<ProjectHistoryHostActionPreparation> {
+    return requestSessionJson<ProjectHistoryHostActionPreparation>("/history-host-action", {
+      method: "POST",
+      body: JSON.stringify({ operation: "prepare", nodeId, action, sourceTaskId })
+    });
+  },
+
+  getProjectHistoryHostAction(requestId: string): Promise<ProjectHistoryHostAction> {
+    return requestSessionJson<ProjectHistoryHostAction>("/history-host-action", {
+      method: "POST",
+      body: JSON.stringify({ operation: "status", requestId })
+    });
+  },
+
+  markProjectHistoryHostActionDispatchFailed(requestId: string, error: string): Promise<ProjectHistoryHostAction> {
+    return requestSessionJson<ProjectHistoryHostAction>("/history-host-action", {
+      method: "POST",
+      body: JSON.stringify({ operation: "dispatch-failed", requestId, error })
+    });
+  },
+
+  confirmProjectHistoryNode(token: string, acceptVerificationRisk = false, autoMergeIfEligible = false): Promise<ProjectHistoryOperationResponse> {
+    return requestSessionJson<ProjectHistoryOperationResponse>("/history-confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, acceptVerificationRisk, autoMergeIfEligible })
+    });
+  },
+
+  prepareProjectHistoryMerge(nodeId: string): Promise<ProjectHistoryMergePreparation> {
+    return requestSessionJson<ProjectHistoryMergePreparation>("/history-merge-prepare", {
+      method: "POST",
+      body: JSON.stringify({ nodeId })
+    });
+  },
+
+  mergeProjectHistoryNode(token: string): Promise<ProjectHistoryOperationResponse> {
+    return requestSessionJson<ProjectHistoryOperationResponse>("/history-merge", {
+      method: "POST",
+      body: JSON.stringify({ token })
+    });
+  },
+
+  getProjectHistoryPortability(): Promise<ProjectHistoryPortabilityStatus> {
+    return requestSessionJson<ProjectHistoryPortabilityStatus>("/history-portability");
+  },
+
+  updateProjectHistoryPortability(
+    operation: "authorize" | "revoke" | "sync" | "import" | "write-local" | "export-local" | "import-local",
+    remote?: string,
+    manifest?: unknown
+  ): Promise<{ operation: unknown; history: ProjectHistoryResponse }> {
+    return requestSessionJson<{ operation: unknown; history: ProjectHistoryResponse }>("/history-portability", {
+      method: "POST",
+      body: JSON.stringify({ operation, remote, manifest })
     });
   },
 

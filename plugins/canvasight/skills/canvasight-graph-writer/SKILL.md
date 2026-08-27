@@ -111,5 +111,6 @@ In the example, the final `target-users` node body must contain `$user-research`
 - Do not hand-edit `.scatter/scatter.json` to bypass the daemon, revisions, or validation.
 - Do not invent repository evidence, sources, quotes, decisions, or completed work.
 - Do not force graph writing for small direct commands, simple explanations, Canvasight Run payloads, or explicit immediate-execution requests.
+- Do not use `write_canvasight_graph` for Project History. History is a separate read-only derived workspace backed by append-only events and internal Git refs; its nodes, chat markers, confirmations, merges, and portability metadata must never become Workflow Task/Asset/Group objects or `.scatter` revisions.
 - Framework confirmation is transient conversation state. Never write pending choices or `confirmationId` into `.scatter`.
 - Do not silently accept a validation failure. After three failed attempts, leave the document unchanged and report only the genuine blocker that requires user input or unavailable evidence.

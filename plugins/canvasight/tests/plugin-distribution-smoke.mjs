@@ -82,7 +82,7 @@ try {
   );
   const toolsStage = diagnostic.stages?.find((stage) => stage.stage === "tools_list_ok");
   assert.ok(toolsStage, "installed MCP registration probe did not complete tools/list");
-  assert.equal(toolsStage.toolCount, 17, "installed MCP server must expose exactly 17 tools");
+  assert.equal(toolsStage.toolCount, 19, "installed MCP server must expose exactly 19 tools");
   assert.equal(
     toolsStage.requiredToolsPresent,
     true,
@@ -98,6 +98,8 @@ try {
     true,
     "installed MCP server is missing add_canvasight_generated_images"
   );
+  assert.equal(toolsStage.historyAgentCheckToolPresent, true, "installed MCP server is missing record_project_history_agent_check");
+  assert.equal(toolsStage.historyHostActionToolPresent, true, "installed MCP server is missing record_project_history_host_action");
 
   console.log(
     `Canvasight clean distribution smoke passed (${toolsStage.toolCount} tools, no node_modules or caches).`

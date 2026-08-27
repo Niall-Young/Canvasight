@@ -612,6 +612,92 @@ export function createToolCatalog({
       outputSchema: generatedImagesOutputSchema
     },
     {
+      name: "record_project_history_host_action",
+      description:
+        "Record the bounded receipt for a Canvasight Project History native host action. Call only after a widget-generated prompt supplied a short-lived token and you actually attempted the requested Codex navigation or task creation tool. This records metadata only; it never creates a task, changes Git, confirms, merges, or pushes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Exact project path supplied by the Canvasight host-action prompt."
+          },
+          threadId: {
+            type: "string",
+            description: "Source Codex task id supplied by the Canvasight host-action prompt."
+          },
+          token: {
+            type: "string",
+            description: "Short-lived action-, node-, project-, and source-task-bound token supplied by the widget."
+          },
+          outcome: {
+            type: "string",
+            enum: ["succeeded", "queued", "failed"],
+            description: "Use succeeded only after a native host tool returned a target task; queued only when task creation returned clientThreadId; otherwise failed."
+          },
+          targetTaskId: {
+            type: "string",
+            description: "Opened original task id or newly created ready task id. Required for succeeded."
+          },
+          clientThreadId: {
+            type: "string",
+            description: "Queued task setup id returned by Codex. Required for queued and for the one allowed queued-to-succeeded promotion."
+          },
+          error: {
+            type: "string",
+            maxLength: 500,
+            description: "Bounded native host error. Required only for failed."
+          }
+        },
+        required: ["projectPath", "threadId", "token", "outcome"],
+        additionalProperties: false
+      },
+      outputSchema: looseObjectOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    },
+    {
+      name: "record_project_history_agent_check",
+      description:
+        "Record the bounded result of a Canvasight Project History functional check. Call only after the user started an Agent check from a History node and the resulting prompt supplied a short-lived token. Inspect and test the exact protected snapshot first. This tool records metadata only; it never confirms a node, writes Git, merges, or pushes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          projectPath: {
+            type: "string",
+            description: "Exact project path supplied by the widget check request."
+          },
+          threadId: {
+            type: "string",
+            description: "Current Codex task id that performed the check."
+          },
+          token: {
+            type: "string",
+            description: "Short-lived node- and project-bound token supplied by the widget request."
+          },
+          outcome: {
+            type: "string",
+            enum: ["passed", "failed"],
+            description: "Passed only when the requested functional behavior and relevant checks were actually verified."
+          },
+          summary: {
+            type: "string",
+            maxLength: 500,
+            description: "Concise conclusion describing what was functionally verified or why it failed."
+          },
+          evidence: {
+            type: "array",
+            maxItems: 20,
+            items: { type: "string", maxLength: 280 },
+            description: "Bounded commands, observations, or acceptance results. Never include secrets or full chat content."
+          }
+        },
+        required: ["projectPath", "threadId", "token", "outcome", "summary", "evidence"],
+        additionalProperties: false
+      },
+      outputSchema: looseObjectOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    },
+    {
       name: "canvasight_widget_api",
       description: "Internal app-only proxy for Canvasight native widget session APIs. The widget uses this instead of fetching localhost directly.",
       inputSchema: {
