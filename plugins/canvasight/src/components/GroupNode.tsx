@@ -5,7 +5,6 @@ import type { ScatterGroupNodeData } from "../../shared/types";
 import { useI18n } from "../lib/i18n";
 import { useScatterStore } from "../store/scatterStore";
 import { useCanvasActions } from "../application/CanvasActionsContext";
-import { stableGroupAction } from "./groupAction";
 import { ActionMenuItem } from "./ui/action-menu-item";
 import { IconButton } from "./ui/icon-button";
 import { TooltipAnchor } from "./ui/tooltip";
@@ -99,7 +98,7 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
             size="lg"
             aria-label={collapsed ? t("group.fitCollapsed") : memberCount ? t("group.fit") : t("group.fitEmpty")}
             disabled={!memberCount || collapsed}
-            {...stableGroupAction(() => actions.fitGroup(id))}
+            onClick={() => actions.fitGroup(id)}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={collapsed ? t("group.expand") : t("group.collapse")}>
@@ -110,11 +109,11 @@ function GroupNodeComponent({ id, data, selected }: NodeProps<Node<ScatterGroupN
             size="lg"
             aria-label={collapsed ? t("group.expand") : t("group.collapse")}
             aria-expanded={!collapsed}
-            {...stableGroupAction(() => actions.toggleGroup(id))}
+            onClick={() => actions.toggleGroup(id)}
           />
         </TooltipAnchor>
         <TooltipAnchor className="nodrag" label={memberCount ? t("group.run") : t("group.runEmpty")}>
-          <IconButton filled={false} icon="play-1" size="lg" aria-label={memberCount ? t("group.run") : t("group.runEmpty")} disabled={!memberCount} {...stableGroupAction(() => actions.runNode(id, "flow"))} />
+          <IconButton filled={false} icon="play-1" size="lg" aria-label={memberCount ? t("group.run") : t("group.runEmpty")} disabled={!memberCount} onClick={() => actions.runNode(id, "flow")} />
         </TooltipAnchor>
         <RadixDropdownMenu.Root>
           <RadixDropdownMenu.Trigger asChild>

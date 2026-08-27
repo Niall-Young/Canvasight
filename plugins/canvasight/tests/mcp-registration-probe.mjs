@@ -143,21 +143,11 @@ try {
     toolNames.includes("add_canvasight_generated_images"),
     "add_canvasight_generated_images is missing from tools/list"
   );
-  assert.ok(
-    toolNames.includes("record_project_history_host_action"),
-    "record_project_history_host_action is missing from tools/list"
-  );
-  assert.ok(
-    toolNames.includes("record_project_history_agent_check"),
-    "record_project_history_agent_check is missing from tools/list"
-  );
   record("tools_list_ok", {
     toolCount: toolNames.length,
     requiredToolsPresent: true,
     frameworkQuestionsToolPresent: true,
-    generatedImagesToolPresent: true,
-    historyHostActionToolPresent: true,
-    historyAgentCheckToolPresent: true
+    generatedImagesToolPresent: true
   });
 
   const lifecycleRaw = await readFile(diagnostic.lifecycleLogPath, "utf8");

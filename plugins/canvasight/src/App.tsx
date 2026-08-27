@@ -109,7 +109,6 @@ import {
   CanvasRunToolbar,
   type CanvasTool
 } from "./components/CanvasToolbars";
-import { HistoryWorkspace, WorkspaceModeSwitch } from "./components/HistoryWorkspace";
 import { RightDrawer } from "./components/RightDrawer";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { StartupFailurePanel } from "./components/StartupFailurePanel";
@@ -322,7 +321,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     undo: state.undo
   })));
   const [loadingProject, setLoadingProject] = useState(true);
-  const [workspaceMode, setWorkspaceMode] = useState<"workflow" | "history">("workflow");
   const [refreshingDocument, setRefreshingDocument] = useState(false);
   const nativeWidget = isNativeWidgetShell();
   const [startupStage, setStartupStageState] = useState<CanvasightStartupStage>(() =>
@@ -2457,7 +2455,6 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
-      if (workspaceMode === "history") return;
       const targetIsEditable = isEditableTarget(event.target);
       const targetIsKeyboardInteractive = isKeyboardInteractiveTarget(event.target);
       const targetNodeId = nodeIdFromElementTarget(event.target);
@@ -2578,7 +2575,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", resetSpacePan);
     };
-  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, groupSelectedNodes, project, redo, runActiveNode, selectedNodes, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo, ungroupSelection, workspaceMode]);
+  }, [addNode, copySelectedNodes, deleteSelectedNodes, fitCanvas, groupSelectedNodes, project, redo, runActiveNode, selectedNodes, toggleMarkdownDrawer, toggleTasksDrawer, toggleTemplatesDrawer, undo, ungroupSelection]);
 
   return (
     <CanvasActionsProvider actions={canvasActions}>
@@ -2644,13 +2641,8 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           onDrop={handleCanvasDrop}
           onDragOver={handleCanvasDragOver}
         >
-          {project ? <WorkspaceModeSwitch language={language} value={workspaceMode} onChange={setWorkspaceMode} /> : null}
-          {project ? workspaceMode === "history" ? (
-            <ReactFlowProvider key="history-workspace-flow">
-              <HistoryWorkspace language={language} />
-            </ReactFlowProvider>
-          ) : (
-            <ReactFlowProvider key="workflow-flow">
+          {project ? (
+            <>
               <div className="canvas-page-toolbar" aria-label={t("page.toolbar")}>
                 {renamingPage ? (
                   <input
@@ -2803,7 +2795,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
                 t={t}
                 viewportZoom={viewportZoom}
               />
-            </ReactFlowProvider>
+            </>
           ) : (
             <div className="empty-workspace canvasight-empty">
               <p>{loadingProject ? "Loading Canvasight..." : status || "Open Canvasight from a Codex project to create a workspace."}</p>
@@ -2811,7 +2803,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           )}
         </section>
 
-        {workspaceMode === "workflow" ? <RightDrawer
+        <RightDrawer
           drawer={drawer}
           nodes={semanticNodes}
           edges={edges}
@@ -2829,7 +2821,7 @@ function CanvasightWorkspace({ agentTeamEnabled, onOpenSettings }: CanvasightWor
           onTemplateSearchChange={setTemplateSearch}
           onTemplateDragStart={handleTemplateDragStart}
           onTemplateDragEnd={handleTemplateDragEnd}
-        /> : null}
+        />
         <ConfirmDialog
           open={Boolean(deletePageRequest)}
           title={t("page.deleteDialogTitle")}
@@ -3000,10 +2992,12 @@ export default function App(): ReactElement {
       onReopenInNewTask={reopenCanvasightInNewTask}
     >
       <I18nProvider language={activeSettings.language}>
-        <CanvasightWorkspace
-          agentTeamEnabled={activeSettings.agentTeamEnabled}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
+        <ReactFlowProvider>
+          <CanvasightWorkspace
+            agentTeamEnabled={activeSettings.agentTeamEnabled}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </ReactFlowProvider>
         <SettingsDialog
           agentTeamEnabled={activeSettings.agentTeamEnabled}
           aiSkillAssignmentEnabled={activeSettings.aiSkillAssignmentEnabled}
