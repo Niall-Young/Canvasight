@@ -1,829 +1,689 @@
-# Canvasight
+<div align="center">
+  <a href="https://github.com/Niall-Young/Canvasight">
+    <img src="images/logo.png" alt="Canvasight Logo" width="110" height="110" />
+  </a>
+  <h1>Canvasight</h1>
+  <p><strong>专为 Codex 打造的可交互任务画布与提示词工作区</strong></p>
+  <p><em>An Interactive Task Canvas & Prompt Workflow Workspace for Codex</em></p>
 
-Language / 语言: [中文](#中文) | [English](#english)
+  <p>
+    <a href="https://github.com/Niall-Young/Canvasight/releases"><img src="https://img.shields.io/badge/Release-v0.5.11-2ea44f?style=flat-square" alt="Release Version" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="MIT License" /></a>
+    <a href="https://github.com/Niall-Young/Canvasight"><img src="https://img.shields.io/badge/Codex-Plugin-000000.svg?style=flat-square&logo=openai&logoColor=white" alt="Codex Plugin" /></a>
+    <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-Ext--Apps-8A2BE2.svg?style=flat-square" alt="MCP Ext-Apps" /></a>
+    <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB.svg?style=flat-square&logo=react&logoColor=black" alt="React 19" /></a>
+    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 5.9" /></a>
+    <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/Vite-7-646CFF.svg?style=flat-square&logo=vite&logoColor=white" alt="Vite 7" /></a>
+    <a href="https://xyflow.com/"><img src="https://img.shields.io/badge/XYFlow-12-FF0072.svg?style=flat-square" alt="XYFlow" /></a>
+    <a href="https://github.com/Niall-Young/Canvasight/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome" /></a>
+  </p>
+
+  <p>
+    <b>Language / 语言导航：</b>
+    <a href="#-简体中文">🇨🇳 简体中文</a> &nbsp;|&nbsp;
+    <a href="#-english">🇬🇧 English</a>
+  </p>
+</div>
 
 ---
 
 <a id="中文"></a>
-## 中文
+<a id="-简体中文"></a>
+# 🇨🇳 简体中文
 
-Canvasight 是一个 Codex 插件，用可编辑画布把任务、文件素材和提示词流程整理成 `Page → Group → Task/Asset` 结构，再交给 Codex 执行。正式安装使用 Codex 管理的 Git 快照，不依赖桌面的源码仓库；仓库本身仍采用 repo-local 插件布局，供开发和本地 checkout 使用。正常使用时，画布直接渲染在 Codex 原生 widget 中；项目级本地 daemon 负责画布数据和 API，不依赖某个任务持续运行。
+Canvasight 是一个专为 Codex 设计的插件，通过直观的可编辑节点画布，将任务、文件素材和提示词流程整理为 `Page → Group → Task/Asset` 层次结构，并直通 Codex 执行。
+
+正式安装使用 Codex 管理的 Git 快照，不依赖桌面端源码仓库；仓库本身保留 repo-local 插件布局供本地开发调试。正常使用时，画布直接以内嵌形式渲染在 Codex 原生 Widget 中；项目级本地 Daemon 独立负责画布数据持久化与 API 交互，无需依赖单个任务会话常驻。
+
+### 目录
+- [许可证](#许可证)
+- [核心特性](#核心特性)
+- [快速上手](#快速上手)
+- [多任务并发与协同编辑](#多任务并发与协同编辑)
+- [原生 Widget 运行机制](#原生-widget-运行机制)
+- [AI 写入画布](#ai-写入画布)
+- [插件安装与更新](#插件安装与更新)
+- [MCP Tools 说明](#mcp-tools-说明)
+- [Skills 分工体系](#skills-分工体系)
+- [数据持久化规范](#数据持久化规范)
+- [开发与测试](#开发与测试)
+- [原生验收标准](#原生验收标准)
+- [常见问题解答 (FAQ)](#常见问题解答-faq)
+
+---
 
 ### 许可证
 
-Canvasight 以 [MIT License](LICENSE) 开源，Copyright (c) 2026 Niall Young。
+Canvasight 采用 [MIT 许可证](LICENSE) 开源，Copyright (c) 2026 Niall Young。详情请参阅 [LICENSE](LICENSE)。
 
-画布归属与 Run 投递是两套独立的绑定：画布内容跟随项目文件夹，保存为该项目的 `.scatter/scatter.json`（附件在 `.scatter/assets/`）；每次打开则以**当前 Codex 任务**临时绑定 native widget 和 Run。切换到另一个项目后，Canvasight 必须重新解析该任务的项目目录并加载那个目录的 `.scatter`，不能因为先前任务或最近项目记录而复用旧项目画布或旧任务作为 Run 目标。
+> **画布归属与 Run 运行绑定说明：**  
+> 画布内容跟随项目目录，持久化存储于项目根目录下的 `.scatter/scatter.json`（附件位于 `.scatter/assets/`）；每次打开画布，则以**当前 Codex 任务**临时绑定 Native Widget 与 Run 运行通道。切换到新项目后，Canvasight 会重新解析该任务的项目目录并加载对应的 `.scatter`，不会串用历史项目的画布或旧任务作为 Run 目标。
 
-### 主要功能
+---
 
-- 创建、拖拽、删除和连接任务节点与资产节点；点击任一节点左右侧的加号，或把连接拖到画布空白处，可从菜单选择任务节点、文件节点或媒体节点，文件与媒体都在单选文件成功后才创建。拖到已有节点仍直接连线。每个节点可以是无上游的根节点，但作为子节点连接后只能有一个父节点，同时仍可连接多个下游。图片（包括 SVG）和视频直接成为 Asset 的可见内容，选中时显示聚焦边框；视频画面点击只选中节点，底部保留浏览器原生的播放/暂停、进度、时间、音量和全屏控制。其他文件在单层白底中显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标。Asset 通过连线参与 Task/Group Run，作为文件证据但不单独运行。
-- 用单层语义 Group 收纳 Task/Asset 节点，支持 `⌘/Ctrl+G` 分组、`⌘/Ctrl+Shift+G` 解除；对整个 Group 解除会释放成员并让容器立即消失，对单个成员解除则保留 Group。还支持整体移动、右侧一键适应内容、折叠摘要和仅组内 Run。
-- 在节点内使用无工具栏富文本编辑：Markdown 快捷语法会直接呈现为紧凑的富文本，同时正文仍以 Markdown 保存，兼容模板、预览、导出和 Run。
-- 使用多个 Page 隔离同一项目中的不同画布工作区。
-- 多个 Codex 任务可以同时编辑同一项目：不同对象自动合并，同一对象冲突时保留完整冲突副本。
-- 通过画布选择器、拖放或粘贴，把图片、视频和文件添加为一等 Asset Node。
-- Task/Group Run 始终通过 Chat 把对应范围发送到当前 Codex 任务。
-- 通过 `write_canvasight_graph` 让 Codex 创建或更新可编辑的 Page、节点和连线。
-- 直接输入 `@Canvasight 生成……`：Canvasight 会先验证或打开当前项目的原生画布，再用 Codex 内置 imagegen 生图，并把每张最终图片作为独立 Asset Node 放到生成开始时活动 Page 的最右侧。
-- 产品/UI 设计探索默认生成三张独立参考图。它们和原来节点里的附件本质相同，只是成为可连线的 Asset Node；用户把需要的图接入现有 Task 流程后，仍从 Task 运行整个流程，不在该 Task 可达范围内的图片自然与本次 Run 无关。
-- AI 写入后可从画布右上角手动刷新到项目的最新画布版本，同时保护未保存的本地修改。
-- 梳理框架遇到会改变方向的关键歧义时，在当前 Codex 消息中直接显示 Canvasight 确认卡；提交后自动继续原 Graph Writer 请求，无需打开画布。
-- 保存和复用本机全局节点模板；模板库最多保存 200 个模板，不会静默淘汰旧数据。
-- 从新 Codex 任务恢复最近使用的 Canvasight 项目。
-- 可选地在 Run Markdown 中加入 Agent Team 协作协议：以 `ROSTER.md` 恢复角色席位、以版本化报告维护唯一 owner 与验证证据，并从报告派生 `agent-reports/QUEUE.md`。
-- 在节点正文输入 `$` 搜索当前项目启用的 Skill；也可让专业 Skill 主导一次画布内容生成，或在显式开启后让 AI 为职责明确的节点选择 Skill。
+### 核心特性
 
-### 基础用法
+- **节点与资产驱动**：创建、拖拽、删除并连接任务节点（Task Node）与资产节点（Asset Node）。点击节点侧边加号或拖动连线至空白画布，唤出菜单快速选择新建 Task、文件或媒体节点；单选本地文件成功后即创建对应节点。每个节点可为独立的无前置根节点；一旦建立上游连接，严格遵循**单父节点**约束（保证执行逻辑确定），下游可继续发散分流。
+- **一等媒体资产体验**：图片（含 SVG）和视频直接作为 Asset 呈现；选中时显示聚焦轮廓，视频保留原生播放/暂停、进度条、音量及全屏交互。其他格式文件以清晰的单层白底搭配对应 SVG 格式图标及大小展示。Asset 节点作为上下文证据伴随连线参与 Task/Group 运行，不可独立触发 Run。
+- **语义化分组 (Group)**：支持使用 `⌘/Ctrl+G` 将多个节点打包成单层语义 Group，使用 `⌘/Ctrl+Shift+G` 解除分组。支持整组平移、一键按内容自适应尺寸、折叠卡片摘要，以及仅针对组内范围的聚焦 Run。
+- **无工具栏沉浸富文本**：节点正文支持 Markdown 快捷键与即时排版渲染（标题、列表、粗体、代码块、引用等），底层完全保持标准 Markdown 字符串存储，全面兼容模板、预览、导出与 Run。
+- **多页面工作区 (Pages)**：支持在同一项目下创建多个独立 Page，自由隔离架构设计、需求拆解、调试分析等不同场景。
+- **多任务无锁并发**：支持在多个 Codex 任务中同时打开并编辑同一项目画布。非冲突修改自动合并，同对象并发冲突时自动保留完整的“AI 冲突副本”或“本地冲突副本”，绝不发生静默覆盖。
+- **AI 对话式写图与生图**：输入自然语言或 `@Canvasight 生成……`，由 Codex 自动调用 `write_canvasight_graph` 输出清晰有向图；或联动内置图像生成 Skill，将多角度概念图/参考图直接以独立 Asset Node 导入至当前画布最右侧。
+- **歧义确认卡片 (Framework Questions)**：架构梳理遇关键方向分歧时，在 Codex 消息流内直接展示内嵌确认卡片，无需跳转画布即可完成决策确认并自动继续流程。
+- **本地模板与 Skill 联动**：内置本地全局节点模板库（支持最多 200 个模版）；节点正文中输入 `$` 即可联想搜索已启用的 Skill，亦可授权 AI 在写图时为职责明确的节点打上 `$skill-name` 标签。
 
-1. **安装插件。** 复制下面这句话，粘贴并发送给 Codex：
+---
 
-   ```text
-   帮我从 stable 分支安装这个 Codex plugin：https://github.com/Niall-Young/Canvasight.git
-   ```
+### 快速上手
 
-   Codex 会完成 marketplace 和插件安装。如果你想手动运行 CLI，或者需要从本地 checkout 安装，请参阅后面的[插件安装](#插件安装)。
+#### 1. 安装插件
+复制以下指令发送给 Codex：
 
-   ![小饭团把 Canvasight 插件交给 Codex 安装](images/fantuan-illustration-zh-01.png)
+```text
+帮我从 stable 分支安装这个 Codex plugin：https://github.com/Niall-Young/Canvasight.git
+```
 
-2. **让 Codex 加载插件。** 安装、重装或升级后，重新加载 Codex 窗口或完全重启 Codex；然后打开要使用 Canvasight 的项目，新建一个 Codex 任务，并在任务中 `@Canvasight`。
+Codex 会自动完成 Marketplace 与插件的拉取配置。手动安装方法请参阅后文[插件安装与更新](#插件安装与更新)。
 
-3. **打开画布。** 把下面这段提示词完整复制到 Codex：
+<div align="center">
+  <img src="images/fantuan-illustration-zh-01.png" alt="小饭团把 Canvasight 插件交给 Codex 安装" width="680" />
+</div>
 
-   ```text
-   @Canvasight 打开当前项目的 Canvasight 画布。请使用当前任务的项目目录，并在原生画布确认就绪后再告诉我。
-   ```
+#### 2. 重启并加载
+插件安装或更新后，请**重新加载 Codex 窗口或重启 Codex 客户端**。进入目标项目，开启新的 Codex 任务，并在会话中输入 `@Canvasight`。
 
-   ![小饭团在 Codex 中打开 Canvasight 原生画布](images/fantuan-illustration-zh-02.png)
+#### 3. 打开画布
+在对话中发送以下提示词：
 
-4. **创建画布内容。** 画布打开后，选择一个适合当前工作的提示词复制到 Codex：
+```text
+@Canvasight 打开当前项目的 Canvasight 画布。请使用当前任务的项目目录，并在原生画布确认就绪后再告诉我。
+```
 
-   分析代码项目：
+<div align="center">
+  <img src="images/fantuan-illustration-zh-02.png" alt="小饭团在 Codex 中打开 Canvasight 原生画布" width="680" />
+</div>
 
-   ```text
-   用 Canvasight 分析当前项目，并创建一个“代码架构”Page。按照真实目录、核心模块、数据流、接口、风险和验证方式拆成可编辑节点，用有实际含义的连线表达它们的关系。
-   ```
+#### 4. 生成画布内容
+画布启动后，根据实际工作场景直接向 Codex 发送提示词：
 
-   规划产品需求：
+* **代码架构梳理**：
+  ```text
+  用 Canvasight 分析当前项目，并创建一个“代码架构”Page。按照真实目录、核心模块、数据流、接口、风险和验证方式拆成可编辑节点，用有实际含义的连线表达它们的关系。
+  ```
+* **产品需求拆解**：
+  ```text
+  用 Canvasight 把下面的产品需求创建成一个可执行的画布：包含产品目标、目标用户、核心流程、范围边界、设计方向、技术实现、风险和验收标准。请拆成可编辑节点，并用连线表示真实依赖关系。
 
-   ```text
-   用 Canvasight 把下面的产品需求创建成一个可执行的画布：包含产品目标、目标用户、核心流程、范围边界、设计方向、技术实现、风险和验收标准。请拆成可编辑节点，并用连线表示真实依赖关系。
+  产品需求：
+  [在这里粘贴你的需求描述]
+  ```
+* **整理技术资料或文章**：
+  ```text
+  用 Canvasight 把下面的内容整理成一个新的 Page。按照主题、章节、核心观点、证据、结论和待确认问题创建可编辑节点；只有存在真实包含、证据或依赖关系时才连接节点。
 
-   产品需求：
-   在这里粘贴你的需求
-   ```
+  内容：
+  [在这里粘贴文章或资料文本]
+  ```
+* **直接生图到画布**：
+  ```text
+  @Canvasight 生成一张雨夜霓虹街道的电影感概念图，并直接放到当前画布。
+  ```
 
-   整理文章或资料：
+#### 5. 增量修改与完善
+```text
+继续完善当前 Canvasight Page：请保留未提及的节点和位置，只更新与“[在这里填写要新增、调整或移除的要素]”相关的节点和连线。
+```
 
-   ```text
-   用 Canvasight 把下面的内容整理成一个新的 Page。按照主题、章节、核心观点、证据、结论和待确认问题创建可编辑节点；只有存在真实包含、证据或依赖关系时才连接节点。
+#### 6. 刷新同步
+若 AI 已确认完成写入，但画布未即时展现，点击画布右上角的**刷新**图标。Canvasight 会确保本地修改存盘后，加载项目最新版本并保留当前视口和选中项。
 
-   内容：
-   在这里粘贴文章或资料
-   ```
+#### 7. 节点流转与执行
+在画布中拖拽组织连线。双击节点正文开启富文本编辑；通过下方资产按钮或拖拽导入素材文件；选中多个节点 `⌘/Ctrl+G` 创建 Group。点击节点或 Group 的 **Run** 按钮，系统会精准将对应作用域及上下游 Asset 证据通过 Chat 发送给 Codex 立即执行。
 
-   直接生图到当前画布：
+<div align="center">
+  <img src="images/fantuan-illustration-zh-03.png" alt="小饭团在 Canvasight 中创建节点、连接流程并运行任务" width="680" />
+</div>
 
-   ```text
-   @Canvasight 生成一张雨夜霓虹街道的电影感概念图，并直接放到当前画布。
-   ```
+---
 
-5. **继续修改当前画布。** 复制下面的提示词，并把方括号中的内容换成你的要求：
+### 多任务并发与协同编辑
 
-   ```text
-   继续完善当前 Canvasight Page：请保留未提及的节点和位置，只更新与“[在这里写要补充、修改或删除的内容]”有关的节点和连线。
-   ```
+- **独立版本比对**：同一项目支持在多个 Codex 任务中同时开启。保存时以各任务最近确认的版本为基准进行三方比对，不同节点/连线的变动自动合并，无需加锁。
+- **自动变基 (Rebase)**：若当前任务保存期间发生外部写入（如后台 AI 产出），响应文档会自动与本地待保存改动重基，杜绝后续编辑覆盖较新的 AI 节点。
+- **冲突副本隔离**：当两人或任务修改了同一节点且无法协调时，系统保留先存者的原页面内容，并将后存者的完整 Page 另存为清晰标识的“冲突副本”Page，绝不静默丢失任何一方的数据。
+- **AI 并发保护**：AI 在当前 Page 运行写图期间，用户可自由拖拽节点或编辑其他内容。已有节点保留用户最新手动坐标，AI 新增节点自动布局排布，发生碰撞时完整 AI 结果另存为“AI 冲突副本”。
 
-6. **刷新到最新版本。** 如果 AI 已完成写入，但当前画布没有及时显示新节点，点击画布右上角的刷新图标。Canvasight 会先等待当前修改保存，再加载项目的最新画布版本，并尽量保留当前 Page、视口和选中状态。如果本地修改尚未保存或刷新期间又发生了修改，刷新会取消并保留当前内容。
+---
 
-7. **编辑、加入素材并运行。** 你可以继续在画布中拖拽节点、编辑正文、创建 Asset、连接节点或切换 Page。每个 Task/Asset 可以没有父节点；第一条入边连接后，Canvasight 会拒绝任何第二父连接并完整保留原连线。一个节点仍可分支连接多个下游。第一次点击节点会选中它；节点已选中时，再点击正文即可进入无边框、无工具栏的富文本编辑。
+### 原生 Widget 运行机制
 
-   正文支持通过 Markdown 快捷语法输入一级至三级标题、粗体、斜体、删除线、项目列表、编号列表、引用、行内代码、围栏代码块和链接，也支持常用格式快捷键。任务标记不会变成交互式复选框；已有的 `- [ ]` / `- [x]` 内容会作为普通列表文字显示并原样保存。显示虽然是所见即所得的富文本，底层仍保存 Markdown 字符串，因此已有纯文本节点、节点模板、Markdown 预览与导出、并发保存和 Run 保持兼容。AI 写图也只写 Markdown 字符串，不会用编辑器 JSON、原始 HTML、表格或内联媒体代替 Asset。
+- **启动状态机**：React Shell 在 Widget 挂载后以单向单调状态机驱动：`starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`，杜绝状态倒流。
+- **实例身份校验**：每个客户端生成全局唯一的 `widgetInstanceId`，仅当 `openAttemptId`、`sessionId` 与当前 `threadId` 严格三合一匹配且画布完全渲染可见时，才判定为 `ready` 状态。
+- **安全沙箱代理**：Widget 绝不直接向 `localhost` 发起裸网络请求，一切 API 调用皆通过专属 MCP 工具 `canvasight_widget_api` 转发，保障安全边界。
+- **Run 通信渠道**：原生运行走 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 桥梁；外部浏览器 Fallback 页面仅作为调试通道，不具备原生主机桥梁能力。
 
-   在正文输入 `$` 会继续搜索当前项目启用的 Skill，选择后插入可见、可复制的 `$skill-name`；列表不可用时仍可直接输入。Task 不再提供附件上传入口；通过底部资产按钮选择文件，或把文件拖放、粘贴到画布、Task 或 Group，都会为每个文件创建一个 Asset。历史 Task 附件仍可读取、运行、导出、移除或显式提升，不会在打开或保存时被自动删除。图片（包括 SVG）和视频直接显示媒体本体，不再显示外壳、文件名或尺寸；媒体选中时在内容边界内显示聚焦边框，不会改变节点或连接点位置。视频画面点击只选中节点，不会播放或暂停；底部保留浏览器原生的完整控制栏，可操作播放/暂停、进度、时间、音量、画中画和全屏，并支持浏览器原生键盘交互。SVG 会按图片安全清理后被动显示，不会作为可执行文档注入页面。其他文件使用单层白底横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式统一使用未知文件图标；这里的 SVG 仅是普通文件的格式图标，不代表源 `.svg` 图片。Asset 不再显示或编辑输入/参考/候选/产出分类，关系含义由连线方向、标签和上下文表达。右上角更多操作只在悬停、聚焦或选中时显示，并只保留更换受管文件和删除节点。Asset 不编辑标题/说明，也不单独运行；双击或按 Enter 可打开非视频文件。更换时会保留节点位置、Group 归属和连线，旧受管文件不会被删除。历史附件上的“提升为资产节点”会复用原文件、移除内嵌引用，并建立 `Task → Asset` 附件关系，让同一 Task 能关联多个文件且 Task Run 自动携带这些下游 Asset；过程不会复制或删除 `.scatter/assets` 中的文件。
-
-   多选至少两个 Task/Asset 后按 `⌘/Ctrl+G` 创建 Group；按 `⌘/Ctrl+Shift+G` 解除分组。对整个 Group 执行解除会释放全部直接成员并立即移除容器；只选择成员时则仅将所选成员移出，Group 继续保留。Group 不嵌套，一个节点最多属于一个 Group；删除 Group 也只释放成员，不删除成员或资产文件。Group 标题右侧外显“适应内容”和折叠/展开，更多菜单只保留低频管理操作。折叠只改变当前 Page 的视图，原节点和连线保持不变。Task Run 继续按下游关系发送并携带范围内的 Asset 证据；Group Run 只发送组标题、说明、直接成员、内部连线和成员资产，不会沿跨组连线带出组外节点。Markdown 预览与导出保留说明、受管文件引用、关系方向/标签和 Group 章节。
-
-   ![小饭团在 Canvasight 中创建节点、连接流程并运行任务](images/fantuan-illustration-zh-03.png)
-
-旧 `.scatter` v1 画布会保持原内容和布局，并且仅打开或继续使用普通 Task 时不会被自动改写。第一次创建 Asset Node 或 Group 时，Canvasight 原子升级为 v2，并在 `.scatter/scatter.v1.backup.json` 创建一次旧格式备份；之后不会重复覆盖该备份。旧 Task 附件不会自动提升。
-
-### 并发编辑
-
-同一项目可以在多个 Codex 任务中同时打开和编辑。同一 Page 上的保存会以各任务最后确认的版本为基础进行比较：不同节点或连线的修改会自动合并，不需要锁住整个 Page。
-
-每次 widget 保存响应都会同时确认 revision 和响应文档：如果响应包含外部 AI 或其他任务新增的内容，画布会立即同步；如果保存期间又发生了本地编辑，Canvasight 会把这些编辑重基到响应文档之上。客户端不会只推进 base revision 而继续保留旧画布正文，因此后续视口或普通编辑保存不会把较新的 AI 节点覆盖掉。
-
-如果两个任务修改了同一对象且结果不同，原 Page 保留先保存的结果；后保存任务的完整 Page 会保存为一个新的“冲突副本” Page。删除与修改发生冲突时也会创建冲突副本，不会把任一方的内容静默丢弃。后保存的任务会在本地切换到这个冲突副本并显示提示，其他任务不会被强制切换 Page。冲突副本之后就是普通 Page，可以继续编辑、重命名或删除。
-
-AI 开始修改当前 Page 时，Canvasight 会把这次写入绑定到当时的 Page 和上下文。你可以在 AI 工作期间继续拖动节点、编辑其他内容或切换 Page；不同对象的修改会自动合并，切换 Page 也不会让 AI 写到错误的页面。已有节点保留你最新的手动位置，AI 只为新增节点安排位置。
-
-如果你和 AI 修改了同一个节点、连线或 Page 信息，你的内容和手动位置会保留在原 Page，经过验证的完整 AI 结果则保存为“AI 冲突副本”。如果原 Page 已被删除，Canvasight 会把 AI 结果保存为“AI 恢复副本”，不会擅自恢复已删除的 Page。提示会持续显示“你正在编辑的版本已保留，AI 结果已保存为冲突副本”，并提供“查看 AI 版本”；Canvasight 不会自动切换当前 Page。
-
-图结构和 framework 校验始终在自动重基前完成。支持新并发合同的 AI 写入可以安全合并或保存副本；不带有效上下文的旧客户端继续使用严格的 revision 校验，过期写入仍会返回错误而不会覆盖新内容。
-
-### 原生 widget 合同
-
-- React shell 在 widget 第一帧立即挂载；启动过程使用单调状态机 `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`。重复或乱序的 `tool-result` / `openai:set_globals` 只能确认当前进度，不能把 Ready 回退为 Connecting，也不能让失败的 attempt 恢复。
-- 每个 widget 客户端生成唯一 `widgetInstanceId`。只有与 `openAttemptId`、`sessionId`、`threadId` 同时匹配的 fullscreen instance 能满足 ready；hidden、inline 和 browser renderer 只能上报诊断。
-- widget 通过 app-only `canvasight_widget_api` 访问 daemon，并在请求中携带 attempt、instance 和当前 startup stage。原生 widget 不直接 fetch localhost。
-- Codex 复用已打开的 widget 容器时，新的 open binding 会在同一容器中重新启动 React 应用、停用旧任务画布并绑定新的 attempt/session/thread。当前 binding 的重复元数据可以合并；更旧 binding 的迟到元数据必须忽略，不能让 Ready 回退到 Connecting。
-- 启动失败、阶段超时或 React render error 会进入持久失败面板，显示失败阶段和可读原因，并提供重新连接、在新任务中重开和复制脱敏诊断；不能永久停在 “Opening”、“Starting” 或 “Connecting”。
-- native Run 只允许由已验证的 fullscreen instance 以 Chat 发往绑定任务，并且只有 MCP Apps `ui/message` 或 `window.openai.sendFollowUpMessage` 的 Promise 成功后才能显示“已发送”。Codex Desktop 正常持有当前任务的 thread writer 时，独立 preflight 的 `already has an active writer` 不会阻断 Run，而是交由已绑定 host 的消息 Promise 决定接受或拒绝；其他 preflight 错误仍会在发送前安全停止。
-- daemon URL 和 token 只存在于 widget 内部元数据，不出现在 native open 的公开结果中。
-
-浏览器 URL 和裸 dev 页面是诊断 fallback，不是原生打开路径。它们没有 native widget host bridge：claim 当前任务后，Run 只进入 `await_canvasight_run` 队列，不能显示为 native sent。
+---
 
 ### AI 写入画布
 
-需要把产品需求、文章结构、代码架构或执行计划变成画布时，可以直接说：
+Codex 推荐优先调用 `write_canvasight_graph`，禁止直接手动覆写 `.scatter/scatter.json`：
+1. **模式策略**：
+   - 默认采用 `append-page` 新增独立 Page；
+   - 局部追加或精细修改调用 `get_canvasight_graph_context` 后采用 `merge-active-page`；
+   - 仅在用户明确要求完全重做当前页或全文档时，方可使用 `replace-active-page` 或 `replace-document`。
+2. **规范约束**：
+   - **水平拓扑**：所有 AI 自动生成及整理布局严格遵循从左到右的两层水平拓扑（Group / 独立节点分层横排，Group 内部成员水平排列）；
+   - **单父节点**：严禁为一个节点建立多个上游入边；
+   - **真实因果关系**：连线仅用于表达真实依赖、包含、证据、判定或流转关系，严禁将平级清单机械串联成单链。
 
-- “用 Canvasight 把这个需求拆成任务节点。”
-- “分析这个项目，并生成一个代码架构 Page。”
-- “把这篇文章按论点和证据写到画布。”
-- “新增一个包含调研、设计、开发和测试的 Page。”
+---
 
-Codex 应优先调用 `write_canvasight_graph`，不手写完整 `.scatter/scatter.json`。默认 `mode` 是 `append-page`，只有用户明确要求覆盖时才使用 `replace-active-page` 或 `replace-document`。`graphType` 只决定节点组织策略，不决定 Page 的写入方式。
+### 插件安装与更新
 
-当用户说“继续完善当前画布”“补充这个节点”“删除上面的分支”时，Codex 应先调用 `get_canvasight_graph_context` 读取当前 Page、`contextId`、`documentRevision` 和 `documentVersion`，再用 `merge-active-page` 提交最小的节点/连线 operations，同时传回该上下文的 revision 和可在重试时复用的稳定 mutation ID。只有“新画一张”才新增 Page，“重做当前页”才整体替换当前 Page，“全部重来”才替换整个文档。增量修改始终写回上下文捕获的 Page，不会被之后的 Page 切换重新定向。
-
-Graph Context 会返回 Task、Asset、Group 摘要、Group 归属、Asset 的受管 `id` / `relativePath` 引用，以及旧 Task 附件不含绝对路径和文件 URL 的轻量句柄。Graph Writer 可以创建和更新三种节点及 Task/Asset 的 `parentId`，但 Asset 只能复用当前项目 `.scatter/assets` 下经服务端验证的文件；图片、SVG、视频和普通文件共用同一种 Asset Node，由文件自动决定展示。AI 不能创建新的 Task 内联附件，旧附件只能在带 `contextId`、revision 和稳定 mutation ID 的 `merge-active-page` 中通过 `promote-attachment` 原子提升。持久化的 Asset `role` 仅为旧数据兼容，当前关系由 Edge 方向、标签和上下文表达。Group 不能嵌套，也不能作为 Edge 端点，成员归属不会重复写成 Edge。Group 折叠状态属于用户的 Page 视图，AI 写入和重基都会保留，不能把它当作语义意图修改。
-
-新图片生成走独立的 `canvasight-imagegen` Skill：它先完成原生 ready 校验并捕获当前 Page，再遵循系统 imagegen Skill 生成和检查位图，最后调用 `add_canvasight_generated_images`。该工具只接受当前项目或 `$CODEX_HOME/generated_images` 下不超过 10 MB 的 PNG、JPEG、WebP，一次最多 16 张且总计不超过 100 MB；它保留源文件，将受管副本与 Asset Node 在同一写锁内提交，并通过 context 保证等待期间切换 Page 不会改变目标。产品/UI 设计探索在用户未指定数量时生成三张独立方向图；用户把需要的图接入普通 Task 流程后，它会像节点附件一样随 Task Run 一起发送，不在该 Task 可达范围内的图与本次流程无关。返回结果只包含轻量节点/资产标识与项目相对路径。
-
-生成内容按 intent、domain、maturity 和 output 组合选择思考框架。主要 domain 的必需内容通过非持久化 `frameworkManifest.coverage` 校验；候选画布未通过时不会写入，Codex 会根据内部 violations 修正并重新校验，最多三轮。正常交付给用户的是通过检查后的可编辑画布，不是检查问题清单。
-
-当两个以上合理答案会实质改变身份或权威、主要受众、内容或媒体类型、语言覆盖、内容模式、框架维度、目标范围、关键关系、写入方式、必要覆盖或验收时，Graph Writer 会先调用 `ask_canvasight_framework_questions`，把一至三道问题作为紧凑卡片直接放进当前消息。每题支持单选或多选、二至三个预设答案和自定义补充；推荐项只是建议，不会替用户提交。超过三项的独立阻塞问题会分批确认，不能先写图再把其余问题留成“待确认”、`TBD` 或未知节点。卡片不会打开 Canvasight、启动 daemon、建立项目 Session 或写入 `.scatter`。提交成功后，答案作为当前任务中可见的用户消息发送，Graph Writer 重新获取最新 graph context 后继续；发送失败会保留选择并允许重试。旧任务看不到该工具或宿主无法渲染 inline UI 时，Codex 改用普通文字提问，不会改开全屏画布或猜测关键答案。
-
-专业内容 Skill 可以通过 Codex description 路由或用户显式 `$Skill` 主导一次写图。此时 `skill-led` 只替换默认专业内容框架：专业 Skill 负责内容，Canvasight 仍是 Page、节点、关系、revision、原子写入和固定水平布局的唯一写入者。多个专业 Skill 无法调和时必须先询问用户，不能静默混合。
-
-节点级 Skill 是另一层能力。用户手动 `$Skill` 始终可用；“允许 AI 为节点选择 Skill”是默认关闭、跨项目生效的全局设置。开启后 AI 只在 Skill description 与节点职责明确匹配时写入 `$skill-name`，并提交来源和理由用于本次写图校验。Canvasight 不给节点增加隐藏 Skill 字段，也不提供 Skill 安装或启用管理。
-
-写入 `software-product` 画布时，如果项目缺少 `AGENTS.md` 或 `design.md`，Canvasight 会自动补充对应的独立交付节点，不需要消耗模型重试次数。缺少 `AGENTS.md` 不会默认加入尚未启用的 Agent Team 流程；如果文件只有 Canvasight 管理的 Agent Team 段落，则生成“完善 AGENTS.md”节点并要求保留该段落、补齐项目通用规则。`skill-led` 写图同样保留这些项目交付节点。
-
-所有 AI 创建、替换、合并和重排默认使用 `layoutPolicy: auto`，并统一采用两层从左到右的水平拓扑：先排列 Group 与未分组节点，再在每个 Group 内水平排列成员并计算边界；不会因 domain、output、`graphType`、文章阅读顺序或任务先后顺序产生纵向例外。Canvasight 根据最终节点关系分层、按完整子树居中并避让节点矩形；同层兄弟、并行分支和章节顺序只通过 Y 轴排序表达。对外 schema 只公开 `horizontal`；旧调用中的 `vertical` 和 `grid` 仍可作为兼容输入，但运行时会统一归一为 `horizontal` 并返回 deprecated advisory，不会按旧方向写入。
-
-`preserve-explicit` 只用于用户明确要求保留自己手工调整的坐标，不能作为 AI 新建纵向图的入口；现有 `.scatter` Page 不会被自动迁移，只有后续 AI 拓扑修改或显式 `relayout-page` 才会按水平规则重排。并发重基时，已有节点始终保留最新的手动坐标，AI 布局只作用于新增节点。内容拆分依据职责和真实关系，而不是节点数、正文长度或固定层级；内容顺序本身不等于依赖边，文章章节、产品页面、能力、验收项和并行任务只有存在真实的依赖、包含、导航、证据或决策关系时才连接。Canvasight 会拒绝把独立职责机械串成一条超长单链；`frameworkManifest.semanticStructure` 记录覆盖节点的职责与凝聚原因，`semanticRelationships` 按最终 edge ID 记录关系类型和理由。
-
-AI 写图前可以先用 `list_canvasight_node_templates` 扫描模板摘要，再用 `get_canvasight_node_template` 读取选中模板的完整内容。带旧附件的模板不会把附件重新塞回 Task：Canvasight 会验证并复制模板文件到当前项目，为每个复用 Task 建立下游 Asset；复制或候选校验失败时，文档和项目资产目录都保持不变。现代 AI 写入通过捕获的上下文与网页自动保存协调：过期 revision 会触发安全重基，不同对象自动合并，同一对象冲突时保留用户原 Page 并保存完整 AI 副本。旧客户端仍执行严格 revision 校验，任何路径都不能静默覆盖较新的画布。
-
-### 插件安装
-
-推荐先使用上面[基础用法](#基础用法)中的提示词让 Codex 安装。正式安装从官方 GitHub `stable` 分支创建由 Codex 管理的独立快照；安装完成后，桌面的 Canvasight 源码仓库可以移动或删除，不会影响插件。需要手动安装时，在终端运行：
-
+#### 官方 Release 快照安装（推荐）
+在终端中执行：
 ```bash
 codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git --ref stable
 codex plugin add canvasight@canvasight-local
 codex plugin list
 ```
+*自 `v0.4.10` 起，发布包中已内置自包含的 MCP Server 依赖，通过 GitHub 安装后无需进入缓存目录执行 `npm install`。*
 
-从 `0.4.10` 开始，Canvasight 发布包中的 MCP server 已包含运行所需的依赖。通过 GitHub 正常安装或升级时，插件缓存不需要 `node_modules`，用户也不需要进入缓存目录运行 `npm install` 或 `npm ci`。如果 `codex plugin list` 仍显示 `0.4.9` 或更早版本，请优先升级到 `0.4.10` 或更高版本。
-
-`codex plugin list` 中应能看到 `canvasight@canvasight-local`。Canvasight 也支持仅供开发使用的本地 checkout：插件源码位于 `plugins/canvasight`，marketplace 配置位于 `.agents/plugins/marketplace.json`。这种方式会让 Codex 直接引用仓库的绝对路径；移动、重命名或删除仓库后，插件会消失。把下面的路径换成仓库的绝对路径：
-
+#### 本地开发安装 (Local Checkout)
+若需对 Canvasight 进行二次开发，可直接引用本地仓库路径：
 ```bash
 codex plugin marketplace add /你的绝对路径/Canvasight
 codex plugin add canvasight@canvasight-local
 codex plugin list
 ```
 
-安装、重装或升级后，如果 Codex 桌面端当时正在运行，请先重新加载窗口或重启 Codex，再新建任务并重新 `@Canvasight`。只新建任务仍可能沿用桌面进程级的旧插件注册快照。正式安装的已解析版本应与官方 Release 和插件 manifest 一致；本地开发安装才应与 checkout 中的 `plugins/canvasight/package.json` 一致。
-
-### 检查与更新
-
-从 `0.4.11` 开始，可以直接对 Codex 说“检查 Canvasight 更新”或“更新 Canvasight”。检查只比较当前已安装版本和官方最新正式 Release，不会安装或改动任何内容。更新会安装 Release 中的完整插件快照，包括网页界面、MCP server 与 tools、Skills、manifest、图标、静态资源和插件文档；它不是只替换更新 Skill。
-
-从 `0.5.9` 开始，检查最新版不再调用有匿名 API 配额的 `api.github.com`，也不要求用户登录 GitHub、使用仓库所有者账号或提供访问令牌。更新器读取公开的 Latest Release 跳转，再用公开 Git refs 验证 Release tag 与 `stable` 指向同一提交。`0.5.8` 的旧更新器仍可能在共享公网 IP 耗尽 GitHub 匿名额度时返回 HTTP 403；遇到这种情况，可在额度恢复后重试，或手动执行一次下面的 marketplace upgrade / plugin add 命令升级到 `0.5.9` 及以后版本。
-
-检查或更新只运行一次 Canvasight 内置更新器，不会夹带额外的安装、构建、Release、Git、清理或“重复文件修复”命令，避免文件提供器产生编号副本。
-
-已经是最新版时，Canvasight 不刷新 marketplace、不重新安装，也不提示重启。当前版本高于正式 Release、版本无法识别、来源是本地 checkout 或自定义 fork 时，更新器会安全停止，不降级、不覆盖开发目录。只有确认官方 `Niall-Young/Canvasight` 的 `stable` 来源、Release 与插件版本一致并安装验证成功后，才会报告更新完成。
-
-更新器永远不修改项目中的 `.scatter/scatter.json`、`.scatter/assets/`、Page、节点、连线、位置和设置，也不修改 `~/.canvasight`、项目源码、其他插件或 Skills、开发者本地 checkout 和无关 Codex 配置。若未来数据格式需要升级，会使用独立的兼容迁移，而不是由通用更新器删除或重建数据。
-
-`0.4.10` 或更早版本还没有更新 Skill。第一次升级到 `0.4.11` 需要手动运行：
-
-```bash
-codex plugin marketplace upgrade canvasight-local
-codex plugin add canvasight@canvasight-local
+#### 检查更新
+在 Codex 对话中直接输入：
+```text
+检查 Canvasight 更新
 ```
+或
+```text
+更新 Canvasight
+```
+更新器将比对已安装版本与 GitHub 官方最新正式 Release，自动完成全套快照的无缝平滑替换。
 
-真正安装新版本后，更新器只会请你自行重新加载或重启 Codex Desktop，再新建任务并重新 `@Canvasight`；它不会代替你重启、退出、新建任务或继续追踪。
+---
 
-### MCP Tools
+### MCP Tools 说明
 
-原生打开与确认：
+| 工具类别 | 工具名称 | 功能描述 |
+| :--- | :--- | :--- |
+| **原生打开与确认** | `open_canvasight` | 启动原生画布实例，返回 `opening` 凭据与 `openAttemptId` |
+| | `await_canvasight_widget_ready` | 轮询等待 Widget 完成 React 挂载、数据水合与可见渲染 |
+| | `ask_canvasight_framework_questions` | 在 Codex 对话流中内嵌 1~3 道决策单选/多选确认卡片 |
+| | `open_canvasight_recent_project` | 在新任务中快速重开最近历史项目画布 |
+| | `list_canvasight_recent_projects` | 查询最近使用过的 Canvasight 项目列表 |
+| **画布与图元管理** | `get_canvasight_graph_context` | 读取当前 Page 结构、节点摘要、连线及修订版本号 |
+| | `write_canvasight_graph` | 以受控事务提交图元的新建、合并、替换或重排 |
+| | `list_canvasight_node_templates` | 列出本地全局节点模板库摘要 |
+| | `get_canvasight_node_template` | 获取指定模板的完整节点定义及附件 |
+| | `list_canvasight_skills` | 查询当前项目已启用 Skill 的安全摘要 |
+| **调试与会话** | `open_canvasight_browser_fallback` | 打开基于浏览器的备用调试页面 |
+| | `claim_canvasight_thread` | 将 Fallback 调试会话绑定至当前任务 |
+| | `await_canvasight_run` | 提取 Fallback 队列中的待执行 Run 任务 |
+| | `close_canvasight` | 关闭指定会话连接（不影响项目 Daemon） |
 
-- `ask_canvasight_framework_questions`：在当前 Codex 消息中显示一至三道关键框架问题；不会打开或依赖 Canvasight 工作区。
-- `open_canvasight`：正常入口；返回 provisional `opening`、`openAttemptId` 和 `sessionId`，不代表画布已打开。
-- `render_canvasight_canvas_widget`：显式 widget 兼容入口。
-- `open_canvasight_recent_project`：在新任务中打开最近项目。
-- `list_canvasight_recent_projects`：列出最近项目。
-- `await_canvasight_widget_ready`：绑定 attempt、session、任务和 fullscreen instance，等待真实 React commit、项目 hydration 与可见画布；这是 native open 的成功判定。
+---
 
-画布和模板：
+### Skills 分工体系
 
-- `get_canvasight_graph_context`
-- `write_canvasight_graph`
-- `list_canvasight_node_templates`
-- `get_canvasight_node_template`
-- `list_canvasight_skills`：按当前项目职责查询已启用 Skill 的脱敏摘要；不返回正文或本地路径。
+- **`canvasight-open`**：负责原生 Widget 调起、最近项目流转及 Fallback 接入。
+- **`canvasight-run`**：负责原生 Chat Run 投递以及 Fallback 队列消费。
+- **`canvasight-graph-writer`**：负责根据意图调用规范生成与维护画布图谱。
+- **`canvasight-imagegen`**：负责验证画布、驱动图像模型生图并原子归集为 Asset Node。
+- **`canvasight-agent-team`**：负责处理基于 `ROSTER.md` 与 `agent-reports/` 的多智能体协作协议。
+- **`canvasight-update`**：负责版本比对以及通过 Marketplace 执行安全升级。
+- **`canvasight-troubleshooting`**：负责环境探测、Daemon 排错与 MCP 链路诊断。
 
-fallback 与会话：
+---
 
-- `open_canvasight_browser_fallback`：只用于显式诊断或开发预览。
-- `claim_canvasight_thread`：把已有 fallback session 绑定到当前任务。
-- `await_canvasight_run`：领取 fallback 队列中的 Run；不用于证明 native Run 成功。
-- `close_canvasight`：关闭指定 session，不停止项目级 daemon。
+### 数据持久化规范
 
-一次用户级打开动作必须是一次 `open_canvasight` 加一次 `await_canvasight_widget_ready`。调用方必须保留首次打开返回的完整结果，并使用其中同一组 `sessionId`、`openAttemptId` 和 `threadId` 继续校验；不能因为包装器、转录或局部变量丢失了这些字段而再次调用 `open_canvasight`。身份缺失时，本次打开保持 `unverified` 并进入故障排查，不能静默创建第二个画布。
+- **画布数据**：`.scatter/scatter.json`（支持多 Page、Group、Task 及 Asset 结构）。
+- **附件资产**：`.scatter/assets/`（由系统受管存储，删除 Asset 节点不会物理删除源文件）。
+- **修订记录**：`.scatter/revision-state.json`（记录版本历史与幂等变更凭据）。
+- **全局偏好与模板**：保存在用户主目录下的 Canvasight 目录中，不污染具体项目。
 
-`await_canvasight_widget_ready` 参数：
+---
 
-- `openAttemptId`：必填，来自 `open_canvasight`。
-- `sessionId`：必填，来自 `open_canvasight`。
-- `threadId`：必填，必须是调用 `open_canvasight` 时使用的当前 Codex 任务 id。
-- `widgetInstanceId`：可选；调用方已观察到具体实例时，可进一步限定到该 fullscreen instance。
-- `timeoutMs`：可选，范围 `1..300000`，默认 `30000`。
+### 开发与测试
 
-它返回 `status`（`ready`、`timeout` 或 `failed`）、`verified`、`openAttemptId`、`sessionId`、`threadId`、`widgetInstanceId`、`displayMode`、`stage`、`reactMounted`、`projectHydrated`、`canvasRendered`、`canvasVisible`、画布尺寸、`error` 和 `reportedAt`。只有上述 fullscreen ready 证据完整时 `verified` 才能为 true。
-
-### Skills 分工
-
-- `canvasight-open`：原生打开、最近项目和显式 browser fallback。
-- `canvasight-run`：native Chat Run 与 fallback 队列处理。
-- `canvasight-graph-writer`：用 AI 创建或更新 Page、节点和连线。
-- `canvasight-agent-team`：处理可选的 Agent Team 角色注册表与 agent-report 协作协议；报告优先于 roster，队列为派生索引。
-- `canvasight-update`：只读检查官方正式 Release，或安全安装完整的稳定插件快照并验证版本。
-- `canvasight-troubleshooting`：处理插件、MCP transport、daemon、widget 和 fallback 故障。
-- `canvasight`：跨多个 Canvasight 工作流时使用的薄索引。
-
-专业 Skills 负责内容判断；Canvasight Skills 负责写入协议和产品工作流。画布级内容 Skill 与节点级 `$Skill` 分配是不同概念，两者都不能直接写 `.scatter` 或改变固定水平布局。
-
-### 数据存储
-
-- 项目画布：`.scatter/scatter.json`
-- 项目附件：`.scatter/assets/`
-- 最近项目、daemon 状态和生命周期日志：本机 Canvasight 用户状态目录
-- 全局用户偏好：`CANVASIGHT_HOME/preferences.json`，包括默认关闭的 AI 节点 Skill 分配开关
-- 全局节点模板及其资源：本机 Canvasight 用户状态目录，不写入项目文件
-
-`.scatter/scatter.json` 同时读取 v1 和 v2，并通过 `pages` 和 `activePageId` 支持多个 Page。v2 增加 Asset、Group、成员 `parentId` 和 Page 视图状态；v1 仅在首次使用这些能力时升级，并保留上面的单次备份。未知字段应尽量保留，非法文件应显示可恢复错误，而不是清空画布。删除 Asset Node 不会删除 `.scatter/assets` 中的受管文件。
-
-`threadId` 不用于决定画布文件归属，也不应作为跨项目的持久“当前项目”记录；它只标识本次打开的 Codex 任务和该任务中的 Run 接收方。最近项目列表仅用于显式的“打开最近项目”，不能覆盖当前任务已解析的项目目录。
-
-### 开发命令
-
-从 `plugins/canvasight` 运行：
+在本地进入 `plugins/canvasight` 目录：
 
 ```bash
+# 安装依赖
 npm install
+
+# 编译 MCP 打包产物
 npm run build:mcp
 npm run check:mcp-bundle
+
+# 本地调试开发服务
 npm run dev
 npm run dev:status
 npm run dev:stop
-npm run dev:foreground
-npm run preview
-npm run daemon
-npm run daemon:stop
+
+# 代码检查与单元测试
 npm run typecheck
-npm run build
 npm run test:unit
 npm run test:architecture
+
+# 核心全量测试矩阵
 npm run test:core
 npm run verify
-npm run test:markdown
-npm run test:rich-text
-npm run test:markdown-export
-npm run test:asset-presentation
-npm run test:node-creation
-npm run test:task-attachments
-npm run test:single-parent
-npm run test:svg-asset
-npm run test:skills
-npm run test:dev-server
-npm run test:mcp
-npm run test:concurrency
-npm run test:plugin-distribution
-npm run test:update
-npm run test:widget-runtime
-npm run diagnose:mcp
-npm run release:prepare -- 0.5.5
-npm run release:verify -- 0.5.5
+
+# 打包构建
+npm run build
 ```
 
-`npm run build:mcp` 从 MCP 源码生成发布用的自包含 server；`npm run check:mcp-bundle` 只检查已提交 bundle 是否与源码一致。`npm run test:unit` 验证抽离后的领域规则，`npm run test:architecture` 检查模块依赖和组合入口不会重新膨胀，`npm run test:core` 运行核心行为矩阵，`npm run verify` 依次检查 bundle、类型和核心行为。完整的模块职责和新增代码放置规则见[架构说明](docs/architecture.md)。`npm run test:rich-text` 是节点富文本 Markdown 往返与兼容性 smoke；`npm run test:asset-presentation` 验证 Asset 类型映射、SVG 格式图标存在性和内容优先的源码/CSS 合同；`npm run test:node-creation` 验证左右加号与拖空白共用任务/文件/媒体创建菜单、单文件限制和提交前连接复核；`npm run test:task-attachments` 验证 Task 新增附件入口保持移除、文件 drop/paste 创建 Asset，并保留历史附件兼容；`npm run test:single-parent` 验证手动连线在 mutation 前拒绝第二父节点；`npm run test:svg-asset` 验证源 SVG 图片识别、旧数据兼容、安全响应头和预览清理。`npm run dev` 和 `npm run dev:foreground` 只用于开发预览。正常插件使用由 MCP tool 自动启动或复用项目级 daemon，不应要求用户安装依赖、生成 bundle 或先运行 dev server。
+---
 
-`npm run release:prepare -- <version>` 会同步发布版本并重新生成 MCP 与 Web 发布产物；`npm run release:verify -- <version>` 是不修改文件的只读发布门禁。
+### 原生验收标准
 
-插件校验：
+涉及 Native Widget 的交付必须经过严格的主机环境实机验收：
+1. 安装对应版本插件并在 Codex Desktop 重启后开启全新任务；
+2. 正常输入 `@Canvasight` 触发打开；
+3. `await_canvasight_widget_ready` 返回 `verified: true`，且各阶段回执完整（React 挂载、项目水合、画布渲染可见且具有有效物理尺寸）；
+4. 画布操作验证：创建 Task、导入媒体为 Asset、创建并折叠 Group；
+5. 执行 Group Run，验证消息通过主机桥梁准确投递至当前任务对话流；
+6. 验证乱序及延迟事件不会使就绪状态回退至 `Connecting`。
 
-```bash
-python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/niallyoung/Desktop/Canvasight/plugins/canvasight
-```
+---
 
-### 原生验收
+### 常见问题解答 (FAQ)
 
-代码改动可以先通过 typecheck、build、MCP smoke 和 plugin validation，但原生 widget 修改还必须完成真实宿主验收：
+<details>
+<summary><b>Q1: 界面卡在 Opening / Starting / Connecting 怎么办？</b></summary>
+<br>
+通过 <code>await_canvasight_widget_ready</code> 返回的诊断信息排查：
+- <b>timeout</b>：Widget 未在超时前完成就绪握手，请排查 MCP Lifecycle 日志与 Node 执行环境；
+- <b>failed</b>：查看面板标明的失败 Stage，定位是 React 渲染故障、会话握手阻断还是视口不可见；
+- 单纯看到 Connecting 仅代表桥梁接收到元数据，不代表 API 通信完成。
+</details>
 
-1. 安装待交付的准确插件版本。
-2. 若升级发生在 Codex 运行期间，先重新加载窗口或重启 Codex；再新建任务并重新 `@Canvasight`。
-3. 通过正常 `@Canvasight` / `open_canvasight` 路径打开。
-4. 使用 open 返回的 `openAttemptId`、`sessionId` 和同一 `threadId` 调用 `await_canvasight_widget_ready`，确认返回已验证的 fullscreen instance，且 React、项目 hydration、canvas rendered/visible 与非零尺寸证据完整。
-5. 确认完整画布可见；上传一张图片创建 Asset Node，并确认图片通过 daemon 安全代理正常预览。
-6. 创建一个 Group，拖入 Task/Asset，折叠后确认摘要与聚合连线，再展开确认原节点和 Edge 恢复。
-7. 点击 Group Run，确认只有组内范围由同一已验证 fullscreen instance 通过 native host bridge 到达同一个 Codex 任务。
-8. 等待并触发重复或乱序的 metadata / host 事件，确认可见状态不再从 Ready 回退到 Connecting。
-
-synthetic VM、DOM mock、metadata shape、postMessage、MCP smoke、build、plugin validation 和 browser fallback 都只能作为辅助检查。缺少上述真实证据时，交付状态必须写为 `unverified`，不能声称“画布已打开”“已就绪”或“已修复”。
-
-### 常见问题
-
-**一直显示 Opening / Starting / Connecting 怎么办？**
-
-先查看 `await_canvasight_widget_ready`：
-
-- `ready`：只有 `verified: true` 且 fullscreen、React、项目 hydration 和可见画布证据完整时，原生启动才已确认。
-- `timeout`：widget 没有在等待时间内完成 ready 回执；按未验证处理，查看可见启动错误、插件版本和 MCP lifecycle 日志。看到 `Connecting` 只证明 bridge 收到了 session metadata，不证明初始 API 或 ready 回执成功；daemon 尚未收到 telemetry 时，`reactMounted:false` 也不能单独证明 React 没运行。
-- `failed`：根据持久失败面板和 ready 结果中的 `stage`、`error` 定位 React、bridge、fullscreen host context、session、hydration 或 canvas visibility 阶段。可以选择重新连接、在新任务中重开或复制脱敏诊断。
-
-不要用 browser fallback、daemon health 或再次看到 tool success 来覆盖这个结论。
-
-**删除或移动 Canvasight 源码仓库后为什么找不到插件？**
-
-这说明当前使用的是本地开发安装。源码仓库仍存在或恢复后，`codex plugin list` 中的 Canvasight `PATH` 会指向该 checkout，而不是 Codex 管理的 marketplace 快照；如果仓库已经删除，插件也可能直接不再列出或显示为来源不可读。若尚未删除，请保留源码目录直到迁移完成，然后清理旧注册并迁移到官方 `stable` 独立安装：
-
-```bash
-codex plugin remove canvasight@canvasight-local
+<details>
+<summary><b>Q2: 移动或删除源码目录后找不到插件？</b></summary>
+<br>
+说明之前使用了本地 checkout 开发安装。请清理旧注册后切换为官方 stable 分支的快照安装：
+<pre><code>codex plugin remove canvasight@canvasight-local
 codex plugin marketplace remove canvasight-local
 codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git --ref stable
-codex plugin add canvasight@canvasight-local
-codex plugin list
-```
+codex plugin add canvasight@canvasight-local</code></pre>
+</details>
 
-迁移后，Canvasight 的 `PATH` 应位于 Codex 管理目录（例如 `~/.codex/.tmp/marketplaces/canvasight-local/plugins/canvasight`），不再位于源码仓库。然后完整重启 Codex Desktop，新建任务并重新 `@Canvasight`。这个过程不迁移或删除项目 `.scatter` 画布和 `~/.canvasight` 用户状态；但如果你随后删除整个项目文件夹，项目内的 `.scatter` 也会一起被删除，请先备份需要保留的画布。
+<details>
+<summary><b>Q3: Windows 下安装后看不到 Canvasight 相关 Tools？</b></summary>
+<br>
+1. 使用 <code>tool_search</code> 检索 <code>canvasight open_canvasight</code>；<br>
+2. 使用 <code>codex.cmd plugin list</code> 验证版本是否处于 <code>0.4.10</code> 及以上（新版本已内置完整依赖）；<br>
+3. 在插件目录运行 <code>node .\tests\mcp-registration-probe.mjs</code> 进行注册握手诊断。
+</details>
 
-**Windows 安装后仍看不到 Canvasight tools？**
+<details>
+<summary><b>Q4: 导入的文件会变成 Task 附件还是 Asset Node？</b></summary>
+<br>
+所有新导入文件（拖放、粘贴、文件选择）一律作为一等公民 <b>Asset Node</b> 创建。图片与视频直接呈现预览卡片，其他格式显示标准文件卡。旧项目已有的 Task 附件完全兼容，支持在菜单中一键“提升为资产节点”。
+</details>
 
-先用 `tool_search` 查找 `canvasight open_canvasight await_canvasight_widget_ready`，再用 `codex.cmd plugin list`（不要使用可能被 PowerShell 执行策略拦截的 `codex.ps1`）确认插件来源和已解析版本。正式修复是升级到 `0.4.10` 或更高版本；这些版本的 MCP server 自带依赖，正常 GitHub 安装不需要缓存目录中存在 `node_modules`，也不需要手工运行 npm。
+<details>
+<summary><b>Q5: Group Run 与 普通 Run 有何不同？</b></summary>
+<br>
+- <b>Task Run</b>：沿连接线向后遍历，将下游全部子任务及关联的 Asset 文件证据一并交付执行；<br>
+- <b>Group Run</b>：严格限定在 Group 边界内，仅打包组标题、说明、直属成员、成员资产与组内内部连线，绝不沿跨组连线带出外部节点。
+</details>
 
-如果已解析版本是 `0.4.9` 或更早版本，并且错误明确为 `ERR_MODULE_NOT_FOUND`（例如缺少 `@modelcontextprotocol/ext-apps` 或 `fflate`），可以把下面的命令作为旧缓存的临时恢复方式：先进入 `codex.cmd plugin list` 显示的 Canvasight 已安装插件根目录，再运行：
-
-```powershell
-npm.cmd ci --omit=dev
-```
-
-这不是正式修复。完成临时恢复或版本升级后，都要完全退出并重启 Codex Desktop，再新建任务并重新 `@Canvasight`；只新建任务可能仍沿用旧注册快照。不要把 browser fallback 能显示画布当作原生修复成功；仍须由 `await_canvasight_widget_ready` 返回完整的 verified fullscreen ready 证据。
-
-如果 tools 仍缺失，问题还在 MCP 启动/注册层，不要先排查 daemon 或 widget。在已安装插件根目录运行 `node .\tests\mcp-registration-probe.mjs`；探针会检查 manifest 中的 Node 命令，完成 `initialize` 和 `tools/list`，确认必要的打开工具，并输出 Node 可执行文件、工作目录、阶段和隔离的生命周期日志位置。仓库开发环境也可运行 `npm run diagnose:mcp`。
-
-查看 `%USERPROFILE%\.canvasight\mcp-lifecycle.log`（设置了 `CANVASIGHT_HOME` 时改看该目录）：
-
-- 没有本次启动的 `stdio_start`：Codex Desktop 没有启动 Canvasight MCP；检查插件缓存、`.mcp.json` 和 Desktop 进程是否能解析 Node。
-- 有 `stdio_start` 但没有 `request`/`initialize`：MCP 子进程已启动，但宿主没有完成握手。
-- 有 `initialize` 和 `tools/list`：Canvasight MCP 已响应，继续检查当前任务的插件工具注册快照。
-
-不要把直接运行 `node .\mcp\server.mjs` 后持续等待当成故障；stdio MCP 会等待 JSON-RPC 输入。探针只证明 MCP 握手健康，不能证明原生画布已打开。
-
-**`Transport closed` 是什么？**
-
-它表示当前 Codex 任务里的 Canvasight MCP transport 已关闭或过期，不等于 daemon 故障。检查 Canvasight lifecycle 日志；若插件版本未变化，可尝试重载任务，若刚安装或升级过插件则应重载/重启 Codex 宿主后再新建并重新标记任务。localhost fallback 不能修复 native transport。
-
-**为什么 browser fallback 的 Run 没有直接发送？**
-
-browser/dev 页面没有 native widget host bridge。用 `claim_canvasight_thread` 绑定当前任务后，它只会把 Run 放入队列，再由 `await_canvasight_run` 领取。
-
-**文件会成为 Task 附件还是 Asset Node？**
-
-新导入的文件一律成为 Asset Node：底部资产按钮、画布/Task/Group 上的拖放，以及文件或图片粘贴都遵循同一规则。Task 不再提供附件上传入口。旧项目中已有的内嵌附件仍保留兼容，可继续参与 Run 和导出，也可移除或使用“提升为资产节点”显式迁移；提升复用同一受管文件，不复制文件。图片（包括安全清理后被动显示的 SVG）和视频 Asset 直接显示媒体；普通文件在单层白底中横排显示对应 SVG 格式图标、文件名与格式/大小，未匹配格式使用未知文件图标。Asset 本身不单独运行，也不显示输入/参考/候选/产出分类；用途由连线方向、标签和上下文表达。更多菜单只保留更换文件和删除。更换或删除 Asset Node 都不会删除 `.scatter/assets` 中已有的受管文件。
-
-**Group Run 和普通 Run 有什么区别？**
-
-Task Run 会沿持久化 Edge 收集下游节点及其中的 Asset 证据；Asset 本身没有 Run。Group Run 是封闭范围，只包含 Group 标题、说明、直接成员、成员资产和内部 Edge；跨组 Edge 只用于画布关系，不会把组外节点带入本次 Run。
-
-**Run 为什么没有出现在当前任务？**
-
-先确认这是通过 `open_canvasight` 打开的 native widget，并且 ready 已确认。native Chat Run 以 host bridge Promise 为成功标准；fallback Run 则检查 claim 和 `await_canvasight_run`。
-
-**Run 显示 `failed to read thread` 或 `rollout does not start with session metadata` 怎么办？**
-
-这表示 Codex 无法读取该任务的本地 session/rollout metadata，不是节点内容错误。Canvasight 会依次选择显式配置的 runtime、Codex Desktop、ChatGPT Desktop，最后才在没有可用 Desktop runtime 时使用 PATH 中的 `codex`。只有 Codex 明确报告 task 尚未加载时，Canvasight 才会在同一连接里恢复该 task 后重试。
-
-若诊断显示 **Desktop runtime 不可用**，重载或重启当前 Desktop 应用后重新打开 Canvasight；若显示 **线程存档不兼容**，重载或重启 Desktop 后新建 task，再重新打开 Canvasight。不要改用旧 PATH CLI、旧任务或最近任务。两种失败都会保留节点内容。Canvasight 全程不模拟鼠标/键盘、不复制粘贴、不自动新开 task，也不修改 Codex session 文件。browser fallback 和 dev 页面不能修复原生任务存储。
-
-**新任务需要运行 `npm run dev` 吗？**
-
-不需要。正常插件入口会自动启动或复用项目级 daemon。dev 命令只用于开发和诊断。
+<br />
 
 ---
 
 <a id="english"></a>
-## English
+<a id="-english"></a>
+# 🇬🇧 English
 
-Canvasight is a Codex plugin for organizing tasks, file-based material, and prompt flows into a `Page → Group → Task/Asset` structure on an editable canvas before handing the result to Codex. A normal installation uses a Git snapshot managed by Codex and does not depend on a desktop source checkout; the repository itself retains a repo-local plugin layout for development and local-checkout use. In normal use, the canvas renders directly inside a Codex native widget. A project-level local daemon serves canvas data and APIs independently of any single task.
+Canvasight is an interactive canvas plugin designed for Codex. It organizes tasks, media materials, and prompt flows into a clean `Page → Group → Task/Asset` hierarchy on an infinite canvas before handing them off to Codex for execution.
+
+Standard installations use a Git snapshot managed by Codex without needing a desktop source checkout; the repository retains a repo-local plugin structure for active development. In normal workflows, the canvas renders directly inside a Codex Native Widget. A project-level local daemon handles data persistence and JSON APIs independently of any transient task lifetime.
+
+### Table of Contents
+- [License](#license)
+- [Key Features](#key-features)
+- [Quick Start](#quick-start)
+- [Multi-Task Concurrency & Collaboration](#multi-task-concurrency--collaboration)
+- [Native Widget Architecture](#native-widget-architecture)
+- [AI Graph Writing](#ai-graph-writing)
+- [Plugin Installation & Updates](#plugin-installation--updates)
+- [MCP Tools Reference](#mcp-tools-reference)
+- [Skills Ecosystem](#skills-ecosystem)
+- [Data Storage Specification](#data-storage-specification)
+- [Development & Testing](#development--testing)
+- [Native Verification Acceptance](#native-verification-acceptance)
+- [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
+
+---
 
 ### License
 
-Canvasight is open source under the [MIT License](LICENSE), Copyright (c) 2026 Niall Young.
+Canvasight is open source software licensed under the [MIT License](LICENSE), Copyright (c) 2026 Niall Young. See the [LICENSE](LICENSE) file for complete terms.
 
-Canvas ownership and Run delivery are separate bindings: canvas content follows the project folder and is stored in that project's `.scatter/scatter.json` (with attachments in `.scatter/assets/`); each open temporarily binds the native widget and Run to the **current Codex task**. After switching projects, Canvasight must resolve that task's project directory again and load that directory's `.scatter`; it must not reuse a prior task's canvas or Run recipient merely because that task or project was opened previously.
+> **Canvas Ownership & Run Dispatch Binding:**  
+> Canvas content follows the project directory, persisting into `.scatter/scatter.json` (with attachments in `.scatter/assets/`). Each open temporarily binds the Native Widget and Run targeting to the **current Codex task**. Switching projects causes Canvasight to resolve the target task's project directory freshly, ensuring canvases and task recipients never bleed across workspaces.
 
-### Main Features
+---
 
-- Create, drag, delete, and connect task and asset nodes. Clicking either side plus on any node, or dropping a dragged connection on blank canvas, opens a menu for a Task, file, or media node; file and media choices create only after one file is selected successfully. Dropping on an existing node still connects directly. A node may be a root with no incoming Edge; once connected as a child it has exactly one parent, while it may still branch to multiple downstream nodes. Images, including SVG, and videos become the visible Asset content directly and show a focus border when selected; clicking a video picture only selects the node, while the browser's native play/pause, progress, time, volume, and fullscreen controls remain available at the bottom. Other files show the matching SVG format icon, filename, and format/size on one white surface, with unmatched formats using the unknown-file icon. Assets contribute file evidence to Task/Group Run through their connections without running on their own.
-- Organize Task/Asset nodes in single-level semantic Groups with `Cmd/Ctrl+G` and ungroup with `Cmd/Ctrl+Shift+G`. Ungrouping a whole Group releases its members and immediately removes the container, while ungrouping an individual member keeps the Group. Groups can also move together, fit their contents from the right-side header action, collapse to a summary, and Run only their own contents.
-- Edit node bodies as toolbarless rich text: Markdown shortcuts render directly as compact formatted content while the body remains stored as Markdown for templates, preview, export, and Run.
-- Use multiple Pages as isolated canvas workspaces within one project.
-- Edit one project from multiple Codex tasks: different objects merge automatically, while same-object conflicts preserve a complete conflict copy.
-- Add images and files as first-class Asset Nodes through the canvas picker, drop, or paste.
-- Task/Group Run always uses Chat to send its corresponding scope to the current Codex task.
-- Let Codex create or update editable Pages, nodes, and edges through `write_canvasight_graph`.
-- Enter `@Canvasight Generate…` directly: Canvasight verifies or opens the current project's native canvas, uses Codex's built-in imagegen flow, and adds every final image as its own Asset Node at the far right of the Page that was active when generation began.
-- Product/UI design exploration generates three independent references by default. They are ordinary connectable Asset Nodes, equivalent in behavior to the former in-node attachments. Once the user connects a wanted image into an existing Task flow, Task Run carries it with the whole flow; images outside that Task's reachable scope are naturally unrelated.
-- After an AI write, manually refresh from the upper-right canvas controls to load the project's latest canvas version without discarding unsaved local changes.
-- Resolve consequential framework ambiguity through a Canvasight confirmation card embedded directly in the current Codex message, then continue the original Graph Writer request without opening the canvas.
-- Save and reuse global local node templates. The library holds up to 200 templates and never silently evicts old data.
-- Reopen recent Canvasight projects from a new Codex task.
-- Optionally include the Agent Team protocol in generated Run Markdown: `ROSTER.md` restores role seats, versioned reports hold the single owner and verification evidence, and `agent-reports/QUEUE.md` is derived from reports.
-- Type `$` in a node body to search enabled project Skills; a professional Skill can also lead one canvas content write, and AI can opt in to choosing Skills for clearly matched node responsibilities.
+### Key Features
 
-### Basic Usage
+- **Task & Asset Node Topology**: Create, drag, connect, and delete Task Nodes and Asset Nodes. Clicking the side plus handles or dragging an edge to open canvas summons a quick creation menu (Task, File, Media). Every node can be a root; once connected as a child, it strictly enforces a **single-parent invariant** while allowing multiple downstream branches.
+- **First-Class Media Assets**: Images (including SVG) and videos appear directly as visible Asset content; selecting them displays a focus contour without disturbing handles. Videos provide native playback, scrub bar, volume, and fullscreen controls. Files render on a clean white surface with their respective SVG format icon and size metadata. Assets supply contextual evidence to Task/Group Runs without executing alone.
+- **Semantic Groups**: Group multiple nodes with `Cmd/Ctrl+G` and ungroup with `Cmd/Ctrl+Shift+G`. Groups support cohesive dragging, single-click "Fit to Content", collapsible summary badges, and group-scoped Runs.
+- **Toolbarless Rich-Text Markdown**: Enjoy frictionless in-place rich text editing powered by standard Markdown shortcuts (headers, lists, blockquotes, inline/fenced code). Files remain purely stored as standard Markdown strings, preserving compatibility across templates, previews, exports, and Runs.
+- **Multi-Page Workspaces**: Isolate architectures, user flows, design drafts, or bug explorations across independent Pages within the same project.
+- **Lock-Free Concurrency**: Open and edit the same project simultaneously across multiple Codex tasks. Independent changes merge automatically; irreconcilable conflicts generate complete, non-destructive "Conflict Copies".
+- **AI Graph Writing & Image Generation**: Use natural language prompts or `@Canvasight Generate…` to let Codex construct structured editable graphs or automatically import generated conceptual imagery as Asset Nodes positioned on the far right.
+- **Framework Clarification Cards**: Resolves pivotal architectural ambiguities directly inside the Codex conversation stream using compact inline multi-choice cards, eliminating unnecessary canvas popups.
+- **Templates & Skill Integrations**: Store up to 200 local node templates. Type `$` in any node body to search project Skills, or allow AI to tag responsibilities with `$skill-name`.
 
-1. **Install the plugin.** Copy this prompt, paste it into Codex, and send it:
+---
 
-   ```text
-   Help me install this Codex plugin from its stable branch: https://github.com/Niall-Young/Canvasight.git
-   ```
+### Quick Start
 
-   Codex will handle the marketplace and plugin installation. To run the CLI manually or install from a local checkout, see [Plugin Installation](#plugin-installation).
+#### 1. Install Plugin
+Send the following message to Codex:
 
-   ![Fantuan asks Codex to install the Canvasight plugin](images/fantuan-illustration-en-01.png)
+```text
+Help me install this Codex plugin from the stable branch: https://github.com/Niall-Young/Canvasight.git
+```
 
-2. **Let Codex load the plugin.** After an install, reinstall, or upgrade, reload the Codex window or quit and restart Codex. Then open the project you want to use with Canvasight, create a new Codex task, and mention `@Canvasight` in that task.
+Codex will configure the marketplace and plugin automatically. For manual CLI installation, see [Plugin Installation & Updates](#plugin-installation--updates).
 
-3. **Open the canvas.** Copy this complete prompt into Codex:
+<div align="center">
+  <img src="images/fantuan-illustration-en-01.png" alt="Fantuan delivers Canvasight plugin to Codex for installation" width="680" />
+</div>
 
-   ```text
-   @Canvasight Open the Canvasight canvas for the current project. Use this task's project directory, and only tell me it is ready after the native canvas has been verified.
-   ```
+#### 2. Reload Codex
+After installation or updates, **reload the Codex window or restart Codex Desktop completely**. Open your target project, start a new task, and reference `@Canvasight`.
 
-   ![Fantuan opens the Canvasight native canvas in Codex](images/fantuan-illustration-en-02.png)
+#### 3. Open the Canvas
+Send this prompt in your Codex conversation:
 
-4. **Create canvas content.** After the canvas opens, copy the prompt that best matches your work into Codex:
+```text
+@Canvasight Open the Canvasight canvas for the current project. Please use the project directory of this task and inform me once the native canvas is verified ready.
+```
 
-   Analyze a codebase:
+<div align="center">
+  <img src="images/fantuan-illustration-en-02.png" alt="Fantuan opens Canvasight native canvas in Codex" width="680" />
+</div>
 
-   ```text
-   Use Canvasight to inspect the current project and create a “Code Architecture” Page. Build editable nodes from the real directories, core modules, data flow, interfaces, risks, and verification paths. Connect nodes only with meaningful relationships.
-   ```
+#### 4. Generate Canvas Workflows
+Once open, pick a prompt suited to your task:
 
-   Plan a product requirement:
+* **Codebase Architecture**:
+  ```text
+  Analyze the current project with Canvasight and create a "Code Architecture" Page. Break it down into editable nodes reflecting real directories, modules, data flows, APIs, risks, and validation, connected with meaningful edges.
+  ```
+* **Product Requirements**:
+  ```text
+  Use Canvasight to convert the following PRD into an executable canvas: include goals, personas, core flows, boundaries, technical specs, risks, and acceptance criteria. Connect real dependencies with directed edges.
 
-   ```text
-   Use Canvasight to turn the product requirement below into an executable canvas. Include the product goal, target users, core flow, scope boundaries, design direction, technical implementation, risks, and acceptance criteria. Create editable nodes and use edges for real dependencies.
+  PRD:
+  [Paste your requirements here]
+  ```
+* **Research & Knowledge Synthesis**:
+  ```text
+  Organize the following material into a new Canvasight Page. Decompose by topics, chapters, arguments, evidence, conclusions, and open items; only connect nodes with genuine evidence or dependency relations.
 
-   Product requirement:
-   Paste your requirement here
-   ```
+  Content:
+  [Paste reference material here]
+  ```
+* **Direct Image Generation**:
+  ```text
+  @Canvasight Generate a cinematic concept image of a rainy neon city street and place it directly onto the current canvas.
+  ```
 
-   Organize an article or source material:
+#### 5. Incremental Refinement
+```text
+Continue refining the active Canvasight Page: keep all unmentioned nodes and positions intact, and only modify nodes and edges related to "[describe specific additions, updates, or removals]".
+```
 
-   ```text
-   Use Canvasight to organize the content below into a new Page. Create editable nodes for the topic, sections, key claims, evidence, conclusion, and open questions. Connect nodes only when there is a real containment, evidence, or dependency relationship.
+#### 6. Synchronize Canvas State
+If AI generation has completed but the canvas has not refreshed, click the **Refresh** icon in the upper-right corner. Canvasight ensures local changes are persisted before fetching the newest project state while preserving current viewport and selection.
 
-   Content:
-   Paste the article or source material here
-   ```
+#### 7. Edit, Connect, and Run
+Drag nodes to adjust layouts. Click a node body to enter seamless rich-text editing. Drop files or media directly to spawn Asset Nodes. Group related items using `Cmd/Ctrl+G`. Click **Run** on any Task or Group to send the exact scoped workflow and attached Asset evidence to Codex.
 
-   Generate directly into the current canvas:
+<div align="center">
+  <img src="images/fantuan-illustration-en-03.png" alt="Fantuan creates nodes, builds flows, and runs tasks in Canvasight" width="680" />
+</div>
 
-   ```text
-   @Canvasight Generate a cinematic concept image of a neon street on a rainy night and add it directly to the current canvas.
-   ```
+---
 
-5. **Update the current canvas.** Copy this prompt and replace the bracketed text with your request:
+### Multi-Task Concurrency & Collaboration
 
-   ```text
-   Continue refining the current Canvasight Page. Preserve all nodes and positions I did not mention, and only update the nodes and edges related to “[describe what to add, change, or remove here].”
-   ```
+- **Three-Way Document Rebase**: Different Codex tasks can work on the same project simultaneously. Local and external mutations undergo three-way comparisons; modifications to disparate nodes or edges merge automatically without coarse file locks.
+- **Client Auto-Rebase**: Incoming saves reconcile both revision and document state. If an external AI write occurred in the background, local pending edits rebase cleanly on top of the fresh state.
+- **Non-Destructive Conflict Copies**: When two tasks modify the same node concurrently, the earlier save holds the original Page, while the later task preserves its entire canvas into an explicit "Conflict Copy" Page.
+- **Safe AI Ingestion**: During an active AI graph write, user drags and node edits on the original Page take precedence. Validated AI candidate graphs are rebased or preserved as identifiable "AI Conflict Copies" without overwriting manual work.
 
-6. **Refresh to the latest version.** If AI has finished writing but the open canvas does not yet show the new nodes, click the refresh icon in the upper-right canvas controls. Canvasight waits for current changes to save, then loads the project's latest canvas version while preserving the active Page, viewport, and selection where possible. If local changes are still unsaved or new edits occur during refresh, it cancels the refresh and preserves the current content.
+---
 
-7. **Edit, add material, and run.** You can keep dragging nodes, editing their bodies, creating Assets, connecting nodes, or switching Pages directly on the canvas. Each Task/Asset may remain a root with no parent; after its first incoming Edge, Canvasight rejects any second parent while preserving the existing connection. A node may still branch to multiple downstream targets. The first click selects a node; when it is already selected, click its body again to enter the borderless, toolbarless rich-text editor.
+### Native Widget Architecture
 
-   Node bodies support Markdown shortcuts for level-one through level-three headings, bold, italic, strikethrough, bullet lists, numbered lists, blockquotes, inline code, fenced code blocks, and links, along with common formatting keyboard shortcuts. Task markers do not become interactive checkboxes; existing `- [ ]` / `- [x]` content remains visible as ordinary list text and round-trips unchanged. The editing surface is rich text, but Canvasight still stores the body as a Markdown string, preserving compatibility with existing plain-text nodes, node templates, Markdown preview and export, concurrent saves, and Run. AI graph writes also persist only Markdown strings and do not substitute editor JSON, raw HTML, tables, or inline media for Assets.
+- **Deterministic Startup Machine**: The React shell mounts on frame one and advances through a monotonic state machine: `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`.
+- **Instance Verification**: Every client assigns a distinct `widgetInstanceId`. The canvas is acknowledged as `ready` only when `openAttemptId`, `sessionId`, and `threadId` match and the fullscreen instance reports verified dimensions and complete React hydration.
+- **Secure Sandbox Proxying**: The widget never performs direct fetches against `localhost`. All JSON calls route through the allowlisted `canvasight_widget_api` MCP tool.
+- **Host Bridge Communication**: Native Run actions dispatch through MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` host bridge transports. Browser fallback surfaces operate strictly as dev fallbacks.
 
-   Type `$` in the body to search enabled Skills for the current project and insert a visible, copyable `$skill-name`; direct typing still works when the catalog is unavailable. Tasks no longer expose an attachment-upload entry. Choosing files through the bottom Asset button, or dropping or pasting files over the canvas, a Task, or a Group, creates one Asset per file. Existing legacy Task attachments remain readable, runnable, exportable, removable, and explicitly promotable; opening or saving an old project does not delete them automatically. Images, including SVG, and videos show the media itself with no shell, filename, or size. Selected media shows a focus border inside the content boundary without moving the node or its connection points. Clicking a video picture only selects the node and never plays or pauses it; the complete browser-native control bar remains available at the bottom for play/pause, progress, time, volume, picture-in-picture, fullscreen, and native keyboard interaction. SVG previews are sanitized and displayed as passive images rather than injected as executable documents. Other files use one white surface with a horizontal SVG format icon, filename, and format/size summary, while unmatched formats use the unknown-file icon; those SVGs are format icons for ordinary files, not source `.svg` images. Assets no longer show or edit Input/Reference/Option/Output classification; connection direction, labels, and surrounding context express the relationship. More appears in the upper-right only on hover, focus, or selection and contains only Replace file and Delete. Assets do not edit a title/description or run independently. Double-click or press Enter to open a non-video file. Replacement preserves the node position, Group membership, and Edges without deleting the previous managed file. “Promote to asset node” remains available only for legacy inline attachments; it reuses the managed file, removes the inline reference, and creates an editable `Task → Asset` attachment relationship so one Task may reference multiple files and Task Run automatically carries those downstream Assets, without copying or deleting files under `.scatter/assets`.
-
-   Select at least two Task/Asset nodes and press `Cmd/Ctrl+G` to create a Group; press `Cmd/Ctrl+Shift+G` to ungroup. Ungrouping a whole Group releases every direct member and immediately removes the container; selecting members only releases those members and keeps the Group. Groups do not nest and each node belongs to at most one Group. Deleting a Group also releases its members without deleting member nodes or asset files. Fit to contents and collapse/expand are exposed on the right side of the Group header, while More keeps low-frequency management. Collapsing is Page-local view state: the underlying nodes and edges remain unchanged. Task Run follows downstream relationships and carries Asset evidence in scope, while Group Run includes only its title, description, direct members, internal edges, and member assets. It never follows cross-Group edges outside the Group. Markdown review and export preserve descriptions, managed-file references, relationship direction/labels, and Group chapters.
-
-   ![Fantuan creates connected Canvasight nodes and runs a task](images/fantuan-illustration-en-03.png)
-
-Existing `.scatter` v1 canvases keep their content and layout and are not rewritten merely by opening them or continuing to use ordinary Tasks. The first Asset Node or Group atomically promotes the document to v2 and creates a one-time legacy backup at `.scatter/scatter.v1.backup.json`; Canvasight does not overwrite that backup later. Existing Task attachments are never promoted automatically.
-
-### Concurrent Editing
-
-The same project can be open and edited in multiple Codex tasks at once. Saves to the same Page are compared from the last version confirmed by each task. Changes to different nodes or edges merge automatically, so Canvasight does not need to lock the entire Page.
-
-Every widget save response confirms both its revision and response document. When that response contains content added by an external AI write or another task, the canvas synchronizes it immediately. When newer local edits occur while the save is in flight, Canvasight rebases them onto the response document. The client never advances only its base revision while retaining an older canvas body, so a later viewport or ordinary edit cannot overwrite newer AI nodes.
-
-If two tasks change the same object to different results, the original Page keeps the first saved result and the later task's complete Page is saved as a new conflict-copy Page. A delete-versus-edit conflict also creates a conflict copy instead of silently discarding either side. The later task switches locally to its conflict copy and shows a notice; other tasks are not forced to switch Pages. A conflict copy is an ordinary Page after creation and can be edited, renamed, or deleted.
-
-When AI starts changing the current Page, Canvasight binds that write to the Page and context captured at the start. You can keep dragging nodes, editing other content, or switching Pages while AI works. Changes to different objects merge automatically, and switching Pages never redirects the AI result to the wrong Page. Existing nodes keep their latest manual positions; AI places only newly added nodes.
-
-If you and AI change the same node, edge, or Page identity, your content and manual positions stay on the original Page, while the complete validated AI result is saved as an AI conflict copy. If the original Page was deleted, Canvasight saves the AI result as an AI recovery copy without recreating the deleted Page. The persistent notice says “Your edited version was preserved. The AI result was saved as a conflict copy” and offers “View AI version”; Canvasight does not switch Pages automatically.
-
-Graph-structure and framework validation is always completed before automatic rebasing. Modern context-aware AI writes can merge safely or preserve a copy. Legacy clients without a valid context remain strict revision-checked clients: stale writes fail instead of overwriting newer content.
-
-### Native Widget Contract
-
-- The React shell mounts on the widget's first frame. Startup follows the monotonic state machine `starting → connecting_bridge → connecting_session → hydrating_project → ready | failed`. Repeated or out-of-order `tool-result` / `openai:set_globals` events may confirm progress but cannot move Ready back to Connecting or revive a failed attempt.
-- Every widget client creates a unique `widgetInstanceId`. Only a fullscreen instance matching the same `openAttemptId`, `sessionId`, and `threadId` can satisfy ready; hidden, inline, and browser renderers are diagnostic only.
-- The widget reaches the daemon through the app-only `canvasight_widget_api`, carrying its attempt, instance, and startup stage on every request. The native widget does not fetch localhost directly.
-- When Codex reuses an open widget container, the newer open binding restarts the React app in that container, disables the old task's canvas, and binds the new attempt/session/thread. Duplicate metadata for the current binding may be merged; late metadata from an older binding must be ignored and cannot move Ready back to Connecting.
-- Startup failures, stage timeouts, and React render errors enter a persistent failure panel with the failed stage, a readable reason, Reconnect, Reopen in a new task, and Copy redacted diagnostics. The UI must not remain on “Opening”, “Starting”, or “Connecting” forever.
-- A native Run is allowed only from the verified fullscreen instance to its bound task through Chat and is sent only after the Promise from MCP Apps `ui/message` or `window.openai.sendFollowUpMessage` resolves successfully. When Codex Desktop normally holds the current task's thread writer, an independent preflight error saying `already has an active writer` does not block Run; the bound host's message Promise decides whether to accept or reject it. Other preflight failures still stop safely before delivery.
-- Daemon URLs and tokens remain in widget-only metadata and are not exposed in public native-open output.
-
-Browser URLs and bare dev pages are diagnostic fallbacks, not native-open paths. They have no native widget host bridge. After claiming the current task, their Runs only enter the `await_canvasight_run` queue and cannot be labelled as native sent.
+---
 
 ### AI Graph Writing
 
-You can ask Codex to turn product requirements, article structure, code architecture, or execution plans into a canvas:
+Codex agents interact with Canvasight through `write_canvasight_graph` rather than modifying raw `.scatter/scatter.json` files:
+1. **Mode Selection**:
+   - `append-page` (default): Appends a new Page to preserve existing work;
+   - `merge-active-page`: Reads `get_canvasight_graph_context` and submits surgical operations with a stable `clientMutationId`;
+   - `replace-active-page` / `replace-document`: Reserved strictly for explicit user rewrite requests.
+2. **Topological Rules**:
+   - **Horizontal Hierarchy**: All AI layouts strictly organize left-to-right (Groups and root nodes horizontally partitioned, Group members horizontally aligned internally);
+   - **Single-Parent Rule**: Every target node admits exactly one incoming edge;
+   - **Meaningful Connectivity**: Edges express genuine causal, evidence, sequence, or containment relationships rather than arbitrary linear chaining.
 
-- “Break this requirement into Canvasight task nodes.”
-- “Inspect this project and create a code architecture Page.”
-- “Map this article's claims and evidence onto the canvas.”
-- “Add a Page with research, design, development, and testing nodes.”
+---
 
-Codex should use `write_canvasight_graph` instead of manually assembling the full `.scatter/scatter.json`. The default `mode` is `append-page`; use `replace-active-page` or `replace-document` only when replacement is explicit. `graphType` controls node organization, not Page write behavior.
+### Plugin Installation & Updates
 
-When the user asks to continue the current canvas, expand a node, or remove an existing branch, Codex should first call `get_canvasight_graph_context` to read the active Page, `contextId`, `documentRevision`, and `documentVersion`. It then submits minimal node/edge operations with `merge-active-page`, returns that context's revision, and uses a stable mutation ID across retries. Only an explicitly new canvas appends a Page; an explicit current-Page rewrite replaces that Page; a full reset replaces the document. Incremental edits always return to the Page captured by the context and cannot be redirected by a later Page switch.
-
-Graph Context returns Task, Asset, and Group summaries, Group membership, managed Asset `id` / `relativePath` handles, and lightweight legacy Task-attachment handles without absolute paths or file URLs. Graph Writer can create and update all three node types plus Task/Asset `parentId`, but an Asset may only reuse a server-validated file under the current project's `.scatter/assets`; images, SVG, video, and ordinary files share one Asset Node shape and infer presentation from the file. AI cannot create new inline Task attachments. A legacy attachment can be promoted atomically only through context-bound `merge-active-page` with `promote-attachment`, the captured revision, and a stable mutation ID. Persisted Asset `role` is legacy compatibility only; current relationship meaning comes from Edge direction, labels, and context. Groups cannot nest or become Edge endpoints, and membership is never duplicated as an Edge. Group collapse belongs to the user's Page view state; AI writes and rebases preserve it and cannot treat it as semantic intent.
-
-New-image generation uses the dedicated `canvasight-imagegen` Skill. It verifies native readiness and captures the active Page, follows the system imagegen Skill to generate and inspect the bitmap outputs, then calls `add_canvasight_generated_images`. The tool accepts only PNG, JPEG, or WebP files up to 10 MB each from the current project or `$CODEX_HOME/generated_images`, with at most 16 images and 100 MB per call. It preserves the sources, commits managed copies and Asset Nodes under one write lock, and uses the captured context so Page switches during generation cannot retarget the result. Product/UI exploration generates three independent directions when the user does not specify a count. Once the user connects a wanted image into the ordinary Task flow, it travels with Task Run like a node attachment; images outside that Task's reachable scope are unrelated. The tool response contains only lightweight node/asset identifiers and project-relative paths.
-
-Generated content selects a thinking framework by combining intent, domain, maturity, and output. The primary domain's required content is checked through non-persistent `frameworkManifest.coverage`. A failing candidate is not written: Codex consumes the internal violations, repairs the candidate, and validates again for up to three rounds. The normal user-facing result is the corrected editable canvas, not a defect checklist.
-
-When two or more plausible answers would materially change identity or authority, primary audience, content or media type, language coverage, content mode, framework dimensions, target scope, key relationships, write behavior, required coverage, or acceptance, Graph Writer first calls `ask_canvasight_framework_questions`. It embeds one to three compact questions directly in the current message. Each question supports single or multiple selection, two or three presets, and a custom answer; a recommended option is guidance only. Independent blockers beyond the three-question limit are confirmed in later batches and cannot be written first as pending, TBD, or unknown nodes. The card never opens Canvasight, starts the daemon, creates a project session, or writes to `.scatter`. After a successful submission, the answers become a visible user message in the same task and Graph Writer reacquires the latest graph context before continuing. A failed send preserves the selections for retry. If an older task cannot see the tool or its host cannot render inline UI, Codex falls back to concise text questions instead of opening fullscreen Canvasight or guessing a consequential answer.
-
-A professional content Skill can lead one graph write through Codex description routing or an explicit `$Skill`. `skill-led` replaces only Canvasight's default professional content framework: the professional Skill owns content decisions, while Canvasight remains the sole writer for Pages, nodes, relationships, revisions, atomic persistence, and the fixed horizontal layout. Conflicting professional Skills must be resolved with the user before writing.
-
-Node-level Skills are separate. Manual `$Skill` text always works. “Allow AI to choose Skills for nodes” is a global, cross-project opt-in that defaults off. When enabled, AI writes `$skill-name` only for a clear description-to-responsibility match and supplies a source and rationale for write-time validation. Canvasight adds no hidden node Skill field and does not manage Skill installation or enablement.
-
-When writing a `software-product` canvas, Canvasight deterministically adds separate delivery nodes for any missing `AGENTS.md` or `design.md`, without consuming model retry attempts. A missing `AGENTS.md` does not opt the project into Agent Team by default. If the file contains only Canvasight's managed Agent Team block, Canvasight adds a focused “Complete AGENTS.md” node that preserves that block while adding general project rules. The same project-delivery nodes remain active for `skill-led` graph writes.
-
-All AI create, replace, merge, and relayout operations use `layoutPolicy: auto` by default and share a two-level left-to-right topology: Groups and ungrouped nodes are arranged first, then members are laid out horizontally inside each Group and its bounds are calculated. There are no vertical exceptions for any domain, output, `graphType`, article reading order, or task sequence. Canvasight layers nodes from their final relationships, centers parents over complete subtrees, and separates full node bounds; Y-axis ordering represents siblings, parallel branches, and chapter order. The public schema exposes only `horizontal`. Legacy `vertical` and `grid` values remain accepted as compatibility inputs, but the runtime normalizes them to `horizontal`, returns a deprecated advisory, and never writes the old direction.
-
-Use `preserve-explicit` only when the user explicitly wants their manually adjusted coordinates preserved; it is not an entry point for AI-created vertical graphs. Existing `.scatter` Pages are not migrated automatically and are horizontally rearranged only after a later AI topology change or an explicit `relayout-page`. During a concurrent rebase, existing nodes always keep their latest manual coordinates and AI layout applies only to new nodes. Decomposition follows responsibility and real relationships rather than node counts, body length, or fixed depth. Content order alone is not a dependency edge: article sections, product pages, capabilities, acceptance items, and parallel tasks are connected only when a real dependency, containment, navigation, evidence, or decision relationship exists. Canvasight rejects mechanically chaining independent responsibilities into one long path. `frameworkManifest.semanticStructure` records covered-node responsibilities and cohesion, while `semanticRelationships` records each final edge's relationship type and rationale.
-
-Before graph writing, AI can scan template summaries with `list_canvasight_node_templates`, then fetch one selected template with `get_canvasight_node_template`. A legacy template attachment is never restored inline: Canvasight validates and copies the template file into the current project, then creates a downstream Asset for every reused Task; copy or candidate-validation failure leaves both the document and project asset directory unchanged. Modern AI writes coordinate with web autosave through the captured context: a stale revision triggers a safe rebase, different-object changes merge, and same-object conflicts preserve the user's original Page plus a complete AI copy. Legacy clients remain strict revision-checked, and no path may silently overwrite a newer canvas.
-
-### Plugin Installation
-
-The recommended first step is to use the prompt in [Basic Usage](#basic-usage) and let Codex install the plugin. A normal installation creates a Codex-managed snapshot from the official GitHub `stable` branch; after installation, moving or deleting a desktop Canvasight source checkout does not affect the plugin. For manual installation, run:
-
+#### Official Release Installation (Recommended)
+Run the following commands in your shell:
 ```bash
 codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git --ref stable
 codex plugin add canvasight@canvasight-local
 codex plugin list
 ```
+*Starting with `v0.4.10`, the published MCP server bundle is completely self-contained; no manual `npm install` inside plugin cache directories is required.*
 
-Starting with `0.4.10`, the MCP server shipped in the Canvasight plugin includes its runtime dependencies. A normal GitHub install or upgrade does not need `node_modules` in the plugin cache, and users do not need to run `npm install` or `npm ci` inside that cache. If `codex plugin list` still resolves `0.4.9` or earlier, upgrade to `0.4.10` or later as the preferred fix.
-
-`codex plugin list` should show `canvasight@canvasight-local`. Canvasight also supports a development-only local checkout: its source is under `plugins/canvasight`, and its marketplace configuration is `.agents/plugins/marketplace.json`. This mode makes Codex reference the repository's absolute path directly; moving, renaming, or deleting the repository makes the plugin disappear. Replace the path below with the repository's absolute path:
-
+#### Local Checkout Development
+To develop Canvasight locally, register the local repository directory:
 ```bash
-codex plugin marketplace add /absolute/path/to/Canvasight
+codex plugin marketplace add /your/absolute/path/to/Canvasight
 codex plugin add canvasight@canvasight-local
 codex plugin list
 ```
 
-After installing, reinstalling, or upgrading while Codex Desktop is running, reload the window or restart Codex first, then create a new task and tag `@Canvasight` again. Creating a task alone can retain the desktop process's old plugin registry snapshot. A normal installation should resolve the version published by the official Release and plugin manifest; only a local development installation should be compared with the checkout's `plugins/canvasight/package.json`.
-
-### Checking and Updating
-
-Starting with `0.4.11`, you can tell Codex “Check for Canvasight updates” or “Update Canvasight.” A check only compares the installed version with the latest official GitHub Release; it installs and changes nothing. An update installs the complete plugin snapshot from the Release, including the web UI, MCP server and tools, Skills, manifest, icons, static assets, and plugin documentation. It does not replace only the updater Skill.
-
-Starting with `0.5.9`, latest-version checks no longer call the anonymously rate-limited `api.github.com` API and do not require users to sign in to GitHub, use the repository owner's account, or provide an access token. The updater follows the public Latest Release redirect and then verifies through public Git refs that the Release tag and `stable` point to the same commit. The old `0.5.8` updater can still return HTTP 403 when a shared public IP exhausts GitHub's anonymous quota; affected users can retry after the quota resets or run the marketplace upgrade / plugin add commands below once to reach `0.5.9` or later.
-
-When the installed version is already current, Canvasight does not refresh the marketplace, reinstall, or show a restart prompt. If the installed version is newer than the Release, unrecognizable, from a local checkout, or from a custom fork, the updater stops safely without downgrading or overwriting the development source. It reports success only after verifying the official `Niall-Young/Canvasight` `stable` source, Release/plugin version agreement, installation, and resulting version.
-
-The updater never modifies project `.scatter/scatter.json`, `.scatter/assets/`, Pages, nodes, edges, positions, or settings. It also leaves `~/.canvasight`, project source, other plugins and Skills, local development checkouts, and unrelated Codex configuration untouched. Any future data-format migration will be designed separately for backward compatibility instead of deleting or rebuilding data through the generic updater.
-
-Version `0.4.10` and earlier do not contain the updater Skill. The first upgrade to `0.4.11` must be run manually:
-
-```bash
-codex plugin marketplace upgrade canvasight-local
-codex plugin add canvasight@canvasight-local
+#### Checking for Updates
+Ask Codex directly:
+```text
+Check Canvasight updates
 ```
+or
+```text
+Update Canvasight
+```
+The updater inspects GitHub Latest Releases, verifies Git refs against `stable`, and performs an atomic plugin snapshot replacement without touching project workspace data.
 
-After a real installation, the updater only asks you to reload or restart Codex Desktop yourself, then create a new task and tag `@Canvasight` again. It does not restart, quit, create a task, or keep tracking that responsibility for you.
+---
 
-### MCP Tools
+### MCP Tools Reference
 
-Native open and confirmation:
+| Category | Tool | Description |
+| :--- | :--- | :--- |
+| **Native Open & Ready** | `open_canvasight` | Launches native canvas widget; returns provisional `opening` tokens |
+| | `await_canvasight_widget_ready` | Waits for verified fullscreen React mount, hydration, and visible render |
+| | `ask_canvasight_framework_questions` | Displays 1–3 inline choice cards directly in Codex chat stream |
+| | `open_canvasight_recent_project` | Reopens a recently accessed project canvas in a new task |
+| | `list_canvasight_recent_projects` | Lists recently active Canvasight projects |
+| **Graph & Templates** | `get_canvasight_graph_context` | Retrieves active Page topology, node digests, edges, and document revision |
+| | `write_canvasight_graph` | Atomically commits additions, merges, replacements, or relayouts |
+| | `list_canvasight_node_templates` | Summarizes available local node templates |
+| | `get_canvasight_node_template` | Reads complete template node definition and assets |
+| | `list_canvasight_skills` | Queries sanitized summaries of enabled project Skills |
+| **Diagnostics & Fallback**| `open_canvasight_browser_fallback` | Launches local browser fallback page for diagnostics |
+| | `claim_canvasight_thread` | Binds a fallback browser session to the current Codex task |
+| | `await_canvasight_run` | Polls and claims queued Run payloads from fallback sessions |
+| | `close_canvasight` | Closes a canvas session without stopping the shared project daemon |
 
-- `ask_canvasight_framework_questions`: renders one to three consequential framework questions inline in the current Codex message; it does not open or require the Canvasight workspace.
-- `open_canvasight`: normal entrypoint; returns provisional `opening`, `openAttemptId`, and `sessionId`, which do not prove that the canvas opened.
-- `render_canvasight_canvas_widget`: explicit compatibility alias for widget rendering.
-- `open_canvasight_recent_project`: opens a recent project in a new task.
-- `list_canvasight_recent_projects`: lists recent projects.
-- `await_canvasight_widget_ready`: binds the attempt, session, task, and fullscreen instance, then waits for the real React commit, project hydration, and visible canvas; this is the native-open success gate.
+---
 
-Canvas and templates:
+### Skills Ecosystem
 
-- `get_canvasight_graph_context`
-- `write_canvasight_graph`
-- `list_canvasight_node_templates`
-- `get_canvasight_node_template`
-- `list_canvasight_skills`: queries redacted summaries of enabled Skills for the current project; it never returns full Skill bodies or local paths.
+- **`canvasight-open`**: Handles native widget bootstrap, recent project switching, and fallback routing.
+- **`canvasight-run`**: Manages native Chat Run dispatching and fallback queue processing.
+- **`canvasight-graph-writer`**: Formulates structured, validated node and edge graph layouts.
+- **`canvasight-imagegen`**: Generates conceptual bitmap artwork and atomically imports Asset Nodes.
+- **`canvasight-agent-team`**: Coordinates multi-agent workflows backed by `ROSTER.md` and `agent-reports/`.
+- **`canvasight-update`**: Checks releases and installs official updates through marketplace mechanisms.
+- **`canvasight-troubleshooting`**: Diagnoses MCP transports, daemon lifecycles, and widget states.
 
-Fallback and session tools:
+---
 
-- `open_canvasight_browser_fallback`: only for explicit diagnostics or development preview.
-- `claim_canvasight_thread`: binds an existing fallback session to the current task.
-- `await_canvasight_run`: receives a fallback queued Run; it does not prove native Run success.
-- `close_canvasight`: closes one session without stopping the project daemon.
+### Data Storage Specification
 
-One user-level open action must consist of one `open_canvasight` call followed by one `await_canvasight_widget_ready` call. The caller must retain the complete first result and continue with the same `sessionId`, `openAttemptId`, and `threadId`. It must not call `open_canvasight` again merely because a wrapper, transcript, or local variable lost those fields. Missing identity leaves the original attempt `unverified` and routes it to troubleshooting instead of silently creating a second canvas.
+- **Project Graph**: `.scatter/scatter.json` (stores Pages, Groups, Tasks, and Asset Nodes).
+- **Project Assets**: `.scatter/assets/` (managed asset store; deleting nodes never deletes underlying files).
+- **Revision History**: `.scatter/revision-state.json` (persists mutation receipts and revision history).
+- **Global User Preferences**: Stored in `~/.canvasight/` (templates, daemon state, logs).
 
-`await_canvasight_widget_ready` accepts:
+---
 
-- `openAttemptId`: required; returned by `open_canvasight`.
-- `sessionId`: required; returned by `open_canvasight`.
-- `threadId`: required; it must be the current Codex task id passed to `open_canvasight`.
-- `widgetInstanceId`: optional; when the caller has observed an exact instance, this further restricts the wait to that fullscreen instance.
-- `timeoutMs`: optional, `1..300000`, default `30000`.
+### Development & Testing
 
-It returns `status` (`ready`, `timeout`, or `failed`), `verified`, `openAttemptId`, `sessionId`, `threadId`, `widgetInstanceId`, `displayMode`, `stage`, `reactMounted`, `projectHydrated`, `canvasRendered`, `canvasVisible`, canvas dimensions, `error`, and `reportedAt`. `verified` can be true only when all fullscreen ready evidence is complete.
-
-### Skill Split
-
-- `canvasight-open`: native open, recent projects, and explicit browser fallback.
-- `canvasight-run`: native Chat Run and fallback queues.
-- `canvasight-graph-writer`: AI-created or AI-updated Pages, nodes, and edges.
-- `canvasight-agent-team`: optional Agent Team role-registry and agent-report protocol; reports are authoritative and the queue is derived.
-- `canvasight-update`: read-only official Release checks or a guarded install of the complete stable plugin snapshot with version verification.
-- `canvasight-troubleshooting`: plugin, MCP transport, daemon, widget, and fallback failures.
-- `canvasight`: thin index for work spanning multiple Canvasight workflows.
-
-Professional Skills own content judgments; Canvasight Skills own the write protocol and product workflow. Canvas-level content Skills and node-level `$Skill` assignments are separate, and neither may write `.scatter` directly or change the fixed horizontal layout.
-
-### Data Storage
-
-- Project canvas: `.scatter/scatter.json`
-- Project attachments: `.scatter/assets/`
-- Recent projects, daemon state, and lifecycle logs: local Canvasight user state
-- Global preferences: `CANVASIGHT_HOME/preferences.json`, including the default-off AI node Skill assignment switch
-- Global node templates and their assets: local Canvasight user state, outside project files
-
-`.scatter/scatter.json` reads both v1 and v2 and supports multiple Pages through `pages` and `activePageId`. V2 adds Assets, Groups, member `parentId`, and Page view state. A v1 document upgrades only when one of those capabilities is first used, preserving the one-time backup described above. Unknown fields should be preserved where possible, and invalid files should produce recoverable errors instead of clearing the canvas. Deleting an Asset Node does not delete its managed file from `.scatter/assets`.
-
-`threadId` does not determine which canvas file belongs to a project and must not become a cross-project persistent “current project” record; it identifies only the Codex task for this opening and its Run recipient. The recent-project list is only for an explicit “open recent project” action and must not override the project directory resolved from the current task.
-
-### Development Commands
-
-Run from `plugins/canvasight`:
+From `plugins/canvasight`:
 
 ```bash
+# Install dependencies
 npm install
+
+# Build & check MCP server bundle
 npm run build:mcp
 npm run check:mcp-bundle
+
+# Local dev server
 npm run dev
 npm run dev:status
 npm run dev:stop
-npm run dev:foreground
-npm run preview
-npm run daemon
-npm run daemon:stop
+
+# Type checking and unit tests
 npm run typecheck
-npm run build
 npm run test:unit
 npm run test:architecture
+
+# Core test matrix verification
 npm run test:core
 npm run verify
-npm run test:markdown
-npm run test:rich-text
-npm run test:markdown-export
-npm run test:asset-presentation
-npm run test:node-creation
-npm run test:task-attachments
-npm run test:single-parent
-npm run test:svg-asset
-npm run test:skills
-npm run test:dev-server
-npm run test:mcp
-npm run test:concurrency
-npm run test:plugin-distribution
-npm run test:update
-npm run test:widget-runtime
-npm run diagnose:mcp
-npm run release:prepare -- 0.5.5
-npm run release:verify -- 0.5.5
+
+# Production build
+npm run build
 ```
 
-`npm run build:mcp` generates the self-contained distribution server from the MCP source; `npm run check:mcp-bundle` only checks that the committed bundle matches that source. `npm run test:unit` verifies extracted domain rules, `npm run test:architecture` checks module dependencies and composition-root growth, `npm run test:core` runs the core behavior matrix, and `npm run verify` checks the bundle, types, and core behavior in order. See the [architecture guide](docs/architecture.md) for module responsibilities and placement rules for new code. `npm run test:rich-text` is the node rich-text Markdown roundtrip and compatibility smoke; `npm run test:asset-presentation` verifies Asset type mapping, SVG format-icon availability, and content-first source/CSS contracts; `npm run test:node-creation` verifies the shared Task/file/media menu for side pluses and blank-canvas drops, the single-file limit, and connection revalidation before commit; `npm run test:task-attachments` verifies that new Task attachment entries stay removed, file drop/paste creates Assets, and legacy attachments remain compatible; `npm run test:single-parent` verifies that manual connections reject a second parent before mutation; `npm run test:svg-asset` verifies source-SVG image classification, legacy compatibility, secure response headers, and preview sanitization. `npm run dev` and `npm run dev:foreground` are development-preview commands. Normal plugin use automatically starts or reuses the project daemon through MCP tools and should not require users to install dependencies, generate the bundle, or start a dev server.
+---
 
-`npm run release:prepare -- <version>` synchronizes the release version and regenerates the MCP and web distribution artifacts; `npm run release:verify -- <version>` is the read-only release gate and does not modify files.
+### Native Verification Acceptance
 
-Plugin validation:
+Any modifications affecting the Native Widget must satisfy the complete host acceptance gate:
+1. Install the target plugin build and restart Codex Desktop before initiating a fresh task;
+2. Request `@Canvasight` to trigger native opening;
+3. Confirm `await_canvasight_widget_ready` returns `verified: true` with complete fullscreen React hydration and non-zero dimensions;
+4. Perform core interactions: create a Task Node, drop a media file to create an Asset Node, form a Group, and test collapse/expand;
+5. Trigger Group Run and verify that only the contained group scope is dispatched to the active Codex conversation via the native host bridge;
+6. Confirm out-of-order or late metadata events cannot regress the UI state back to `Connecting`.
 
-```bash
-python3 /Users/niallyoung/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py /Users/niallyoung/Desktop/Canvasight/plugins/canvasight
-```
+---
 
-### Native Acceptance
+### Frequently Asked Questions (FAQ)
 
-Typecheck, build, MCP smoke, and plugin validation are useful supporting checks. Native-widget changes must also pass real host acceptance:
+<details>
+<summary><b>Q1: What should I do if the widget stays stuck on Opening / Starting / Connecting?</b></summary>
+<br>
+Inspect the result from <code>await_canvasight_widget_ready</code>:
+- <b>timeout</b>: The widget failed to emit a ready receipt before the timeout. Check the MCP lifecycle logs and ensure Node is accessible;
+- <b>failed</b>: Review the specific <code>stage</code> in the error report to isolate whether the failure occurred during React mounting, session bridge connection, or canvas rendering;
+- A <code>Connecting</code> label only indicates bridge receipt of metadata, not verified API readiness.
+</details>
 
-1. Install the exact plugin version being delivered.
-2. If the upgrade happened while Codex was running, reload the window or restart Codex; then create a new task and tag `@Canvasight` again.
-3. Use the normal `@Canvasight` / `open_canvasight` path.
-4. Call `await_canvasight_widget_ready` with the returned `openAttemptId`, `sessionId`, and the same `threadId`. Confirm a verified fullscreen instance with complete React, project-hydration, canvas-rendered/visible, and non-zero-size evidence.
-5. Confirm that the full canvas is visible. Upload an image to create an Asset Node and verify that its preview loads through the daemon's safe proxy.
-6. Create a Group, add Task/Asset members, collapse it to verify the summary and aggregate edges, then expand it and confirm that the original nodes and Edges return.
-7. Click Group Run and confirm that only the Group scope reaches the same Codex task from the same verified fullscreen instance through the native host bridge.
-8. Wait and trigger repeated or out-of-order metadata / host events; confirm that the visible UI does not regress from Ready to Connecting.
-
-Synthetic VM, DOM mocks, metadata-shape checks, postMessage tests, MCP smoke, build, plugin validation, and browser fallback are supporting evidence only. If real host evidence is missing, the delivery must be marked `unverified`; it must not be described as opened, ready, or fixed.
-
-### FAQ
-
-**Canvasight stays on Opening, Starting, or Connecting. What should I do?**
-
-Check `await_canvasight_widget_ready` first:
-
-- `ready`: native startup is confirmed only with `verified: true` and complete fullscreen, React, project-hydration, and visible-canvas evidence.
-- `timeout`: the widget did not acknowledge ready in time. Treat it as unverified and inspect the visible startup error, resolved plugin version, and MCP lifecycle log. `Connecting` proves only that the bridge received session metadata, not that the initial API or ready acknowledgement succeeded. Before the daemon receives telemetry, `reactMounted:false` does not by itself prove React never ran.
-- `failed`: use the persistent failure panel and the ready result's `stage` and `error` to identify the React, bridge, fullscreen host-context, session, hydration, or canvas-visibility failure. You can Reconnect, Reopen in a new task, or copy redacted diagnostics.
-
-Do not override this result with a browser fallback, daemon health, or another successful open-tool response.
-
-**Why does the plugin disappear after I move or delete the Canvasight source checkout?**
-
-That means Canvasight was installed from a local development checkout. While the source repository still exists—or after it is restored—its `PATH` in `codex plugin list` points into that checkout instead of a Codex-managed marketplace snapshot; if the repository has already been deleted, the plugin may instead be absent or report an unreadable source. If the checkout still exists, keep it until migration finishes, then clean up the old registration and move to the official `stable` installation:
-
-```bash
-codex plugin remove canvasight@canvasight-local
+<details>
+<summary><b>Q2: Why did the plugin disappear after moving or deleting the source repo?</b></summary>
+<br>
+This indicates the plugin was installed via a local repository path checkout. Switch to the official self-contained <code>stable</code> snapshot:
+<pre><code>codex plugin remove canvasight@canvasight-local
 codex plugin marketplace remove canvasight-local
 codex plugin marketplace add https://github.com/Niall-Young/Canvasight.git --ref stable
-codex plugin add canvasight@canvasight-local
-codex plugin list
+codex plugin add canvasight@canvasight-local</code></pre>
+</details>
+
+<details>
+<summary><b>Q3: Missing Canvasight tools on Windows after installation?</b></summary>
+<br>
+1. Run <code>tool_search</code> for <code>canvasight open_canvasight</code>;<br>
+2. Run <code>codex.cmd plugin list</code> to ensure the version is <code>0.4.10</code> or newer (which bundles all required dependencies);<br>
+3. Execute <code>node .\tests\mcp-registration-probe.mjs</code> inside the plugin directory to diagnose MCP registration.
+</details>
+
+<details>
+<summary><b>Q4: Do imported files become Task attachments or Asset Nodes?</b></summary>
+<br>
+All newly imported files (via drag-and-drop, paste, or the file picker) become standalone <b>Asset Nodes</b>. Images and videos render visual previews, while other formats display clean document cards. Existing legacy task attachments remain fully backward-compatible and can be promoted to Asset Nodes via their context menu.
+</details>
+
+<details>
+<summary><b>Q5: How does a Group Run differ from a standard Task Run?</b></summary>
+<br>
+- <b>Task Run</b>: Follows downstream outgoing edges to compile all subsequent child tasks and their referenced Asset evidence into the execution payload;<br>
+- <b>Group Run</b>: Strictly bounded by the Group container. Dispatches only direct members, internal edges, and member assets, never escaping outward across boundary edges.
+</details>
+
+<br />
+
+---
+
+## 📄 开源协议 / License
+
+Canvasight is open source software released under the **[MIT License](LICENSE)**.  
+Canvasight 遵循 **[MIT 开源许可证](LICENSE)**。
+
+```text
+MIT License
+
+Copyright (c) 2026 Niall Young
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
-
-After migration, Canvasight's `PATH` should be under a Codex-managed directory such as `~/.codex/.tmp/marketplaces/canvasight-local/plugins/canvasight`, not the source checkout. Fully restart Codex Desktop, create a new task, and tag `@Canvasight` again. This process does not migrate or delete project `.scatter` canvases or `~/.canvasight` user state; however, deleting the entire project folder later also deletes its project-local `.scatter`, so back up any canvas you want to keep first.
-
-**Canvasight tools are still missing on Windows after installation.**
-
-Use `tool_search` for `canvasight open_canvasight await_canvasight_widget_ready`, then run `codex.cmd plugin list` (not `codex.ps1`, which a PowerShell execution policy may block) to verify the plugin source and resolved version. The supported fix is to upgrade to `0.4.10` or later. Those releases ship a self-contained MCP server, so a normal GitHub install does not need `node_modules` in the cache or any manual npm command.
-
-If the resolved version is `0.4.9` or earlier and the exact error is `ERR_MODULE_NOT_FOUND` (for example, a missing `@modelcontextprotocol/ext-apps` or `fflate` package), use this only as a temporary recovery for that old cache: enter the installed Canvasight plugin root shown by `codex.cmd plugin list`, then run:
-
-```powershell
-npm.cmd ci --omit=dev
-```
-
-This is not the permanent fix. After either temporary recovery or an upgrade, fully quit and restart Codex Desktop, then create a new task and tag `@Canvasight` again; creating a task alone can retain the old registry snapshot. A visible browser fallback does not prove the native fix worked; `await_canvasight_widget_ready` must still return complete verified fullscreen ready evidence.
-
-If the tools are still missing, the failure is still in MCP startup/registration; do not start with daemon or widget debugging. From the installed plugin root, run `node .\tests\mcp-registration-probe.mjs`. The probe checks the manifest Node command, performs `initialize` and `tools/list`, verifies the required open tools, and reports the Node executable, working directory, stages, and isolated lifecycle-log path. Repository development environments can also run `npm run diagnose:mcp`.
-
-Inspect `%USERPROFILE%\.canvasight\mcp-lifecycle.log` (or the configured `CANVASIGHT_HOME`):
-
-- No `stdio_start` for the attempt: Codex Desktop did not start the Canvasight MCP process; inspect the installed cache, `.mcp.json`, and whether the Desktop process can resolve Node.
-- `stdio_start` exists but no `request`/`initialize`: the MCP child started but the host did not complete the handshake.
-- `initialize` and `tools/list` are present: Canvasight MCP responded; inspect the current task's plugin-tool registry snapshot next.
-
-A bare `node .\mcp\server.mjs` command waiting indefinitely is not itself a failure; a stdio MCP server waits for JSON-RPC input. The probe proves only MCP handshake health, not that the native canvas opened.
-
-**What does `Transport closed` mean?**
-
-The current Codex task's Canvasight MCP transport is closed or stale; it is not evidence of a daemon failure. Inspect the Canvasight lifecycle log. If the plugin version did not change, reloading the task may be enough; after an install or upgrade, reload/restart the Codex host before creating and tagging a new task. A localhost fallback cannot repair the native transport.
-
-**Why does browser fallback not send Run directly?**
-
-Browser/dev pages do not have the native widget host bridge. After `claim_canvasight_thread`, they queue Runs for `await_canvasight_run`.
-
-**Does a file become a Task attachment or an Asset Node?**
-
-Every newly imported file becomes an Asset Node. The bottom Asset button, drops over the canvas/Task/Group, and file or image paste all follow the same rule; Tasks no longer expose an attachment-upload entry. Existing inline attachments from older projects remain compatible with Run and export and may be removed or explicitly migrated with “Promote to asset node,” which reuses the managed file without copying it. Image Assets—including sanitized, passively displayed SVG—and video Assets show media directly. Ordinary files show a horizontal matching SVG format icon, filename, and format/size summary on one white surface; unmatched formats use the unknown-file icon. An Asset does not run independently or show Input/Reference/Option/Output classification; connection direction, labels, and context express its purpose. More only replaces the file or deletes the node. Replacing or deleting an Asset Node does not delete an existing managed file under `.scatter/assets`.
-
-**How is Group Run different from ordinary Run?**
-
-Task Run follows persisted Edges and collects Asset evidence within its downstream scope; an Asset has no Run of its own. Group Run is a closed scope containing only the Group title, description, direct members, member assets, and internal Edges. Cross-Group Edges remain visible canvas relationships but never pull outside nodes into that Run.
-
-**Why did Run not appear in the current task?**
-
-Confirm that the canvas came from `open_canvasight` and that widget ready was verified. Native Chat Run success follows the host-bridge Promise. Fallback Runs require a current claim and `await_canvasight_run`.
-
-**What if Run shows `failed to read thread` or `rollout does not start with session metadata`?**
-
-Codex could not read that task's local session/rollout metadata; this is not a node-content error. Canvasight resolves an explicitly configured runtime first, then Codex Desktop, then ChatGPT Desktop, and uses PATH `codex` only when no Desktop runtime is available. Canvasight resumes and retries only when Codex explicitly reports that the task is not loaded.
-
-If the diagnostics say **Desktop runtime unavailable**, reload or restart the current Desktop app before reopening Canvasight. If they say **thread archive incompatible**, reload or restart Desktop, create a new task, then reopen Canvasight. Do not fall back to an old PATH CLI or an old/recent task. Both failures retain the node content. Canvasight never simulates mouse or keyboard input, copies/pastes content, automatically creates a task, or edits Codex session files. Browser fallback and dev pages cannot repair native task storage.
-
-**Do I need `npm run dev` in a new task?**
-
-No. The normal plugin entrypoint starts or reuses the project daemon automatically. Dev commands are for development and diagnostics only.
